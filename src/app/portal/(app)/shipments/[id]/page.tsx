@@ -40,6 +40,8 @@ export default async function PortalShipmentDetail({ params }: { params: Promise
   const lang = await getLang();
   const t: T = makeT(lang);
   const tm = (m: string | null) => translateMessage(lang, m);
+  // 补差原因 / 扣款说明可能是“a · b”拼起来的，逐段翻译（中文原样）
+  const tp = (m: string | null) => (m ? m.split(" · ").map((x) => translateMessage(lang, x)).join(" · ") : m);
 
   return (
     <>
@@ -118,7 +120,7 @@ export default async function PortalShipmentDetail({ params }: { params: Promise
               <table>
                 <tbody>
                   {adjustments.map((a) => (
-                    <tr key={a.id}><td className="small">{a.reason}</td><td className="num">{money(a.amount)}</td></tr>
+                    <tr key={a.id}><td className="small">{tp(a.reason)}</td><td className="num">{money(a.amount)}</td></tr>
                   ))}
                 </tbody>
               </table>
@@ -137,7 +139,7 @@ export default async function PortalShipmentDetail({ params }: { params: Promise
                 <tr key={l.id}>
                   <td className="small muted">{fmtTime(l.createdAt)}</td>
                   <td>{t(LEDGER_TYPE_LABEL[l.type])}</td>
-                  <td className="small">{tm(l.note)}</td>
+                  <td className="small">{tp(l.note)}</td>
                   <td className={`num ${l.amount >= 0 ? "profit-pos" : ""}`}>{l.amount >= 0 ? "+" : ""}{money(l.amount)}</td>
                 </tr>
               ))}

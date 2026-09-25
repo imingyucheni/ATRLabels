@@ -2,6 +2,7 @@ import { currentCustomerId, isLoggedIn } from "@/lib/auth";
 import { getCustomer, getShipment } from "@/lib/db";
 import { isPaperSize, layoutLabels, type PaperSize } from "@/lib/labelLayout";
 import { mergeLabels } from "@/lib/mergeLabels";
+import { getT } from "@/lib/prefs";
 
 /** 合并打印：/api/labels/merge?ids=1,2,3（最多 300 张） */
 export async function GET(req: Request) {
@@ -16,7 +17,7 @@ export async function GET(req: Request) {
   const list = ids
     .map((id) => getShipment(id))
     .filter((s): s is NonNullable<typeof s> => !!s && !!s.labelPath && s.status !== "cancelled" && (admin || s.customerId === own));
-  if (!list.length) return new Response("没有可打印的面单", { status: 404 });
+  if (!list.length) return new Response((await getT())("没有可打印的面单"), { status: 404, headers: { "Content-Type": "text/plain; charset=utf-8" } });
   const q = new URL(req.url).searchParams.get("paper");
   const pref = getCustomer(own ?? list[0].customerId)?.labelPaper;
   const paper: PaperSize = isPaperSize(q) ? q : isPaperSize(pref) ? pref : "4x6";

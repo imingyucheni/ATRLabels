@@ -196,14 +196,21 @@ export function RevenueLines({ data }: { data: { date: string; revenue: number; 
           <path key={s.k} d={line(s.k)} fill="none" stroke={s.color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
         ))}
         {/* 末端直接标注（两条线，少于 4 个系列都直接标注） */}
-        {last && series.map((s, j) => {
-          const ly = y(last[s.k]);
-          const other = y(last[series[1 - j].k]);
-          const dy = Math.abs(ly - other) < 14 ? (ly < other ? -7 : 7) : 0;
-          return (
-            <text key={s.k} x={x(data.length - 1) + 8} y={ly + dy} className="chart-label" dominantBaseline="middle">{s.label}</text>
-          );
-        })}
+        {last && (() => {
+          // 两个末端值太近（例如都是 0）时把标注上下拉开，至少 14px，避免文字叠在一起
+          const GAP = 14;
+          const ys = series.map((s) => y(last[s.k]));
+          if (Math.abs(ys[0] - ys[1]) < GAP) {
+            const mid = (ys[0] + ys[1]) / 2;
+            // 数值大（或相等）的“客户消费”放上面
+            const firstOnTop = ys[0] <= ys[1];
+            ys[0] = mid + (firstOnTop ? -GAP / 2 : GAP / 2);
+            ys[1] = mid + (firstOnTop ? GAP / 2 : -GAP / 2);
+          }
+          return series.map((s, j) => (
+            <text key={s.k} x={x(data.length - 1) + 8} y={ys[j]} className="chart-label" dominantBaseline="middle">{s.label}</text>
+          ));
+        })()}
         {idx >= 0 && data[idx] && (
           <g>
             <line x1={x(idx)} x2={x(idx)} y1={pad.t} y2={pad.t + ih} className="chart-crosshair" />

@@ -1,6 +1,7 @@
 import { currentCustomerId, isLoggedIn } from "@/lib/auth";
 import { buildTemplate, senderFor } from "@/lib/batch";
 import { customerChannels, getSettings, listChannels } from "@/lib/db";
+import { getT } from "@/lib/prefs";
 
 export async function GET() {
   const admin = await isLoggedIn();
@@ -13,7 +14,7 @@ export async function GET() {
   return new Response(new Uint8Array(buf), {
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent("导单模板.xlsx")}`,
+      "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent((await getT())("导单模板.xlsx"))}`,
     },
   });
 }

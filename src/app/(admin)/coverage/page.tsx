@@ -5,9 +5,11 @@ import { fmtTime } from "@/lib/time";
 import FlashForm from "@/components/FlashForm";
 import CoverageUpload from "@/components/CoverageUpload";
 import ZipLookup from "@/components/ZipLookup";
+import { getT } from "@/lib/prefs";
 import { clearBlocksAction, removeCoverageAction, saveDimRuleAction, setPrefilterAction } from "@/app/actions";
 
 export default async function CoveragePage() {
+  const t = await getT();
   const channels = listChannels();
   const sources = new Map(listCoverage().map((c) => [c.channelCode, c]));
   const blocks = blockStats();
@@ -15,22 +17,22 @@ export default async function CoveragePage() {
   const totalBlocks = Object.values(blocks).reduce((a, n) => a + n, 0);
   return (
     <>
-      <h1>派送范围与价格表</h1>
+      <h1>{t("派送范围与价格表")}</h1>
       <div className="card">
-        <h2>怎么判断一个地址能不能送</h2>
+        <h2>{t("怎么判断一个地址能不能送")}</h2>
         <ol className="small" style={{ paddingLeft: 18, margin: 0, display: "grid", gap: 6 }}>
-          <li><b>以 ShipBest 试算结果为准</b>：每个渠道都会问一次接口，送不到的会返回“不通邮”，系统自动隐藏这个渠道。</li>
+          <li><b>{t("以 ShipBest 试算结果为准")}</b>{t("：每个渠道都会问一次接口，送不到的会返回“不通邮”，系统自动隐藏这个渠道。")}</li>
           <li>
-            <b>自动记忆</b>：接口回复“不通邮”的 渠道 + 邮编会记住 30 天，之后同一邮编直接跳过这个渠道，批量导入更快。
-            当前记住 {totalBlocks.toLocaleString()} 条。
+            <b>{t("自动记忆")}</b>{t("：接口回复“不通邮”的 渠道 + 邮编会记住 30 天，之后同一邮编直接跳过这个渠道，批量导入更快。")}
+            {t("当前记住 {n} 条。", { n: totalBlocks.toLocaleString() })}
           </li>
           <li>
-            <b>模拟报价</b>：模拟模式下，成本 = 报价表里“计费重量 + 分区”对应的价格。计费重量 = 实重和体积重取大的（体积重 = 长×宽×高 ÷ 系数，按磅向上取整）。
-            各渠道的系数在下表里改，填 0 表示不算体积重；USPS 默认超过 1728 立方英寸（1 立方英尺）才算体积重。
+            <b>{t("模拟报价")}</b>{t("：模拟模式下，成本 = 报价表里“计费重量 + 分区”对应的价格。计费重量 = 实重和体积重取大的（体积重 = 长×宽×高 ÷ 系数，按磅向上取整）。")}
+            {t("各渠道的系数在下表里改，填 0 表示不算体积重；USPS 默认超过 1728 立方英寸（1 立方英尺）才算体积重。")}
           </li>
           <li>
-            <b>邮编表（可选）</b>：服务商报价表里的邮编表可以上传作参考，并可按渠道打开“预筛”。
-            实测（80 次真实试算）表里没有、但实际能送的约占 11%，SPX 尤其多，所以默认不预筛，建议只在确认表格准确的渠道打开。
+            <b>{t("邮编表（可选）")}</b>{t("：服务商报价表里的邮编表可以上传作参考，并可按渠道打开“预筛”。")}
+            {t("实测（80 次真实试算）表里没有、但实际能送的约占 11%，SPX 尤其多，所以默认不预筛，建议只在确认表格准确的渠道打开。")}
           </li>
         </ol>
       </div>
@@ -41,16 +43,16 @@ export default async function CoveragePage() {
       />
 
       <div className="card table-wrap">
-        <h2>各渠道的邮编表</h2>
+        <h2>{t("各渠道的邮编表")}</h2>
         <table className="list">
-          <thead><tr><th>渠道</th><th>邮编表</th><th>口岸</th><th className="num">表内邮编</th><th>按邮编表预筛</th><th>价格表（模拟报价用）</th><th>体积重</th><th className="num">记住的不通邮</th><th></th></tr></thead>
+          <thead><tr><th>{t("渠道")}</th><th>{t("邮编表")}</th><th>{t("口岸")}</th><th className="num">{t("表内邮编")}</th><th>{t("按邮编表预筛")}</th><th>{t("价格表（模拟报价用）")}</th><th>{t("体积重")}</th><th className="num">{t("记住的不通邮")}</th><th></th></tr></thead>
           <tbody>
             {channels.map((c) => {
               const s = sources.get(c.code);
               return (
                 <tr key={c.code}>
-                  <td>{c.name}<div className="small muted">{c.code}{c.enabled ? "" : " · 已停用"}</div></td>
-                  <td>{s ? <>{s.sheet}<div className="small muted">{s.filename}</div></> : <span className="muted">未上传（全部交给接口判断）</span>}</td>
+                  <td>{c.name}<div className="small muted">{c.code}{c.enabled ? "" : ` · ${t("已停用")}`}</div></td>
+                  <td>{s ? <>{s.sheet}<div className="small muted">{s.filename}</div></> : <span className="muted">{t("未上传（全部交给接口判断）")}</span>}</td>
                   <td>{s?.gateway ?? "-"}</td>
                   <td className="num">{s ? s.zipCount.toLocaleString() : "-"}</td>
                   <td>
@@ -59,19 +61,19 @@ export default async function CoveragePage() {
                         confirm={s.prefilter ? undefined : "打开后，不在邮编表里的地址不再试算这个渠道（可能漏掉实际能送的地址）。确定？"}>
                         <input type="hidden" name="code" value={c.code} />
                         <input type="hidden" name="on" value={s.prefilter ? "0" : "1"} />
-                        <span className={`badge ${s.prefilter ? "ok" : "cancelled"}`} style={{ marginRight: 8 }}>{s.prefilter ? "已打开" : "只作参考"}</span>
+                        <span className={`badge ${s.prefilter ? "ok" : "cancelled"}`} style={{ marginRight: 8 }}>{t(s.prefilter ? "已打开" : "只作参考")}</span>
                       </FlashForm>
                     ) : "-"}
                   </td>
-                  <td className="small">{rates[c.code] ? `${rates[c.code].rows} 个重量档` : <span className="muted">未导入</span>}</td>
+                  <td className="small">{rates[c.code] ? t("{n} 个重量档", { n: rates[c.code].rows }) : <span className="muted">{t("未导入")}</span>}</td>
                   <td>
                     {(() => {
                       const r = dimRule(c.code, c.name);
                       return (
                         <FlashForm action={saveDimRuleAction} submitLabel="保存" submitClass="small" className="dim-form" review confirm="体积重规则会影响这个渠道所有客户的报价">
                           <input type="hidden" name="code" value={c.code} />
-                          <label className="small">长×宽×高(英寸) ÷ <input name="divisor" type="number" min="0" step="1" defaultValue={r.divisor} style={{ width: 64 }} /></label>
-                          <label className="small">超过 <input name="minCubic" type="number" min="0" step="1" defaultValue={r.minCubic} style={{ width: 70 }} /> 立方英寸才算</label>
+                          <label className="small">{t("长×宽×高(英寸) ÷")} <input name="divisor" type="number" min="0" step="1" defaultValue={r.divisor} style={{ width: 64 }} /></label>
+                          <label className="small">{t("超过")} <input name="minCubic" type="number" min="0" step="1" defaultValue={r.minCubic} style={{ width: 70 }} /> {t("立方英寸才算")}</label>
                         </FlashForm>
                       );
                     })()}

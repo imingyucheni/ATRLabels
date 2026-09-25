@@ -6,6 +6,7 @@ import Sidebar from "@/components/Sidebar";
 import fs from "node:fs";
 import path from "node:path";
 import { rateStats } from "@/lib/rates";
+import { getT } from "@/lib/prefs";
 
 /** 当前运行的版本（GitHub 构建的发布包里有 VERSION 文件） */
 function version() {
@@ -19,22 +20,26 @@ import { logoutAction } from "../actions";
 
 export const dynamic = "force-dynamic";
 
-export const metadata = { title: "ATR 面单系统 · 后台" };
+export async function generateMetadata() {
+  const t = await getT();
+  return { title: t("ATR 面单系统 · 后台") };
+}
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   await requireAdmin();
   const pendingTopups = pendingTopupCount();
   const resets = pendingResets().length;
+  const t = await getT();
   return (
     <div className="shell">
       <Sidebar
         brand="ATR Labels"
-        brandSub={version() ? `管理后台 · 版本 ${version()}` : "管理后台"}
+        brandSub={version() ? t("管理后台 · 版本 {v}", { v: version() }) : "管理后台"}
         envTag={
           isMockMode()
             ? Object.keys(rateStats()).length
-              ? `模拟模式 · 按报价表计算（${Object.keys(rateStats()).length} 个渠道）`
-              : "模拟模式 · 还没导入报价表，运费是粗略估算"
+              ? t("模拟模式 · 按报价表计算（{n} 个渠道）", { n: Object.keys(rateStats()).length })
+              : t("模拟模式 · 还没导入报价表，运费是粗略估算")
             : undefined
         }
         logout={logoutAction}
