@@ -24,6 +24,9 @@ import {
   listChannels,
   saveCustomer,
   saveSettings,
+  setChannelStamp,
+  setCustomerStampMode,
+  setLabelNote,
   setCustomerPassword,
   setCustomerSender,
   updateCustomerPortal,
@@ -32,9 +35,11 @@ import {
 } from "@/lib/db";
 import type { PartialRule } from "@/lib/pricing";
 import { addLedger, balanceOf, postAdjustment } from "@/lib/ledger";
+import { saveChannelSample } from "@/lib/labels";
 import { getShipBestClient } from "@/lib/shipbest/client";
 import type { Address, ShipmentRequest } from "@/lib/shipbest/types";
 import { cleanAddress, cleanRequest, n, optNum, str, unit } from "@/lib/sanitize";
+import type { StampConfig, StampOverride, StampSettings } from "@/lib/stampConfig";
 import {
   confirmCancelled,
   createLabel,
@@ -363,4 +368,84 @@ export async function linkAdjustmentAction(_: FlashState, fd: FormData): Promise
   postAdjustment(adj.id, s.customerId, s.id, amount, null);
   revalidatePath(`/adjustments`);
   return { ok: `已关联到 ${s.customNo}（${s.customerName}）` };
+}
+
+/* ---------------- 面单加印 SKU ---------------- */
+
+function cleanStamp(o: Partial<StampConfig>): Partial<StampConfig> {
+  const out: Partial<StampConfig> = {};
+  const numIn = (v: unknown, min: number, max: number) => {
+    const x = Number(v);
+    return v === undefined || v === null || v === "" || !Number.isFinite(x) ? undefined : Math.min(max, Math.max(min, x));
+  };
+  const x = numIn(o.x, 0, 8.5), y = numIn(o.y, 0, 11), fs = numIn(o.fontSize, 5, 24), mw = numIn(o.maxWidth, 0.5, 8), ml = numIn(o.maxLines, 1, 5);
+  if (x !== undefined) out.x = x;
+  if (y !== undefined) out.y = y;
+  if (fs !== undefined) out.fontSize = fs;
+  if (mw !== undefined) out.maxWidth = mw;
+  if (ml !== undefined) out.maxLines = Math.round(ml);
+  if (o.rotate !== undefined && [0, 90, 180, 270].includes(Number(o.rotate))) out.rotate = Number(o.rotate) as StampConfig["rotate"];
+  return out;
+}
+
+export async function saveStampAction(g: StampSettings): Promise<FlashState> {
+  await requireAdmin();
+  const cur = getSettings().stamp;
+  saveSettings({
+    stamp: {
+      ...cur,
+      ...cleanStamp(g),
+      enabled: !!g.enabled,
+      whiteBg: !!g.whiteBg,
+      bold: !!g.bold,
+      showQty: !!g.showQty,
+      // 前缀末尾的空格要保留（“SKU: ”）
+      prefix: String(g.prefix ?? "").slice(0, 30),
+      separator: String(g.separator ?? " / ").slice(0, 10),
+    },
+  });
+  revalidatePath("/settings");
+  return { ok: "加印设置已保存" };
+}
+
+export async function saveChannelStampAction(code: string, o: StampOverride): Promise<FlashState> {
+  await requireAdmin();
+  const c = cleanStamp(o) as StampOverride;
+  if (o.enabled === true || o.enabled === false) c.enabled = o.enabled;
+  setChannelStamp(str(code, 50), c);
+  revalidatePath("/settings");
+  return { ok: "该渠道的加印位置已保存" };
+}
+
+export async function saveCustomerStampAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  await requireAdmin();
+  const id = Number(fd.get("id"));
+  const m = fd.get("stampMode");
+  setCustomerStampMode(id, m === "on" || m === "off" ? m : "inherit");
+  revalidatePath(`/customers/${id}`);
+  return { ok: "已保存" };
+}
+
+export async function saveLabelNoteAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  await requireAdmin();
+  const id = Number(fd.get("id"));
+  setLabelNote(id, str(fd.get("labelNote"), 200) || null);
+  revalidatePath(`/shipments/${id}`);
+  return { ok: "已保存，重新打开面单即可看到" };
+}
+
+/** 上传某个渠道的示例面单，用来在设置页预览、调整加印位置 */
+export async function uploadChannelSampleAction(fd: FormData): Promise<FlashState> {
+  await requireAdmin();
+  const code = str(fd.get("channel"), 50);
+  const file = fd.get("file");
+  if (!code) return { error: "请先选择渠道" };
+  if (!(file instanceof File) || !file.size) return { error: "请选择面单文件" };
+  if (file.size > 5 * 1024 * 1024) return { error: "文件不能超过 5MB" };
+  try {
+    saveChannelSample(code, Buffer.from(await file.arrayBuffer()));
+    return { ok: "示例面单已上传，预览已更新" };
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
 }

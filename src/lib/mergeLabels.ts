@@ -1,6 +1,7 @@
 import { PDFDocument } from "pdf-lib";
 import type { Shipment } from "./db";
 import { readLabel } from "./labels";
+import { stampedLabel } from "./stamp";
 
 const W = 288; // 4 in
 const H = 432; // 6 in
@@ -10,6 +11,13 @@ export async function mergeLabels(list: Shipment[]): Promise<Uint8Array> {
   const out = await PDFDocument.create();
   for (const s of list) {
     if (!s.labelPath) continue;
+    // 需要加印 SKU 的先生成加印版（统一为 PDF）
+    const stamped = await stampedLabel(s);
+    if (stamped) {
+      const src = await PDFDocument.load(stamped);
+      (await out.copyPages(src, src.getPageIndices())).forEach((p) => out.addPage(p));
+      continue;
+    }
     const buf = readLabel(s.labelPath);
     if (s.labelMime === "application/pdf") {
       const src = await PDFDocument.load(buf, { ignoreEncryption: true });

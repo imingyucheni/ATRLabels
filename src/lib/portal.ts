@@ -4,6 +4,7 @@
  */
 import { getSettings, getShipment, listAdjustments, listShipments, type Shipment, type ShipmentFilter, type ShipmentStatus } from "./db";
 import type { ChannelQuote } from "./service";
+import { stampFor, stampText } from "./stamp";
 import type { Address, PackageInfo, SkuItem } from "./shipbest/types";
 
 export interface PublicQuote {
@@ -62,9 +63,14 @@ export interface PortalShipment {
   skuList: SkuItem[];
   remark: string | null;
   createdAt: string;
+  /** 面单是否加印 SKU、印的文字 */
+  stampOn: boolean;
+  stampText: string;
+  labelNote: string | null;
 }
 
 export function toPortalShipment(s: Shipment): PortalShipment {
+  const stampCfg = stampFor(s);
   return {
     id: s.id,
     customNo: s.customNo,
@@ -87,6 +93,9 @@ export function toPortalShipment(s: Shipment): PortalShipment {
     skuList: s.skuList,
     remark: s.remark,
     createdAt: s.createdAt,
+    stampOn: !!stampCfg,
+    stampText: stampText(s, stampCfg ?? getSettings().stamp),
+    labelNote: s.labelNote,
   };
 }
 

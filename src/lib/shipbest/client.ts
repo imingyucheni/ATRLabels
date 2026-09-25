@@ -158,7 +158,7 @@ export class HttpShipBestClient implements ShipBestClient {
 
 /** 离线模拟：不调用真实接口，用于本地试用和测试。 */
 export class MockShipBestClient implements ShipBestClient {
-  private orders = new Map<string, OrderDetail & { createdAt: number }>();
+  private orders = new Map<string, OrderDetail & { createdAt: number; to?: string }>();
   private seq = 0;
   // 与真实账号的渠道名一致，方便演示和导入 ShipBest 导单表
   private products: Product[] = [
@@ -219,6 +219,7 @@ export class MockShipBestClient implements ShipBestClient {
       feePrice: q.totalDiscountShippingFee,
       feePriceCurrency: q.currency,
       createdAt: Date.now(),
+      to: [`${req.recipient.nameFirst} ${req.recipient.nameLast}`, req.recipient.address1, `${req.recipient.city} ${req.recipient.province ?? ""} ${req.recipient.zipCode}`].join("|"),
     });
     return {};
   }
@@ -237,9 +238,9 @@ export class MockShipBestClient implements ShipBestClient {
     if (o.status === 2 && Date.now() - o.createdAt > 1000) {
       o.status = 4;
       o.trackingNo = "9400" + String(Date.now()).slice(-10) + String(++this.seq).padStart(6, "0");
-      o.labelUrl = `mock://label/${o.customNo}`;
+      o.labelUrl = `mock://label/${o.customNo}?ch=${encodeURIComponent(o.logisticsProductName)}&t=${o.trackingNo}&to=${encodeURIComponent(o.to ?? "")}`;
     }
-    const { createdAt: _, ...detail } = o;
+    const { createdAt: _, to: __, ...detail } = o;
     return { ...detail };
   }
 

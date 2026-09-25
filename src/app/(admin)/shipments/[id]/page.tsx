@@ -1,13 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getShipment, listAdjustments, shipmentProfit } from "@/lib/db";
+import { getSettings, getShipment, listAdjustments, shipmentProfit } from "@/lib/db";
 import { money } from "@/lib/pricing";
 import { defaultCancelFees } from "@/lib/service";
 import { SB_STATUS, type Address } from "@/lib/shipbest/types";
 import FlashForm from "@/components/FlashForm";
 import StatusBadge from "@/components/StatusBadge";
 import Profit from "@/components/Profit";
-import { cancelAction, confirmCancelAction, refreshAction } from "@/app/actions";
+import { cancelAction, confirmCancelAction, refreshAction, saveLabelNoteAction } from "@/app/actions";
+import { stampFor, stampText } from "@/lib/stamp";
 
 const UNITS = { 1: ["g", "cm"], 2: ["kg", "cm"], 3: ["lb", "in"] } as const;
 const SIGN = ["不需要签名", "直接签名", "间接签名", "成人签名"];
@@ -29,6 +30,7 @@ export default async function ShipmentDetail({ params }: { params: Promise<{ id:
   const [wu, lu] = UNITS[s.pkg.displayUnitSystem];
   const fees = defaultCancelFees(s);
   const adjustments = listAdjustments({ shipmentId: s.id });
+  const stampCfg = stampFor(s);
   const canCancel = s.status === "pending" || s.status === "labeled" || s.status === "exception";
 
   return (
@@ -48,6 +50,7 @@ export default async function ShipmentDetail({ params }: { params: Promise<{ id:
               <div className="row" style={{ marginBottom: 12 }}>
                 <a className="btn primary" href={`/api/labels/${s.id}`} target="_blank">打开 / 打印 4×6 面单</a>
                 <a className="btn" href={`/api/labels/${s.id}?download=1`}>下载</a>
+                {stampCfg && <a className="btn" href={`/api/labels/${s.id}?raw=1`} target="_blank">原始面单（不加印）</a>}
               </div>
               {s.labelMime === "application/pdf" ? (
                 <iframe src={`/api/labels/${s.id}`} style={{ width: "100%", height: 480, border: "1px solid var(--line)", borderRadius: 8 }} />
@@ -59,6 +62,13 @@ export default async function ShipmentDetail({ params }: { params: Promise<{ id:
           ) : (
             <p className="muted">面单尚未生成。ShipBest 一般几秒内出单，可点“刷新状态”。</p>
           )}
+          <FlashForm action={saveLabelNoteAction} submitLabel="保存" submitClass="small" className="row">
+            <input type="hidden" name="id" value={s.id} />
+            <label className="f" style={{ flex: 1, minWidth: 220 }}>
+              面单加印文字{stampCfg ? "" : "（这个客户当前不加印）"}
+              <input name="labelNote" maxLength={200} defaultValue={s.labelNote ?? ""} placeholder={stampText({ ...s, labelNote: null }, stampCfg ?? getSettings().stamp) || "留空则印 SKU"} />
+            </label>
+          </FlashForm>
           <div className="row" style={{ marginTop: 12 }}>
             <FlashForm action={refreshAction} submitLabel="刷新状态" submitClass="" inline>
               <input type="hidden" name="id" value={s.id} />

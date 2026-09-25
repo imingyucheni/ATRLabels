@@ -13,7 +13,7 @@ import {
   requireCustomer,
   verifyPassword,
 } from "@/lib/auth";
-import { getCustomerLogin, getPasswordHash, setCustomerPassword, setCustomerSender } from "@/lib/db";
+import { getCustomerLogin, getPasswordHash, setCustomerPassword, setCustomerSender, setLabelNote } from "@/lib/db";
 import { InsufficientBalanceError } from "@/lib/ledger";
 import { ownsShipment, publicError, toPublicQuote, type PublicQuote } from "@/lib/portal";
 import { cleanAddress, cleanRequest, n, str } from "@/lib/sanitize";
@@ -144,4 +144,14 @@ export async function portalChangePasswordAction(_: FlashState, fd: FormData): P
   // 改密码后旧会话失效，用新密码重新签发
   await createCustomerSession(me.id, hash);
   return { ok: "密码已修改" };
+}
+
+/** 客户修改自己面单上加印的文字 */
+export async function portalSaveLabelNoteAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  const me = await requireCustomer();
+  const id = Number(fd.get("id"));
+  if (!ownsShipment(me.id, id)) return { error: "面单不存在" };
+  setLabelNote(id, str(fd.get("labelNote"), 200) || null);
+  revalidatePath(`/portal/shipments/${id}`);
+  return { ok: "已保存，重新打开面单即可看到" };
 }

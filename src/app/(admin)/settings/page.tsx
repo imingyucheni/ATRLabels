@@ -2,6 +2,7 @@ import { ADJUSTMENT_POLICY_LABEL, getSettings, listChannels } from "@/lib/db";
 import { computePrice, money, resolveRule, type MarkupRule } from "@/lib/pricing";
 import { isMockMode } from "@/lib/shipbest/client";
 import AddressFields from "@/components/AddressFields";
+import StampSettings from "@/components/StampSettings";
 import FlashForm from "@/components/FlashForm";
 import RuleInputs from "@/components/RuleInputs";
 import { saveChannelsAction, saveSettingsAction, syncChannelsAction, verifyAction } from "@/app/actions";
@@ -90,6 +91,8 @@ export default async function SettingsPage() {
         <AddressFields value={s.sender} namePrefix="sender." />
         <div style={{ height: 12 }} />
       </FlashForm>
+
+      <StampSettings global={s.stamp} channels={channels.filter((c) => c.enabled).map((c) => ({ code: c.code, name: c.name, stamp: c.stamp }))} />
 
       <FlashForm action={saveChannelsAction} submitLabel="保存渠道设置" className="card">
         <h2>物流渠道</h2>

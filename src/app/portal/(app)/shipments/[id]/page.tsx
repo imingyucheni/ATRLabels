@@ -6,7 +6,7 @@ import { money } from "@/lib/pricing";
 import type { Address } from "@/lib/shipbest/types";
 import FlashForm from "@/components/FlashForm";
 import StatusBadge from "@/components/StatusBadge";
-import { portalCancelAction, portalRefreshAction } from "@/app/portal/actions";
+import { portalCancelAction, portalRefreshAction, portalSaveLabelNoteAction } from "@/app/portal/actions";
 
 const UNITS = { 1: ["g", "cm"], 2: ["kg", "cm"], 3: ["lb", "in"] } as const;
 const SIGN = ["不需要签名", "直接签名", "间接签名", "成人签名"];
@@ -57,6 +57,15 @@ export default async function PortalShipmentDetail({ params }: { params: Promise
             <p className="muted">面单生成中，一般几秒到一分钟。可以点“刷新”。</p>
           ) : (
             <p className="muted">没有面单。</p>
+          )}
+          {s.stampOn && s.status !== "cancelled" && (
+            <FlashForm action={portalSaveLabelNoteAction} submitLabel="保存" submitClass="small" className="row">
+              <input type="hidden" name="id" value={s.id} />
+              <label className="f" style={{ flex: 1, minWidth: 220 }}>
+                面单上加印的文字（留空则印 SKU）
+                <input name="labelNote" maxLength={200} defaultValue={s.labelNote ?? ""} placeholder={s.stampText} />
+              </label>
+            </FlashForm>
           )}
           <div className="row" style={{ marginTop: 12 }}>
             {s.status === "pending" && (

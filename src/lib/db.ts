@@ -2,6 +2,7 @@ import Database from "better-sqlite3";
 import fs from "node:fs";
 import path from "node:path";
 import { seedDemo } from "./demo";
+import { DEFAULT_STAMP, presetForChannel, type StampOverride, type StampSettings } from "./stampConfig";
 import type { MarkupRule, PartialRule } from "./pricing";
 import type { Address, PackageInfo, SkuItem, UnitSystem } from "./shipbest/types";
 
@@ -160,6 +161,10 @@ function migrate(conn: Database.Database) {
     ["sender_json", "TEXT"],
   ];
   for (const [c, t] of addCust) if (!ccols.includes(c)) conn.exec(`ALTER TABLE customers ADD COLUMN ${c} ${t}`);
+  if (!ccols.includes("stamp_mode")) conn.exec("ALTER TABLE customers ADD COLUMN stamp_mode TEXT NOT NULL DEFAULT 'inherit'");
+  const chcols = (conn.prepare("PRAGMA table_info(channels)").all() as { name: string }[]).map((c) => c.name);
+  if (!chcols.includes("stamp_json")) conn.exec("ALTER TABLE channels ADD COLUMN stamp_json TEXT");
+  if (!cols.includes("label_note")) conn.exec("ALTER TABLE shipments ADD COLUMN label_note TEXT");
   conn.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_customers_email ON customers(portal_email) WHERE portal_email IS NOT NULL");
 }
 
@@ -199,6 +204,8 @@ export interface Settings {
   brandName: string;
   /** 客户端显示的客服联系方式 */
   supportContact: string;
+  /** 面单加印 SKU */
+  stamp: StampSettings;
 }
 
 /**
@@ -225,12 +232,15 @@ const DEFAULT_SETTINGS: Settings = {
   adjustmentPolicy: "with_markup",
   brandName: "ATR Logistics",
   supportContact: "",
+  stamp: { ...DEFAULT_STAMP, enabled: false },
 };
 
 export function getSettings(): Settings {
   const rows = db().prepare("SELECT key, value FROM settings").all() as { key: string; value: string }[];
   const s: Record<string, unknown> = { ...DEFAULT_SETTINGS };
   for (const r of rows) s[r.key] = JSON.parse(r.value);
+  // 新增字段时旧数据没有，用默认值补齐
+  s.stamp = { ...DEFAULT_SETTINGS.stamp, ...(s.stamp as object) };
   return s as unknown as Settings;
 }
 
@@ -252,6 +262,8 @@ export interface Channel {
   enabled: boolean;
   markup: PartialRule;
   syncedAt: string | null;
+  /** 该渠道面单加印 SKU 的位置（覆盖全局） */
+  stamp: StampOverride | null;
 }
 
 interface ChannelRow {
@@ -262,6 +274,7 @@ interface ChannelRow {
   markup_fixed: number | null;
   markup_min_profit: number | null;
   synced_at: string | null;
+  stamp_json: string | null;
 }
 
 function toChannel(r: ChannelRow): Channel {
@@ -271,7 +284,12 @@ function toChannel(r: ChannelRow): Channel {
     enabled: !!r.enabled,
     markup: { percent: r.markup_percent, fixed: r.markup_fixed, minProfit: r.markup_min_profit },
     syncedAt: r.synced_at,
+    stamp: r.stamp_json ? JSON.parse(r.stamp_json) : null,
   };
+}
+
+export function setChannelStamp(code: string, stamp: StampOverride | null) {
+  db().prepare("UPDATE channels SET stamp_json = ? WHERE code = ?").run(stamp && Object.keys(stamp).length ? JSON.stringify(stamp) : null, code);
 }
 
 export function listChannels(onlyEnabled = false): Channel[] {
@@ -292,7 +310,15 @@ export function upsertChannels(list: { code: string; name: string }[]) {
     `INSERT INTO channels (code, name, synced_at) VALUES (?, ?, datetime('now'))
      ON CONFLICT(code) DO UPDATE SET name = excluded.name, synced_at = excluded.synced_at`,
   );
-  db().transaction(() => list.forEach((p) => stmt.run(p.code, p.name)))();
+  // 还没有加印设置的渠道套用预设（USPS 默认加印 SKU）
+  const preset = db().prepare("UPDATE channels SET stamp_json = ? WHERE code = ? AND stamp_json IS NULL");
+  db().transaction(() =>
+    list.forEach((p) => {
+      stmt.run(p.code, p.name);
+      const pr = presetForChannel(p.name);
+      if (pr) preset.run(JSON.stringify(pr), p.code);
+    }),
+  )();
 }
 
 export function updateChannel(code: string, enabled: boolean, markup: PartialRule) {
@@ -324,6 +350,8 @@ export interface Customer {
   sender: Address | null;
   /** 当前余额（流水合计） */
   balance: number;
+  /** 面单加印 SKU：inherit 跟随全局 / on 加印 / off 不加印 */
+  stampMode: "inherit" | "on" | "off";
 }
 
 interface CustomerRow {
@@ -343,6 +371,7 @@ interface CustomerRow {
   credit_limit: number;
   sender_json: string | null;
   balance: number | null;
+  stamp_mode: "inherit" | "on" | "off" | null;
 }
 
 function toCustomer(r: CustomerRow): Customer {
@@ -361,6 +390,7 @@ function toCustomer(r: CustomerRow): Customer {
     creditLimit: r.credit_limit ?? 0,
     sender: r.sender_json ? JSON.parse(r.sender_json) : null,
     balance: Math.round((r.balance ?? 0) * 100) / 100,
+    stampMode: r.stamp_mode ?? "inherit",
   };
 }
 
@@ -400,6 +430,10 @@ export function updateCustomerPortal(id: number, p: { email: string | null; enab
 
 export function setCustomerPassword(id: number, hash: string) {
   db().prepare("UPDATE customers SET password_hash = ? WHERE id = ?").run(hash, id);
+}
+
+export function setCustomerStampMode(id: number, mode: "inherit" | "on" | "off") {
+  db().prepare("UPDATE customers SET stamp_mode = ? WHERE id = ?").run(mode, id);
 }
 
 export function setCustomerSender(id: number, sender: Address | null) {
@@ -488,6 +522,8 @@ export interface Shipment {
   customerRef: string | null;
   /** admin / customer */
   createdBy: string | null;
+  /** 面单上加印的文字（为空时用 SKU） */
+  labelNote: string | null;
   /** 官方账单补差合计：正数 = ShipBest 向我们补扣，负数 = 退给我们 */
   costAdj: number;
   /** 向客户补收（正）/ 退客户（负）的合计 */
@@ -527,6 +563,7 @@ interface ShipmentRow {
   remark: string | null;
   customer_ref: string | null;
   created_by: string | null;
+  label_note: string | null;
   cost_adj: number | null;
   customer_adj: number | null;
   created_at: string;
@@ -565,6 +602,7 @@ function toShipment(r: ShipmentRow): Shipment {
     remark: r.remark,
     customerRef: r.customer_ref,
     createdBy: r.created_by,
+    labelNote: r.label_note,
     costAdj: r.cost_adj ?? 0,
     customerAdj: r.customer_adj ?? 0,
     createdAt: r.created_at,
@@ -659,6 +697,10 @@ export function updateShipment(id: number, patch: ShipmentPatch) {
   db()
     .prepare(`UPDATE shipments SET ${sets}, updated_at = datetime('now') WHERE id = ?`)
     .run(...entries.map(([, v]) => v as string | number | null), id);
+}
+
+export function setLabelNote(id: number, note: string | null) {
+  db().prepare("UPDATE shipments SET label_note = ?, updated_at = datetime('now') WHERE id = ?").run(note, id);
 }
 
 export function deleteShipment(id: number) {

@@ -6,7 +6,7 @@ import RuleInputs from "@/components/RuleInputs";
 import AddressFields from "@/components/AddressFields";
 import { LEDGER_TYPE_LABEL, listLedger } from "@/lib/ledger";
 import { money } from "@/lib/pricing";
-import { ledgerEntryAction, saveCustomerAction, saveCustomerPortalAction, saveCustomerSenderAction, setCustomerPasswordAction } from "@/app/actions";
+import { ledgerEntryAction, saveCustomerAction, saveCustomerPortalAction, saveCustomerSenderAction, saveCustomerStampAction, setCustomerPasswordAction } from "@/app/actions";
 
 export default async function CustomerEdit({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -81,6 +81,21 @@ export default async function CustomerEdit({ params }: { params: Promise<{ id: s
               <p className="small muted">客户登录地址：<code>/portal</code></p>
             </div>
           </div>
+
+          <FlashForm action={saveCustomerStampAction} submitLabel="保存" className="card">
+            <h2>面单加印 SKU</h2>
+            <input type="hidden" name="id" value={c.id} />
+            <div className="row" style={{ marginBottom: 12 }}>
+              <label className="f" style={{ minWidth: 260 }}>这个客户的面单
+                <select name="stampMode" defaultValue={c.stampMode}>
+                  <option value="inherit">跟随全局设置（{getSettings().stamp.enabled ? "当前：加印" : "当前：不加印"}）</option>
+                  <option value="on">加印 SKU</option>
+                  <option value="off">不加印</option>
+                </select>
+              </label>
+              <span className="small muted">位置和样式在“设置 → 面单加印 SKU”里调整。</span>
+            </div>
+          </FlashForm>
 
           <FlashForm action={saveCustomerSenderAction} submitLabel="保存寄件地址" className="card">
             <h2>客户默认寄件地址</h2>

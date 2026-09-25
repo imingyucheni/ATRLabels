@@ -4,6 +4,7 @@
  */
 import type Database from "better-sqlite3";
 import { hashPassword } from "./password";
+import { presetForChannel } from "./stampConfig";
 
 export const DEMO_ACCOUNTS = [
   { email: "demo@example.com", password: "demo1234", name: "演示客户 A（预付）" },
@@ -34,11 +35,11 @@ export function seedDemo(conn: Database.Database) {
 
   // 模拟模式下直接放入渠道（真实模式请在“设置”里同步）
   if (process.env.SHIPBEST_MOCK === "1") {
-    const ch = conn.prepare("INSERT OR IGNORE INTO channels (code, name, synced_at) VALUES (?, ?, datetime('now'))");
+    const ch = conn.prepare("INSERT OR IGNORE INTO channels (code, name, synced_at, stamp_json) VALUES (?, ?, datetime('now'), ?)");
     for (const [code, name] of [
       ["LP10210028", "UniUni-（91710）"], ["LP10210029", "GOFO-（91710）"], ["LP10210030", "USPS-（91710）"],
       ["LP10210433", "SwiftX-91710"], ["LP10210434", "YWE-91710"],
-    ]) ch.run(code, name);
+    ]) ch.run(code, name, presetForChannel(name) ? JSON.stringify(presetForChannel(name)) : null);
   }
   void b;
 }

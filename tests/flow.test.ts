@@ -270,4 +270,49 @@ describe("模拟模式完整流程", () => {
     job = await wait(jobId, ["done"]);
     expect(job.rows.every((r) => r.status === "created")).toBe(true);
   }, 60_000);
+
+  it("面单加印：全局开关、客户单独设置、渠道位置、原始面单不变", async () => {
+    const { stampFor, stampedLabel } = await import("@/lib/stamp");
+    const { readLabel } = await import("@/lib/labels");
+    const custId = db.saveCustomer(null, { name: "加印客户", contact: null, phone: null, email: null, note: null, markup: {} });
+    ledger.addLedger({ customerId: custId, type: "topup", amount: 50, createdBy: "admin" });
+    const q = (await svc.quoteAll(custId, req))[0];
+    const id = await svc.createLabel({ customerId: custId, channelCode: q.channelCode, req, expectedPrice: q.price! });
+    const s = db.getShipment(id)!;
+    const original = readLabel(s.labelPath!);
+
+    // 默认关闭
+    expect(stampFor(s)).toBeNull();
+    expect(await stampedLabel(s)).toBeNull();
+    // 全局开启
+    db.saveSettings({ stamp: { ...db.getSettings().stamp, enabled: true } });
+    expect(stampFor(s)).not.toBeNull();
+    const stamped = await stampedLabel(s);
+    expect(stamped).not.toBeNull();
+    expect(Buffer.compare(readLabel(s.labelPath!), original)).toBe(0); // 原文件没动
+    // 客户单独关闭
+    db.setCustomerStampMode(custId, "off");
+    expect(stampFor(db.getShipment(id)!)).toBeNull();
+    // 客户单独开启 + 全局关闭 + 渠道位置覆盖
+    db.saveSettings({ stamp: { ...db.getSettings().stamp, enabled: false } });
+    db.setCustomerStampMode(custId, "on");
+    db.setChannelStamp(q.channelCode, { y: 1.2, fontSize: 14 });
+    const cfg = stampFor(db.getShipment(id)!)!;
+    expect(cfg.y).toBe(1.2);
+    expect(cfg.fontSize).toBe(14);
+    expect(cfg.x).toBe(db.getSettings().stamp.x);
+    // 渠道单独不加印（例如 ShipBest 已在备注里印了 SKU）→ 即使客户开启也不加印
+    db.setChannelStamp(q.channelCode, { enabled: false });
+    expect(stampFor(db.getShipment(id)!)).toBeNull();
+    // 渠道单独加印：全局关闭、客户跟随全局时也加印
+    db.setCustomerStampMode(custId, "inherit");
+    db.setChannelStamp(q.channelCode, { enabled: true, y: 5.3 });
+    expect(stampFor(db.getShipment(id)!)!.y).toBe(5.3);
+    // 客户明确不加印优先
+    db.setCustomerStampMode(custId, "off");
+    expect(stampFor(db.getShipment(id)!)).toBeNull();
+    // 单独填写的文字
+    db.setLabelNote(id, "PICK: A-01");
+    expect(db.getShipment(id)!.labelNote).toBe("PICK: A-01");
+  }, 30_000);
 });
