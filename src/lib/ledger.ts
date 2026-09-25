@@ -1,4 +1,5 @@
 import { db, getCustomer, getSettings } from "./db";
+import { checkLowBalanceSoon, notifyLater, queueAdjustmentNotice } from "./notify";
 
 /**
  * 客户钱包流水。余额 = 流水合计。
@@ -71,6 +72,8 @@ export function addLedger(e: {
       "INSERT INTO ledger (customer_id, type, amount, shipment_id, adjustment_id, note, created_by) VALUES (?,?,?,?,?,?,?)",
     )
     .run(e.customerId, e.type, round2(e.amount), e.shipmentId ?? null, e.adjustmentId ?? null, e.note ?? null, e.createdBy ?? null);
+  // 余额变了：几秒后检查是否要发“余额不足”提醒
+  checkLowBalanceSoon(e.customerId);
   return Number(r.lastInsertRowid);
 }
 
@@ -136,6 +139,13 @@ export function refundCancelled(customerId: number, shipmentId: number, refund: 
   const exists = db().prepare("SELECT 1 FROM ledger WHERE shipment_id = ? AND type = 'refund'").get(shipmentId);
   if (exists || !(refund > 0)) return;
   addLedger({ customerId, type: "refund", amount: refund, shipmentId, note: "取消订单退款", createdBy });
+  const s = db().prepare("SELECT custom_no, customer_ref, cancel_fee FROM shipments WHERE id = ?").get(shipmentId) as { custom_no: string; customer_ref: string | null; cancel_fee: number | null } | undefined;
+  const ref = s?.customer_ref || s?.custom_no || String(shipmentId);
+  const fee = s?.cancel_fee ? ` (fee $${s.cancel_fee.toFixed(2)})` : "";
+  notifyLater(customerId, "cancel", { zh: `订单 ${ref} 已取消`, en: `Order ${ref} cancelled` }, {
+    zh: [`订单 ${ref} 已取消，$${refund.toFixed(2)} 已退回账户余额${s?.cancel_fee ? `（扣除取消手续费 $${s.cancel_fee.toFixed(2)}）` : ""}。这张面单已作废，请不要再使用。`],
+    en: [`Order ${ref} has been cancelled and $${refund.toFixed(2)} was refunded to your balance${fee}. The label is void — please don't use it.`],
+  });
 }
 
 /** 补差入账（幂等）：客户补收记为扣款，退还记为入账 */
@@ -144,6 +154,8 @@ export function postAdjustment(adjustmentId: number, customerId: number, shipmen
   const exists = db().prepare("SELECT 1 FROM ledger WHERE adjustment_id = ?").get(adjustmentId);
   if (exists) return;
   addLedger({ customerId, type: "adjustment", amount: -customerAmount, shipmentId, adjustmentId, note, createdBy: "system" });
+  const s = db().prepare("SELECT custom_no, customer_ref, tracking_no FROM shipments WHERE id = ?").get(shipmentId) as { custom_no: string; customer_ref: string | null; tracking_no: string | null } | undefined;
+  queueAdjustmentNotice(customerId, s?.customer_ref || s?.tracking_no || s?.custom_no || String(shipmentId), customerAmount, note);
 }
 
 interface LedgerRow {

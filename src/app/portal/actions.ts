@@ -31,6 +31,7 @@ import { requestReset, resetWithToken } from "@/lib/passwordReset";
 import type { Address, ShipmentRequest } from "@/lib/shipbest/types";
 import type { FlashState } from "@/app/actions";
 import { getT, tMsg } from "@/lib/prefs";
+import { NOTIFY_EVENTS, saveNotifyPrefs, type NotifyPrefs } from "@/lib/notify";
 import { checkAddress, needsAck, type AddressCheck } from "@/lib/addressCheck";
 
 async function clientIp() {
@@ -293,6 +294,17 @@ export async function portalResetAction(_: unknown, fd: FormData) {
     return { error: await tMsg((e as Error).message) };
   }
   redirect("/portal");
+}
+
+export async function portalSaveNotifyAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  const me = await requireCustomer();
+  const email = str(fd.get("notifyEmail"), 120);
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { error: await tMsg("邮箱格式不正确") };
+  const low = Math.max(0, Math.min(100000, Number(fd.get("lowBalance")) || 0));
+  const events = Object.fromEntries(NOTIFY_EVENTS.map((e) => [e, fd.get(`ev.${e}`) === "on"])) as NotifyPrefs["events"];
+  saveNotifyPrefs(me.id, { events, email, lowBalance: low });
+  revalidatePath("/portal/account");
+  return { ok: await tMsg("通知设置已保存") };
 }
 
 export async function portalSaveLabelPaperAction(_: FlashState, fd: FormData): Promise<FlashState> {

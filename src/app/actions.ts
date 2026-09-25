@@ -44,6 +44,7 @@ import { saveDimRule } from "@/lib/rates";
 import { CARRIERS } from "@/lib/carriers";
 import { clearChannelNameCache } from "@/lib/channelDisplay";
 import { clearTestData } from "@/lib/cleanup";
+import { sendMail } from "@/lib/mailer";
 import { checkFinancePin, setFinancePin } from "@/lib/financePin";
 import { testAddressService } from "@/lib/addressCheck";
 import { listSenders, saveSender } from "@/lib/senders";
@@ -421,6 +422,35 @@ export async function setFinancePinAction(_: FlashState, fd: FormData): Promise<
   }
   revalidatePath("/settings");
   return { ok: "财务确认密码已设置" };
+}
+
+export async function saveSmtpAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  await requireAdmin();
+  const cur = getSettings().smtp ?? { host: "", port: 465, user: "", pass: "", from: "" };
+  saveSettings({
+    notifyEnabled: fd.get("notifyEnabled") === "on",
+    smtp: {
+      host: str(fd.get("host"), 120),
+      port: Math.max(1, Number(fd.get("port")) || 465),
+      user: str(fd.get("user"), 120),
+      pass: str(fd.get("pass"), 200) || cur.pass, // 留空 = 不修改
+      from: str(fd.get("from"), 160),
+    },
+  });
+  revalidatePath("/settings");
+  return { ok: "邮件设置已保存" };
+}
+
+export async function testMailAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  await requireAdmin();
+  const to = str(fd.get("to"), 120);
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) return { error: "请填写收件邮箱" };
+  try {
+    await sendMail(to, `${getSettings().brandName} · 测试邮件 / Test email`, "这是一封测试邮件，说明发件邮箱设置正确。\nThis is a test email — your mail settings work.");
+    return { ok: `已发送到 ${to}，请查收（也看看垃圾邮件箱）` };
+  } catch (e) {
+    return { error: `发送失败：${(e as Error).message}` };
+  }
 }
 
 export async function clearTestDataAction(_: FlashState, fd: FormData): Promise<FlashState> {

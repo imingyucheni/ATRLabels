@@ -19,6 +19,7 @@ import { precheck, rememberQuote } from "./coverage";
 import { downloadLabel } from "./labels";
 import { chargeLabel, refundCancelled, removeShipmentLedger } from "./ledger";
 import { displayChannel } from "./channelDisplay";
+import { notifyLater } from "./notify";
 import type { AddressCheck } from "./addressCheck";
 import { computePrice, resolveRule, roundUp, type MarkupRule, type PartialRule } from "./pricing";
 import { getShipBestClient, shipbestMode, ShipBestError } from "./shipbest/client";
@@ -398,6 +399,15 @@ export async function refreshShipment(id: number): Promise<Shipment> {
   }
   updateShipment(id, patch);
   settleCancel(id);
+  // 刚变成异常：通知客户
+  if (patch.status === "exception" && s.status !== "exception") {
+    const ref = s.customerRef || s.customNo;
+    const reason = patch.errorMsg || "";
+    notifyLater(s.customerId, "exception", { zh: `订单 ${ref} 出单异常`, en: `Order ${ref} has a problem` }, {
+      zh: [`订单 ${ref} 出单异常${reason ? `：${reason}` : ""}。请登录查看，或联系客服处理。`],
+      en: [`Order ${ref} could not be processed${reason ? `: ${reason}` : ""}. Please sign in to check or contact support.`],
+    });
+  }
   return getShipment(id)!;
 }
 

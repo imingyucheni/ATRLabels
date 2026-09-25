@@ -320,6 +320,10 @@ export interface Settings {
   addrCheck: { enabled: boolean; provider: "google" | "usps"; googleKey: string; monthlyCap: number };
   /** 财务确认密码（4 位数字）的哈希 */
   financePin: string | null;
+  /** 发件邮箱（SMTP） */
+  smtp: { host: string; port: number; user: string; pass: string; from: string };
+  /** 邮件通知总开关 */
+  notifyEnabled: boolean;
 }
 
 /**
@@ -363,6 +367,8 @@ const DEFAULT_SETTINGS: Settings = {
   usps: { enabled: true, consumerKey: "", consumerSecret: "" },
   addrCheck: { enabled: true, provider: "google", googleKey: "", monthlyCap: 5000 },
   financePin: null,
+  smtp: { host: "", port: 465, user: "", pass: "", from: "" },
+  notifyEnabled: true,
 };
 
 export function getSettings(): Settings {

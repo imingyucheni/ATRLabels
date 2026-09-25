@@ -4,25 +4,11 @@
  * - 没配置时，申请会出现在后台“客户”页面，由客服一键重置密码后告诉客户。
  */
 import { createHash, randomBytes } from "node:crypto";
-import nodemailer from "nodemailer";
+import { sendMail, smtpConfigured } from "./mailer";
 import { db, getCustomer, getCustomerLogin, getSettings, setCustomerPassword } from "./db";
 import { hashPassword } from "./password";
 
 const sha = (t: string) => createHash("sha256").update(t).digest("hex");
-
-export function smtpConfigured() {
-  return !!(process.env.SMTP_HOST && process.env.SMTP_FROM);
-}
-
-async function sendMail(to: string, subject: string, text: string) {
-  const t = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: Number(process.env.SMTP_PORT || 465),
-    secure: Number(process.env.SMTP_PORT || 465) === 465,
-    auth: process.env.SMTP_USER ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS } : undefined,
-  });
-  await t.sendMail({ from: process.env.SMTP_FROM, to, subject, text });
-}
 
 /** 提交忘记密码申请；不管邮箱是否存在都返回同样结果，避免被用来试探账号 */
 export async function requestReset(email: string, baseUrl: string): Promise<{ emailed: boolean }> {

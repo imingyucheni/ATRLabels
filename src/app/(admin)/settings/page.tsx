@@ -6,7 +6,7 @@ import { isSandboxSite, shipbestConfig, type ShipBestMode } from "@/lib/shipbest
 import StampSettings from "@/components/StampSettings";
 import FlashForm from "@/components/FlashForm";
 import RuleInputs from "@/components/RuleInputs";
-import { setFinancePinAction, clearTestDataAction, saveAddrCheckAction, testAddrAction, refreshFxAction, saveChannelsAction, savePaymentSettingsAction, saveSettingsAction, saveShipBestAction, syncChannelsAction, verifyAction } from "@/app/actions";
+import { saveSmtpAction, testMailAction, setFinancePinAction, clearTestDataAction, saveAddrCheckAction, testAddrAction, refreshFxAction, saveChannelsAction, savePaymentSettingsAction, saveSettingsAction, saveShipBestAction, syncChannelsAction, verifyAction } from "@/app/actions";
 import { cnyToPay, usdCnyQuote } from "@/lib/fx";
 import FilePick from "@/components/FilePick";
 import { CarrierMark } from "@/components/ChannelLabel";
@@ -14,6 +14,8 @@ import { CARRIERS, carrierById, defaultPublicName, guessCarrier, publicChannel }
 import { testDataStats } from "@/lib/cleanup";
 import { addrConfig, monthlyUsage } from "@/lib/addressCheck";
 import { hasFinancePin } from "@/lib/financePin";
+import { smtpConfig } from "@/lib/mailer";
+import { NOTIFY_EVENTS, NOTIFY_LABEL, recentEmailLog } from "@/lib/notify";
 import { getLang, getT } from "@/lib/prefs";
 import type { T } from "@/lib/i18n";
 
@@ -146,6 +148,56 @@ export default async function SettingsPage() {
               <div className="row" style={{ marginTop: 8 }}>
                 <FlashForm action={testAddrAction} submitLabel="测试连接" submitClass="" inline />
               </div>
+            )}
+          </div>
+        );
+      })()}
+
+      {(() => {
+        const sm = smtpConfig();
+        const saved = s.smtp ?? { host: "", port: 465, user: "", pass: "", from: "" };
+        const logs = recentEmailLog(8);
+        return (
+          <div className="card" id="mail">
+            <div className="row" style={{ justifyContent: "space-between" }}>
+              <h2 style={{ margin: 0 }}>{t("邮件通知")}</h2>
+              <span className={`badge ${sm.host && sm.from && s.notifyEnabled !== false ? "ok" : "pending"}`}>{sm.host && sm.from ? (s.notifyEnabled !== false ? t("已启用") : t("已停用")) : t("未配置")}</span>
+            </div>
+            <p className="small muted">
+              {t("配置发件邮箱后，系统会给客户发这些通知（中英双语）：")}{NOTIFY_EVENTS.map((e) => t(NOTIFY_LABEL[e])).join(t("、"))}{t("。客户可以在“账户设置 → 邮件通知”里逐项关闭，每封邮件也有退订链接。忘记密码的重置邮件也用这个邮箱发。")}
+            </p>
+            <FlashForm action={saveSmtpAction} submitLabel="保存" locked="修改后所有邮件都用新的发件设置">
+              <div className="grid" style={{ margin: "12px 0" }}>
+                <label className="f">{t("SMTP 服务器")}<input name="host" defaultValue={saved.host} placeholder="smtp.gmail.com" autoComplete="off" /></label>
+                <label className="f">{t("端口")}<input name="port" type="number" defaultValue={saved.port || 465} /></label>
+                <label className="f">{t("用户名")}<input name="user" defaultValue={saved.user} placeholder="info@innotronia.com" autoComplete="off" /></label>
+                <label className="f">{t("密码 / 应用专用密码")}<input name="pass" type="password" autoComplete="new-password" placeholder={saved.pass ? t("已保存，留空不修改") : ""} /></label>
+                <label className="f">{t("发件人")}<input name="from" defaultValue={saved.from} placeholder={`${s.brandName} <info@innotronia.com>`} /></label>
+                <label className="f" style={{ alignSelf: "end" }}><span><input type="checkbox" name="notifyEnabled" defaultChecked={s.notifyEnabled !== false} /> {t("发送客户通知")}</span></label>
+              </div>
+            </FlashForm>
+            {sm.host && sm.from && (
+              <FlashForm action={testMailAction} submitLabel="发送测试邮件" submitClass="" className="row" >
+                <input name="to" type="email" placeholder={t("收件邮箱")} required style={{ maxWidth: 260 }} />
+              </FlashForm>
+            )}
+            {logs.length > 0 && (
+              <details className="small" style={{ marginTop: 10 }}>
+                <summary>{t("最近发送记录")}</summary>
+                <table className="list" style={{ marginTop: 6 }}>
+                  <tbody>
+                    {logs.map((l) => (
+                      <tr key={l.id}>
+                        <td className="muted">{fmtTime(l.created_at)}</td>
+                        <td>{l.customer_name}</td>
+                        <td>{l.to_email}</td>
+                        <td className="cell-wrap">{l.subject}</td>
+                        <td><span className={`badge ${l.status === "sent" ? "ok" : "exception"}`}>{l.status === "sent" ? t("已发送") : t("失败")}</span>{l.error && <div className="small muted">{l.error}</div>}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </details>
             )}
           </div>
         );

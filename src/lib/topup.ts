@@ -2,6 +2,7 @@
  * 客户充值申请：客户转账后提交申请（Zelle 美元 / 支付宝人民币），后台确认后记入钱包。
  */
 import fs from "node:fs";
+import { notifyLater } from "./notify";
 import path from "node:path";
 import { dataDir, db, getCustomer } from "./db";
 import { cnyToPay, usdCnyQuote } from "./fx";
@@ -158,6 +159,10 @@ export function approveTopup(id: number, creditedUsd: number, adminNote: string 
       .prepare("UPDATE topup_requests SET status = 'approved', credited_usd = ?, admin_note = ?, ledger_id = ?, handled_at = datetime('now') WHERE id = ? AND status = 'pending'")
       .run(amount, adminNote, ledgerId, id);
   })();
+  notifyLater(t.customerId, "topup", { zh: `充值 $${amount.toFixed(2)} 已到账`, en: `Top-up of $${amount.toFixed(2)} received` }, {
+    zh: [`你的充值（申请 #${t.id}）已确认到账，$${amount.toFixed(2)} 已加到账户余额。`],
+    en: [`Your top-up (request #${t.id}) has been confirmed and $${amount.toFixed(2)} was added to your balance.`],
+  });
 }
 
 export function rejectTopup(id: number, adminNote: string) {
@@ -166,6 +171,10 @@ export function rejectTopup(id: number, adminNote: string) {
   if (t.status !== "pending") throw new Error("这笔申请已经处理过了");
   if (!adminNote.trim()) throw new Error("请填写不通过的原因，客户会看到");
   db().prepare("UPDATE topup_requests SET status = 'rejected', admin_note = ?, handled_at = datetime('now') WHERE id = ?").run(adminNote, id);
+  notifyLater(t.customerId, "topup", { zh: `充值申请 #${t.id} 未通过`, en: `Top-up request #${t.id} not approved` }, {
+    zh: [`你的充值申请 #${t.id}（$${t.amountUsd.toFixed(2)}）没有通过。原因：${adminNote}`, "如有疑问请联系客服。"],
+    en: [`Your top-up request #${t.id} ($${t.amountUsd.toFixed(2)}) was not approved. Reason: ${adminNote}`, "Please contact support if you have questions."],
+  });
 }
 
 /* ---------------- 支付宝收款码 ---------------- */

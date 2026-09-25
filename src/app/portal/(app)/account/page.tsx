@@ -2,7 +2,8 @@ import { requireCustomer } from "@/lib/auth";
 import FlashForm from "@/components/FlashForm";
 import SenderBook from "@/components/SenderBook";
 import { listSenders } from "@/lib/senders";
-import { portalChangePasswordAction, portalSaveLabelPaperAction } from "@/app/portal/actions";
+import { portalChangePasswordAction, portalSaveLabelPaperAction, portalSaveNotifyAction } from "@/app/portal/actions";
+import { getNotifyPrefs, NOTIFY_EVENTS, NOTIFY_LABEL, notifyReady } from "@/lib/notify";
 import { PAPER_LABEL, PAPER_SIZES } from "@/lib/labelLayout";
 import { getT } from "@/lib/prefs";
 
@@ -28,6 +29,24 @@ export default async function PortalAccount() {
         </div>
       </FlashForm>
       <SenderBook initial={listSenders(me.id)} />
+      {notifyReady() && (() => {
+        const np = getNotifyPrefs(me.id);
+        return (
+          <FlashForm action={portalSaveNotifyAction} submitLabel={t("保存")} className="card" id="notify">
+            <h2>{t("邮件通知")}</h2>
+            <p className="small muted">{t("勾选想收到的邮件，不需要的可以取消。每封邮件底部也有一键退订链接。")}</p>
+            <div className="check-grid" style={{ margin: "10px 0" }}>
+              {NOTIFY_EVENTS.map((e) => (
+                <label key={e} className="small"><input type="checkbox" name={`ev.${e}`} defaultChecked={np.events[e]} /> {t(NOTIFY_LABEL[e])}</label>
+              ))}
+            </div>
+            <div className="grid" style={{ marginBottom: 12 }}>
+              <label className="f">{t("收通知的邮箱（可选）")}<input name="notifyEmail" type="email" defaultValue={np.email} placeholder={me.portalEmail ?? ""} /></label>
+              <label className="f">{t("余额低于多少美元时提醒")}<input name="lowBalance" type="number" min={0} step={1} defaultValue={np.lowBalance} /></label>
+            </div>
+          </FlashForm>
+        );
+      })()}
       <FlashForm action={portalChangePasswordAction} submitLabel={t("修改密码")} className="card" resetOnSuccess>
         <h2>{t("修改密码")}</h2>
         <div className="grid" style={{ marginBottom: 12 }}>
