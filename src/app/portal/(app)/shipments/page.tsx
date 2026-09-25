@@ -1,3 +1,4 @@
+import { isPaperSize, PAPER_LABEL, type PaperSize } from "@/lib/labelLayout";
 import { fmtTime } from "@/lib/time";
 import Link from "next/link";
 import { requireCustomer } from "@/lib/auth";
@@ -31,6 +32,7 @@ export default async function PortalShipments({ searchParams }: { searchParams: 
         <a className="btn" href={`/api/portal/export?${qs}`}>导出 CSV</a>
       </form>
       <SelectPrint
+        paperNote={PAPER_LABEL[(isPaperSize(me.labelPaper) ? me.labelPaper : "4x6") as PaperSize]}
         rows={rows.map((s) => ({
           id: s.id,
           hasLabel: s.hasLabel,

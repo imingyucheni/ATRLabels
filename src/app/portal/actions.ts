@@ -17,8 +17,9 @@ import {
   leaveCustomer,
 } from "@/lib/auth";
 import { adminOrigin } from "@/lib/sites";
+import { isPaperSize, PAPER_LABEL } from "@/lib/labelLayout";
 import { deleteSender, listSenders, saveSender, setDefaultSender } from "@/lib/senders";
-import { getCustomerLogin, getPasswordHash, getSettings, setCustomerPassword, setCustomerSender, setLabelNote } from "@/lib/db";
+import { getCustomerLogin, getPasswordHash, getSettings, setCustomerLabelPaper, setCustomerPassword, setCustomerSender, setLabelNote } from "@/lib/db";
 import { InsufficientBalanceError } from "@/lib/ledger";
 import { ownsShipment, publicError, toPublicQuote, type PublicQuote } from "@/lib/portal";
 import { cleanAddress, cleanRequest, n, str } from "@/lib/sanitize";
@@ -243,4 +244,13 @@ export async function portalResetAction(_: unknown, fd: FormData) {
     return { error: (e as Error).message };
   }
   redirect("/portal");
+}
+
+export async function portalSaveLabelPaperAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  const me = await requireCustomer();
+  const v = fd.get("labelPaper");
+  if (!isPaperSize(v)) return { error: "请选择纸张" };
+  setCustomerLabelPaper(me.id, v);
+  revalidatePath("/portal", "layout");
+  return { ok: `已保存：之后打印 / 下载面单使用 ${PAPER_LABEL[v]}` };
 }

@@ -13,6 +13,8 @@ export default function TopupForm(props: {
 }) {
   const [method, setMethod] = useState<"zelle" | "alipay">(props.zelleInfo || !props.alipayInfo ? "zelle" : "alipay");
   const [amount, setAmount] = useState("");
+  // 收款账号默认隐藏，点按钮才显示
+  const [showPay, setShowPay] = useState(false);
   const [state, action, pending] = useActionState(portalTopupAction, null);
   const ref = useRef<HTMLFormElement>(null);
   useEffect(() => {
@@ -73,14 +75,25 @@ export default function TopupForm(props: {
           <button className="primary" disabled={pending}>{pending ? "提交中…" : "我已付款，提交充值申请"}</button>
         </div>
         <div>
-          <div className="small muted" style={{ marginBottom: 4 }}>收款信息</div>
-          <div className="card" style={{ background: "var(--bg)", whiteSpace: "pre-wrap" }}>
-            {method === "zelle" ? props.zelleInfo || "请联系客服获取 Zelle 收款信息" : props.alipayInfo || "请联系客服获取支付宝收款信息"}
-            {method === "alipay" && props.alipayQr && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src="/api/assets/alipay-qr" alt="支付宝收款码" style={{ display: "block", width: 200, maxWidth: "100%", marginTop: 12, border: "1px solid var(--line)", borderRadius: 8 }} />
-            )}
+          <div className="row" style={{ justifyContent: "space-between", marginBottom: 8 }}>
+            <b>{method === "zelle" ? "Zelle 收款信息" : "支付宝收款信息"}</b>
+            <button type="button" className={showPay ? "" : "primary"} onClick={() => setShowPay((v) => !v)}>
+              {showPay ? "隐藏收款信息" : "显示收款信息"}
+            </button>
           </div>
+          {showPay ? (
+            <div className="card" style={{ background: "var(--bg)", whiteSpace: "pre-wrap" }}>
+              {method === "zelle" ? props.zelleInfo || "请联系客服获取 Zelle 收款信息" : props.alipayInfo || "请联系客服获取支付宝收款信息"}
+              {method === "alipay" && props.alipayQr && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src="/api/assets/alipay-qr" alt="支付宝收款码" style={{ display: "block", width: 200, maxWidth: "100%", marginTop: 12, border: "1px solid var(--line)", borderRadius: 8 }} />
+              )}
+            </div>
+          ) : (
+            <div className="pay-hidden" onClick={() => setShowPay(true)}>
+              收款账号已隐藏，点击“显示收款信息”查看
+            </div>
+          )}
         </div>
       </div>
     </form>

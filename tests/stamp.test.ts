@@ -75,3 +75,22 @@ describe("面单加印 SKU", async () => {
     expect(db.getChannel("LP10210030")!.stamp!.y).toBe(4.9);
   });
 });
+
+describe("面单纸张排版", () => {
+  it("4x6 原样；半张 / 整张 / 每页两张", async () => {
+    const { PDFDocument } = await import("pdf-lib");
+    const { layoutLabels } = await import("@/lib/labelLayout");
+    const src = await PDFDocument.create();
+    for (let i = 0; i < 3; i++) src.addPage([288, 432]).drawRectangle({ x: 10, y: 10, width: 268, height: 412, borderWidth: 1 });
+    const three = await src.save();
+    expect(await layoutLabels(three, "4x6")).toBe(three);
+    const half = await PDFDocument.load(await layoutLabels(three, "half"));
+    expect(half.getPageCount()).toBe(3);
+    expect(half.getPage(0).getSize()).toEqual({ width: 612, height: 396 });
+    const letter = await PDFDocument.load(await layoutLabels(three, "letter"));
+    expect(letter.getPageCount()).toBe(3);
+    expect(letter.getPage(0).getSize()).toEqual({ width: 612, height: 792 });
+    const two = await PDFDocument.load(await layoutLabels(three, "letter2"));
+    expect(two.getPageCount()).toBe(2); // 3 张 → 2 页
+  });
+});

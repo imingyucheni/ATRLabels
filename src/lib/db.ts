@@ -199,6 +199,7 @@ function migrate(conn: Database.Database) {
   ];
   for (const [c, t] of addCust) if (!ccols.includes(c)) conn.exec(`ALTER TABLE customers ADD COLUMN ${c} ${t}`);
   if (!ccols.includes("stamp_mode")) conn.exec("ALTER TABLE customers ADD COLUMN stamp_mode TEXT NOT NULL DEFAULT 'inherit'");
+  if (!ccols.includes("label_paper")) conn.exec("ALTER TABLE customers ADD COLUMN label_paper TEXT NOT NULL DEFAULT '4x6'");
   const chcols = (conn.prepare("PRAGMA table_info(channels)").all() as { name: string }[]).map((c) => c.name);
   if (!chcols.includes("stamp_json")) conn.exec("ALTER TABLE channels ADD COLUMN stamp_json TEXT");
   if (!cols.includes("label_note")) conn.exec("ALTER TABLE shipments ADD COLUMN label_note TEXT");
@@ -501,6 +502,8 @@ export interface Customer {
   balance: number;
   /** 面单加印 SKU：inherit 跟随全局 / on 加印 / off 不加印 */
   stampMode: "inherit" | "on" | "off";
+  /** 面单纸张：4x6 / half / letter / letter2 */
+  labelPaper: string;
 }
 
 interface CustomerRow {
@@ -521,6 +524,7 @@ interface CustomerRow {
   sender_json: string | null;
   balance: number | null;
   stamp_mode: "inherit" | "on" | "off" | null;
+  label_paper: string | null;
 }
 
 function toCustomer(r: CustomerRow): Customer {
@@ -540,6 +544,7 @@ function toCustomer(r: CustomerRow): Customer {
     sender: r.sender_json ? JSON.parse(r.sender_json) : null,
     balance: Math.round((r.balance ?? 0) * 100) / 100,
     stampMode: r.stamp_mode ?? "inherit",
+    labelPaper: r.label_paper ?? "4x6",
   };
 }
 
@@ -587,6 +592,10 @@ export function setCustomerPassword(id: number, hash: string) {
 
 export function setCustomerStampMode(id: number, mode: "inherit" | "on" | "off") {
   db().prepare("UPDATE customers SET stamp_mode = ? WHERE id = ?").run(mode, id);
+}
+
+export function setCustomerLabelPaper(id: number, paper: string) {
+  db().prepare("UPDATE customers SET label_paper = ? WHERE id = ?").run(paper, id);
 }
 
 export function setCustomerSender(id: number, sender: Address | null) {

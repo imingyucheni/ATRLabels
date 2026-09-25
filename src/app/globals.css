@@ -19,6 +19,7 @@
   --ink-hover: #2b2b31;
   --on-ink: #ffffff;
   --accent: #0f766e;
+  --on-accent: #ffffff;
   --accent-soft: #e3f2ef;
   --accent-ring: rgba(15, 118, 110, 0.22);
   --ok: #067647;
@@ -56,6 +57,7 @@
     --ink-hover: #ffffff;
     --on-ink: #111113;
     --accent: #3cc2b2;
+    --on-accent: #06201c;
     --accent-soft: #15302d;
     --accent-ring: rgba(60, 194, 178, 0.28);
     --ok: #4ccf8f;
@@ -78,7 +80,7 @@
   color-scheme: dark;
   --bg: #111113; --surface: #18181b; --surface-2: #1c1c20; --sunken: #141416; --line: #2a2a2f; --line-strong: #3a3a41;
   --text: #ededee; --text-2: #c4c4c9; --muted: #8d8d96; --ink: #ededee; --ink-hover: #ffffff; --on-ink: #111113;
-  --accent: #3cc2b2; --accent-soft: #15302d; --accent-ring: rgba(60, 194, 178, 0.28);
+  --accent: #3cc2b2; --on-accent: #06201c; --accent-soft: #15302d; --accent-ring: rgba(60, 194, 178, 0.28);
   --ok: #4ccf8f; --ok-soft: #13291e; --warn: #f0b44c; --warn-soft: #2d2413; --err: #ff8078; --err-soft: #331816; --info-soft: #172234;
   --shadow-xs: none; --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4); --shadow-pop: 0 12px 32px -8px rgba(0, 0, 0, 0.6);
   --series-1: #3987e5; --series-2: #d95926; --chart-grid: #26262b; --chart-axis: #8d8d96;
@@ -127,17 +129,31 @@ code { font: 12.5px ui-monospace, SFMono-Regular, Menlo, monospace; background: 
 }
 .brand-name { font-weight: 650; font-size: 14.5px; line-height: 1.2; }
 .brand-sub { font-size: 11.5px; color: var(--muted); }
-.nav-section { font-size: 11px; font-weight: 600; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; padding: 14px 10px 6px; }
-.nav-item {
-  display: flex; align-items: center; gap: 10px;
-  padding: 7px 10px; margin: 1px 0; border-radius: 8px;
-  color: var(--text-2); font-weight: 500; font-size: 13.5px;
-  border: 1px solid transparent;
+/* 菜单分组标题：小色条 + 标题 + 细分隔线 */
+.sidebar nav + nav { margin-top: 6px; }
+.nav-section {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; font-weight: 650; color: var(--text-2); letter-spacing: 0.08em;
+  padding: 16px 10px 8px;
 }
-.nav-item svg { width: 16px; height: 16px; color: var(--muted); flex-shrink: 0; }
+.nav-section::before { content: ""; width: 3px; height: 12px; border-radius: 2px; background: var(--accent); opacity: 0.85; }
+.nav-section::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.nav-item {
+  position: relative; display: flex; align-items: center; gap: 11px;
+  padding: 6px 10px 6px 8px; margin: 2px 0; border-radius: 10px;
+  color: var(--text-2); font-weight: 500; font-size: 14px;
+  border: 1px solid transparent; transition: background .15s, color .15s;
+}
+/* 图标放在小方块里 */
+.nav-item svg {
+  width: 30px; height: 30px; padding: 7px; border-radius: 8px; flex-shrink: 0;
+  color: var(--muted); background: var(--sunken); transition: background .15s, color .15s;
+}
 .nav-item:hover { background: var(--sunken); text-decoration: none; color: var(--text); }
-.nav-item.active { background: var(--surface); border-color: var(--line); box-shadow: var(--shadow-xs); color: var(--text); }
-.nav-item.active svg { color: var(--accent); }
+.nav-item:hover svg { background: var(--surface); color: var(--text); }
+.nav-item.active { background: var(--accent-soft); color: var(--text); font-weight: 600; }
+.nav-item.active svg { color: var(--on-accent); background: var(--accent); }
+.nav-item.active::before { content: ""; position: absolute; left: -12px; top: 8px; bottom: 8px; width: 3px; border-radius: 0 3px 3px 0; background: var(--accent); }
 .nav-count { margin-left: auto; font-size: 11px; font-weight: 600; background: var(--warn-soft); color: var(--warn); border-radius: 999px; padding: 0 7px; line-height: 18px; }
 .sidebar-foot { margin-top: auto; padding-top: 14px; display: grid; gap: 8px; }
 .who-card { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 10px 12px; }
@@ -406,3 +422,4 @@ table.list td { white-space: nowrap; }
 .dim-form { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .dim-form .alert { width: 100%; margin: 0; padding: 4px 8px; }
 .dim-form input { height: 30px; padding: 2px 6px; }
+.pay-hidden { padding: 28px 16px; text-align: center; border: 1px dashed var(--line-strong); border-radius: 10px; color: var(--muted); font-size: 13px; cursor: pointer; }

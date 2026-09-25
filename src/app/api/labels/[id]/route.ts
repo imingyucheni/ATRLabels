@@ -1,5 +1,8 @@
 import { currentCustomerId, isLoggedIn } from "@/lib/auth";
-import { getShipment } from "@/lib/db";
+import { getCustomer, getShipment } from "@/lib/db";
+import { isPaperSize, layoutLabels, type PaperSize } from "@/lib/labelLayout";
+import { stampLabelBytes, mergeStamp } from "@/lib/stamp";
+import { getSettings } from "@/lib/db";
 import { readLabel } from "@/lib/labels";
 import { stampedLabel, voidLabel } from "@/lib/stamp";
 
@@ -25,9 +28,18 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
   }
   // 默认返回加印 SKU 的版本；?raw=1 返回 ShipBest 原始面单
   const stamped = params.has("raw") ? null : await stampedLabel(s);
-  const buf = stamped ?? readLabel(s.labelPath);
-  const mime = stamped ? "application/pdf" : s.labelMime;
-  const ext = stamped ? "pdf" : s.labelPath.split(".").pop();
+  let buf: Uint8Array = stamped ?? readLabel(s.labelPath);
+  let mime = stamped ? "application/pdf" : s.labelMime;
+  let ext = stamped ? "pdf" : s.labelPath.split(".").pop();
+  // 纸张：?paper= 优先，其次客户的设置；不是 4×6 时排版到普通纸上
+  const q = params.get("paper");
+  const paper: PaperSize = isPaperSize(q) ? q : isPaperSize(getCustomer(s.customerId)?.labelPaper) ? (getCustomer(s.customerId)!.labelPaper as PaperSize) : "4x6";
+  if (paper !== "4x6" && !params.has("raw")) {
+    const pdf = mime === "application/pdf" ? buf : await stampLabelBytes(Buffer.from(buf), mime, "", mergeStamp(getSettings().stamp, null));
+    buf = await layoutLabels(pdf, paper);
+    mime = "application/pdf";
+    ext = "pdf";
+  }
   return new Response(new Uint8Array(buf), {
     headers: {
       "Content-Type": mime || "application/octet-stream",

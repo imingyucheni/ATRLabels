@@ -122,7 +122,7 @@ export default function BatchOrders(props: {
         <ol className="small muted" style={{ paddingLeft: 18, marginTop: 0 }}>
           <li>使用 <b>ShipBest 导单模板</b>：原来在 ShipBest 后台用的表格可以直接上传，也可以点右上角下载模板（含填写说明和示例）。寄件人各列留空时，使用{props.mode === "portal" ? "账户设置里的默认寄件地址" : "客户的默认寄件地址"}。</li>
           <li>系统用下面勾选的渠道逐单试算，每单列出各渠道价格，默认选最便宜的，可以逐单修改。</li>
-          <li>确认后勾选订单“提交订单”，完成后一键合并打印全部 4×6 面单。</li>
+          <li>确认后勾选订单“提交订单”，完成后一键合并打印全部面单（纸张在“账户设置”里选，默认 4×6）。</li>
         </ol>
         <form action={onUpload} style={{ display: "grid", gap: 12 }}>
           <input type="hidden" name="mode" value={props.mode} />

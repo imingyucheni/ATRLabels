@@ -7,10 +7,12 @@ export default function SelectPrint({
   rows,
   headers,
   numericCols = [],
+  paperNote,
 }: {
   rows: { id: number; hasLabel: boolean; cells: React.ReactNode[] }[];
   headers: string[];
   numericCols?: number[];
+  paperNote?: string;
 }) {
   const [sel, setSel] = useState<Set<number>>(new Set());
   const printable = rows.filter((r) => r.hasLabel);
@@ -32,7 +34,7 @@ export default function SelectPrint({
         >
           合并打印所选面单（{sel.size}）
         </a>
-        <span className="small muted">勾选已出面单的记录，合并成一个 4×6 PDF 打印</span>
+        <span className="small muted">勾选已出面单的记录，合并成一个 PDF 打印{paperNote ? `（纸张：${paperNote}，可在“账户设置”里修改）` : ""}</span>
       </div>
       <table className="list">
         <thead>
