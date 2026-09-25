@@ -10,7 +10,7 @@ import { clearTestDataAction, refreshFxAction, saveChannelsAction, savePaymentSe
 import { cnyToPay, usdCnyQuote } from "@/lib/fx";
 import FilePick from "@/components/FilePick";
 import { CarrierMark } from "@/components/ChannelLabel";
-import { CARRIERS, carrierById, cleanChannelName, guessCarrier, publicChannel } from "@/lib/carriers";
+import { CARRIERS, carrierById, defaultPublicName, guessCarrier, publicChannel } from "@/lib/carriers";
 import { testDataStats } from "@/lib/cleanup";
 import { getLang, getT } from "@/lib/prefs";
 import type { T } from "@/lib/i18n";
@@ -233,7 +233,7 @@ export default async function SettingsPage() {
                   <td>
                     <div className="row" style={{ gap: 6, flexWrap: "nowrap" }}>
                       <CarrierMark carrier={publicChannel(c).carrier} size="sm" />
-                      <input name={`display.${c.code}`} defaultValue={c.displayName ?? ""} placeholder={cleanChannelName(c.name)} maxLength={40} style={{ width: 150 }} />
+                      <input name={`display.${c.code}`} defaultValue={c.displayName ?? ""} placeholder={defaultPublicName(c.name, c.carrier)} maxLength={40} style={{ width: 150 }} />
                     </div>
                     <select name={`carrier.${c.code}`} defaultValue={c.carrier ?? ""} style={{ marginTop: 6, width: 190 }}>
                       <option value="">{t("自动识别：{name}", { name: carrierById(guessCarrier(c.name)).name })}</option>
