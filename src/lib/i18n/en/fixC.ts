@@ -21,7 +21,7 @@ export const fixC: Record<string, string> = {
   "已停用": "Disabled",
   "未配置": "Not set up",
   "启用地址核对": "Enable address check",
-  "客户查运费时自动用 USPS 核对收件地址：地址不存在或缺公寓号会提醒客户，必须确认后才能下单；写法不标准会给出建议地址。免费，需要在 developers.usps.com 注册并创建 App，拿到 Consumer Key 和 Consumer Secret。USPS 默认每小时 60 次，同一个地址 30 天内只查一次。": "When customers get quotes, the recipient address is checked with USPS: if it doesn't exist or is missing a unit number, the customer must confirm before ordering; non-standard formats get a suggested address. Free — register at developers.usps.com and create an app to get a Consumer Key and Secret. USPS allows 60 lookups per hour by default; each address is checked at most once every 30 days.",
+  "客户查运费时自动用 USPS 核对收件地址：地址不存在或缺公寓号会提醒客户，必须确认后才能下单；写法不标准会给出建议地址。免费，需要在 developers.usps.com 注册并创建 App，拿到 Consumer Key 和 Consumer Secret。USPS 默认每小时 60 次，同一个地址只查一次，以后直接用上次的结果。": "When customers get quotes, the recipient address is checked with USPS: if it doesn't exist or is missing a unit number, the customer must confirm before ordering; non-standard formats get a suggested address. Free — register at developers.usps.com and create an app to get a Consumer Key and Secret. USPS allows 60 lookups per hour by default; each address is only checked once and the result is reused.",
   "修改后所有客户下单都会用新的设置核对地址": "Changes apply to address checks for all customers",
   "USPS 开发者平台 → Apps 里的 Consumer Key": "Consumer Key from USPS Developer Portal → Apps",
   "USPS 开发者平台 → Apps 里的 Consumer Secret": "Consumer Secret from USPS Developer Portal → Apps",

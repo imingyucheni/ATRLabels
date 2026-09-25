@@ -98,7 +98,7 @@ export default async function SettingsPage() {
               <span className={`badge ${u.enabled ? "ok" : "pending"}`}>{u.enabled ? t("已启用") : u.configured ? t("已停用") : t("未配置")}</span>
             </div>
             <p className="small muted">
-              {t("客户查运费时自动用 USPS 核对收件地址：地址不存在或缺公寓号会提醒客户，必须确认后才能下单；写法不标准会给出建议地址。免费，需要在 developers.usps.com 注册并创建 App，拿到 Consumer Key 和 Consumer Secret。USPS 默认每小时 60 次，同一个地址 30 天内只查一次。")}
+              {t("客户查运费时自动用 USPS 核对收件地址：地址不存在或缺公寓号会提醒客户，必须确认后才能下单；写法不标准会给出建议地址。免费，需要在 developers.usps.com 注册并创建 App，拿到 Consumer Key 和 Consumer Secret。USPS 默认每小时 60 次，同一个地址只查一次，以后直接用上次的结果。")}
             </p>
             <FlashForm action={saveUspsAction} submitLabel="保存并测试连接" locked="修改后所有客户下单都会用新的设置核对地址">
               <div className="grid" style={{ margin: "12px 0" }}>

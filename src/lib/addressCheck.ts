@@ -1,7 +1,7 @@
 /**
  * 收件地址核对（USPS Addresses API v3）：下单前检查地址是否存在、是否缺公寓号，并给出标准写法。
  * - 在后台“设置 → 地址核对”填写 USPS 开发者账号的 Consumer Key / Secret 后启用。
- * - 结果缓存 30 天，同一个地址只查一次（USPS 默认每小时 60 次额度）。
+ * - 结果永久保存，同一个地址只查一次（USPS 默认每小时 60 次额度）。
  * - 接口出错 / 超额度 / 没配置时返回 unavailable，不影响下单。
  * - 模拟模式下（没填密钥）用简单规则模拟，方便演示和测试。
  */
@@ -77,7 +77,7 @@ function ensure() {
 }
 
 function cached(key: string): AddressCheck | null {
-  const r = ensure().prepare("SELECT json, checked_at FROM address_checks WHERE key = ? AND checked_at > datetime('now', '-30 days')").get(key) as
+  const r = ensure().prepare("SELECT json, checked_at FROM address_checks WHERE key = ?").get(key) as
     | { json: string; checked_at: string }
     | undefined;
   return r ? { ...JSON.parse(r.json), checkedAt: r.checked_at } : null;
