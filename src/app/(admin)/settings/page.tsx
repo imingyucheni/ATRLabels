@@ -11,7 +11,7 @@ import { cnyToPay, usdCnyQuote } from "@/lib/fx";
 import FilePick from "@/components/FilePick";
 import { CarrierMark } from "@/components/ChannelLabel";
 import { CARRIERS, carrierById, defaultPublicName, guessCarrier, publicChannel } from "@/lib/carriers";
-import { testDataStats } from "@/lib/cleanup";
+import { hasTestData, testDataStats } from "@/lib/cleanup";
 import { currentEnv } from "@/lib/db";
 import { addrConfig, monthlyUsage } from "@/lib/addressCheck";
 import { hasFinancePin } from "@/lib/financePin";
@@ -396,21 +396,24 @@ export default async function SettingsPage() {
         const st = testDataStats();
         return (
           <div className="card danger-card" id="cleanup">
-            <h2>{t("上线前清空测试数据")}</h2>
+            <h2>{t("清除模拟 / 沙盒数据")}</h2>
             <p className="small muted">
-              {t("删除所有订单、余额流水（客户余额归零）、充值申请、补差记录、批量导入记录和面单文件；客户、登录账号、渠道、价格设置、派送范围、报价表和寄件地址都会保留。清空前会自动备份数据库。")}
+              {t("只删除模拟、沙盒模式下的订单，以及这些订单的扣款、退款、补差、批量导入记录和面单文件；真实订单和它们的账目不会动，上线后也可以随时用。充值和手动调账分不出是不是测试，会保留，如有测试充值请在客户页面手动调整。清除前会自动备份。")}
+            </p>
+            <p className="small muted">
+              {t("以后切换到模拟 / 沙盒模式时产生的数据存放在单独的测试数据库里，不会进入正式数据。")}
             </p>
             <p className="small">
-              {t("现有：订单 {a}（其中正式单 {b}）、流水 {c}、充值申请 {d}、补差 {e}、批量导入 {f}", {
-                a: st.shipments, b: st.liveShipments, c: st.ledger, d: st.topups, e: st.adjustments, f: st.batches,
+              {t("正式订单 {a}；可清除：模拟 / 沙盒订单 {b}、相关流水 {c}、补差 {d}、批量导入 {e}", {
+                a: st.liveShipments, b: st.testShipments, c: st.testLedger, d: st.testAdjustments, e: st.testBatches,
               })}
             </p>
-            {st.liveShipments > 0 ? (
-              <div className="alert warn">{t("已经有正式订单，不能再清空。")}</div>
+            {!hasTestData(st) ? (
+              <div className="alert ok">{t("没有需要清除的模拟 / 沙盒数据。")}</div>
             ) : (
-              <FlashForm action={clearTestDataAction} submitLabel="清空测试数据" submitClass="danger" confirm="确定清空所有测试数据吗？所有客户余额会归零，这一步不能撤销（会自动备份）。">
-                <label className="f" style={{ maxWidth: 320, marginBottom: 10 }}>{t("输入“清空测试数据”确认")}
-                  <input name="confirm" autoComplete="off" placeholder={lang === "en" ? "CLEAR" : "清空测试数据"} />
+              <FlashForm action={clearTestDataAction} submitLabel="清除测试数据" submitClass="danger" confirm="确定清除模拟 / 沙盒数据吗？真实订单不受影响（会自动备份）。">
+                <label className="f" style={{ maxWidth: 320, marginBottom: 10 }}>{t("输入“清除测试数据”确认")}
+                  <input name="confirm" autoComplete="off" placeholder={lang === "en" ? "CLEAR" : "清除测试数据"} />
                 </label>
               </FlashForm>
             )}

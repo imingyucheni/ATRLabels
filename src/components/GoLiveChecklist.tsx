@@ -2,7 +2,7 @@ import Link from "next/link";
 import { CheckCircle2, Circle } from "lucide-react";
 import { db, getSettings, listChannels } from "@/lib/db";
 import { isSandboxSite, shipbestConfig } from "@/lib/shipbest/client";
-import { testDataStats } from "@/lib/cleanup";
+import { hasTestData, testDataStats } from "@/lib/cleanup";
 import { getT } from "@/lib/prefs";
 
 /** 上线检查清单：全部完成前显示在后台概览顶部（沙盒站不显示） */
@@ -21,7 +21,7 @@ export default async function GoLiveChecklist() {
     { done: opened > 0, label: "给客户开通渠道", hint: "客户详情 → 可用渠道", href: "/customers" },
     { done: !!(s.zelleInfo || s.alipayInfo), label: "填写收款方式", hint: "客户充值页会显示", href: "/settings" },
     { done: https, label: "开启 HTTPS", hint: "在服务器执行 atr-update --reconfigure 填写域名（可以用 sslip.io 免费域名）", href: "/settings" },
-    { done: stats.shipments === 0 || stats.liveShipments > 0, label: "清空测试数据", hint: "设置页最下面，上线前清一次", href: "/settings#cleanup" },
+    { done: !hasTestData(stats), label: "清除测试数据", hint: "设置页最下面，删掉模拟 / 沙盒订单", href: "/settings#cleanup" },
   ];
   const left = items.filter((i) => !i.done).length;
   if (!left) return null;

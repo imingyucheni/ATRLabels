@@ -87,30 +87,48 @@ describe("接口模式 / 沙盒", () => {
   });
 });
 
-describe("上线前清空测试数据", () => {
-  it("清空订单和流水，保留客户；有正式单时拒绝", async () => {
+describe("清除模拟 / 沙盒数据", () => {
+  it("只删测试单及其扣款、补差，正式单、充值和客户保留", async () => {
     const db = await import("@/lib/db");
     const ledger = await import("@/lib/ledger");
-    const { clearTestData, testDataStats } = await import("@/lib/cleanup");
+    const { clearTestData, testDataStats, hasTestData } = await import("@/lib/cleanup");
     const id = db.saveCustomer(null, { name: "清空测试客户", contact: null, phone: null, email: null, note: null, markup: {} });
     ledger.addLedger({ customerId: id, type: "topup", amount: 50, createdBy: "admin" });
-    expect(ledger.balanceOf(id)).toBe(50);
     // 充值申请（引用流水）、订单 + 扣款、补差，覆盖所有外键关系
     const topup = await import("@/lib/topup");
     const tid = await topup.createTopup({ customerId: id, method: "zelle", amountUsd: 20, reference: "T1" });
     topup.approveTopup(tid, 20, null);
-    const sid = Number(db.db().prepare("INSERT INTO shipments (custom_no, customer_id, channel_code, sender_json, recipient_json, package_json, sku_json, quoted_cost, currency, price, rule_json, status, env) VALUES ('M1', ?, 'X', '{}', '{}', '{}', '[]', 1, 'USD', 2, '{}', 'labeled', 'mock')").run(id).lastInsertRowid);
+    const ins = (no: string, env: string, price: number) =>
+      Number(db.db().prepare(`INSERT INTO shipments (custom_no, customer_id, channel_code, sender_json, recipient_json, package_json, sku_json, quoted_cost, currency, price, rule_json, status, env) VALUES (?, ?, 'X', '{}', '{}', '{}', '[]', 1, 'USD', ?, '{}', 'labeled', ?)`).run(no, id, price, env).lastInsertRowid);
+    const sid = ins("M1", "mock", 2);
     ledger.addLedger({ customerId: id, type: "label", amount: -2, shipmentId: sid, createdBy: "admin" });
+    const sb2 = ins("S1", "sandbox", 3);
+    ledger.addLedger({ customerId: id, type: "label", amount: -3, shipmentId: sb2, createdBy: "admin" });
+    // 分开环境之前的老数据：没有记录模式、也没有面单地址 → 算测试单
+    const old = Number(db.db().prepare("INSERT INTO shipments (custom_no, customer_id, channel_code, sender_json, recipient_json, package_json, sku_json, quoted_cost, currency, price, rule_json, status) VALUES ('O1', ?, 'X', '{}', '{}', '{}', '[]', 1, 'USD', 1, '{}', 'pending')").run(id).lastInsertRowid);
+    const live = ins("L1", "live", 5);
+    ledger.addLedger({ customerId: id, type: "label", amount: -5, shipmentId: live, createdBy: "admin" });
     const bid = Number(db.db().prepare("INSERT INTO adjustment_batches (filename, file_hash, policy) VALUES ('a.csv', 'h1', 'at_cost')").run().lastInsertRowid);
     const aid = Number(db.db().prepare("INSERT INTO adjustments (batch_id, row_no, match_key, shipment_id, customer_id, cost_amount, customer_amount) VALUES (?, 2, 'M1', ?, ?, 0.5, 0.5)").run(bid, sid, id).lastInsertRowid);
     ledger.postAdjustment(aid, id, sid, 0.5, "重量调整");
+    const aid2 = Number(db.db().prepare("INSERT INTO adjustments (batch_id, row_no, match_key, shipment_id, customer_id, cost_amount, customer_amount) VALUES (?, 3, 'L1', ?, ?, 0.4, 0.4)").run(bid, live, id).lastInsertRowid);
+    ledger.postAdjustment(aid2, id, live, 0.4, "重量调整");
+    expect(ledger.balanceOf(id)).toBeCloseTo(50 + 20 - 2 - 3 - 5 - 0.5 - 0.4, 2);
+
+    const st = testDataStats();
+    expect(st.liveShipments).toBeGreaterThanOrEqual(1);
+    expect(st.testShipments).toBeGreaterThanOrEqual(2);
     const r = clearTestData();
     expect(r.backup).toMatch(/^before-clear-.*\.db$/);
-    expect(ledger.balanceOf(id)).toBe(0);
+    // 充值保留，只退掉测试单的扣款和补差；正式单和它的补差不动
+    expect(ledger.balanceOf(id)).toBeCloseTo(50 + 20 - 5 - 0.4, 2);
+    expect(db.getShipment(live)).toBeTruthy();
+    expect(db.getShipment(sid)).toBeNull();
+    expect(db.getShipment(sb2)).toBeNull();
+    expect(db.getShipment(old)).toBeNull();
+    expect(db.db().prepare("SELECT COUNT(*) AS n FROM adjustments WHERE batch_id = ?").get(bid)).toEqual({ n: 1 });
     expect(db.getCustomer(id)?.name).toBe("清空测试客户");
-    expect(testDataStats().ledger).toBe(0);
-
-    db.db().prepare("INSERT INTO shipments (custom_no, customer_id, channel_code, sender_json, recipient_json, package_json, sku_json, quoted_cost, currency, price, rule_json, status, env) VALUES ('L1', ?, 'X', '{}', '{}', '{}', '[]', 1, 'USD', 1, '{}', 'labeled', 'live')").run(id);
-    expect(() => clearTestData()).toThrow(/正式订单/);
+    expect(hasTestData()).toBe(false);
+    expect(() => clearTestData()).toThrow(/没有需要清除/);
   });
 });

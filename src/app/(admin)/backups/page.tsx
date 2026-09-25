@@ -18,7 +18,7 @@ export default async function BackupsPage() {
         <div>
           <h1 style={{ marginBottom: 2 }}>{t("数据备份")}</h1>
           <p className="small muted" style={{ margin: 0 }}>
-            {t("每天凌晨 3 点自动备份（保留 30 天）；清空测试数据、恢复备份之前也会自动备份。备份包括数据库和面单、充值凭证等文件。只备份正式数据。")}
+            {t("每天凌晨 3 点自动备份（保留 30 天）；清除测试数据、恢复备份之前也会自动备份。备份包括数据库和面单、充值凭证等文件。只备份正式数据。")}
           </p>
         </div>
         <FlashForm action={createBackupAction} submitLabel="立即备份" inline />

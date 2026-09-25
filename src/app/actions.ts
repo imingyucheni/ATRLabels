@@ -503,11 +503,11 @@ export async function deleteBackupAction(_: FlashState, fd: FormData): Promise<F
 export async function clearTestDataAction(_: FlashState, fd: FormData): Promise<FlashState> {
   await requireAdmin();
   const typed = str(fd.get("confirm"), 50);
-  if (typed !== "清空测试数据" && typed.toUpperCase() !== "CLEAR") return { error: "请在输入框里输入“清空测试数据”确认" };
+  if (typed !== "清除测试数据" && typed.toUpperCase() !== "CLEAR") return { error: "请在输入框里输入“清除测试数据”确认" };
   try {
-    const { backup } = clearTestData();
+    const { backup, removed } = clearTestData();
     revalidatePath("/", "layout");
-    return { ok: `已清空测试数据，所有客户余额归零。清空前的数据已备份为 ${backup}` };
+    return { ok: `已清除 ${removed.testShipments} 张模拟 / 沙盒订单及相关扣款记录，真实订单没有变动。清除前的数据已备份为 ${backup}` };
   } catch (e) {
     return { error: (e as Error).message };
   }

@@ -1,7 +1,7 @@
 /**
  * 数据备份与恢复（正式数据）：
  * - 每天凌晨 3 点服务器自动备份（atrlabels-日期.db + files-日期.tgz，安装脚本里的定时任务）
- * - 后台“数据备份”可以随时手动备份；清空测试数据、恢复备份之前也会自动备份
+ * - 后台“数据备份”可以随时手动备份；清除测试数据、恢复备份之前也会自动备份
  * - 每个备份包括数据库和面单 / 充值凭证等文件，恢复时一起恢复
  */
 import { execFileSync } from "node:child_process";
@@ -14,7 +14,7 @@ export type BackupKind = "daily" | "manual" | "before-clear" | "before-restore";
 export const BACKUP_KIND_LABEL: Record<BackupKind, string> = {
   daily: "每日自动",
   manual: "手动备份",
-  "before-clear": "清空测试数据前",
+  "before-clear": "清除测试数据前",
   "before-restore": "恢复备份前",
 };
 
