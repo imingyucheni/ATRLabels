@@ -344,6 +344,8 @@ export function shipbestConfig() {
     sb.mode === "mock" || sb.mode === "sandbox" || sb.mode === "live" ? sb.mode : process.env.SHIPBEST_MOCK === "1" ? "mock" : "live";
   // 沙盒站不允许真实出单：设置里是“正式”也按沙盒处理
   if (mode === "live" && isSandboxSite()) mode = "sandbox";
+  // 沙盒站还没填 API 账号时先用模拟模式（能正常试用，不会报错）
+  if (mode === "sandbox" && isSandboxSite() && (!apiId || !token)) mode = "mock";
   const baseUrl = (sb.baseUrl || process.env.SHIPBEST_BASE_URL || "https://oms.shipbest.com").trim();
   return { apiId, token, mode, mock: mode === "mock", baseUrl, source: sb.apiId ? "settings" : process.env.SHIPBEST_API_ID ? "env" : "none" };
 }

@@ -35,7 +35,7 @@ export default async function Dashboard() {
       )}
       {noChannels && (
         <div className="alert warn">
-          {t("还没有同步物流渠道，请先到")} <Link href="/settings">{t("设置")}</Link> {t("点“同步渠道”，并设置默认寄件地址和加价规则。")}
+          {t("还没有同步物流渠道，请先到")} <Link href="/settings">{t("设置")}</Link> {t("点“同步渠道”，并设置加价规则。")}
         </div>
       )}
       <div className="stats">

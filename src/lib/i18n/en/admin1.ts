@@ -19,7 +19,7 @@ export const admin1: Record<string, string> = {
   "有 {n} 笔客户充值待确认，": "{n} customer top-ups awaiting confirmation. ",
   "去处理": "Review now",
   "还没有同步物流渠道，请先到": "No shipping services synced yet. Go to",
-  "点“同步渠道”，并设置默认寄件地址和加价规则。": "and click “Sync services”, then set the default sender address and markup rules.",
+  "点“同步渠道”，并设置加价规则。": "and click “Sync services”, then set the markup rules.",
   "含面单生成中 {n} 单": "incl. {n} generating",
   "今日收入": "Today's revenue",
   "今日利润": "Today's profit",
