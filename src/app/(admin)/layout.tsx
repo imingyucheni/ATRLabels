@@ -3,6 +3,18 @@ import { isMockMode } from "@/lib/shipbest/client";
 import { pendingTopupCount } from "@/lib/topup";
 import { pendingResets } from "@/lib/passwordReset";
 import Sidebar from "@/components/Sidebar";
+import fs from "node:fs";
+import path from "node:path";
+import { rateStats } from "@/lib/rates";
+
+/** 当前运行的版本（GitHub 构建的发布包里有 VERSION 文件） */
+function version() {
+  try {
+    return fs.readFileSync(path.join(process.cwd(), "VERSION"), "utf8").trim().slice(0, 7);
+  } catch {
+    return "";
+  }
+}
 import { logoutAction } from "../actions";
 
 export const dynamic = "force-dynamic";
@@ -17,8 +29,14 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     <div className="shell">
       <Sidebar
         brand="ATR Labels"
-        brandSub="管理后台"
-        envTag={isMockMode() ? "模拟模式 · 未连接真实 ShipBest" : undefined}
+        brandSub={version() ? `管理后台 · 版本 ${version()}` : "管理后台"}
+        envTag={
+          isMockMode()
+            ? Object.keys(rateStats()).length
+              ? `模拟模式 · 按报价表计算（${Object.keys(rateStats()).length} 个渠道）`
+              : "模拟模式 · 还没导入报价表，运费是粗略估算"
+            : undefined
+        }
         logout={logoutAction}
         groups={[
           { items: [{ href: "/", label: "概览", icon: "dashboard", exact: true }, { href: "/reports", label: "报表", icon: "reports" }] },
