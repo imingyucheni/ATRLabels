@@ -103,3 +103,9 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 tr.best td { background: #f5f9ff; }
 
 .login { max-width: 360px; margin: 12vh auto; }
+
+.nav.portal { background: #0f2a4a; }
+.nav.portal a:hover { background: #17385f; }
+.nav .who { color: #fff; padding: 0 8px 12px; border-bottom: 1px solid #24476f; margin-bottom: 8px; }
+.nav .who .small { color: #b9c7d8; }
+@media (max-width: 900px) { .nav .who { border: 0; padding: 0 8px; margin: 0; } }

@@ -113,6 +113,12 @@ function ruleFor(customerId: number, channelCode: string): MarkupRule {
   return resolveRule(s.markup, getChannel(channelCode)?.markup, getCustomer(customerId)?.markup);
 }
 
+/** 指定渠道试算（渠道名从本地渠道表取） */
+export async function quoteChannel(customerId: number, channelCode: string, req: ShipmentRequest): Promise<ChannelQuote> {
+  const ch = getChannel(channelCode);
+  return quoteOne(customerId, channelCode, ch?.name ?? channelCode, req);
+}
+
 async function quoteOne(customerId: number, channelCode: string, channelName: string, req: ShipmentRequest) {
   const client = getShipBestClient();
   const { roundingStep } = getSettings();

@@ -186,6 +186,10 @@ export interface Settings {
   sender: Address | null;
   /** 官方账单补差如何转嫁给客户 */
   adjustmentPolicy: AdjustmentPolicy;
+  /** 客户端显示的公司名称 */
+  brandName: string;
+  /** 客户端显示的客服联系方式 */
+  supportContact: string;
 }
 
 /**
@@ -210,6 +214,8 @@ const DEFAULT_SETTINGS: Settings = {
   defaultCurrency: "USD",
   sender: null,
   adjustmentPolicy: "with_markup",
+  brandName: "ATR Logistics",
+  supportContact: "",
 };
 
 export function getSettings(): Settings {

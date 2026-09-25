@@ -39,11 +39,12 @@ function cellText(v: ExcelJS.CellValue): string {
   return String(v).trim();
 }
 
-async function parseXlsx(buf: Buffer): Promise<string[][]> {
+async function parseXlsx(buf: Buffer, sheet: "largest" | "first"): Promise<string[][]> {
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.load(buf as unknown as ArrayBuffer);
   // 取数据最多的工作表
-  const ws = [...wb.worksheets].sort((a, b) => b.actualRowCount - a.actualRowCount)[0];
+  // 补差表取数据最多的工作表；批量下单模板取第一个（第二个是说明）
+  const ws = sheet === "first" ? wb.worksheets[0] : [...wb.worksheets].sort((a, b) => b.actualRowCount - a.actualRowCount)[0];
   if (!ws) return [];
   const rows: string[][] = [];
   ws.eachRow({ includeEmpty: false }, (row) => {
@@ -95,14 +96,20 @@ export function parseCsv(buf: Buffer): string[][] {
   return rows;
 }
 
-export async function parseSheet(filename: string, buf: Buffer): Promise<ParsedSheet> {
+/** 读取 .xlsx / .csv 为二维字符串数组 */
+export async function readSheetRows(filename: string, buf: Buffer, sheet: "largest" | "first" = "largest"): Promise<string[][]> {
   const lower = filename.toLowerCase();
   let rows: string[][];
-  if (lower.endsWith(".xlsx")) rows = await parseXlsx(buf);
+  if (lower.endsWith(".xlsx")) rows = await parseXlsx(buf, sheet);
   else if (lower.endsWith(".csv") || lower.endsWith(".txt")) rows = parseCsv(buf);
   else if (lower.endsWith(".xls")) throw new Error("暂不支持旧版 .xls，请在 Excel 里“另存为” .xlsx 或 .csv 后再上传");
   else throw new Error("请上传 .xlsx 或 .csv 文件");
   if (!rows.length) throw new Error("表格是空的");
+  return rows;
+}
+
+export async function parseSheet(filename: string, buf: Buffer): Promise<ParsedSheet> {
+  const rows = await readSheetRows(filename, buf);
   // 按表格内容（而不是文件字节）判重：同一张表重新另存后字节会变，但内容不变
   const fileHash = contentHash(rows);
   return { filename, fileHash, rows: rows.slice(0, 20000), headerRow: guessHeaderRow(rows), alreadyImported: batchExists(fileHash) };

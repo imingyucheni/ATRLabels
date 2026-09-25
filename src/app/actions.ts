@@ -2,7 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { checkPassword, createSession, destroySession, requireAdmin } from "@/lib/auth";
+import { checkPassword, checkRateLimit, clearFailures, createSession, destroySession, hashPassword, recordFailure, requireAdmin } from "@/lib/auth";
+import { randomBytes } from "node:crypto";
+import { headers } from "next/headers";
 import {
   buildPreview,
   customerAmountFor,
@@ -16,18 +18,23 @@ import {
   deleteAdjustmentBatch,
   findShipmentByKey,
   getAdjustment,
+  getPasswordHash,
   getSettings,
   linkAdjustment,
   listChannels,
   saveCustomer,
   saveSettings,
+  setCustomerPassword,
+  setCustomerSender,
+  updateCustomerPortal,
   updateChannel,
   type Settings,
 } from "@/lib/db";
 import type { PartialRule } from "@/lib/pricing";
-import { postAdjustment } from "@/lib/ledger";
+import { addLedger, balanceOf, postAdjustment } from "@/lib/ledger";
 import { getShipBestClient } from "@/lib/shipbest/client";
-import type { Address, ShipmentRequest, SkuItem, UnitSystem } from "@/lib/shipbest/types";
+import type { Address, ShipmentRequest } from "@/lib/shipbest/types";
+import { cleanAddress, cleanRequest, n, optNum, str, unit } from "@/lib/sanitize";
 import {
   confirmCancelled,
   createLabel,
@@ -40,85 +47,17 @@ import {
   type ChannelQuote,
 } from "@/lib/service";
 
-/* ---------------- 工具 ---------------- */
-
-function str(v: unknown, max = 200): string {
-  return (typeof v === "string" ? v : v === null || v === undefined ? "" : String(v)).trim().slice(0, max);
-}
-function n(v: unknown): number {
-  const x = typeof v === "number" ? v : parseFloat(String(v ?? ""));
-  return Number.isFinite(x) ? x : 0;
-}
-function optNum(v: FormDataEntryValue | null): number | null {
-  const s = String(v ?? "").trim();
-  if (s === "") return null;
-  const x = parseFloat(s);
-  return Number.isFinite(x) ? x : null;
-}
-function unit(v: unknown): UnitSystem {
-  const u = Number(v);
-  return u === 1 || u === 2 || u === 3 ? u : 1;
-}
-
-function cleanAddress(a: Partial<Address> | undefined): Address {
-  const x = a ?? {};
-  const out: Address = {
-    nameFirst: str(x.nameFirst),
-    nameLast: str(x.nameLast),
-    country: str(x.country, 2).toUpperCase(),
-    city: str(x.city),
-    address1: str(x.address1),
-    zipCode: str(x.zipCode),
-  };
-  for (const k of ["phone", "email", "corporateName", "taxIdValue", "province", "area", "street", "houseNumber", "address2"] as const) {
-    const v = str(x[k]);
-    if (v) out[k] = v;
-  }
-  return out;
-}
-
-/** 客户端传来的数据不可信：统一转换类型、去掉多余字段。 */
-function cleanRequest(raw: ShipmentRequest): ShipmentRequest {
-  const p = raw?.pkg ?? ({} as ShipmentRequest["pkg"]);
-  const sig = Number(p.signServiceType);
-  return {
-    sender: cleanAddress(raw?.sender),
-    recipient: cleanAddress(raw?.recipient),
-    pkg: {
-      length: n(p.length),
-      width: n(p.width),
-      height: n(p.height),
-      weight: n(p.weight),
-      displayUnitSystem: unit(p.displayUnitSystem),
-      signServiceType: (sig >= 0 && sig <= 3 ? sig : 0) as 0 | 1 | 2 | 3,
-      insuranceService: Number(p.insuranceService) === 1 ? 1 : 0,
-      insuranceFee: n(p.insuranceFee) || undefined,
-      currency: str(p.currency, 3).toUpperCase() || "USD",
-    },
-    skuList: (Array.isArray(raw?.skuList) ? raw.skuList : []).slice(0, 50).map(
-      (s: Partial<SkuItem>): SkuItem => ({
-        sku: str(s.sku, 100),
-        productNameCn: str(s.productNameCn),
-        productNameEn: str(s.productNameEn),
-        quantity: Math.round(n(s.quantity)),
-        declaredUnitPrice: n(s.declaredUnitPrice),
-        declaredCurrency: str(s.declaredCurrency, 3).toUpperCase() || "USD",
-        hsCode: str(s.hsCode, 20),
-        productNature: str(s.productNature, 20),
-        length: n(s.length),
-        width: n(s.width),
-        height: n(s.height),
-        weight: n(s.weight),
-        unit: unit(s.unit),
-      }),
-    ),
-  };
-}
-
 /* ---------------- 登录 ---------------- */
 
 export async function loginAction(_: unknown, fd: FormData) {
-  if (!checkPassword(String(fd.get("password") ?? ""))) return { error: "密码错误" };
+  const key = "admin:" + ((await headers()).get("x-forwarded-for") ?? "local").split(",")[0].trim();
+  const limited = checkRateLimit(key);
+  if (limited) return { error: limited };
+  if (!checkPassword(String(fd.get("password") ?? ""))) {
+    recordFailure(key);
+    return { error: "密码错误" };
+  }
+  clearFailures(key);
   await createSession();
   redirect("/");
 }
@@ -152,6 +91,7 @@ export async function createAction(input: {
   req: ShipmentRequest;
   expectedPrice: number;
   remark?: string;
+  customerRef?: string;
 }): Promise<{ id?: number; error?: string; quote?: ChannelQuote }> {
   await requireAdmin();
   try {
@@ -161,6 +101,8 @@ export async function createAction(input: {
       req: cleanRequest(input.req),
       expectedPrice: n(input.expectedPrice),
       remark: str(input.remark, 200) || undefined,
+      customerRef: str(input.customerRef, 50) || undefined,
+      createdBy: "admin",
     });
     revalidatePath("/shipments");
     return { id };
@@ -225,7 +167,7 @@ export async function saveCustomerAction(_: FlashState, fd: FormData): Promise<F
   const name = str(fd.get("name"));
   if (!name) return { error: "客户名称必填" };
   const idRaw = Number(fd.get("id"));
-  saveCustomer(idRaw > 0 ? idRaw : null, {
+  const savedId = saveCustomer(idRaw > 0 ? idRaw : null, {
     name,
     contact: str(fd.get("contact")) || null,
     phone: str(fd.get("phone")) || null,
@@ -234,7 +176,60 @@ export async function saveCustomerAction(_: FlashState, fd: FormData): Promise<F
     markup: ruleFromForm(fd),
   });
   revalidatePath("/customers");
-  redirect("/customers");
+  // 新客户保存后进入详情页，继续开通登录、充值
+  if (!(idRaw > 0)) redirect(`/customers/${savedId}`);
+  return { ok: "已保存" };
+}
+
+export async function saveCustomerPortalAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  await requireAdmin();
+  const id = Number(fd.get("id"));
+  const email = str(fd.get("portalEmail"), 100).toLowerCase() || null;
+  const enabled = fd.get("portalEnabled") === "on";
+  if (enabled && !email) return { error: "开通登录需要填写登录邮箱" };
+  if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return { error: "登录邮箱格式不正确" };
+  try {
+    updateCustomerPortal(id, { email, enabled, creditLimit: Math.max(0, optNum(fd.get("creditLimit")) ?? 0) });
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+  revalidatePath(`/customers/${id}`);
+  return { ok: enabled && !getPasswordHash(id) ? "已保存。还没有设置密码，请在下方设置登录密码。" : "已保存" };
+}
+
+export async function setCustomerPasswordAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  await requireAdmin();
+  const id = Number(fd.get("id"));
+  let pw = String(fd.get("password") ?? "").trim();
+  const generated = !pw;
+  if (generated) pw = randomBytes(6).toString("base64url");
+  if (pw.length < 8 && !generated) return { error: "密码至少 8 位（留空则自动生成）" };
+  setCustomerPassword(id, hashPassword(pw));
+  revalidatePath(`/customers/${id}`);
+  return { ok: `密码已设置为：${pw}　请发给客户，客户登录后可以自己修改。这个密码只显示这一次。` };
+}
+
+export async function saveCustomerSenderAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  await requireAdmin();
+  const id = Number(fd.get("id"));
+  const sender = cleanAddress(Object.fromEntries([...fd.entries()].filter(([k]) => k.startsWith("sender.")).map(([k, v]) => [k.slice(7), v])) as Partial<Address>);
+  setCustomerSender(id, sender.nameFirst || sender.address1 ? sender : null);
+  revalidatePath(`/customers/${id}`);
+  return { ok: "寄件地址已保存" };
+}
+
+export async function ledgerEntryAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  await requireAdmin();
+  const id = Number(fd.get("id"));
+  const type = fd.get("type") === "manual" ? "manual" : "topup";
+  const amount = optNum(fd.get("amount"));
+  if (!amount) return { error: "请填写金额" };
+  if (type === "topup" && amount < 0) return { error: "充值金额必须为正数；扣款请选“手动调账”并填负数" };
+  const note = str(fd.get("note"), 200) || null;
+  if (type === "manual" && !note) return { error: "手动调账请填写说明" };
+  addLedger({ customerId: id, type, amount, note, createdBy: "admin" });
+  revalidatePath(`/customers/${id}`);
+  return { ok: `已${type === "topup" ? "充值" : "调账"} ${amount.toFixed(2)}，当前余额 ${balanceOf(id).toFixed(2)}` };
 }
 
 /* ---------------- 设置 ---------------- */
@@ -254,6 +249,8 @@ export async function saveSettingsAction(_: FlashState, fd: FormData): Promise<F
     defaultUnit: unit(fd.get("defaultUnit")),
     defaultCurrency: str(fd.get("defaultCurrency"), 3).toUpperCase() || "USD",
     adjustmentPolicy: (["at_cost", "with_markup", "none"] as const).find((p) => p === fd.get("adjustmentPolicy")) ?? cur.adjustmentPolicy,
+    brandName: str(fd.get("brandName"), 60) || cur.brandName,
+    supportContact: str(fd.get("supportContact"), 200),
   };
   const sender = cleanAddress(Object.fromEntries([...fd.entries()].filter(([k]) => k.startsWith("sender.")).map(([k, v]) => [k.slice(7), v])) as Partial<Address>);
   patch.sender = sender.nameFirst || sender.address1 ? sender : null;

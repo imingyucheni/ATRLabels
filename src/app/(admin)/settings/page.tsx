@@ -67,6 +67,13 @@ export default async function SettingsPage() {
         </div>
         <p className="small muted">ShipBest 扣的是预报价，官方账单出来后按重量或分区差异多退少补。在“补差导入”上传他们的表格时，按这里的规则计算向客户补收或退还的金额（导入时的规则会记录在批次上）。</p>
 
+        <h3>客户端</h3>
+        <div className="grid">
+          <label className="f">客户端显示的公司名称<input name="brandName" defaultValue={s.brandName} maxLength={60} /></label>
+          <label className="f" style={{ gridColumn: "span 2" }}>客服联系方式（显示在客户端）<input name="supportContact" defaultValue={s.supportContact} maxLength={200} placeholder="例如：微信 xxx / 邮箱 support@xxx.com" /></label>
+        </div>
+        <p className="small muted">客户登录地址：<code>/portal</code>。在“客户”页面给客户开通登录。</p>
+
         <h3>默认值</h3>
         <div className="grid">
           <label className="f">默认单位
