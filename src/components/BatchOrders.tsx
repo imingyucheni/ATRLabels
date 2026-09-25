@@ -6,6 +6,7 @@ import {
   chooseAllAction,
   chooseRowAction,
   confirmBatchJobAction,
+  deleteRowsAction,
   createBatchJobAction,
   deleteBatchJobAction,
   getBatchJobAction,
@@ -37,17 +38,21 @@ export default function BatchOrders(props: {
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, start] = useTransition();
   const [onlyProblems, setOnlyProblems] = useState(false);
+  // 和 ShipBest 一样：默认只显示能送达（可下单）的渠道
+  const [onlyAvailable, setOnlyAvailable] = useState(true);
   const [requoteSet, setRequoteSet] = useState<Set<string>>(new Set());
   const [bulkChannel, setBulkChannel] = useState("");
 
   const load = useCallback(async (id: number) => {
     const r = await getBatchJobAction(id);
+    // 批次里的订单都删掉后批次也会删除，回到导入页
+    if (r.error === "任务不存在") return router.push(props.basePath);
     if (r.error) setError(r.error);
     else {
       setJob(r.job!);
       setRequoteSet((s) => (s.size ? s : new Set(r.job!.channels.map((c) => c.code))));
     }
-  }, []);
+  }, [router, props.basePath]);
 
   useEffect(() => {
     if (props.jobId) load(props.jobId);
@@ -96,9 +101,15 @@ export default function BatchOrders(props: {
   if (!props.jobId) {
     return (
       <div className="card">
-        <h2>导入订单</h2>
+        <div className="card-head">
+          <h2>导入订单</h2>
+          <a className="btn" href="/api/batch/template" download>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="m7 10 5 5 5-5" /><path d="M12 15V3" /></svg>
+            下载导单模板
+          </a>
+        </div>
         <ol className="small muted" style={{ paddingLeft: 18, marginTop: 0 }}>
-          <li>使用 <b>ShipBest 导单模板</b>（原来在 ShipBest 后台用的表格可以直接上传），或 <a href="/api/batch/template">下载模板</a>。</li>
+          <li>使用 <b>ShipBest 导单模板</b>：原来在 ShipBest 后台用的表格可以直接上传，也可以点右上角下载模板（已预填你的寄件地址，含填写说明）。</li>
           <li>系统用下面勾选的渠道逐单试算，每单列出各渠道价格，默认选最便宜的，可以逐单修改。</li>
           <li>确认后勾选订单“提交订单”，完成后一键合并打印全部 4×6 面单。</li>
         </ol>
@@ -198,6 +209,15 @@ export default function BatchOrders(props: {
                 {job.channels.map((c) => <option key={c.code} value={c.code}>{c.name}</option>)}
               </select>
               <button className="small" disabled={busy || !bulkChannel} onClick={() => act(() => chooseAllAction(job.id, bulkChannel, chosen.map((r) => r.id)))}>应用</button>
+              <button className="small danger" disabled={busy || !chosen.length} onClick={() => {
+                if (window.confirm(`删除勾选的 ${chosen.length} 单？删除后不会下单。`)) act(() => deleteRowsAction(job.id, chosen.map((r) => r.id)));
+              }}>删除勾选的订单</button>
+              {problems > 0 && (
+                <button className="small" disabled={busy} onClick={() => {
+                  const bad = job.rows.filter((r) => r.status === "error" || r.status === "failed").map((r) => r.id);
+                  if (window.confirm(`删除 ${bad.length} 单有错误的订单？`)) act(() => deleteRowsAction(job.id, bad));
+                }}>删除有错误的订单</button>
+              )}
               {total - cheapestTotal > 0.005 && <span className="small" style={{ color: "var(--warn)" }}>比全部选最便宜多 {money(total - cheapestTotal)}</span>}
             </div>
             <div className="row" style={{ gap: 12 }}>
@@ -243,7 +263,10 @@ export default function BatchOrders(props: {
             }}>放弃这个批次</button>
           )}
           <label className="small" style={{ marginLeft: "auto" }}>
-            <input type="checkbox" checked={onlyProblems} onChange={(e) => setOnlyProblems(e.target.checked)} /> 只看有问题的
+            <input type="checkbox" checked={onlyAvailable} onChange={(e) => setOnlyAvailable(e.target.checked)} /> 只显示可下单渠道
+          </label>
+          <label className="small">
+            <input type="checkbox" checked={onlyProblems} onChange={(e) => setOnlyProblems(e.target.checked)} /> 只看有问题的订单
           </label>
         </div>
         {problems > 0 && editable && <p className="small muted">有错误的订单不会提交。请在表格里改好后，把这些订单重新导入。</p>}
@@ -299,7 +322,7 @@ export default function BatchOrders(props: {
                       <span>{r.channelName} <b>{r.price !== null ? money(r.price, r.currency ?? "") : ""}</b></span>
                     ) : r.quotes.length ? (
                       <div style={{ display: "grid", gap: 2 }}>
-                        {r.quotes.map((q) => (
+                        {r.quotes.filter((q) => q.ok || !onlyAvailable).map((q) => (
                           <label
                             key={q.code}
                             className="small"
@@ -322,6 +345,11 @@ export default function BatchOrders(props: {
                             <b>{q.ok ? money(q.price, q.currency ?? "") : "不可用"}</b>
                           </label>
                         ))}
+                        {onlyAvailable && r.quotes.some((q) => !q.ok) && (
+                          <span className="small muted" title={r.quotes.filter((q) => !q.ok).map((q) => `${q.name}：${q.error ?? "不可用"}`).join("\n")}>
+                            另有 {r.quotes.filter((q) => !q.ok).length} 个渠道不支持此地址
+                          </span>
+                        )}
                       </div>
                     ) : (
                       <span className="muted small">{r.status === "pending" ? "试算中…" : "-"}</span>

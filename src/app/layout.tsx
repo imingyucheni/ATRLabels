@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import "@fontsource-variable/inter";
 import "./globals.css";
 
 // 客户端也用这个根布局，这里不要写任何内部信息（服务商名称、成本等）

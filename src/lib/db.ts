@@ -156,6 +156,17 @@ CREATE TABLE IF NOT EXISTS topup_requests (
   handled_at TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_topup_status ON topup_requests(status);
+CREATE TABLE IF NOT EXISTS password_resets (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  customer_id INTEGER NOT NULL REFERENCES customers(id),
+  token_hash TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  used_at TEXT,
+  emailed INTEGER NOT NULL DEFAULT 0,
+  -- 后台是否已处理（没配置邮件时由客服重置）
+  handled_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 CREATE INDEX IF NOT EXISTS idx_adj_customer ON adjustments(customer_id);
 CREATE INDEX IF NOT EXISTS idx_shipments_created ON shipments(created_at);
 `;

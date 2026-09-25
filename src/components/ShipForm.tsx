@@ -62,6 +62,7 @@ export default function ShipForm(props: {
   const [remark, setRemark] = useState("");
 
   const [quotes, setQuotes] = useState<Quote[] | null>(null);
+  const [onlyAvailable, setOnlyAvailable] = useState(true);
   const [errors, setErrors] = useState<string[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
   const [quoting, startQuote] = useTransition();
@@ -306,6 +307,16 @@ export default function ShipForm(props: {
         </div>
         {notice && <div className="alert warn">{notice}</div>}
         {quotes && (
+          <div className="row small" style={{ justifyContent: "space-between", marginBottom: 8, alignItems: "center" }}>
+            <span className="muted">
+              {quotes.filter((q) => q.ok).length} 个渠道可以送达
+              {quotes.some((q) => !q.ok) && `，${quotes.filter((q) => !q.ok).length} 个渠道不支持这个地址`}
+            </span>
+            <label><input type="checkbox" checked={onlyAvailable} onChange={(e) => setOnlyAvailable(e.target.checked)} /> 只显示可下单渠道</label>
+          </div>
+        )}
+        {quotes && !quotes.some((q) => q.ok) && <div className="alert err">所有渠道都不支持这个地址或包裹，请检查邮编、地址或重量尺寸。</div>}
+        {quotes && (
           <div className="table-wrap">
             <table>
               <thead>
@@ -316,7 +327,7 @@ export default function ShipForm(props: {
                 )}
               </thead>
               <tbody>
-                {quotes.map((q) =>
+                {quotes.filter((q) => q.ok || !onlyAvailable).map((q) =>
                   q.ok ? (
                     <tr key={q.channelCode} className={q.price === bestPrice ? "best" : ""}>
                       <td>{q.channelName}{!portal && <div className="small muted">{q.channelCode}</div>}</td>

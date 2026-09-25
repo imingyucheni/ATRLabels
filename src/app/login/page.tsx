@@ -1,23 +1,19 @@
-"use client";
+import AuthShell from "@/components/AuthShell";
+import LoginForm from "./LoginForm";
 
-import { useActionState } from "react";
-import { loginAction } from "../actions";
+export const metadata = { title: "登录 · ATR 面单系统" };
 
 export default function LoginPage() {
-  const [state, action, pending] = useActionState(loginAction, null);
   return (
-    <div className="login card">
-      <h1>ATR 面单系统</h1>
-      <form action={action} style={{ display: "grid", gap: 12 }}>
-        {state?.error && <div className="alert err">{state.error}</div>}
-        <label className="f">
-          后台密码
-          <input type="password" name="password" autoFocus required />
-        </label>
-        <button className="primary" disabled={pending}>
-          {pending ? "登录中…" : "登录"}
-        </button>
-      </form>
-    </div>
+    <AuthShell
+      brand="ATR Labels"
+      headline="尾程面单，一处管理"
+      sub="报价、出单、补差、客户钱包与报表。"
+      points={["多渠道实时比价，按规则自动加价", "批量导入 ShipBest 导单表，一键合并打印", "官方账单补差自动对应到客户"]}
+    >
+      <h1>管理后台</h1>
+      <p className="sub">使用后台密码登录</p>
+      <LoginForm />
+    </AuthShell>
   );
 }

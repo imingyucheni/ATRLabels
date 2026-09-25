@@ -38,6 +38,7 @@ import { addLedger, balanceOf, postAdjustment } from "@/lib/ledger";
 import { saveChannelSample } from "@/lib/labels";
 import { approveTopup, rejectTopup, saveAlipayQr } from "@/lib/topup";
 import { usdCnyQuote } from "@/lib/fx";
+import { adminResetFromRequest } from "@/lib/passwordReset";
 import { getShipBestClient } from "@/lib/shipbest/client";
 import type { Address, ShipmentRequest } from "@/lib/shipbest/types";
 import { cleanAddress, cleanRequest, n, optNum, str, unit } from "@/lib/sanitize";
@@ -515,4 +516,15 @@ export async function refreshFxAction(_: FlashState): Promise<FlashState> {
   return q.manual && getSettings().fxMode === "auto"
     ? { error: `实时汇率获取失败，当前使用 ${q.source}：${q.live}` }
     : { ok: `实时汇率 ${q.live}（${q.source}），加点 ${q.markup} → 充值汇率 ${q.rate}` };
+}
+
+export async function handleResetRequestAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  await requireAdmin();
+  try {
+    const r = adminResetFromRequest(Number(fd.get("id")));
+    revalidatePath("/customers");
+    return { ok: `${r.customerName} 的新密码：${r.password}　请发给客户（只显示这一次）` };
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
 }

@@ -483,6 +483,37 @@ export function setSelected(jobId: number, rowIds: number[] | "all" | "none") {
   }
 }
 
+/** 删除还没提交的订单（待出单的订单还没扣款，可以直接删除） */
+export function deleteRows(jobId: number, rowIds: number[]) {
+  assertEditable(jobId);
+  const ids = jobRows(jobId).filter((r) => rowIds.includes(r.id) && r.status !== "created").map((r) => r.id);
+  const stmt = db().prepare("DELETE FROM batch_job_rows WHERE id = ? AND job_id = ? AND status != 'created'");
+  db().transaction(() => ids.forEach((id) => stmt.run(id, jobId)))();
+  // 批次里没有订单了就删掉批次
+  if (!jobRows(jobId).length) db().prepare("DELETE FROM batch_jobs WHERE id = ?").run(jobId);
+  return ids.length;
+}
+
+/** 所有批次里还没提交的订单（待出单） */
+export function listDraftRows(customerId?: number) {
+  return (
+    db()
+      .prepare(
+        `SELECT r.id, r.job_id, r.row_no, r.customer_ref, r.req_json, r.channel_name, r.price, r.status, r.error, j.filename, j.created_at, c.name AS customer_name
+         FROM batch_job_rows r JOIN batch_jobs j ON j.id = r.job_id JOIN customers c ON c.id = j.customer_id
+         WHERE r.status IN ('quoted', 'error', 'failed', 'pending') ${customerId ? "AND j.customer_id = ?" : ""}
+         ORDER BY j.id DESC, r.row_no`,
+      )
+      .all(...(customerId ? [customerId] : [])) as {
+      id: number; job_id: number; row_no: number; customer_ref: string | null; req_json: string; channel_name: string | null; price: number | null;
+      status: RowStatus; error: string | null; filename: string | null; created_at: string; customer_name: string;
+    }[]
+  ).map((r) => {
+    const req = JSON.parse(r.req_json) as ShipmentRequest;
+    return { ...r, recipient: `${req.recipient.nameFirst} ${req.recipient.nameLast}, ${req.recipient.city} ${req.recipient.province ?? ""} ${req.recipient.zipCode}` };
+  });
+}
+
 /** 换一组渠道重新试算（未下单的订单） */
 export function requote(jobId: number, channels: string[]) {
   assertEditable(jobId);

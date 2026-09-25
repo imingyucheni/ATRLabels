@@ -17,9 +17,10 @@ import { getCustomerLogin, getPasswordHash, setCustomerPassword, setCustomerSend
 import { InsufficientBalanceError } from "@/lib/ledger";
 import { ownsShipment, publicError, toPublicQuote, type PublicQuote } from "@/lib/portal";
 import { cleanAddress, cleanRequest, n, str } from "@/lib/sanitize";
-import { createLabel, PriceChangedError, quoteAll, refreshShipment, requestCancel, validateRequest } from "@/lib/service";
+import { createLabel, PriceChangedError, quoteAll, refreshShipment, validateRequest } from "@/lib/service";
 import { ShipBestError } from "@/lib/shipbest/client";
 import { createTopup } from "@/lib/topup";
+import { requestReset, resetWithToken } from "@/lib/passwordReset";
 import type { Address, ShipmentRequest } from "@/lib/shipbest/types";
 import type { FlashState } from "@/app/actions";
 
@@ -108,18 +109,7 @@ export async function portalRefreshAction(_: FlashState, fd: FormData): Promise<
   }
 }
 
-export async function portalCancelAction(_: FlashState, fd: FormData): Promise<FlashState> {
-  const me = await requireCustomer();
-  const id = Number(fd.get("id"));
-  if (!ownsShipment(me.id, id)) return { error: "面单不存在" };
-  try {
-    const r = await requestCancel(id);
-    revalidatePath(`/portal/shipments/${id}`);
-    return r.done ? { ok: r.message } : { ok: "已提交取消申请，我们处理完成后会把费用退回你的账户余额" };
-  } catch {
-    return { error: "取消失败，请联系客服" };
-  }
-}
+// 已付款出单的订单客户不能自己取消，需要联系客服在后台处理（见面单详情页提示）。
 
 /* ---------------- 账户 ---------------- */
 
@@ -177,4 +167,36 @@ export async function portalTopupAction(_: FlashState, fd: FormData): Promise<Fl
   } catch (e) {
     return { error: (e as Error).message };
   }
+}
+
+/* ---------------- 忘记密码 ---------------- */
+
+export async function portalForgotAction(_: unknown, fd: FormData) {
+  const email = str(fd.get("email"), 100).toLowerCase();
+  const key = `forgot:${await clientIp()}`;
+  const limited = checkRateLimit(key);
+  if (limited) return { error: limited };
+  recordFailure(key); // 每次申请都计数，防止被刷
+  if (!email) return { error: "请填写登录邮箱" };
+  const h = await headers();
+  const base = `${h.get("x-forwarded-proto") ?? "http"}://${h.get("x-forwarded-host") ?? h.get("host")}`;
+  const r = await requestReset(email, base);
+  return {
+    ok: r.emailed
+      ? "如果这个邮箱已开通账号，我们已发送重置密码的链接，请在 1 小时内查收邮件。"
+      : "已收到你的申请，客服会尽快为你重置密码并联系你。",
+  };
+}
+
+export async function portalResetAction(_: unknown, fd: FormData) {
+  const token = str(fd.get("token"), 100);
+  const pw = String(fd.get("password") ?? "");
+  if (pw !== String(fd.get("confirm") ?? "")) return { error: "两次输入的密码不一致" };
+  try {
+    const id = resetWithToken(token, pw);
+    await createCustomerSession(id, getPasswordHash(id)!);
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+  redirect("/portal");
 }

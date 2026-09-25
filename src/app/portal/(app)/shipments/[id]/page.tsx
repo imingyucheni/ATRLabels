@@ -7,7 +7,8 @@ import { LEDGER_TYPE_LABEL, listLedger } from "@/lib/ledger";
 import type { Address } from "@/lib/shipbest/types";
 import FlashForm from "@/components/FlashForm";
 import StatusBadge from "@/components/StatusBadge";
-import { portalCancelAction, portalRefreshAction, portalSaveLabelNoteAction } from "@/app/portal/actions";
+import { portalRefreshAction, portalSaveLabelNoteAction } from "@/app/portal/actions";
+import { getSettings } from "@/lib/db";
 
 const UNITS = { 1: ["g", "cm"], 2: ["kg", "cm"], 3: ["lb", "in"] } as const;
 const SIGN = ["不需要签名", "直接签名", "间接签名", "成人签名"];
@@ -31,6 +32,7 @@ export default async function PortalShipmentDetail({ params }: { params: Promise
   const [wu, lu] = UNITS[s.pkg.displayUnitSystem] ?? UNITS[3];
   const canCancel = s.status === "pending" || s.status === "labeled" || s.status === "exception";
   const feePct = portalCancelFeePercent();
+  const contact = getSettings().supportContact;
   const charges = listLedger({ shipmentId: s.id }).filter((l) => l.customerId === me.id).reverse();
 
   return (
@@ -39,7 +41,12 @@ export default async function PortalShipmentDetail({ params }: { params: Promise
         <h1 style={{ margin: 0 }}>{s.customerRef || s.customNo} <StatusBadge status={s.status} /></h1>
         <Link href="/portal/shipments">← 返回列表</Link>
       </div>
-      {s.problem && <div className="alert err">订单异常：{s.problem}。可以申请取消，运费会全额退回。</div>}
+      {s.problem && <div className="alert err">订单异常：{s.problem}。请联系客服处理{contact ? `（${contact}）` : ""}，未出面单的订单运费会全额退回。</div>}
+      {canCancel && (
+        <div className="alert warn">
+          这张订单已付款出单，如需取消请联系客服{contact ? `：${contact}` : ""}。取消后运费退回账户余额（已出面单的收取 {feePct}% 手续费）。
+        </div>
+      )}
       {s.status === "cancel_requested" && <div className="alert warn">取消申请处理中，完成后费用会退回账户余额。</div>}
 
       <div className="grid2">
@@ -75,17 +82,7 @@ export default async function PortalShipmentDetail({ params }: { params: Promise
                 <input type="hidden" name="id" value={s.id} />
               </FlashForm>
             )}
-            {canCancel && (
-              <FlashForm
-                action={portalCancelAction}
-                submitLabel="申请取消"
-                submitClass="danger"
-                inline
-                confirm={s.status === "labeled" ? `确认取消？已出面单的订单取消会收取运费 ${feePct}% 的手续费，其余退回账户余额。` : "确认取消这张订单？运费会退回账户余额。"}
-              >
-                <input type="hidden" name="id" value={s.id} />
-              </FlashForm>
-            )}
+
           </div>
         </div>
 

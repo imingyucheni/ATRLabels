@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["better-sqlite3", "exceljs", "pdf-lib"],
+  serverExternalPackages: ["better-sqlite3", "exceljs", "pdf-lib", "nodemailer"],
   experimental: {
     serverActions: {
       // 补差表、批量下单表通过 Server Action 上传，默认 1MB 不够

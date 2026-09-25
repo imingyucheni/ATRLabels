@@ -4,6 +4,7 @@ import { currentCustomerId, isLoggedIn } from "@/lib/auth";
 import { readSheetRows } from "@/lib/adjustments";
 import {
   chooseAll,
+  deleteRows,
   chooseRowChannel,
   confirmJob,
   createJob,
@@ -136,6 +137,10 @@ export async function chooseAllAction(jobId: number, rule: string, rowIds?: numb
 
 export async function setSelectedAction(jobId: number, rowIds: number[] | "all" | "none") {
   return edit(jobId, () => setSelected(jobId, Array.isArray(rowIds) ? rowIds.map(Number) : rowIds));
+}
+
+export async function deleteRowsAction(jobId: number, rowIds: number[]) {
+  return edit(jobId, () => `已删除 ${deleteRows(jobId, rowIds.map(Number))} 单`);
 }
 
 export async function requoteAction(jobId: number, channels: string[]) {
