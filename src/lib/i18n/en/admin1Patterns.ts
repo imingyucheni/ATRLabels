@@ -1,5 +1,8 @@
 /** 后台（设置 / 客户 / 对账单等）带变量的整句提示：[中文正则, 英文替换]，全部 ^...$ 锚定 */
 export const admin1Patterns: [RegExp, string][] = [
+  [/^已备份：(.+)$/, "Backed up: $1"],
+  [/^已恢复到 (.+)。恢复前的数据已另存为 (.+)，需要时可以再恢复回来。$/, "Restored $1. The previous data was saved as $2 in case you need it back."],
+  [/^恢复失败：(.*)$/, "Restore failed: $1"],
   [/^已发送到 (.+)，请查收（也看看垃圾邮件箱）$/, "Sent to $1 — check the inbox (and spam folder)"],
   [/^发送失败：(.*)$/, "Send failed: $1"],
   [/^财务确认密码不正确（还可以再试 (\d+) 次）$/, "Incorrect finance PIN ($1 attempts left)"],

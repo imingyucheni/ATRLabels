@@ -44,6 +44,7 @@ import { saveDimRule } from "@/lib/rates";
 import { CARRIERS } from "@/lib/carriers";
 import { clearChannelNameCache } from "@/lib/channelDisplay";
 import { clearTestData } from "@/lib/cleanup";
+import { createBackup, deleteBackup, restoreBackup } from "@/lib/backup";
 import { resetTestEnv, setStoredMode } from "@/lib/db";
 import { sendMail } from "@/lib/mailer";
 import { checkFinancePin, setFinancePin } from "@/lib/financePin";
@@ -460,6 +461,42 @@ export async function resetTestEnvAction(_: FlashState): Promise<FlashState> {
   clearChannelNameCache();
   revalidatePath("/", "layout");
   return { ok: "测试环境已重置：客户、渠道、设置已从正式数据重新复制，测试订单、充值和余额已清空" };
+}
+
+export async function createBackupAction(_: FlashState): Promise<FlashState> {
+  await requireAdmin();
+  try {
+    const name = createBackup("manual");
+    revalidatePath("/backups");
+    return { ok: `已备份：${name}` };
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+}
+
+export async function restoreBackupAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  await requireAdmin();
+  if (!checkPassword(String(fd.get("adminPassword") ?? ""))) return { error: "管理员登录密码不正确" };
+  const name = str(fd.get("name"), 200);
+  try {
+    const { safety } = restoreBackup(name);
+    clearChannelNameCache();
+    revalidatePath("/", "layout");
+    return { ok: `已恢复到 ${name}。恢复前的数据已另存为 ${safety}，需要时可以再恢复回来。` };
+  } catch (e) {
+    return { error: `恢复失败：${(e as Error).message}` };
+  }
+}
+
+export async function deleteBackupAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  await requireAdmin();
+  try {
+    deleteBackup(str(fd.get("name"), 200));
+    revalidatePath("/backups");
+    return { ok: "已删除" };
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
 }
 
 export async function clearTestDataAction(_: FlashState, fd: FormData): Promise<FlashState> {

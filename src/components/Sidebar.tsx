@@ -6,14 +6,14 @@ import { useEffect, useState } from "react";
 import PrefToggles from "./PrefToggles";
 import { useLang, useT } from "./I18n";
 import {
-  ArrowLeftRight, BarChart3, Globe2, Lock, Map as MapIcon, Menu, PanelLeftClose, PanelLeftOpen, X, CreditCard, FileSpreadsheet, FileText, LayoutDashboard, LogOut, PackagePlus, Receipt, Scale, Settings,
+  ArrowLeftRight, BarChart3, DatabaseBackup, Globe2, Lock, Map as MapIcon, Menu, PanelLeftClose, PanelLeftOpen, X, CreditCard, FileSpreadsheet, FileText, LayoutDashboard, LogOut, PackagePlus, Receipt, Scale, Settings,
   Truck, Upload, UserCog, Users, Wallet,
 } from "lucide-react";
 
 const ICONS = {
   dashboard: LayoutDashboard, ship: PackagePlus, batch: Upload, list: Truck, reports: BarChart3, adjust: Scale,
   customers: Users, finance: Wallet, settings: Settings, topup: CreditCard, billing: Receipt, sheet: FileSpreadsheet,
-  account: UserCog, doc: FileText, map: MapIcon, globe: Globe2,
+  account: UserCog, doc: FileText, map: MapIcon, globe: Globe2, backup: DatabaseBackup,
 };
 
 export type NavItem = { href: string; label: string; icon: keyof typeof ICONS; count?: number; exact?: boolean; soon?: boolean };

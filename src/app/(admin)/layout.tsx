@@ -71,7 +71,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             ],
           },
           { title: "国际面单", soon: true, items: [{ href: "#intl", label: "国际下单", icon: "globe" }] },
-          { title: "系统", items: [{ href: "/settings", label: "设置", icon: "settings" }] },
+          { title: "系统", items: [{ href: "/settings", label: "设置", icon: "settings" }, { href: "/backups", label: "数据备份", icon: "backup" }] },
         ]}
       />
       <main className="main">

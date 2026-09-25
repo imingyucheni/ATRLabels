@@ -328,6 +328,12 @@ export function liveDb(): Database.Database {
   return g.__dbs.live;
 }
 
+/** 关闭正式数据库连接（恢复备份时替换文件用） */
+export function closeLiveDb() {
+  g.__dbs?.live?.close();
+  if (g.__dbs) delete g.__dbs.live;
+}
+
 /** 测试环境的数据库：没有时从正式数据复制一份，清空订单、流水、充值、补差 */
 function testDb(): Database.Database {
   g.__dbs ??= {};
