@@ -41,7 +41,7 @@ export default async function BackupsPage() {
                 <td className="num small">{size(b.size)}</td>
                 <td className="small">{b.hasFiles ? t("有") : t("仅数据库")}</td>
                 <td>
-                  <div className="row" style={{ gap: 6, flexWrap: "nowrap" }}>
+                  <div className="row" style={{ gap: 6, alignItems: "flex-start" }}>
                     <a className="btn small" href={`/api/backups/${encodeURIComponent(b.name)}`}>{t("下载")}</a>
                     <details className="restore-box">
                       <summary className="btn small">{t("恢复")}</summary>

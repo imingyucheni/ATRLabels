@@ -632,4 +632,4 @@ tr.row-disabled td:first-child { opacity: 0.55; }
 .restore-box { position: relative; }
 .restore-box > summary { list-style: none; cursor: pointer; }
 .restore-box > summary::-webkit-details-marker { display: none; }
-.restore-box[open] > form { position: absolute; right: 0; top: 34px; z-index: 5; width: 260px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px; box-shadow: var(--shadow-pop); }
+.restore-box[open] > form { margin-top: 8px; width: 240px; background: var(--sunken); border: 1px solid var(--line); border-radius: 10px; padding: 10px; white-space: normal; }
