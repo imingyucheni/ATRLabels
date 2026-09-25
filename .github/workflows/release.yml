@@ -1,0 +1,53 @@
+# 每次推送代码后，在 GitHub 上构建好发布包（独立运行包），服务器更新时直接下载，不用在小内存服务器上构建。
+name: Build release package
+
+on:
+  push:
+    branches: [main, "claude/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    # 和服务器（Ubuntu 22.04 / 24.04）同样的系统，better-sqlite3 等原生模块可以直接用
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npx tsc --noEmit
+      - run: npx vitest run
+      - name: Build standalone package
+        run: npx next build
+        env:
+          BUILD_STANDALONE: "1"
+          NEXT_TELEMETRY_DISABLED: "1"
+      - name: Pack
+        run: |
+          set -e
+          cp -r .next/static .next/standalone/.next/static
+          if [ -d public ]; then cp -r public .next/standalone/public; fi
+          rm -rf .next/standalone/data .next/standalone/data-demo
+          echo "${GITHUB_SHA}" > .next/standalone/VERSION
+          echo "${GITHUB_SHA}" > VERSION
+          tar -czf atrlabels.tgz -C .next/standalone .
+          ls -lh atrlabels.tgz
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          TAG="build-$(echo "${GITHUB_REF_NAME}" | tr '/' '-')"
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --prerelease --title "自动构建：${GITHUB_REF_NAME}" --notes "服务器更新用的发布包，每次推送自动更新。" --target "${GITHUB_SHA}"
+          # 先传包、最后传 VERSION：服务器看到新 VERSION 时，包已经是新的
+          gh release upload "$TAG" atrlabels.tgz --clobber
+          gh release upload "$TAG" VERSION --clobber

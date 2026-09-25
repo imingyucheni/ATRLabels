@@ -1,6 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // GitHub Actions 预先构建发布包时打成独立包（服务器只需下载运行，不用在小内存服务器上构建）
+  ...(process.env.BUILD_STANDALONE === "1" ? { output: "standalone" as const } : {}),
+  // 数据目录和测试不要打进发布包
+  outputFileTracingExcludes: { "*": ["data/**", "data-demo/**", "tests/**", "scripts/**", ".env*"] },
   serverExternalPackages: ["better-sqlite3", "exceljs", "pdf-lib", "nodemailer"],
   experimental: {
     serverActions: {
