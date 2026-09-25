@@ -47,34 +47,86 @@ export function guessHeaderRow(rows: string[][]): number {
   return 0;
 }
 
-/** 用来给补差原因补充说明的列：结算重量、预报重量、分区 */
+type WeightUnit = "oz" | "lb" | "g" | "kg";
+
+function unitOf(h: string): WeightUnit | null {
+  const m = /\((oz|lb|g|kg)\)|（(oz|lb|g|kg)）|\b(oz|lb|lbs|kg|g)\b/i.exec(h ?? "");
+  const u = (m?.[1] || m?.[2] || m?.[3] || "").toLowerCase();
+  return u === "lbs" ? "lb" : (u as WeightUnit) || null;
+}
+
+const TO_OZ: Record<WeightUnit, number> = { oz: 1, lb: 16, g: 1 / 28.3495, kg: 35.274 };
+
+function round(n: number, d = 2) {
+  return Math.round(n * 10 ** d) / 10 ** d;
+}
+
+/** 用来给补差原因补充说明的列：结算重量、预报重量、实重、分区 */
 export function detailColumns(header: string[]) {
+  const all = (re: RegExp) => header.map((h, i) => (re.test(h ?? "") ? i : -1)).filter((i) => i >= 0);
+  const declared = all(/预报重量|declared.?weight/i);
+  const billedAll = all(/结算重量|计费重量|billed.?weight/i);
+  const declaredIdx = declared[0] ?? -1;
+  // 结算重量优先取和预报重量同单位的那一列，方便直接对比
+  const du = declaredIdx >= 0 ? unitOf(header[declaredIdx]) : null;
+  const billedIdx = billedAll.find((i) => du && unitOf(header[i]) === du) ?? billedAll[0] ?? -1;
   const idx = (re: RegExp) => header.findIndex((h) => re.test(h ?? ""));
   return {
-    billedWeight: idx(/结算重量\s*\(?lb\)?/i) >= 0 ? idx(/结算重量\s*\(?lb\)?/i) : idx(/结算重量|billed.?weight/i),
-    declaredWeight: idx(/预报重量|declared.?weight/i),
+    billedWeight: billedIdx,
+    declaredWeight: declaredIdx,
+    actualWeight: idx(/^实重|实际重量|actual.?weight/i),
     declaredZone: idx(/预报分区/),
     actualZone: idx(/^zone区$|实际分区|^zone$/i),
   };
+}
+
+export interface WeightDiff {
+  declared: number;
+  billed: number;
+  /** 结算 - 预报，单位同 unit */
+  diff: number;
+  unit: WeightUnit;
+}
+
+/** 结算重量和预报重量的差（统一换算到预报重量的单位；缺单位时按同单位处理） */
+export function weightDiff(header: string[], row: string[]): WeightDiff | null {
+  const d = detailColumns(header);
+  if (d.billedWeight < 0 || d.declaredWeight < 0) return null;
+  const billedRaw = parseFloat(row[d.billedWeight] ?? "");
+  const declared = parseFloat(row[d.declaredWeight] ?? "");
+  if (!Number.isFinite(billedRaw) || !Number.isFinite(declared)) return null;
+  const du = unitOf(header[d.declaredWeight]);
+  const bu = unitOf(header[d.billedWeight]);
+  const unit = du ?? bu ?? "oz";
+  const billed = du && bu && du !== bu ? (billedRaw * TO_OZ[bu]) / TO_OZ[du] : billedRaw;
+  return { declared: round(declared, 3), billed: round(billed, 2), diff: round(billed - declared, 2), unit };
 }
 
 function zoneNum(v: string | undefined) {
   return (v ?? "").replace(/\D/g, "");
 }
 
-/** 生成补差说明，例如“重量调整 · 结算重量(lb) 2.046 / 预报重量(oz) 25 · 分区 zone4” */
+/** 生成补差说明，例如“重量调整：预报 25 oz → 结算 32.74 oz（超出 7.74 oz）· 实重 1.036 lb · zone4” */
 export function describeRow(header: string[], row: string[], reasonCol: number): string {
   const d = detailColumns(header);
+  const reason = reasonCol >= 0 ? row[reasonCol] ?? "" : "";
   const parts: string[] = [];
-  if (reasonCol >= 0 && row[reasonCol]) parts.push(row[reasonCol]);
-  const w: string[] = [];
-  if (d.billedWeight >= 0 && row[d.billedWeight]) w.push(`${header[d.billedWeight]} ${row[d.billedWeight]}`);
-  if (d.declaredWeight >= 0 && row[d.declaredWeight]) w.push(`${header[d.declaredWeight]} ${row[d.declaredWeight]}`);
-  if (w.length) parts.push(w.join(" / "));
+  const w = weightDiff(header, row);
+  if (w) {
+    const trend = w.diff > 0 ? `超出 ${w.diff} ${w.unit}` : w.diff < 0 ? `少 ${-w.diff} ${w.unit}` : "无差异";
+    parts.push(`${reason ? reason + "：" : ""}预报 ${w.declared} ${w.unit} → 结算 ${w.billed} ${w.unit}（${trend}）`);
+  } else if (reason) {
+    parts.push(reason);
+  }
+  // 实重为 0 表示没有测到，不显示
+  if (d.actualWeight >= 0 && parseFloat(row[d.actualWeight] ?? "") > 0) {
+    const u = unitOf(header[d.actualWeight]);
+    parts.push(`实重 ${row[d.actualWeight]}${u ? " " + u : ""}`);
+  }
   const dz = d.declaredZone >= 0 ? row[d.declaredZone] : "";
   const az = d.actualZone >= 0 ? row[d.actualZone] : "";
   if (dz && az && zoneNum(dz) !== zoneNum(az)) parts.push(`分区 ${dz} → zone${zoneNum(az)}`);
-  else if (az || dz) parts.push(`分区 zone${zoneNum(az || dz)}`);
+  else if (az || dz) parts.push(`zone${zoneNum(az || dz)}`);
   return parts.join(" · ");
 }
 
