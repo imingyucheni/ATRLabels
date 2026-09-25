@@ -17,13 +17,14 @@ import {
   leaveCustomer,
 } from "@/lib/auth";
 import { adminOrigin } from "@/lib/sites";
+import { usStateCode } from "@/lib/geo";
 import { isPaperSize, PAPER_LABEL } from "@/lib/labelLayout";
 import { deleteSender, listSenders, saveSender, setDefaultSender } from "@/lib/senders";
-import { getCustomerLogin, getPasswordHash, getSettings, setCustomerLabelPaper, setCustomerPassword, setCustomerSender, setLabelNote } from "@/lib/db";
+import { getCustomerLogin, getPasswordHash, getSettings, getShipment, setCustomerLabelPaper, setCustomerPassword, setCustomerSender, setLabelNote } from "@/lib/db";
 import { InsufficientBalanceError } from "@/lib/ledger";
 import { ownsShipment, publicError, toPublicQuote, type PublicQuote } from "@/lib/portal";
 import { cleanAddress, cleanRequest, n, str } from "@/lib/sanitize";
-import { createLabel, PriceChangedError, quoteAll, refreshShipment, validateRequest } from "@/lib/service";
+import { createLabel, PriceChangedError, quoteAll, refreshShipment, requestCancel, validateRequest } from "@/lib/service";
 import { ShipBestError } from "@/lib/shipbest/client";
 import { createTopup, getTopup } from "@/lib/topup";
 import { requestReset, resetWithToken } from "@/lib/passwordReset";
@@ -128,7 +129,25 @@ export async function portalRefreshAction(_: FlashState, fd: FormData): Promise<
   }
 }
 
-// 已付款出单的订单客户不能自己取消，需要联系客服在后台处理（见面单详情页提示）。
+/**
+ * 客户申请取消：和后台“申请取消”走同一个流程（requestCancel）——先尝试接口取消，
+ * 接口取消不了时标记为“取消处理中”，由员工在后台跟 ShipBest 人工取消后确认。
+ */
+export async function portalCancelAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  const me = await requireCustomer();
+  const id = Number(fd.get("id"));
+  if (!ownsShipment(me.id, id)) return { error: await tMsg("面单不存在") };
+  const s = getShipment(id);
+  if (!s || (s.status !== "pending" && s.status !== "labeled")) return { error: await tMsg("这张面单当前不能申请取消") };
+  try {
+    const r = await requestCancel(id);
+    revalidatePath(`/portal/shipments/${id}`);
+    revalidatePath("/portal", "layout");
+    return { ok: await tMsg(r.done ? "已取消，费用已退回账户余额" : "已提交取消申请，客服处理完成后费用会退回账户余额") };
+  } catch {
+    return { error: await tMsg("申请取消失败，请稍后再试或联系客服") };
+  }
+}
 
 /* ---------------- 账户 ---------------- */
 
@@ -142,6 +161,8 @@ export async function saveSenderBookAction(input: { id?: number; label?: string;
   if (!address.address1) errs.push("地址1");
   if (!address.city) errs.push("城市");
   if (!address.zipCode) errs.push("邮编");
+  // 美国地址必须有州（面单和报价都要用），并且是有效的州
+  if (address.country === "US" && !usStateCode(address.province ?? "")) errs.push("州");
   if (errs.length) {
     const t = await getT();
     return { error: t("请填写：{fields}", { fields: errs.map((x) => t(x)).join(t("、")) }) };

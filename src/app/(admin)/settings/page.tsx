@@ -158,59 +158,59 @@ export default async function SettingsPage() {
 
       {/* 收款设置和“立即更新汇率”是两个表单（不能嵌套），放在同一张卡片里 */}
       <div className="card pay-card">
-      <FlashForm action={savePaymentSettingsAction} submitLabel="保存收款设置" locked="客户充值页会显示这里的收款账号" confirm="客户会按这里的信息付款，请再核对一遍收款账号。确定保存吗？">
-        <h2>{t("收款方式（客户充值）")}</h2>
-        <p className="small muted">{t("客户在客户端“充值”页选择 Zelle（美元）或支付宝（人民币）付款，上传凭证后提交申请；你们在“财务”页确认到账后自动加到客户余额。余额以美元记账。")}</p>
-        <div className="grid2">
-          <label className="f">{t("Zelle 收款信息（显示给客户）")}
-            <textarea name="zelleInfo" rows={3} defaultValue={s.zelleInfo} placeholder={t("邮箱 / 电话：pay@example.com\n户名：ATR Logistics LLC")} />
+        <FlashForm action={savePaymentSettingsAction} submitLabel="保存收款设置" locked="客户充值页会显示这里的收款账号" confirm="客户会按这里的信息付款，请再核对一遍收款账号。确定保存吗？">
+          <h2>{t("收款方式（客户充值）")}</h2>
+          <p className="small muted">{t("客户在客户端“充值”页选择 Zelle（美元）或支付宝（人民币）付款，上传凭证后提交申请；你们在“财务”页确认到账后自动加到客户余额。余额以美元记账。")}</p>
+          <div className="grid2">
+            <label className="f">{t("Zelle 收款信息（显示给客户）")}
+              <textarea name="zelleInfo" rows={3} defaultValue={s.zelleInfo} placeholder={t("邮箱 / 电话：pay@example.com\n户名：ATR Logistics LLC")} />
+            </label>
+            <label className="f">{t("支付宝收款信息（显示给客户）")}
+              <textarea name="alipayInfo" rows={3} defaultValue={s.alipayInfo} placeholder={t("支付宝账号：xxx@xxx.com\n户名：某某")} />
+            </label>
+          </div>
+          <div className="grid" style={{ marginTop: 10 }}>
+            <label className="f" style={{ gridColumn: "span 2" }}>{t("支付宝收款码图片（PNG / JPG，可选）")}{s.alipayQr ? t("：已上传，重新选择可替换") : ""}
+              <FilePick name="alipayQr" accept=".png,.jpg,.jpeg" />
+            </label>
+            {s.alipayQr && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src="/api/assets/alipay-qr" alt={t("支付宝收款码")} style={{ width: 110, height: 110, objectFit: "contain", border: "1px solid var(--line)", borderRadius: 6 }} />
+            )}
+          </div>
+          <h3>{t("人民币汇率")}</h3>
+          <div className="grid">
+            <label className="f">{t("汇率来源")}
+              <select name="fxMode" defaultValue={s.fxMode}>
+                <option value="auto">{t("当天实时汇率 + 加点（推荐）")}</option>
+                <option value="manual">{t("固定汇率 + 加点")}</option>
+              </select>
+            </label>
+            <label className="f">{t("实时汇率更新频率")}
+              <select name="fxRefresh" defaultValue={s.fxRefresh ?? "daily"}>
+                <option value="daily">{t("每天一次（全天固定，推荐）")}</option>
+                <option value="hourly">{t("每小时")}</option>
+              </select>
+            </label>
+            <label className="f">{t("加点（加在汇率上，例如 0.03）")}<input name="fxMarkup" type="number" step="0.001" min="0" max="1" defaultValue={s.fxMarkup} /></label>
+            <label className="f">{t("固定 / 备用汇率")}<input name="fxManualRate" type="number" step="0.0001" defaultValue={s.fxManualRate} /></label>
+          </div>
+          <p className="small">
+            {t("当前：")}{fx.manual ? `${fxSource} ${fx.live}` : t("实时汇率 {live}（{source}）", { live: fx.live, source: fxSource + (fx.fetchedAt ? t("，取于 {time}", { time: fmtTime(fx.fetchedAt) }) : "") })}
+            {" "}{t("+ 加点 {m} =", { m: fx.markup })} <b>{t("充值汇率 {rate}", { rate: fx.rate })}</b>{t("（充 100 美元需付 ¥{cny}）", { cny: cnyToPay(100, fx.rate).toFixed(2) })}
+          </p>
+          <p className="small muted">
+            {t("自动更新，不需要手动操作：选“每天一次”时，每天（美西时间）第一次有人打开充值页时取当天的实时汇率，当天之内固定不变；选“每小时”则每小时更新一次。")}
+            {t("来源 ExchangeRate-API，备用欧洲央行数据；获取失败时用最近一次的汇率，再不行用上面的备用汇率。点“立即更新汇率”可以马上重新获取今天的汇率。")}
+          </p>
+          <label className="f" style={{ margin: "8px 0 12px" }}>{t("充值页其他说明（可选）")}
+            <textarea name="topupInstructions" rows={2} defaultValue={s.topupInstructions} placeholder={t("例如：转账备注请写公司名；工作日 2 小时内确认到账")} />
           </label>
-          <label className="f">{t("支付宝收款信息（显示给客户）")}
-            <textarea name="alipayInfo" rows={3} defaultValue={s.alipayInfo} placeholder={t("支付宝账号：xxx@xxx.com\n户名：某某")} />
-          </label>
+        </FlashForm>
+        <div className="fx-refresh">
+          <span className="small muted">{t("当前汇率")} <b>{fx.rate}</b></span>
+          <FlashForm action={refreshFxAction} submitLabel="立即更新汇率" submitClass="small" inline />
         </div>
-        <div className="grid" style={{ marginTop: 10 }}>
-          <label className="f" style={{ gridColumn: "span 2" }}>{t("支付宝收款码图片（PNG / JPG，可选）")}{s.alipayQr ? t("：已上传，重新选择可替换") : ""}
-            <FilePick name="alipayQr" accept=".png,.jpg,.jpeg" />
-          </label>
-          {s.alipayQr && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src="/api/assets/alipay-qr" alt={t("支付宝收款码")} style={{ width: 110, height: 110, objectFit: "contain", border: "1px solid var(--line)", borderRadius: 6 }} />
-          )}
-        </div>
-        <h3>{t("人民币汇率")}</h3>
-        <div className="grid">
-          <label className="f">{t("汇率来源")}
-            <select name="fxMode" defaultValue={s.fxMode}>
-              <option value="auto">{t("当天实时汇率 + 加点（推荐）")}</option>
-              <option value="manual">{t("固定汇率 + 加点")}</option>
-            </select>
-          </label>
-          <label className="f">{t("实时汇率更新频率")}
-            <select name="fxRefresh" defaultValue={s.fxRefresh ?? "daily"}>
-              <option value="daily">{t("每天一次（全天固定，推荐）")}</option>
-              <option value="hourly">{t("每小时")}</option>
-            </select>
-          </label>
-          <label className="f">{t("加点（加在汇率上，例如 0.03）")}<input name="fxMarkup" type="number" step="0.001" min="0" max="1" defaultValue={s.fxMarkup} /></label>
-          <label className="f">{t("固定 / 备用汇率")}<input name="fxManualRate" type="number" step="0.0001" defaultValue={s.fxManualRate} /></label>
-        </div>
-        <p className="small">
-          {t("当前：")}{fx.manual ? `${fxSource} ${fx.live}` : t("实时汇率 {live}（{source}）", { live: fx.live, source: fxSource + (fx.fetchedAt ? t("，取于 {time}", { time: fmtTime(fx.fetchedAt) }) : "") })}
-          {" "}{t("+ 加点 {m} =", { m: fx.markup })} <b>{t("充值汇率 {rate}", { rate: fx.rate })}</b>{t("（充 100 美元需付 ¥{cny}）", { cny: cnyToPay(100, fx.rate).toFixed(2) })}
-        </p>
-        <p className="small muted">
-          {t("自动更新，不需要手动操作：选“每天一次”时，每天（美西时间）第一次有人打开充值页时取当天的实时汇率，当天之内固定不变；选“每小时”则每小时更新一次。")}
-          {t("来源 ExchangeRate-API，备用欧洲央行数据；获取失败时用最近一次的汇率，再不行用上面的备用汇率。点“立即更新汇率”可以马上重新获取今天的汇率。")}
-        </p>
-        <label className="f" style={{ margin: "8px 0 12px" }}>{t("充值页其他说明（可选）")}
-          <textarea name="topupInstructions" rows={2} defaultValue={s.topupInstructions} placeholder={t("例如：转账备注请写公司名；工作日 2 小时内确认到账")} />
-        </label>
-      </FlashForm>
-      <div className="fx-refresh">
-        <span className="small muted">{t("充值汇率 {rate}", { rate: fx.rate })}</span>
-        <FlashForm action={refreshFxAction} submitLabel="立即更新汇率" submitClass="small" inline />
-      </div>
       </div>
 
       <StampSettings global={s.stamp} channels={channels.filter((c) => c.enabled).map((c) => ({ code: c.code, name: c.name, stamp: c.stamp }))} />

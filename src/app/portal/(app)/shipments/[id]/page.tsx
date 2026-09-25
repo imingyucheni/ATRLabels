@@ -8,7 +8,8 @@ import { LEDGER_TYPE_LABEL, listLedger } from "@/lib/ledger";
 import type { Address } from "@/lib/shipbest/types";
 import FlashForm from "@/components/FlashForm";
 import StatusBadge from "@/components/StatusBadge";
-import { portalRefreshAction, portalSaveLabelNoteAction } from "@/app/portal/actions";
+import { portalCancelAction, portalRefreshAction, portalSaveLabelNoteAction } from "@/app/portal/actions";
+import { isPaperSize, PAPER_LABEL } from "@/lib/labelLayout";
 import { getSettings } from "@/lib/db";
 import { makeT, translateMessage, type T } from "@/lib/i18n";
 import { getLang } from "@/lib/prefs";
@@ -33,7 +34,9 @@ export default async function PortalShipmentDetail({ params }: { params: Promise
   if (!s) notFound();
   const adjustments = listOwnAdjustments(me.id).filter((a) => a.shipmentId === s.id);
   const [wu, lu] = UNITS[s.pkg.displayUnitSystem] ?? UNITS[3];
-  const canCancel = s.status === "pending" || s.status === "labeled" || s.status === "exception";
+  // 未出单 / 已出面单的订单客户可以自己申请取消；异常单请联系客服
+  const canCancel = s.status === "pending" || s.status === "labeled";
+  const paper = isPaperSize(me.labelPaper) ? me.labelPaper : "4x6";
   const feePct = portalCancelFeePercent();
   const contact = getSettings().supportContact;
   const charges = listLedger({ shipmentId: s.id }).filter((l) => l.customerId === me.id).reverse();
@@ -50,7 +53,7 @@ export default async function PortalShipmentDetail({ params }: { params: Promise
         <Link href="/portal/shipments">{t("← 返回列表")}</Link>
       </div>
       {s.problem && <div className="alert err">{t("订单异常：{problem}。请联系客服处理{contact}，未出面单的订单运费会全额退回。", { problem: tm(s.problem), contact: contact ? t("（{contact}）", { contact }) : "" })}</div>}
-      {canCancel && (
+      {s.status === "exception" && (
         <div className="alert warn">
           {t("这张订单已付款出单，如需取消请联系客服{contact}。取消后运费退回账户余额（已出面单的收取 {pct}% 手续费）。", { contact: contact ? `${t("：")}${contact}` : "", pct: feePct })}
         </div>
@@ -63,7 +66,7 @@ export default async function PortalShipmentDetail({ params }: { params: Promise
           {s.hasLabel ? (
             <>
               <div className="row" style={{ marginBottom: 12 }}>
-                <a className="btn primary" href={`/api/labels/${s.id}`} target="_blank">{t("打开 / 打印 4×6 面单")}</a>
+                <a className="btn primary" href={`/api/labels/${s.id}`} target="_blank">{t("打开 / 打印面单 · {paper}", { paper: t(PAPER_LABEL[paper]).replace(/\s*[（(](默认|default)[）)]/, "") })}</a>
                 <a className="btn" href={`/api/labels/${s.id}?download=1`}>{t("下载")}</a>
               </div>
               {s.labelMime === "application/pdf" && (
@@ -92,8 +95,27 @@ export default async function PortalShipmentDetail({ params }: { params: Promise
                 <input type="hidden" name="id" value={s.id} />
               </FlashForm>
             )}
-
+            {canCancel && (
+              <FlashForm
+                action={portalCancelAction}
+                submitLabel={t("申请取消")}
+                submitClass="danger"
+                inline
+                confirm={
+                  s.hasLabel || s.trackingNo
+                    ? t("确认申请取消这张面单？面单已生成，取消后收取 {pct}% 取消手续费，其余运费退回账户余额。取消处理完成前请不要使用这张面单。", { pct: feePct })
+                    : t("确认申请取消这张订单？面单还没生成，取消后运费全额退回账户余额。")
+                }
+              >
+                <input type="hidden" name="id" value={s.id} />
+              </FlashForm>
+            )}
           </div>
+          {canCancel && (
+            <p className="small muted" style={{ marginTop: 8 }}>
+              {t("不需要这张面单了可以点“申请取消”：未出面单的全额退款；已出面单的收取 {pct}% 手续费。", { pct: feePct })}
+            </p>
+          )}
         </div>
 
         <div className="card">

@@ -1,7 +1,8 @@
 import { fmtTime } from "@/lib/time";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getSettings, getShipment, listAdjustments, shipmentProfit } from "@/lib/db";
+import { getCustomer, getSettings, getShipment, listAdjustments, shipmentProfit } from "@/lib/db";
+import { isPaperSize, PAPER_LABEL } from "@/lib/labelLayout";
 import { money } from "@/lib/pricing";
 import { defaultCancelFees } from "@/lib/service";
 import { SB_STATUS, type Address } from "@/lib/shipbest/types";
@@ -65,7 +66,11 @@ export default async function ShipmentDetail({ params }: { params: Promise<{ id:
             <>
               {s.status === "cancel_requested" && <div className="alert warn">{t("已申请取消：在 ShipBest 确认取消前请不要使用这张面单。")}</div>}
               <div className="row" style={{ marginBottom: 12 }}>
-                <a className="btn primary" href={`/api/labels/${s.id}`} target="_blank">{t("打开 / 打印 4×6 面单")}</a>
+                <a className="btn primary" href={`/api/labels/${s.id}`} target="_blank">{(() => {
+                  // 按这个客户设置的纸张显示（打开时也按它排版）
+                  const p = getCustomer(s.customerId)?.labelPaper;
+                  return t("打开 / 打印面单 · {paper}", { paper: t(PAPER_LABEL[isPaperSize(p) ? p : "4x6"]).replace(/\s*[（(](默认|default)[）)]/, "") });
+                })()}</a>
                 <a className="btn" href={`/api/labels/${s.id}?download=1`}>{t("下载")}</a>
                 {stampCfg && <a className="btn" href={`/api/labels/${s.id}?raw=1`} target="_blank">{t("原始面单（不加印）")}</a>}
               </div>

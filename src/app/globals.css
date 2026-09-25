@@ -101,7 +101,7 @@ a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; text-underline-offset: 3px; }
 h1 { font-size: 22px; line-height: 1.3; font-weight: 650; letter-spacing: -0.01em; margin: 0 0 18px; }
 h2 { font-size: 15px; font-weight: 600; margin: 0 0 12px; letter-spacing: -0.005em; }
-h3 { font-size: 12px; font-weight: 600; margin: 20px 0 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+h3 { font-size: 12px; font-weight: 600; margin: 20px 0 10px; color: var(--muted); letter-spacing: 0.02em; }
 code { font: 12.5px ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--sunken); padding: 1px 6px; border-radius: 5px; }
 ::selection { background: var(--accent-soft); }
 .muted { color: var(--muted); }
@@ -245,7 +245,17 @@ select.small { padding-right: 28px; }
 .filter-bar form input, .filter-bar form select { width: auto; }
 
 /* ---------------- 表格 ---------------- */
-.table-wrap { overflow-x: auto; }
+.table-wrap { overflow-x: auto; scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
+/* 卡片里的表格放不下时：左右边缘出现阴影，提示可以横向滚动（内容滚到头阴影自动消失） */
+.card.table-wrap, .card .table-wrap {
+  --sh: color-mix(in srgb, var(--text) 18%, transparent);
+  background:
+    linear-gradient(to right, var(--surface) 40%, transparent) left center / 36px 100% no-repeat local,
+    linear-gradient(to left, var(--surface) 40%, transparent) right center / 36px 100% no-repeat local,
+    radial-gradient(farthest-side at 0 50%, var(--sh), transparent) left center / 14px 100% no-repeat scroll,
+    radial-gradient(farthest-side at 100% 50%, var(--sh), transparent) right center / 14px 100% no-repeat scroll,
+    var(--surface);
+}
 table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
 th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
 th { font-size: 12px; font-weight: 500; color: var(--muted); white-space: nowrap; background: transparent; }
@@ -363,8 +373,12 @@ tr.best td { background: var(--accent-soft); }
   .sidebar { position: sticky; top: 0; z-index: 20; height: auto; padding: 10px 14px; border-right: 0; border-bottom: 1px solid var(--line); gap: 0; }
   .brand { padding: 0; margin: 0; display: flex; align-items: center; gap: 10px; }
   .brand .brand-sub { display: none; }
-  .mobile-current { margin-left: auto; font-size: 13px; color: var(--muted); white-space: nowrap; }
-  .menu-toggle { display: inline-flex; position: relative; align-items: center; justify-content: center; width: 38px; height: 38px; padding: 0; margin-left: 8px; }
+  .brand > div:not(.brand-mark) { min-width: 0; flex: 0 1 auto; }
+  .brand-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* 当前页面名：占满中间，靠右显示，太长省略；菜单按钮固定在最右边 */
+  .mobile-current { display: block; flex: 1 1 auto; min-width: 0; margin-left: 8px; text-align: right; font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .menu-toggle { display: inline-flex; position: relative; flex: none; align-items: center; justify-content: center; width: 38px; height: 38px; padding: 0; margin-left: auto; }
+  .mobile-current + .menu-toggle { margin-left: 8px; }
   .menu-dot { position: absolute; top: 7px; right: 7px; width: 7px; height: 7px; border-radius: 50%; background: var(--err); }
   .sidebar nav, .sidebar .sidebar-foot { display: none; }
   .sidebar.open nav { display: block; margin-top: 8px; }
@@ -391,6 +405,13 @@ tr.row-warn > td { background: var(--warn-soft); }
 
 /* 列表表格：单元格不折行（避免中文客户名、按钮被挤成竖排），放不下时横向滚动 */
 table.list td { white-space: nowrap; }
+/* 文字多的列（收件人、客户、渠道…）允许折行，金额等其他列保持一行；表格宽度够时不会折 */
+table.list td.wrap, table.list .cell-wrap { white-space: normal; overflow-wrap: anywhere; }
+table.list td.wrap { min-width: 6.5em; }
+table.list td.wrap.wide { min-width: 13em; }
+table.list .cell-wrap { display: block; min-width: 6.5em; }
+/* 英文表头较长：允许按单词折行（英文不会从单词中间断开） */
+html[lang="en"] table.list th { white-space: normal; }
 .sku-table { min-width: 860px; }
 .sku-table td input:not([type="checkbox"]) { min-width: 90px; }
 .review-box { padding: 8px 0; }
@@ -512,7 +533,14 @@ html[lang="en"] .kpi-label { line-height: 1.3; }
   html[data-nav="mini"] .nav-label, html[data-nav="mini"] .nav-soon, html[data-nav="mini"] .nav-collapse-text, html[data-nav="mini"] .logout-text { display: none; }
   html[data-nav="mini"] .nav-count { position: absolute; top: 3px; right: 9px; font-size: 0; width: 8px; height: 8px; padding: 0; background: var(--warn); }
   html[data-nav="mini"] .nav-collapse { justify-content: center; padding: 6px 0; }
-  html[data-nav="mini"] .prefs, html[data-nav="mini"] .who-card, html[data-nav="mini"] .env-tag { display: none; }
+  html[data-nav="mini"] .sidebar .prefs { display: none; }
+  /* 图标菜单：深浅色轮换按钮 + 竖排 中/EN；环境提示变成一个小圆点；余额卡变成钱包图标（悬停看详情） */
+  html[data-nav="mini"] .sidebar .prefs-mini { display: flex; }
+  html[data-nav="mini"] .env-tag { width: 10px; height: 10px; padding: 0; margin: 2px auto; border-radius: 50%; background: var(--warn); box-shadow: 0 0 0 3px var(--warn-soft); cursor: help; }
+  html[data-nav="mini"] .env-tag-text { display: none; }
+  html[data-nav="mini"] .who-card { display: grid; place-items: center; padding: 6px 0; cursor: help; }
+  html[data-nav="mini"] .who-card .name, html[data-nav="mini"] .who-card .bal { display: none; }
+  html[data-nav="mini"] .who-mini { display: block; }
   html[data-nav="mini"] .logout { padding: 6px 0; }
 }
 @media (max-width: 900px) { .nav-collapse { display: none; } }
@@ -542,3 +570,21 @@ html[data-nav="mini"] .site-link { justify-content: center; padding: 6px 0; }
 .golive li svg { color: var(--muted); flex-shrink: 0; }
 .golive li.done svg { color: var(--ok); }
 .golive li.done a { color: var(--muted); text-decoration: line-through; }
+
+/* 图标菜单里的偏好切换（默认隐藏，只在 html[data-nav="mini"] 下显示） */
+.prefs-mini { display: none; flex-direction: column; align-items: center; gap: 6px; }
+.prefs-mini-theme { width: 34px; height: 30px; padding: 0; color: var(--text-2); background: var(--sunken); border-color: var(--line); box-shadow: none; }
+.prefs-mini-theme:hover { color: var(--text); background: var(--surface); }
+.seg.vertical { flex-direction: column; gap: 2px; }
+.seg.vertical button { width: 30px; justify-content: center; padding: 0; height: 22px; font-size: 11.5px; }
+.who-mini { display: none; color: var(--text-2); }
+.who-mini.neg { color: var(--err); }
+
+/* 次要但醒目的按钮：强调色描边（例如“显示收款信息”），不和主按钮抢 */
+button.accent-outline, .btn.accent-outline { color: var(--accent); border-color: var(--accent); background: var(--surface); }
+button.accent-outline:hover, .btn.accent-outline:hover { background: var(--accent-soft); }
+
+/* 设置页：收款方式卡片（收款表单 + 立即更新汇率） */
+.pay-card:has(.locked-form.editing) { box-shadow: 0 0 0 2px var(--warn); }
+.pay-card .locked-form.editing { box-shadow: none; }
+.fx-refresh { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
