@@ -1,0 +1,257 @@
+import { buildHeaders } from "./sign";
+import type {
+  ApiResult,
+  FeeQuote,
+  OrderDetail,
+  Product,
+  ShipmentRequest,
+} from "./types";
+
+/** 常见错误码的中文说明（完整列表见 ShipBest 文档“常见报错”）。 */
+const ERROR_HINTS: Record<number, string> = {
+  [-1]: "ShipBest 系统维护升级中",
+  1: "ShipBest 服务器错误，请稍后重试",
+  10022: "物流产品不存在",
+  10023: "物流产品已停用",
+  10024: "包裹重量不在该渠道的下单重量范围内",
+  10061: "运费试算失败",
+  10062: "该物流产品没有设置价格，请联系 ShipBest",
+  10063: "自定义单号重复",
+  11004: "API 授权信息无效（检查 apiId / accessToken）",
+  11005: "请求频率超限，请稍后再试",
+  11012: "签名错误",
+  11013: "重复提交",
+  11014: "时间戳无效（检查服务器时间）",
+  11200: "OMS 账户余额不足，请先充值",
+  11201: "OMS 账号已被停用",
+  11202: "订单在 ShipBest 系统中不存在",
+  11203: "该订单不支持取消",
+  11204: "订单已取消，不能重复取消",
+  11205: "订单异常，不支持取消",
+  11206: "创建订单异常",
+};
+
+export class ShipBestError extends Error {
+  constructor(
+    public code: number,
+    public apiMessage: string,
+    public requestId?: string,
+  ) {
+    const hint = ERROR_HINTS[code];
+    super(`[${code}] ${hint ? `${hint}（${apiMessage}）` : apiMessage}`);
+    this.name = "ShipBestError";
+  }
+}
+
+export interface ShipBestClient {
+  verify(): Promise<void>;
+  getProducts(): Promise<Product[]>;
+  /** 按指定渠道试算运费 */
+  trialPrice(productCode: string, req: ShipmentRequest): Promise<FeeQuote | null>;
+  createOrder(customNo: string, productCode: string, req: ShipmentRequest, remark?: string): Promise<unknown>;
+  getOrder(key: { orderNo?: string; customNo?: string }): Promise<OrderDetail>;
+  cancelOrder(key: { orderNo?: string; customNo?: string }): Promise<void>;
+}
+
+function num(v: unknown): number {
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
+/** 组装试算 / 下单共用的请求体字段。 */
+export function buildOrderBody(productCode: string, req: ShipmentRequest) {
+  const { pkg, skuList } = req;
+  const declaredAmount = skuList.reduce((s, i) => s + i.declaredUnitPrice * i.quantity, 0);
+  const declareQuantity = skuList.reduce((s, i) => s + i.quantity, 0);
+  return {
+    logisticsProductCode: productCode,
+    insuranceService: pkg.insuranceService,
+    ...(pkg.insuranceService ? { insuranceFee: pkg.insuranceFee } : {}),
+    insuranceFeeCurrency: pkg.currency,
+    signServiceType: pkg.signServiceType,
+    length: pkg.length,
+    width: pkg.width,
+    height: pkg.height,
+    weight: pkg.weight,
+    displayUnitSystem: pkg.displayUnitSystem,
+    declareQuantity,
+    declaredAmount: Math.round(declaredAmount * 100) / 100,
+    declaredAmountCurrency: pkg.currency,
+    recipientAddressQo: req.recipient,
+    sendAddressQo: req.sender,
+    skuList,
+  };
+}
+
+export class HttpShipBestClient implements ShipBestClient {
+  constructor(
+    private baseUrl: string,
+    private apiId: string,
+    private accessToken: string,
+  ) {}
+
+  private async call<T>(path: string, body: unknown): Promise<T> {
+    const res = await fetch(this.baseUrl.replace(/\/$/, "") + path, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...buildHeaders(this.apiId, this.accessToken, path),
+      },
+      body: JSON.stringify(body ?? {}),
+      signal: AbortSignal.timeout(30_000),
+      cache: "no-store",
+    });
+    const text = await res.text();
+    let json: ApiResult<T>;
+    try {
+      json = JSON.parse(text);
+    } catch {
+      throw new ShipBestError(res.status, `非 JSON 响应: ${text.slice(0, 200)}`);
+    }
+    if (json.code !== 0) throw new ShipBestError(json.code, json.message, json.requestId);
+    return json.data;
+  }
+
+  async verify() {
+    await this.call("/api/oauth/verify", {});
+  }
+
+  async getProducts() {
+    const data = await this.call<{ productVoList?: Product[] }>("/api/logistics/getProducts", {});
+    return data?.productVoList ?? [];
+  }
+
+  async trialPrice(productCode: string, req: ShipmentRequest) {
+    const data = await this.call<{ orderFeeCalcVos?: FeeQuote[] }>(
+      "/api/logistics/trialOrderPrice",
+      buildOrderBody(productCode, req),
+    );
+    const q = data?.orderFeeCalcVos?.[0];
+    if (!q) return null;
+    return {
+      ...q,
+      baseShippingFee: num(q.baseShippingFee),
+      baseDiscountShippingFee: num(q.baseDiscountShippingFee),
+      extraShippingFee: num(q.extraShippingFee),
+      extraDiscountShippingFee: num(q.extraDiscountShippingFee),
+      totalShippingFee: num(q.totalShippingFee),
+      totalDiscountShippingFee: num(q.totalDiscountShippingFee),
+    };
+  }
+
+  async createOrder(customNo: string, productCode: string, req: ShipmentRequest, remark?: string) {
+    return this.call("/api/order/create", {
+      customNo,
+      ...buildOrderBody(productCode, req),
+      ...(remark ? { remark } : {}),
+    });
+  }
+
+  async getOrder(key: { orderNo?: string; customNo?: string }) {
+    return this.call<OrderDetail>("/api/order/detail", key);
+  }
+
+  async cancelOrder(key: { orderNo?: string; customNo?: string }) {
+    await this.call("/api/order/cancel", key);
+  }
+}
+
+/** 离线模拟：不调用真实接口，用于本地试用和测试。 */
+export class MockShipBestClient implements ShipBestClient {
+  private orders = new Map<string, OrderDetail & { createdAt: number }>();
+  private products: Product[] = [
+    { code: "USPS-GA", name: "USPS Ground Advantage" },
+    { code: "UPS-GND", name: "UPS Ground" },
+    { code: "FEDEX-HD", name: "FedEx Home Delivery" },
+  ];
+
+  async verify() {}
+
+  async getProducts() {
+    return this.products;
+  }
+
+  async trialPrice(productCode: string, req: ShipmentRequest) {
+    const idx = this.products.findIndex((p) => p.code === productCode);
+    if (idx < 0) throw new ShipBestError(10022, "Logistics product not exist!");
+    const { weight, displayUnitSystem: u } = req.pkg;
+    const lb = u === 1 ? weight / 453.6 : u === 2 ? weight * 2.2046 : weight;
+    const base = Math.round((4.5 + idx * 1.8 + lb * (0.9 + idx * 0.25)) * 100) / 100;
+    const extra = req.pkg.signServiceType ? 3 : 0;
+    const discount = Math.round(base * 0.92 * 100) / 100;
+    return {
+      logisticsProductId: idx + 1,
+      logisticsProductName: this.products[idx].name,
+      baseShippingFee: base,
+      baseDiscountShippingFee: discount,
+      extraShippingFee: extra,
+      extraDiscountShippingFee: extra,
+      totalShippingFee: base + extra,
+      totalDiscountShippingFee: Math.round((discount + extra) * 100) / 100,
+      currency: "USD",
+    };
+  }
+
+  async createOrder(customNo: string, productCode: string, req: ShipmentRequest) {
+    if ([...this.orders.values()].some((o) => o.customNo === customNo)) {
+      throw new ShipBestError(10063, "custom no is repeat!");
+    }
+    const q = await this.trialPrice(productCode, req);
+    const orderNo = "SB" + Date.now();
+    this.orders.set(orderNo, {
+      orderNo,
+      customNo,
+      logisticsProductCode: productCode,
+      logisticsProductName: q.logisticsProductName,
+      status: 2,
+      feePrice: q.totalDiscountShippingFee,
+      feePriceCurrency: q.currency,
+      createdAt: Date.now(),
+    });
+    return {};
+  }
+
+  private find(key: { orderNo?: string; customNo?: string }) {
+    const o = key.orderNo
+      ? this.orders.get(key.orderNo)
+      : [...this.orders.values()].find((x) => x.customNo === key.customNo);
+    if (!o) throw new ShipBestError(11202, "The order was not found in the system!");
+    return o;
+  }
+
+  async getOrder(key: { orderNo?: string; customNo?: string }) {
+    const o = this.find(key);
+    // 模拟异步出单：创建 1 秒后变成已打单
+    if (o.status === 2 && Date.now() - o.createdAt > 1000) {
+      o.status = 4;
+      o.trackingNo = "9400" + String(Date.now()).slice(-16);
+      o.labelUrl = `mock://label/${o.customNo}`;
+    }
+    const { createdAt: _, ...detail } = o;
+    return { ...detail };
+  }
+
+  async cancelOrder(key: { orderNo?: string; customNo?: string }) {
+    const o = this.find(key);
+    if (o.status === 6) throw new ShipBestError(11204, "The order is Cancelled not cancel repeated !");
+    // 真实情况：已打单的订单需联系 ShipBest 人工取消
+    if (o.status === 4) throw new ShipBestError(11203, "The order was nonsupport cancelled!");
+    o.status = 6;
+  }
+}
+
+const g = globalThis as unknown as { __shipbestMock?: MockShipBestClient };
+
+export function isMockMode() {
+  return process.env.SHIPBEST_MOCK === "1";
+}
+
+export function getShipBestClient(): ShipBestClient {
+  if (isMockMode()) return (g.__shipbestMock ??= new MockShipBestClient());
+  const apiId = process.env.SHIPBEST_API_ID;
+  const token = process.env.SHIPBEST_ACCESS_TOKEN;
+  if (!apiId || !token) {
+    throw new Error("未配置 SHIPBEST_API_ID / SHIPBEST_ACCESS_TOKEN（或设置 SHIPBEST_MOCK=1 使用模拟模式）");
+  }
+  return new HttpShipBestClient(process.env.SHIPBEST_BASE_URL || "https://oms.shipbest.com", apiId, token);
+}
