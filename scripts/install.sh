@@ -273,10 +273,11 @@ IP_URL="http://$(curl -fsS -m 5 ifconfig.me 2>/dev/null || hostname -I | awk '{p
 URL="${DOMAIN:+https://$DOMAIN}"; URL="${URL:-$IP_URL}"
 if [ -n "$OMS_DOMAIN" ]; then OMS="https://$OMS_DOMAIN/portal/login"; else OMS="$URL/portal/login"; fi
 
-# 等服务启动
+# 等服务启动（刚重启时连不上是正常的，不显示报错）
+echo "==> 等待服务启动…"
 ok=0
 for i in $(seq 1 30); do
-  if curl -fsS -o /dev/null -m 3 http://127.0.0.1:3000/login; then ok=1; break; fi
+  if curl -fs -o /dev/null -m 3 http://127.0.0.1:3000/login 2>/dev/null; then ok=1; break; fi
   sleep 2
 done
 ADMIN_PW=$(grep '^ADMIN_PASSWORD=' "$ENV_FILE" | cut -d= -f2-)
