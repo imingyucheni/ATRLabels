@@ -1,4 +1,5 @@
 import { isPaperSize, type PaperSize } from "@/lib/labelLayout";
+import ExportCsv from "@/components/ExportCsv";
 import ChannelLabel from "@/components/ChannelLabel";
 import { fmtTime } from "@/lib/time";
 import Link from "next/link";
@@ -32,7 +33,7 @@ export default async function PortalShipments({ searchParams }: { searchParams: 
         <label className="f">{t("结束日期")}<input type="date" name="to" defaultValue={sp.to} /></label>
         <label className="f" style={{ flex: 1, minWidth: 180 }}>{t("搜索")}<input name="q" placeholder={t("订单号 / 运单号 / 收件人")} defaultValue={sp.q} /></label>
         <button className="primary">{t("筛选")}</button>
-        <a className="btn" href={`/api/portal/export?${qs}`}>{t("导出 CSV")}</a>
+        <ExportCsv qs={qs} />
       </form>
       <SelectPrint
         defaultPaper={(isPaperSize(me.labelPaper) ? me.labelPaper : "4x6") as PaperSize}
