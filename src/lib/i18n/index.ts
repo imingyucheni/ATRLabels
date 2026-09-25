@@ -4,6 +4,12 @@
  * 字典按区域拆在 ./en/*.ts，这里合并。
  */
 import { account } from "./en/account";
+import { admin1 } from "./en/admin1";
+import { admin1Patterns } from "./en/admin1Patterns";
+import { admin2 } from "./en/admin2";
+import { admin2Patterns } from "./en/admin2Patterns";
+import { admin3 } from "./en/admin3";
+import { admin3Patterns } from "./en/admin3Patterns";
 import { common } from "./en/common";
 import { orders } from "./en/orders";
 import { orderPatterns } from "./en/orderPatterns";
@@ -12,7 +18,8 @@ import { patterns } from "./en/patterns";
 export type Lang = "zh" | "en";
 export type Vars = Record<string, string | number | null | undefined>;
 
-const EN: Record<string, string> = { ...common, ...orders, ...account };
+const EN: Record<string, string> = { ...admin3, ...admin2, ...admin1, ...common, ...orders, ...account };
+const PATTERNS: [RegExp, string][] = [...patterns, ...orderPatterns, ...admin1Patterns, ...admin2Patterns, ...admin3Patterns];
 
 function fill(s: string, vars?: Vars) {
   return vars ? s.replace(/\{(\w+)\}/g, (m, k) => (vars[k] === undefined || vars[k] === null ? m : String(vars[k]))) : s;
@@ -31,7 +38,7 @@ export function translateMessage(lang: Lang, msg: string | null | undefined): st
   if (!msg) return msg ?? "";
   if (lang !== "en") return msg;
   if (EN[msg] !== undefined) return EN[msg];
-  for (const [re, rep] of [...patterns, ...orderPatterns]) {
+  for (const [re, rep] of PATTERNS) {
     if (re.test(msg)) return msg.replace(re, rep as string);
   }
   return msg;
