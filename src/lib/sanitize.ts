@@ -1,3 +1,4 @@
+import { usStateCode } from "./geo";
 import type { Address, ShipmentRequest, SkuItem, UnitSystem } from "./shipbest/types";
 
 /** 表单/客户端输入的清洗工具（后台和客户端共用） */
@@ -34,6 +35,8 @@ export function cleanAddress(a: Partial<Address> | undefined): Address {
     const v = str(x[k]);
     if (v) out[k] = v;
   }
+  // 美国地址：州统一成二字码（“California” / “ca” → “CA”）
+  if (out.country === "US" && out.province) out.province = usStateCode(out.province) ?? out.province;
   return out;
 }
 

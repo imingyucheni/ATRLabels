@@ -60,8 +60,8 @@ describe("充值与按订单扣款", () => {
     const svc = await import("@/lib/service");
     await svc.syncChannels();
     const req: ShipmentRequest = {
-      sender: { nameFirst: "W", nameLast: "H", country: "US", city: "Chino", address1: "1 Main", zipCode: "91710" },
-      recipient: { nameFirst: "J", nameLast: "D", country: "US", city: "Austin", address1: "2 Elm", zipCode: "73301" },
+      sender: { nameFirst: "W", nameLast: "H", country: "US", city: "Chino", address1: "1 Main", zipCode: "91710", province: "CA" },
+      recipient: { nameFirst: "J", nameLast: "D", country: "US", city: "Austin", address1: "2 Elm", zipCode: "73301", province: "TX" },
       pkg: { length: 10, width: 8, height: 4, weight: 2, displayUnitSystem: 3, signServiceType: 0, insuranceService: 0, currency: "USD" },
       skuList: [{ sku: "A1", productNameCn: "T恤", productNameEn: "T-shirt", quantity: 1, declaredUnitPrice: 5, declaredCurrency: "USD", hsCode: "", productNature: "2,4", length: 10, width: 8, height: 4, weight: 2, unit: 3 }],
     };

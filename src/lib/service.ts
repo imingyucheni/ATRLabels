@@ -21,6 +21,7 @@ import { chargeLabel, refundCancelled, removeShipmentLedger } from "./ledger";
 import { computePrice, resolveRule, type MarkupRule, type PartialRule } from "./pricing";
 import { getShipBestClient, ShipBestError } from "./shipbest/client";
 import type { Address, ShipmentRequest } from "./shipbest/types";
+import { isCountryCode, isUsZip, usStateCode } from "./geo";
 
 /* ---------------- 校验 ---------------- */
 
@@ -39,6 +40,12 @@ function checkAddress(a: Address | undefined, who: string, errors: string[], zip
   if (zipRequired) req.push(["zipCode", "邮编"]);
   for (const [k, label] of req) if (!a[k]?.toString().trim()) errors.push(`${who}${label}必填`);
   if (a.country && !/^[A-Za-z]{2}$/.test(a.country)) errors.push(`${who}国家请填二字码，例如 US`);
+  else if (a.country && !isCountryCode(a.country)) errors.push(`${who}国家代码“${a.country}”不存在，请从下拉框选择`);
+  if (a.country?.toUpperCase() === "US") {
+    if (!a.province?.trim()) errors.push(`${who}州必填`);
+    else if (!usStateCode(a.province)) errors.push(`${who}州“${a.province}”不正确，请从下拉框选择（例如 CA、TX）`);
+    if (a.zipCode && !isUsZip(a.zipCode)) errors.push(`${who}邮编“${a.zipCode}”格式不对，美国邮编是 5 位数字（可以带 4 位，例如 78701-1234）`);
+  }
   const max: [keyof Address, number, string][] = [
     ["nameFirst", 50, "名"],
     ["nameLast", 50, "姓"],
