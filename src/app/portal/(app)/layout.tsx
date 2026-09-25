@@ -22,6 +22,7 @@ export default async function PortalLayout({ children }: { children: React.React
         <Link href="/portal/ship">＋ 下单</Link>
         <Link href="/portal/batch">批量下单</Link>
         <Link href="/portal/shipments">我的面单</Link>
+        <Link href="/portal/topup">充值</Link>
         <Link href="/portal/billing">账户与账单</Link>
         <Link href="/portal/adjustments">补差明细</Link>
         <Link href="/portal/account">账户设置</Link>

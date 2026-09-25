@@ -8,7 +8,7 @@ function labelsDir() {
   return dir;
 }
 
-function sniffMime(buf: Buffer, headerType: string | null): { mime: string; ext: string } {
+export function sniffMime(buf: Buffer, headerType: string | null): { mime: string; ext: string } {
   if (buf.subarray(0, 4).toString("latin1") === "%PDF") return { mime: "application/pdf", ext: "pdf" };
   if (buf[0] === 0x89 && buf.subarray(1, 4).toString("latin1") === "PNG") return { mime: "image/png", ext: "png" };
   if (buf[0] === 0xff && buf[1] === 0xd8) return { mime: "image/jpeg", ext: "jpg" };

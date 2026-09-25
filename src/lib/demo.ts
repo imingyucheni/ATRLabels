@@ -20,6 +20,9 @@ export function seedDemo(conn: Database.Database) {
     roundingStep: 0.01,
     brandName: "ATR Logistics（演示）",
     supportContact: "演示环境 · 客服微信 atr-demo",
+    zelleInfo: "Zelle：pay@atr-demo.com\n户名：ATR Logistics LLC（演示）",
+    alipayInfo: "支付宝账号：atr-demo@example.com\n户名：演示公司",
+    topupInstructions: "转账备注请写公司名称；工作日 2 小时内确认到账。",
     sender: { nameFirst: "ATR", nameLast: "Warehouse", country: "US", province: "CA", city: "Chino", address1: "13950 Central Ave", zipCode: "91710", phone: "9095550100" },
   };
   for (const [k, v] of Object.entries(settings)) set.run(k, JSON.stringify(v));

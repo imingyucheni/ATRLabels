@@ -2,6 +2,9 @@ import Link from "next/link";
 import { listCustomers } from "@/lib/db";
 import { LEDGER_TYPE_LABEL, listLedger } from "@/lib/ledger";
 import { money } from "@/lib/pricing";
+import { listTopups, TOPUP_METHOD_LABEL, TOPUP_STATUS_LABEL } from "@/lib/topup";
+import FlashForm from "@/components/FlashForm";
+import { approveTopupAction, rejectTopupAction } from "@/app/actions";
 
 export default async function FinancePage({ searchParams }: { searchParams: Promise<{ from?: string; to?: string }> }) {
   const sp = await searchParams;
@@ -10,6 +13,8 @@ export default async function FinancePage({ searchParams }: { searchParams: Prom
   const prepaid = customers.reduce((a, c) => a + Math.max(0, c.balance), 0);
   const owed = customers.reduce((a, c) => a + Math.min(0, c.balance), 0);
   const byType = ledger.reduce<Record<string, number>>((m, l) => ((m[l.type] = (m[l.type] ?? 0) + l.amount), m), {});
+  const pending = listTopups({ status: "pending" });
+  const handled = listTopups({ limit: 30 }).filter((t) => t.status !== "pending");
   const qs = new URLSearchParams(Object.entries(sp).filter(([, v]) => v) as [string, string][]).toString();
 
   return (
@@ -19,6 +24,64 @@ export default async function FinancePage({ searchParams }: { searchParams: Prom
         <div className="stat"><div className="muted">客户预存余额合计</div><div className="v">{money(prepaid)}</div></div>
         <div className="stat"><div className="muted">客户欠款合计</div><div className={`v ${owed < 0 ? "profit-neg" : ""}`}>{money(-owed)}</div></div>
         <div className="stat"><div className="muted">客户数</div><div className="v">{customers.length}</div></div>
+      </div>
+
+      <div className="card table-wrap" id="topups">
+        <h2>待确认充值（{pending.length}）</h2>
+        {!pending.length && <p className="muted">没有待确认的充值申请</p>}
+        {pending.length > 0 && (
+          <table>
+            <thead><tr><th>#</th><th>客户</th><th>方式</th><th className="num">申请（美元）</th><th className="num">应收</th><th>参考号 / 备注</th><th>凭证</th><th>处理</th></tr></thead>
+            <tbody>
+              {pending.map((t) => (
+                <tr key={t.id}>
+                  <td className="muted">{t.id}<div className="small">{t.createdAt}</div></td>
+                  <td><Link href={`/customers/${t.customerId}`}>{t.customerName}</Link></td>
+                  <td>{TOPUP_METHOD_LABEL[t.method]}</td>
+                  <td className="num">{money(t.amountUsd)}</td>
+                  <td className="num"><b>{t.payCurrency === "CNY" ? `¥${t.payAmount.toFixed(2)}` : `$${t.payAmount.toFixed(2)}`}</b>{t.fxRate && <div className="small muted">实时 {t.fxLive} + 加点 = {t.fxRate}</div>}</td>
+                  <td className="small">{t.reference}{t.note && <div className="muted">{t.note}</div>}</td>
+                  <td>{t.hasProof ? <a href={`/api/topup/${t.id}/proof`} target="_blank">查看</a> : <span className="muted small">无</span>}</td>
+                  <td style={{ minWidth: 260 }}>
+                    <FlashForm action={approveTopupAction} submitLabel="确认到账" submitClass="primary small" confirm="确认已收到这笔款项并入账？">
+                      <input type="hidden" name="id" value={t.id} />
+                      <div className="row" style={{ gap: 6, marginBottom: 6 }}>
+                        <label className="f" style={{ width: 110 }}>入账美元<input name="creditedUsd" type="number" step="0.01" defaultValue={t.amountUsd} /></label>
+                        <label className="f" style={{ flex: 1 }}>备注<input name="adminNote" maxLength={200} /></label>
+                      </div>
+                    </FlashForm>
+                    <FlashForm action={rejectTopupAction} submitLabel="不通过" submitClass="danger small" className="row">
+                      <input type="hidden" name="id" value={t.id} />
+                      <input name="adminNote" placeholder="原因（客户可见）" maxLength={200} style={{ flex: 1 }} />
+                    </FlashForm>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        {handled.length > 0 && (
+          <>
+            <h3>最近处理</h3>
+            <table>
+              <thead><tr><th>#</th><th>处理时间</th><th>客户</th><th>方式</th><th className="num">应收</th><th>状态</th><th className="num">入账（美元）</th><th>备注</th></tr></thead>
+              <tbody>
+                {handled.map((t) => (
+                  <tr key={t.id}>
+                    <td className="muted">{t.id}</td>
+                    <td className="small muted">{t.handledAt}</td>
+                    <td>{t.customerName}</td>
+                    <td className="small">{TOPUP_METHOD_LABEL[t.method]}</td>
+                    <td className="num">{t.payCurrency === "CNY" ? `¥${t.payAmount.toFixed(2)}` : `$${t.payAmount.toFixed(2)}`}</td>
+                    <td>{TOPUP_STATUS_LABEL[t.status]}</td>
+                    <td className="num">{t.creditedUsd !== null ? money(t.creditedUsd) : "-"}</td>
+                    <td className="small">{t.adminNote}{t.hasProof && <> <a href={`/api/topup/${t.id}/proof`} target="_blank">凭证</a></>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
+        )}
       </div>
 
       <div className="card table-wrap">

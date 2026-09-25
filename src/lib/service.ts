@@ -229,7 +229,7 @@ export async function createLabel(input: CreateInput): Promise<number> {
     customerRef: input.customerRef || null,
     createdBy,
     });
-    chargeLabel(customerId, newId, quote.price!, createdBy);
+    chargeLabel(customerId, newId, quote.price!, createdBy, `运费 · ${quote.channelName}${quote.zone ? ` · ${quote.zone}` : ""}`);
     return newId;
   })();
 

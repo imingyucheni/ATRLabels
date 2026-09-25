@@ -1,14 +1,17 @@
 import { ADJUSTMENT_POLICY_LABEL, getSettings, listChannels } from "@/lib/db";
+import { BALANCE_RULE_LABEL } from "@/lib/ledger";
 import { computePrice, money, resolveRule, type MarkupRule } from "@/lib/pricing";
 import { isMockMode } from "@/lib/shipbest/client";
 import AddressFields from "@/components/AddressFields";
 import StampSettings from "@/components/StampSettings";
 import FlashForm from "@/components/FlashForm";
 import RuleInputs from "@/components/RuleInputs";
-import { saveChannelsAction, saveSettingsAction, syncChannelsAction, verifyAction } from "@/app/actions";
+import { refreshFxAction, saveChannelsAction, savePaymentSettingsAction, saveSettingsAction, syncChannelsAction, verifyAction } from "@/app/actions";
+import { cnyToPay, usdCnyQuote } from "@/lib/fx";
 
 export default async function SettingsPage() {
   const s = getSettings();
+  const fx = await usdCnyQuote();
   const channels = listChannels();
   const configured = isMockMode() || (!!process.env.SHIPBEST_API_ID && !!process.env.SHIPBEST_ACCESS_TOKEN);
   const example = [5, 10, 20];
@@ -68,6 +71,16 @@ export default async function SettingsPage() {
         </div>
         <p className="small muted">ShipBest 扣的是预报价，官方账单出来后按重量或分区差异多退少补。在“补差导入”上传他们的表格时，按这里的规则计算向客户补收或退还的金额（导入时的规则会记录在批次上）。</p>
 
+        <h3>客户余额与充值</h3>
+        <div className="grid">
+          <label className="f" style={{ gridColumn: "span 2" }}>下单余额规则
+            <select name="balanceRule" defaultValue={s.balanceRule}>
+              {Object.entries(BALANCE_RULE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </select>
+          </label>
+        </div>
+        <p className="small muted">月结客户可以在客户页面设置信用额度：可用余额 = 余额 + 信用额度。后台代客户下单也按这个规则检查。收款方式在下方“收款方式”里设置。</p>
+
         <h3>客户端</h3>
         <div className="grid">
           <label className="f">客户端显示的公司名称<input name="brandName" defaultValue={s.brandName} maxLength={60} /></label>
@@ -91,6 +104,50 @@ export default async function SettingsPage() {
         <AddressFields value={s.sender} namePrefix="sender." />
         <div style={{ height: 12 }} />
       </FlashForm>
+
+      <FlashForm action={savePaymentSettingsAction} submitLabel="保存收款设置" className="card">
+        <h2>收款方式（客户充值）</h2>
+        <p className="small muted">客户在客户端“充值”页选择 Zelle（美元）或支付宝（人民币）付款，上传凭证后提交申请；你们在“财务”页确认到账后自动加到客户余额。余额以美元记账。</p>
+        <div className="grid2">
+          <label className="f">Zelle 收款信息（显示给客户）
+            <textarea name="zelleInfo" rows={3} defaultValue={s.zelleInfo} placeholder={"邮箱 / 电话：pay@example.com\n户名：ATR Logistics LLC"} />
+          </label>
+          <label className="f">支付宝收款信息（显示给客户）
+            <textarea name="alipayInfo" rows={3} defaultValue={s.alipayInfo} placeholder={"支付宝账号：xxx@xxx.com\n户名：某某"} />
+          </label>
+        </div>
+        <div className="grid" style={{ marginTop: 10 }}>
+          <label className="f" style={{ gridColumn: "span 2" }}>支付宝收款码图片（PNG / JPG，可选）{s.alipayQr ? "：已上传，重新选择可替换" : ""}
+            <input type="file" name="alipayQr" accept=".png,.jpg,.jpeg" />
+          </label>
+          {s.alipayQr && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src="/api/assets/alipay-qr" alt="支付宝收款码" style={{ width: 110, height: 110, objectFit: "contain", border: "1px solid var(--line)", borderRadius: 6 }} />
+          )}
+        </div>
+        <h3>人民币汇率</h3>
+        <div className="grid">
+          <label className="f">汇率来源
+            <select name="fxMode" defaultValue={s.fxMode}>
+              <option value="auto">当天实时汇率 + 加点（推荐）</option>
+              <option value="manual">固定汇率 + 加点</option>
+            </select>
+          </label>
+          <label className="f">加点（加在汇率上，例如 0.03）<input name="fxMarkup" type="number" step="0.001" min="0" max="1" defaultValue={s.fxMarkup} /></label>
+          <label className="f">固定 / 备用汇率<input name="fxManualRate" type="number" step="0.0001" defaultValue={s.fxManualRate} /></label>
+        </div>
+        <p className="small">
+          当前：{fx.manual ? `${fx.source} ${fx.live}` : `实时汇率 ${fx.live}（${fx.source}${fx.fetchedAt ? "，" + fx.fetchedAt.slice(0, 16).replace("T", " ") + " UTC" : ""}）`}
+          {" "}+ 加点 {fx.markup} = <b>充值汇率 {fx.rate}</b>（充 100 美元需付 ¥{cnyToPay(100, fx.rate).toFixed(2)}）
+        </p>
+        <p className="small muted">实时汇率每小时自动更新（来源：ExchangeRate-API，备用欧洲央行数据）；获取失败时使用最近一次的实时汇率，再不行用备用汇率。</p>
+        <label className="f" style={{ margin: "8px 0 12px" }}>充值页其他说明（可选）
+          <textarea name="topupInstructions" rows={2} defaultValue={s.topupInstructions} placeholder="例如：转账备注请写公司名；工作日 2 小时内确认到账" />
+        </label>
+      </FlashForm>
+      <div style={{ marginTop: -8, marginBottom: 16 }}>
+        <FlashForm action={refreshFxAction} submitLabel="立即更新汇率" submitClass="small" inline />
+      </div>
 
       <StampSettings global={s.stamp} channels={channels.filter((c) => c.enabled).map((c) => ({ code: c.code, name: c.name, stamp: c.stamp }))} />
 

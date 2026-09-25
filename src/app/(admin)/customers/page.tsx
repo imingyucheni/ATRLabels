@@ -27,7 +27,7 @@ export default async function CustomersPage() {
                 <td className="num">{c.creditLimit ? money(c.creditLimit) : "-"}</td>
                 <td>{show(c.markup.percent, "%")}</td><td>{show(c.markup.fixed)}</td><td>{show(c.markup.minProfit)}</td>
                 <td>
-                  <Link href={`/customers/${c.id}`}>管理</Link> · <Link href={`/shipments?customerId=${c.id}`}>面单</Link> · <Link href={`/customers/${c.id}/statement`}>对账单</Link>
+                  <Link href={`/customers/${c.id}`}>管理</Link> · <Link href={`/shipments?customerId=${c.id}`}>面单</Link> · <Link href={`/customers/${c.id}/charges`}>扣款明细</Link> · <Link href={`/customers/${c.id}/statement`}>对账单</Link>
                 </td>
               </tr>
             ))}

@@ -1,4 +1,4 @@
-import { db, getCustomer } from "./db";
+import { db, getCustomer, getSettings } from "./db";
 
 /**
  * 客户钱包流水。余额 = 流水合计。
@@ -56,11 +56,32 @@ export function addLedger(e: {
 }
 
 export class InsufficientBalanceError extends Error {
-  constructor(public balance: number, public needed: number, public creditLimit: number) {
+  constructor(public balance: number, public needed: number, public creditLimit: number, rule: BalanceRule = "cover") {
+    const credit = creditLimit ? `（信用额度 ${creditLimit.toFixed(2)}）` : "";
     super(
-      `余额不足：当前余额 ${balance.toFixed(2)}${creditLimit ? `（信用额度 ${creditLimit.toFixed(2)}）` : ""}，本单需要 ${needed.toFixed(2)}，请先充值`,
+      rule === "positive"
+        ? `余额不足：当前余额 ${balance.toFixed(2)}${credit}，需要先充值才能继续下单`
+        : `余额不足：当前余额 ${balance.toFixed(2)}${credit}，本单需要 ${needed.toFixed(2)}，请先充值`,
     );
   }
+}
+
+/**
+ * 下单余额规则：
+ * positive：余额（含信用额度）大于 0 就可以下单，这一单可以让余额变成负数；余额 ≤ 0 时必须充值
+ * cover：余额（含信用额度）必须够付这一单
+ */
+export type BalanceRule = "positive" | "cover";
+
+export const BALANCE_RULE_LABEL: Record<BalanceRule, string> = {
+  positive: "余额大于 0 即可下单（这一单可以让余额变负，余额 ≤ 0 时必须充值）",
+  cover: "余额必须够付这一单才能下单",
+};
+
+/** 按规则判断能否下单 */
+export function canAfford(balance: number, creditLimit: number, amount: number, rule: BalanceRule): boolean {
+  if (rule === "positive") return balance + creditLimit > 1e-9;
+  return balance - amount >= -creditLimit - 1e-9;
 }
 
 /** 可用额度 = 余额 + 信用额度 */
@@ -73,14 +94,16 @@ export function availableOf(customerId: number): number {
 export function assertCanAfford(customerId: number, amount: number) {
   const c = getCustomer(customerId);
   const bal = balanceOf(customerId);
-  if (bal - amount < -(c?.creditLimit ?? 0) - 1e-9) throw new InsufficientBalanceError(bal, amount, c?.creditLimit ?? 0);
+  const rule = getSettings().balanceRule;
+  const limit = c?.creditLimit ?? 0;
+  if (!canAfford(bal, limit, amount, rule)) throw new InsufficientBalanceError(bal, amount, limit, rule);
 }
 
 /** 出单扣款：检查额度并扣款在同一个事务里完成，防止并发超扣 */
-export function chargeLabel(customerId: number, shipmentId: number, price: number, createdBy: string) {
+export function chargeLabel(customerId: number, shipmentId: number, price: number, createdBy: string, note?: string) {
   db().transaction(() => {
     assertCanAfford(customerId, price);
-    addLedger({ customerId, type: "label", amount: -price, shipmentId, createdBy });
+    addLedger({ customerId, type: "label", amount: -price, shipmentId, createdBy, note: note ?? null });
   })();
 }
 
@@ -119,9 +142,13 @@ interface LedgerRow {
   created_at: string;
 }
 
-export function listLedger(f: { customerId?: number; from?: string; to?: string; limit?: number }): LedgerEntry[] {
+export function listLedger(f: { customerId?: number; shipmentId?: number; from?: string; to?: string; limit?: number }): LedgerEntry[] {
   const where: string[] = [];
   const args: (string | number)[] = [];
+  if (f.shipmentId) {
+    where.push("l.shipment_id = ?");
+    args.push(f.shipmentId);
+  }
   if (f.customerId) {
     where.push("l.customer_id = ?");
     args.push(f.customerId);
@@ -144,7 +171,7 @@ export function listLedger(f: { customerId?: number; from?: string; to?: string;
 
   // 按客户查询时计算每笔之后的余额
   let running: number | null = null;
-  if (f.customerId) {
+  if (f.customerId && !f.shipmentId) {
     const lastId = rows[0]?.id ?? 0;
     const r = db()
       .prepare("SELECT COALESCE(SUM(amount), 0) AS b FROM ledger WHERE customer_id = ? AND id <= ?")
@@ -172,4 +199,69 @@ export function listLedger(f: { customerId?: number; from?: string; to?: string;
     }
     return e;
   });
+}
+
+/* ---------------- 按订单汇总扣款 ---------------- */
+
+export interface OrderCharge {
+  shipmentId: number;
+  customNo: string;
+  customerRef: string | null;
+  trackingNo: string | null;
+  channelName: string | null;
+  status: string;
+  createdAt: string;
+  /** 运费扣款（正数） */
+  freight: number;
+  /** 账单补差：正数 = 补收，负数 = 退还 */
+  adjustment: number;
+  /** 取消退款（正数） */
+  refund: number;
+  /** 这一单实际扣款合计 = 运费 + 补差 - 退款 */
+  net: number;
+}
+
+/** 每一单的扣款明细（按下单时间筛选） */
+export function listOrderCharges(customerId: number, f: { from?: string; to?: string; q?: string } = {}): OrderCharge[] {
+  const where = ["l.customer_id = ?"];
+  const args: (string | number)[] = [customerId];
+  if (f.from) {
+    where.push("date(s.created_at, 'localtime') >= ?");
+    args.push(f.from);
+  }
+  if (f.to) {
+    where.push("date(s.created_at, 'localtime') <= ?");
+    args.push(f.to);
+  }
+  if (f.q) {
+    where.push("(s.custom_no LIKE ? OR s.tracking_no LIKE ? OR s.customer_ref LIKE ?)");
+    args.push(`%${f.q}%`, `%${f.q}%`, `%${f.q}%`);
+  }
+  const rows = db()
+    .prepare(
+      `SELECT s.id, s.custom_no, s.customer_ref, s.tracking_no, s.channel_name, s.status, s.created_at,
+        COALESCE(SUM(CASE WHEN l.type = 'label' THEN l.amount END), 0) AS freight,
+        COALESCE(SUM(CASE WHEN l.type = 'adjustment' THEN l.amount END), 0) AS adj,
+        COALESCE(SUM(CASE WHEN l.type = 'refund' THEN l.amount END), 0) AS refund,
+        SUM(l.amount) AS net
+       FROM ledger l JOIN shipments s ON s.id = l.shipment_id
+       WHERE ${where.join(" AND ")} GROUP BY s.id ORDER BY s.id DESC`,
+    )
+    .all(...args) as {
+    id: number; custom_no: string; customer_ref: string | null; tracking_no: string | null; channel_name: string | null;
+    status: string; created_at: string; freight: number; adj: number; refund: number; net: number;
+  }[];
+  return rows.map((r) => ({
+    shipmentId: r.id,
+    customNo: r.custom_no,
+    customerRef: r.customer_ref,
+    trackingNo: r.tracking_no,
+    channelName: r.channel_name,
+    status: r.status,
+    createdAt: r.created_at,
+    freight: round2(-r.freight),
+    adjustment: round2(-r.adj),
+    refund: round2(r.refund),
+    net: round2(-r.net),
+  }));
 }

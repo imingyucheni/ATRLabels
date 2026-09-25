@@ -2,6 +2,7 @@ import Link from "next/link";
 import { listChannels, listShipments, shipmentProfit, shipmentReceivable } from "@/lib/db";
 import { money } from "@/lib/pricing";
 import StatusBadge from "@/components/StatusBadge";
+import { pendingTopupCount } from "@/lib/topup";
 import Profit from "@/components/Profit";
 
 function localDate(offsetDays = 0) {
@@ -25,11 +26,15 @@ export default async function Dashboard() {
   );
   const recent = listShipments({ limit: 10 });
   const noChannels = listChannels().length === 0;
+  const pendingTopups = pendingTopupCount();
   const cur = recent[0]?.currency ?? "";
 
   return (
     <>
       <h1>概览</h1>
+      {pendingTopups > 0 && (
+        <div className="alert warn">有 {pendingTopups} 笔客户充值待确认，<Link href="/finance#topups">去处理</Link>。</div>
+      )}
       {noChannels && (
         <div className="alert warn">
           还没有同步物流渠道，请先到 <Link href="/settings">设置</Link> 点“同步渠道”，并设置默认寄件地址和加价规则。

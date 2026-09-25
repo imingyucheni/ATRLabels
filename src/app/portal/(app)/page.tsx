@@ -22,7 +22,7 @@ export default async function PortalHome() {
   return (
     <>
       <h1>你好，{me.name}</h1>
-      {available <= 0 && <div className="alert warn">账户余额不足，暂时无法下单。请联系我们充值{supportContact ? `：${supportContact}` : ""}。</div>}
+      {available <= 0 && <div className="alert err">账户余额不足（{money(me.balance)}），需要先 <Link href="/portal/topup">充值</Link> 才能继续下单。</div>}
       <div className="stats">
         <div className="stat"><div className="muted">账户余额</div><div className="v">{money(me.balance)}</div></div>
         {me.creditLimit > 0 && <div className="stat"><div className="muted">可用额度（含信用额度 {money(me.creditLimit)}）</div><div className="v">{money(available)}</div></div>}
@@ -33,6 +33,7 @@ export default async function PortalHome() {
       <div className="row" style={{ marginBottom: 16 }}>
         <Link className="btn primary" href="/portal/ship">＋ 单个下单</Link>
         <Link className="btn" href="/portal/batch">批量下单（Excel）</Link>
+        <Link className="btn" href="/portal/topup">充值</Link>
       </div>
 
       {attention.length > 0 && (

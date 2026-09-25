@@ -36,6 +36,8 @@ import {
 import type { PartialRule } from "@/lib/pricing";
 import { addLedger, balanceOf, postAdjustment } from "@/lib/ledger";
 import { saveChannelSample } from "@/lib/labels";
+import { approveTopup, rejectTopup, saveAlipayQr } from "@/lib/topup";
+import { usdCnyQuote } from "@/lib/fx";
 import { getShipBestClient } from "@/lib/shipbest/client";
 import type { Address, ShipmentRequest } from "@/lib/shipbest/types";
 import { cleanAddress, cleanRequest, n, optNum, str, unit } from "@/lib/sanitize";
@@ -255,6 +257,7 @@ export async function saveSettingsAction(_: FlashState, fd: FormData): Promise<F
     defaultCurrency: str(fd.get("defaultCurrency"), 3).toUpperCase() || "USD",
     adjustmentPolicy: (["at_cost", "with_markup", "none"] as const).find((p) => p === fd.get("adjustmentPolicy")) ?? cur.adjustmentPolicy,
     brandName: str(fd.get("brandName"), 60) || cur.brandName,
+    balanceRule: fd.get("balanceRule") === "cover" ? "cover" : "positive",
     supportContact: str(fd.get("supportContact"), 200),
   };
   const sender = cleanAddress(Object.fromEntries([...fd.entries()].filter(([k]) => k.startsWith("sender.")).map(([k, v]) => [k.slice(7), v])) as Partial<Address>);
@@ -448,4 +451,68 @@ export async function uploadChannelSampleAction(fd: FormData): Promise<FlashStat
   } catch (e) {
     return { error: (e as Error).message };
   }
+}
+
+/* ---------------- 充值审核 / 收款设置 ---------------- */
+
+export async function approveTopupAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  await requireAdmin();
+  try {
+    const id = Number(fd.get("id"));
+    approveTopup(id, n(fd.get("creditedUsd")), str(fd.get("adminNote"), 200) || null);
+    revalidatePath("/finance");
+    return { ok: `#${id} 已入账` };
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+}
+
+export async function rejectTopupAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  await requireAdmin();
+  try {
+    const id = Number(fd.get("id"));
+    rejectTopup(id, str(fd.get("adminNote"), 200));
+    revalidatePath("/finance");
+    return { ok: `#${id} 已拒绝` };
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+}
+
+export async function savePaymentSettingsAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  await requireAdmin();
+  const cur = getSettings();
+  const markup = optNum(fd.get("fxMarkup"));
+  const manual = optNum(fd.get("fxManualRate"));
+  if (markup !== null && (markup < 0 || markup > 1)) return { error: "汇率加点请填 0 到 1 之间，例如 0.03" };
+  if (manual !== null && (manual < 1 || manual > 20)) return { error: "备用汇率看起来不对（例如 7.2）" };
+  saveSettings({
+    zelleInfo: String(fd.get("zelleInfo") ?? "").slice(0, 500),
+    alipayInfo: String(fd.get("alipayInfo") ?? "").slice(0, 500),
+    topupInstructions: String(fd.get("topupInstructions") ?? "").slice(0, 2000),
+    fxMode: fd.get("fxMode") === "manual" ? "manual" : "auto",
+    fxMarkup: markup ?? cur.fxMarkup,
+    fxManualRate: manual ?? cur.fxManualRate,
+  });
+  const file = fd.get("alipayQr");
+  if (file instanceof File && file.size) {
+    if (file.size > 3 * 1024 * 1024) return { error: "收款码图片不能超过 3MB" };
+    try {
+      saveAlipayQr(Buffer.from(await file.arrayBuffer()));
+      saveSettings({ alipayQr: true });
+    } catch (e) {
+      return { error: (e as Error).message };
+    }
+  }
+  revalidatePath("/settings");
+  return { ok: "收款设置已保存" };
+}
+
+export async function refreshFxAction(_: FlashState): Promise<FlashState> {
+  await requireAdmin();
+  const q = await usdCnyQuote(true);
+  revalidatePath("/settings");
+  return q.manual && getSettings().fxMode === "auto"
+    ? { error: `实时汇率获取失败，当前使用 ${q.source}：${q.live}` }
+    : { ok: `实时汇率 ${q.live}（${q.source}），加点 ${q.markup} → 充值汇率 ${q.rate}` };
 }

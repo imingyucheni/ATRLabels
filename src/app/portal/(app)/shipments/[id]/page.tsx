@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { requireCustomer } from "@/lib/auth";
 import { getOwnShipment, listOwnAdjustments, portalCancelFeePercent } from "@/lib/portal";
 import { money } from "@/lib/pricing";
+import { LEDGER_TYPE_LABEL, listLedger } from "@/lib/ledger";
 import type { Address } from "@/lib/shipbest/types";
 import FlashForm from "@/components/FlashForm";
 import StatusBadge from "@/components/StatusBadge";
@@ -30,6 +31,7 @@ export default async function PortalShipmentDetail({ params }: { params: Promise
   const [wu, lu] = UNITS[s.pkg.displayUnitSystem] ?? UNITS[3];
   const canCancel = s.status === "pending" || s.status === "labeled" || s.status === "exception";
   const feePct = portalCancelFeePercent();
+  const charges = listLedger({ shipmentId: s.id }).filter((l) => l.customerId === me.id).reverse();
 
   return (
     <>
@@ -119,6 +121,26 @@ export default async function PortalShipmentDetail({ params }: { params: Promise
           )}
         </div>
       </div>
+
+      {charges.length > 0 && (
+        <div className="card">
+          <h2>这一单的扣款记录</h2>
+          <table>
+            <thead><tr><th>时间</th><th>类型</th><th>说明</th><th className="num">金额</th></tr></thead>
+            <tbody>
+              {charges.map((l) => (
+                <tr key={l.id}>
+                  <td className="small muted">{l.createdAt}</td>
+                  <td>{LEDGER_TYPE_LABEL[l.type]}</td>
+                  <td className="small">{l.note}</td>
+                  <td className={`num ${l.amount >= 0 ? "profit-pos" : ""}`}>{l.amount >= 0 ? "+" : ""}{money(l.amount)}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot><tr><td colSpan={3}><b>合计扣款</b></td><td className="num"><b>{money(-charges.reduce((a, l) => a + l.amount, 0))}</b></td></tr></tfoot>
+          </table>
+        </div>
+      )}
 
       <div className="grid2">
         <div className="card"><h2>寄件人</h2><Addr a={s.sender} /></div>

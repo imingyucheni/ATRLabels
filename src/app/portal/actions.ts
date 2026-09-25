@@ -19,6 +19,7 @@ import { ownsShipment, publicError, toPublicQuote, type PublicQuote } from "@/li
 import { cleanAddress, cleanRequest, n, str } from "@/lib/sanitize";
 import { createLabel, PriceChangedError, quoteAll, refreshShipment, requestCancel, validateRequest } from "@/lib/service";
 import { ShipBestError } from "@/lib/shipbest/client";
+import { createTopup } from "@/lib/topup";
 import type { Address, ShipmentRequest } from "@/lib/shipbest/types";
 import type { FlashState } from "@/app/actions";
 
@@ -154,4 +155,26 @@ export async function portalSaveLabelNoteAction(_: FlashState, fd: FormData): Pr
   setLabelNote(id, str(fd.get("labelNote"), 200) || null);
   revalidatePath(`/portal/shipments/${id}`);
   return { ok: "已保存，重新打开面单即可看到" };
+}
+
+/** 客户提交充值申请 */
+export async function portalTopupAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  const me = await requireCustomer();
+  const method = fd.get("method") === "alipay" ? "alipay" : "zelle";
+  const file = fd.get("proof");
+  if (file instanceof File && file.size > 5 * 1024 * 1024) return { error: "凭证文件不能超过 5MB" };
+  try {
+    const id = await createTopup({
+      customerId: me.id,
+      method,
+      amountUsd: n(fd.get("amountUsd")),
+      reference: str(fd.get("reference"), 100),
+      note: str(fd.get("note"), 300),
+      proof: file instanceof File && file.size ? Buffer.from(await file.arrayBuffer()) : null,
+    });
+    revalidatePath("/portal/topup");
+    return { ok: `充值申请 #${id} 已提交，我们确认到账后会自动加到账户余额。` };
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
 }

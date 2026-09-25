@@ -9,6 +9,7 @@ import StatusBadge from "@/components/StatusBadge";
 import Profit from "@/components/Profit";
 import { cancelAction, confirmCancelAction, refreshAction, saveLabelNoteAction } from "@/app/actions";
 import { stampFor, stampText } from "@/lib/stamp";
+import { LEDGER_TYPE_LABEL, listLedger } from "@/lib/ledger";
 
 const UNITS = { 1: ["g", "cm"], 2: ["kg", "cm"], 3: ["lb", "in"] } as const;
 const SIGN = ["不需要签名", "直接签名", "间接签名", "成人签名"];
@@ -31,6 +32,7 @@ export default async function ShipmentDetail({ params }: { params: Promise<{ id:
   const fees = defaultCancelFees(s);
   const adjustments = listAdjustments({ shipmentId: s.id });
   const stampCfg = stampFor(s);
+  const charges = listLedger({ shipmentId: s.id }).reverse();
   const canCancel = s.status === "pending" || s.status === "labeled" || s.status === "exception";
 
   return (
@@ -147,6 +149,26 @@ export default async function ShipmentDetail({ params }: { params: Promise<{ id:
                 </tr>
               ))}
             </tbody>
+          </table>
+        </div>
+      )}
+
+      {charges.length > 0 && (
+        <div className="card">
+          <h2>这一单的扣款记录</h2>
+          <table>
+            <thead><tr><th>时间</th><th>类型</th><th>说明</th><th className="num">金额</th></tr></thead>
+            <tbody>
+              {charges.map((l) => (
+                <tr key={l.id}>
+                  <td className="small muted">{l.createdAt}</td>
+                  <td>{LEDGER_TYPE_LABEL[l.type]}</td>
+                  <td className="small">{l.note}</td>
+                  <td className={`num ${l.amount >= 0 ? "profit-pos" : ""}`}>{l.amount >= 0 ? "+" : ""}{money(l.amount)}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot><tr><td colSpan={3}><b>合计扣款</b></td><td className="num"><b>{money(-charges.reduce((a, l) => a + l.amount, 0))}</b></td></tr></tfoot>
           </table>
         </div>
       )}

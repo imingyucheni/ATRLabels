@@ -108,7 +108,7 @@ export default async function CustomerEdit({ params }: { params: Promise<{ id: s
           <div className="card table-wrap">
             <div className="row" style={{ justifyContent: "space-between" }}>
               <h2>账户流水（最近 100 条）</h2>
-              <span><Link href={`/customers/${c.id}/statement`}>对账单</Link> · <Link href={`/shipments?customerId=${c.id}`}>面单</Link></span>
+              <span><Link href={`/customers/${c.id}/charges`}>按订单扣款明细</Link> · <Link href={`/customers/${c.id}/statement`}>对账单</Link> · <Link href={`/shipments?customerId=${c.id}`}>面单</Link></span>
             </div>
             <table>
               <thead><tr><th>时间</th><th>类型</th><th>单号</th><th>说明</th><th>操作人</th><th className="num">金额</th><th className="num">余额</th></tr></thead>

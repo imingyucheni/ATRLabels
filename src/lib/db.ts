@@ -131,6 +131,31 @@ CREATE TABLE IF NOT EXISTS batch_job_rows (
   shipment_id INTEGER REFERENCES shipments(id)
 );
 CREATE INDEX IF NOT EXISTS idx_job_rows ON batch_job_rows(job_id);
+CREATE TABLE IF NOT EXISTS topup_requests (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  customer_id INTEGER NOT NULL REFERENCES customers(id),
+  -- zelle / alipay
+  method TEXT NOT NULL,
+  -- 申请充值的美元金额
+  amount_usd REAL NOT NULL,
+  -- 实际支付金额和币种（Zelle 为 USD，支付宝为 CNY）
+  pay_amount REAL NOT NULL,
+  pay_currency TEXT NOT NULL,
+  fx_live REAL,
+  fx_rate REAL,
+  reference TEXT,
+  proof_path TEXT,
+  proof_mime TEXT,
+  note TEXT,
+  -- pending 待确认 / approved 已入账 / rejected 已拒绝
+  status TEXT NOT NULL DEFAULT 'pending',
+  credited_usd REAL,
+  admin_note TEXT,
+  ledger_id INTEGER REFERENCES ledger(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  handled_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_topup_status ON topup_requests(status);
 CREATE INDEX IF NOT EXISTS idx_adj_customer ON adjustments(customer_id);
 CREATE INDEX IF NOT EXISTS idx_shipments_created ON shipments(created_at);
 `;
@@ -206,6 +231,24 @@ export interface Settings {
   supportContact: string;
   /** 面单加印 SKU */
   stamp: StampSettings;
+  /** 下单余额规则，见 ledger.ts */
+  balanceRule: "positive" | "cover";
+  /** 客户端“充值”页的其他说明 */
+  topupInstructions: string;
+  /** Zelle 收款信息（邮箱 / 电话 / 户名） */
+  zelleInfo: string;
+  /** 支付宝收款信息（账号 / 户名） */
+  alipayInfo: string;
+  /** 是否上传了支付宝收款码 */
+  alipayQr: boolean;
+  /** 人民币汇率：auto = 实时汇率 + 加点；manual = 固定汇率 + 加点 */
+  fxMode: "auto" | "manual";
+  /** 在汇率上加的点数，例如 0.03 */
+  fxMarkup: number;
+  /** 手动 / 备用汇率 */
+  fxManualRate: number;
+  /** 最近一次成功获取的实时汇率 */
+  fxLast: { live: number; source: string; at: string } | null;
 }
 
 /**
@@ -233,6 +276,15 @@ const DEFAULT_SETTINGS: Settings = {
   brandName: "ATR Logistics",
   supportContact: "",
   stamp: { ...DEFAULT_STAMP, enabled: false },
+  balanceRule: "positive",
+  topupInstructions: "",
+  zelleInfo: "",
+  alipayInfo: "",
+  alipayQr: false,
+  fxMode: "auto",
+  fxMarkup: 0.03,
+  fxManualRate: 7.2,
+  fxLast: null,
 };
 
 export function getSettings(): Settings {

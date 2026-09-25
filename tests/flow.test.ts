@@ -255,6 +255,8 @@ describe("模拟模式完整流程", () => {
       }
       throw new Error("timeout");
     };
+    // “必须够付这一单”规则
+    db.saveSettings({ balanceRule: "cover" });
     const custId = db.saveCustomer(null, { name: "余额客户", contact: null, phone: null, email: null, note: null, markup: {} });
     const rows = await readSheetRows("t.xlsx", await batch.buildTemplate(req.sender), "first");
     const jobId = batch.createJob({ customerId: custId, createdBy: "admin", filename: "t.xlsx", channels: ["LP10210030"], pickMode: "cheapest", orders: batch.parseOrders(rows, null).orders });
@@ -269,6 +271,30 @@ describe("模拟模式完整流程", () => {
     batch.confirmJob(jobId);
     job = await wait(jobId, ["done"]);
     expect(job.rows.every((r) => r.status === "created")).toBe(true);
+    db.saveSettings({ balanceRule: "positive" });
+  }, 60_000);
+
+  it("余额规则：余额大于 0 就能下单（可变负），余额 ≤ 0 必须充值；信用额度", async () => {
+    const { canAfford } = await import("@/lib/ledger");
+    // 规则本身
+    expect(canAfford(0.01, 0, 10, "positive")).toBe(true);
+    expect(canAfford(0, 0, 10, "positive")).toBe(false);
+    expect(canAfford(-5, 0, 1, "positive")).toBe(false);
+    expect(canAfford(-5, 100, 10, "positive")).toBe(true);
+    expect(canAfford(5, 0, 10, "cover")).toBe(false);
+    expect(canAfford(5, 10, 10, "cover")).toBe(true);
+
+    db.saveSettings({ balanceRule: "positive" });
+    const custId = db.saveCustomer(null, { name: "透支客户", contact: null, phone: null, email: null, note: null, markup: {} });
+    ledger.addLedger({ customerId: custId, type: "topup", amount: 1, createdBy: "admin" });
+    const q = (await svc.quoteAll(custId, req))[0];
+    // 余额 1，运费约 6：可以下单，余额变负
+    await svc.createLabel({ customerId: custId, channelCode: q.channelCode, req, expectedPrice: q.price! });
+    expect(ledger.balanceOf(custId)).toBeLessThan(0);
+    // 余额为负：必须充值
+    await expect(svc.createLabel({ customerId: custId, channelCode: q.channelCode, req, expectedPrice: q.price! })).rejects.toThrow(/需要先充值/);
+    ledger.addLedger({ customerId: custId, type: "topup", amount: 10, createdBy: "admin" });
+    await svc.createLabel({ customerId: custId, channelCode: q.channelCode, req, expectedPrice: q.price! });
   }, 60_000);
 
   it("面单加印：全局开关、客户单独设置、渠道位置、原始面单不变", async () => {

@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { requireCustomer } from "@/lib/auth";
 import { getSettings } from "@/lib/db";
-import { LEDGER_TYPE_LABEL, listLedger } from "@/lib/ledger";
+import { LEDGER_TYPE_LABEL, listLedger, listOrderCharges } from "@/lib/ledger";
+import OrderCharges from "@/components/OrderCharges";
 import { money } from "@/lib/pricing";
 import { buildStatement } from "@/lib/statement";
 
@@ -20,6 +21,7 @@ export default async function PortalBilling({ searchParams }: { searchParams: Pr
   const to = sp.to ?? def.to;
   const st = buildStatement(me.id, from, to)!;
   const ledger = listLedger({ customerId: me.id, from, to });
+  const charges = listOrderCharges(me.id, { from, to });
   const { supportContact } = getSettings();
 
   return (
@@ -29,7 +31,7 @@ export default async function PortalBilling({ searchParams }: { searchParams: Pr
         <div className="stat"><div className="muted">当前余额</div><div className="v">{money(me.balance)}</div></div>
         {me.creditLimit > 0 && <div className="stat"><div className="muted">信用额度</div><div className="v">{money(me.creditLimit)}</div></div>}
       </div>
-      <p className="small muted">充值请联系我们{supportContact ? `：${supportContact}` : ""}，到账后会显示在下方流水中。</p>
+      <p className="small muted">通过 <Link href="/portal/topup">充值</Link> 页面用 Zelle 或支付宝付款并提交申请，确认到账后会显示在下方流水中。{supportContact ? `有问题请联系：${supportContact}` : ""}</p>
 
       <form className="card row" method="get">
         <label className="f">开始日期<input type="date" name="from" defaultValue={from} /></label>
@@ -46,6 +48,8 @@ export default async function PortalBilling({ searchParams }: { searchParams: Pr
         <div className="stat"><div className="muted">账单补差</div><div className="v">{money(st.totals.adjustments)}</div></div>
         <div className="stat"><div className="muted">本期费用合计</div><div className="v">{money(st.totals.total)}</div></div>
       </div>
+
+      <OrderCharges rows={charges} linkBase="/portal/shipments" exportHref={`/api/charges?from=${from}&to=${to}`} />
 
       <div className="card table-wrap">
         <h2>账户流水</h2>
