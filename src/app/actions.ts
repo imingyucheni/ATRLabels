@@ -392,6 +392,15 @@ export async function saveUspsAction(_: FlashState, fd: FormData): Promise<Flash
   return { ok: "已保存" };
 }
 
+export async function testUspsAction(_: FlashState): Promise<FlashState> {
+  await requireAdmin();
+  try {
+    return { ok: await testUsps() };
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+}
+
 export async function clearTestDataAction(_: FlashState, fd: FormData): Promise<FlashState> {
   await requireAdmin();
   const typed = str(fd.get("confirm"), 50);

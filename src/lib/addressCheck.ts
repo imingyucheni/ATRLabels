@@ -46,18 +46,19 @@ export function uspsConfig() {
 const BASE = "https://apis.usps.com";
 let token: { key: string; value: string; exp: number } | null = null;
 
-async function accessToken(key: string, secret: string): Promise<string> {
-  if (token && token.key === key && token.exp > Date.now() + 60_000) return token.value;
+async function accessToken(key: string, secret: string, scope?: string): Promise<string> {
+  const tag = key + (scope ?? "");
+  if (token && token.key === tag && token.exp > Date.now() + 60_000) return token.value;
   const res = await fetch(`${BASE}/oauth2/v3/token`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ grant_type: "client_credentials", client_id: key, client_secret: secret }),
+    body: JSON.stringify({ grant_type: "client_credentials", client_id: key, client_secret: secret, ...(scope ? { scope } : {}) }),
     signal: AbortSignal.timeout(15_000),
     cache: "no-store",
   });
   const j = (await res.json().catch(() => ({}))) as { access_token?: string; expires_in?: number; error_description?: string; error?: string };
   if (!res.ok || !j.access_token) throw new Error(`USPS 授权失败：${j.error_description || j.error || res.status}`);
-  token = { key, value: j.access_token, exp: Date.now() + (Number(j.expires_in) || 3600) * 1000 };
+  token = { key: tag, value: j.access_token, exp: Date.now() + (Number(j.expires_in) || 3600) * 1000 };
   return token.value;
 }
 
@@ -139,20 +140,29 @@ export async function checkAddress(a: Partial<Address> | null | undefined, opts:
     if (hit) return hit;
   }
   try {
-    const tk = await accessToken(cfg.consumerKey, cfg.consumerSecret);
     const q = new URLSearchParams({ streetAddress: a.address1 ?? "", state: (a.province ?? "").toUpperCase(), ZIPCode: zip5(a.zipCode) });
     if (a.address2) q.set("secondaryAddress", a.address2);
     if (a.city) q.set("city", a.city);
-    const res = await fetch(`${BASE}/addresses/v3/address?${q}`, {
-      headers: { Authorization: `Bearer ${tk}`, Accept: "application/json" },
-      signal: AbortSignal.timeout(15_000),
-      cache: "no-store",
-    });
+    const call = async (tk: string) =>
+      fetch(`${BASE}/addresses/v3/address?${q}`, {
+        headers: { Authorization: `Bearer ${tk}`, Accept: "application/json" },
+        signal: AbortSignal.timeout(15_000),
+        cache: "no-store",
+      });
+    let res = await call(await accessToken(cfg.consumerKey, cfg.consumerSecret));
+    // 403：令牌里可能没带地址接口的权限，指定 scope 再要一次令牌重试
+    if (res.status === 403) res = await call(await accessToken(cfg.consumerKey, cfg.consumerSecret, "addresses"));
     const j = await res.json().catch(() => ({}));
     let result: AddressCheck;
     if (res.ok) result = interpretUsps(a, j);
     else if (res.status === 400 || res.status === 404) result = { status: "not_found", message: "USPS 查不到这个地址，可能不存在或写错了" };
-    else return { status: "unavailable", message: res.status === 429 ? "USPS 查询次数已达上限，稍后再试" : `USPS 暂时无法核对（${res.status}）` };
+    else {
+      if (res.status === 429) return { status: "unavailable", message: "USPS 查询次数已达上限，稍后再试" };
+      // 带上 USPS 返回的原因，方便排查（例如 403：App 没有地址接口的权限）
+      const e = j as { error?: { message?: string; code?: string } | string; message?: string };
+      const reason = (typeof e.error === "object" ? e.error?.message : e.error) || e.message || "";
+      return { status: "unavailable", message: `USPS 暂时无法核对（${res.status}${reason ? `：${String(reason).slice(0, 160)}` : ""}）` };
+    }
     remember(key, result);
     return { ...result, checkedAt: new Date().toISOString() };
   } catch (e) {

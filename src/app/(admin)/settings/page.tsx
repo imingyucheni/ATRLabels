@@ -6,7 +6,7 @@ import { isSandboxSite, shipbestConfig, type ShipBestMode } from "@/lib/shipbest
 import StampSettings from "@/components/StampSettings";
 import FlashForm from "@/components/FlashForm";
 import RuleInputs from "@/components/RuleInputs";
-import { clearTestDataAction, saveUspsAction, refreshFxAction, saveChannelsAction, savePaymentSettingsAction, saveSettingsAction, saveShipBestAction, syncChannelsAction, verifyAction } from "@/app/actions";
+import { clearTestDataAction, saveUspsAction, testUspsAction, refreshFxAction, saveChannelsAction, savePaymentSettingsAction, saveSettingsAction, saveShipBestAction, syncChannelsAction, verifyAction } from "@/app/actions";
 import { cnyToPay, usdCnyQuote } from "@/lib/fx";
 import FilePick from "@/components/FilePick";
 import { CarrierMark } from "@/components/ChannelLabel";
@@ -114,6 +114,11 @@ export default async function SettingsPage() {
                 </label>
               </div>
             </FlashForm>
+            {u.configured && (
+              <div className="row" style={{ marginTop: 8 }}>
+                <FlashForm action={testUspsAction} submitLabel="测试连接" submitClass="" inline />
+              </div>
+            )}
           </div>
         );
       })()}
