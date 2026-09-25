@@ -95,6 +95,10 @@ CREATE INDEX IF NOT EXISTS idx_shipments_created ON shipments(created_at);
 function migrate(conn: Database.Database) {
   const cols = (conn.prepare("PRAGMA table_info(shipments)").all() as { name: string }[]).map((c) => c.name);
   if (!cols.includes("zone")) conn.exec("ALTER TABLE shipments ADD COLUMN zone TEXT");
+  const bcols = (conn.prepare("PRAGMA table_info(adjustment_batches)").all() as { name: string }[]).map((c) => c.name);
+  if (!bcols.includes("header_json")) conn.exec("ALTER TABLE adjustment_batches ADD COLUMN header_json TEXT");
+  const acols = (conn.prepare("PRAGMA table_info(adjustments)").all() as { name: string }[]).map((c) => c.name);
+  if (!acols.includes("raw_json")) conn.exec("ALTER TABLE adjustments ADD COLUMN raw_json TEXT");
 }
 
 const g = globalThis as unknown as { __db?: Database.Database };
@@ -630,23 +634,25 @@ export interface NewAdjustment {
   costAmount: number;
   customerAmount: number;
   reason: string | null;
+  /** 原始表格这一行（导出给客户时用） */
+  raw: string[];
 }
 
 export function insertAdjustmentBatch(
-  b: { filename: string; fileHash: string; policy: AdjustmentPolicy; note: string | null },
+  b: { filename: string; fileHash: string; policy: AdjustmentPolicy; note: string | null; header: string[] },
   rows: NewAdjustment[],
 ): number {
   return db().transaction(() => {
     const r = db()
-      .prepare("INSERT INTO adjustment_batches (filename, file_hash, policy, note) VALUES (?,?,?,?)")
-      .run(b.filename, b.fileHash, b.policy, b.note);
+      .prepare("INSERT INTO adjustment_batches (filename, file_hash, policy, note, header_json) VALUES (?,?,?,?,?)")
+      .run(b.filename, b.fileHash, b.policy, b.note, JSON.stringify(b.header));
     const batchId = Number(r.lastInsertRowid);
     const stmt = db().prepare(
-      `INSERT INTO adjustments (batch_id, row_no, match_key, shipment_id, customer_id, cost_amount, customer_amount, reason)
-       VALUES (?,?,?,?,?,?,?,?)`,
+      `INSERT INTO adjustments (batch_id, row_no, match_key, shipment_id, customer_id, cost_amount, customer_amount, reason, raw_json)
+       VALUES (?,?,?,?,?,?,?,?,?)`,
     );
     for (const a of rows) {
-      stmt.run(batchId, a.rowNo, a.matchKey, a.shipmentId, a.customerId, a.costAmount, a.customerAmount, a.reason);
+      stmt.run(batchId, a.rowNo, a.matchKey, a.shipmentId, a.customerId, a.costAmount, a.customerAmount, a.reason, JSON.stringify(a.raw));
     }
     return batchId;
   })();
@@ -713,6 +719,7 @@ export interface Adjustment {
   costAmount: number;
   customerAmount: number;
   reason: string | null;
+  raw: string[] | null;
   createdAt: string;
 }
 
@@ -734,7 +741,7 @@ export function listAdjustments(f: { batchId?: number; shipmentId?: number; cust
     .all(...args) as {
     id: number; batch_id: number; filename: string; row_no: number; match_key: string; shipment_id: number | null;
     custom_no: string | null; tracking_no: string | null; customer_id: number | null; customer_name: string | null;
-    cost_amount: number; customer_amount: number; reason: string | null; created_at: string;
+    cost_amount: number; customer_amount: number; reason: string | null; raw_json: string | null; created_at: string;
   }[];
   return rows.map((r) => ({
     id: r.id,
@@ -750,8 +757,14 @@ export function listAdjustments(f: { batchId?: number; shipmentId?: number; cust
     costAmount: r.cost_amount,
     customerAmount: r.customer_amount,
     reason: r.reason,
+    raw: r.raw_json ? JSON.parse(r.raw_json) : null,
     createdAt: r.created_at,
   }));
+}
+
+export function getBatchHeader(id: number): string[] {
+  const r = db().prepare("SELECT header_json FROM adjustment_batches WHERE id = ?").get(id) as { header_json: string | null } | undefined;
+  return r?.header_json ? JSON.parse(r.header_json) : [];
 }
 
 /** 手动把未匹配的补差行关联到面单 */

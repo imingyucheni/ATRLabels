@@ -77,3 +77,13 @@ export function describeRow(header: string[], row: string[], reasonCol: number):
   else if (az || dz) parts.push(`分区 zone${zoneNum(az || dz)}`);
   return parts.join(" · ");
 }
+
+/**
+ * 导出给客户时可以保留的原始列（白名单）：日期、尺寸、重量、邮编、州、分区、状态、备注。
+ * 金额、各项费用、应收/实收、我们在服务商那边的账户名等一律不导出。
+ */
+export function customerSafeColumns(header: string[], exclude: number[] = []): number[] {
+  const allow = /日期|date|^长|^宽|^高|length|width|height|重量|实重|weight|邮编|zip|到件州|state|分区|zone|状态|status|备注|说明|remark|note/i;
+  const deny = /金额|费|价|应收|实收|补收|退还|amount|fee|charge|cost|price|^客户$|customer$/i;
+  return header.map((h, i) => i).filter((i) => !exclude.includes(i) && allow.test(header[i] ?? "") && !deny.test(header[i] ?? ""));
+}

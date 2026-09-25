@@ -7,6 +7,13 @@ import type { Mapping, ParsedSheet, Preview } from "@/lib/adjustments";
 import { money } from "@/lib/pricing";
 import { guessColumns as guess } from "@/lib/sheetGuess";
 
+/** 0 -> A, 25 -> Z, 26 -> AA, 51 -> AZ（和 Excel 一致） */
+function colLetter(i: number): string {
+  let s = "";
+  for (let n = i + 1; n > 0; n = Math.floor((n - 1) / 26)) s = String.fromCharCode(65 + ((n - 1) % 26)) + s;
+  return s;
+}
+
 export default function ImportAdjustments() {
   const router = useRouter();
   const [sheet, setSheet] = useState<ParsedSheet | null>(null);
@@ -18,7 +25,7 @@ export default function ImportAdjustments() {
   const [onlyProblems, setOnlyProblems] = useState(false);
 
   const header = useMemo(() => (sheet && mapping ? sheet.rows[mapping.headerRow] ?? [] : []), [sheet, mapping]);
-  const colOptions = header.map((h, i) => ({ i, label: `${String.fromCharCode(65 + (i % 26))}${i >= 26 ? Math.floor(i / 26) : ""}列：${h || "(空)"}` }));
+  const colOptions = header.map((h, i) => ({ i, label: `${colLetter(i)}列：${h || "(空)"}` }));
 
   function onFile(fd: FormData) {
     setError(null);

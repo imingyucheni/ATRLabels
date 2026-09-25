@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { customerAmountFor, guessColumns, parseAmount, parseCsv } from "@/lib/adjustments";
-import { describeRow, guessHeaderRow } from "@/lib/sheetGuess";
+import { customerSafeColumns, describeRow, guessHeaderRow } from "@/lib/sheetGuess";
 
 // ShipBest 实际发来的 GOFO 补差表表头（2026-09）
 const GOFO_HEADER = ["客户","运单号","日期","客户单号","产品编码","预报口岸","注入口岸","签入中心","目的站点","到件州","长(cm)","宽(cm)","高(cm)","结算重量(lb)","结算重量(oz)","预报重量(oz)","实重(LB)","申报货值","燃油费","分拣费","揽收费","派送费","提货费","其他费","超重费","超尺寸费","超最大限制费","禁运品处理费","运费退还","燃油费退还","退件费","异形费","旺季附加费","超长超大费","超长费-不可发","偏远费","住宅派送费","卡转费","贴标费","库内操作费","退件运输费","拦截附加费","换单费","邮编","邮编分区","预报分区","Zone区","运单状态","备注说明","应收金额","实收金额","补收金额"];
@@ -53,5 +53,14 @@ describe("补差表格解析", () => {
     expect(customerAmountFor(2, "with_markup", rule)).toBe(2.2);
     expect(customerAmountFor(-2, "with_markup", rule)).toBe(-2.2);
     expect(customerAmountFor(2, "none", rule)).toBe(0);
+  });
+
+  it("导出给客户的列不含成本、费用和我们的账户名", () => {
+    const cols = customerSafeColumns(GOFO_HEADER, [1, 3, 51]).map((i) => GOFO_HEADER[i]);
+    expect(cols).toEqual([
+      "日期", "到件州", "长(cm)", "宽(cm)", "高(cm)", "结算重量(lb)", "结算重量(oz)", "预报重量(oz)", "实重(LB)",
+      "邮编", "邮编分区", "预报分区", "Zone区", "运单状态", "备注说明",
+    ]);
+    for (const c of cols) expect(c).not.toMatch(/金额|费|应收|实收|客户|产品/);
   });
 });

@@ -10,6 +10,16 @@ export default async function BatchPage({ params }: { params: Promise<{ id: stri
   if (!b) notFound();
   const rows = listAdjustments({ batchId: b.id });
   const unmatched = rows.filter((r) => !r.shipmentId);
+  const groups = new Map<number, { id: number; name: string; count: number; cost: number; customer: number }>();
+  for (const r of rows) {
+    if (!r.customerId) continue;
+    const g = groups.get(r.customerId) ?? { id: r.customerId, name: r.customerName ?? "", count: 0, cost: 0, customer: 0 };
+    g.count++;
+    g.cost += r.costAmount;
+    g.customer += r.customerAmount;
+    groups.set(r.customerId, g);
+  }
+  const byCustomer = [...groups.values()].sort((x, y) => y.customer - x.customer);
 
   return (
     <>
@@ -24,6 +34,30 @@ export default async function BatchPage({ params }: { params: Promise<{ id: stri
         <div className="stat"><div className="muted">已匹配 / 总行数</div><div className="v">{b.matchedCount} / {b.rowCount}</div></div>
       </div>
       <p className="small muted">转嫁规则：{ADJUSTMENT_POLICY_LABEL[b.policy]}{b.note ? ` · 备注：${b.note}` : ""}</p>
+
+      {byCustomer.length > 0 && (
+        <div className="card">
+          <h2>按客户（发给客户的明细）</h2>
+          <p className="small muted">导出的明细只包含该客户自己的单，保留日期、尺寸、重量、分区、备注等说明列，金额为向客户补收/退还的金额，不含任何成本和费用列。</p>
+          <table>
+            <thead><tr><th>客户</th><th className="num">单数</th><th className="num">ShipBest 补差</th><th className="num">向客户补收/退</th><th></th></tr></thead>
+            <tbody>
+              {byCustomer.map((c) => (
+                <tr key={c.id}>
+                  <td>{c.name}</td>
+                  <td className="num">{c.count}</td>
+                  <td className="num">{money(c.cost)}</td>
+                  <td className="num"><b>{money(c.customer)}</b></td>
+                  <td>
+                    <a className="btn small" href={`/api/adjustments/${b.id}/export?customerId=${c.id}`}>导出给客户</a>{" "}
+                    <Link className="small" href={`/customers/${c.id}/statement`}>对账单</Link>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {unmatched.length > 0 && (
         <div className="card">

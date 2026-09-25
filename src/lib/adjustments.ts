@@ -271,7 +271,8 @@ export function importAdjustments(filename: string, rows: string[][], m: Mapping
       costAmount: r.costAmount!,
       customerAmount: r.shipmentId ? r.customerAmount! : 0,
       reason: r.reason || null,
+      raw: rows[r.rowNo - 1] ?? [],
     }));
   if (!valid.length) throw new Error("没有可导入的有效行");
-  return insertAdjustmentBatch({ filename, fileHash, policy: preview.policy, note }, valid);
+  return insertAdjustmentBatch({ filename, fileHash, policy: preview.policy, note, header: rows[m.headerRow] ?? [] }, valid);
 }
