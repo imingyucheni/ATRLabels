@@ -494,3 +494,25 @@ html[lang="en"] .kpi-label { line-height: 1.3; }
   .nav-section { padding-top: 8px; }
   .nav-item { padding-top: 2px; padding-bottom: 2px; }
 }
+
+/* 收起菜单按钮 */
+.nav-collapse { display: flex; align-items: center; gap: 8px; width: 100%; justify-content: flex-start; background: transparent; border: 1px dashed var(--line); color: var(--muted); font-size: 12.5px; font-weight: 500; padding: 5px 10px; min-height: 0; box-shadow: none; }
+.nav-collapse:hover { color: var(--text); background: var(--sunken); }
+/* 图标菜单（只在电脑上生效，手机仍是顶部折叠菜单） */
+@media (min-width: 901px) {
+  .shell { transition: grid-template-columns .18s ease; }
+  html[data-nav="mini"] .shell { grid-template-columns: 64px minmax(0, 1fr); }
+  html[data-nav="mini"] .sidebar { padding: 14px 8px 12px; overflow-x: hidden; }
+  html[data-nav="mini"] .brand { padding: 2px 0 14px; justify-content: center; }
+  html[data-nav="mini"] .brand > div:not(.brand-mark) { display: none; }
+  html[data-nav="mini"] .nav-section { font-size: 0; gap: 0; padding: 8px 6px 4px; }
+  html[data-nav="mini"] .nav-section::before, html[data-nav="mini"] .nav-tag { display: none; }
+  html[data-nav="mini"] .nav-item { justify-content: center; padding: 4px; gap: 0; }
+  html[data-nav="mini"] .nav-item.active::before { left: -8px; }
+  html[data-nav="mini"] .nav-label, html[data-nav="mini"] .nav-soon, html[data-nav="mini"] .nav-collapse-text, html[data-nav="mini"] .logout-text { display: none; }
+  html[data-nav="mini"] .nav-count { position: absolute; top: 3px; right: 9px; font-size: 0; width: 8px; height: 8px; padding: 0; background: var(--warn); }
+  html[data-nav="mini"] .nav-collapse { justify-content: center; padding: 6px 0; }
+  html[data-nav="mini"] .prefs, html[data-nav="mini"] .who-card, html[data-nav="mini"] .env-tag { display: none; }
+  html[data-nav="mini"] .logout { padding: 6px 0; }
+}
+@media (max-width: 900px) { .nav-collapse { display: none; } }

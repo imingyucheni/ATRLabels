@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "@fontsource-variable/inter";
 import "./globals.css";
+import { cookies } from "next/headers";
 import { getPrefs } from "@/lib/prefs";
 import { I18nProvider } from "@/components/I18n";
 
@@ -11,8 +12,9 @@ export const metadata: Metadata = {
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const { theme, lang } = await getPrefs();
+  const mini = (await cookies()).get("atr_nav")?.value === "mini";
   return (
-    <html lang={lang === "en" ? "en" : "zh-CN"} data-theme={theme === "auto" ? undefined : theme}>
+    <html lang={lang === "en" ? "en" : "zh-CN"} data-theme={theme === "auto" ? undefined : theme} data-nav={mini ? "mini" : undefined}>
       <body>
         <I18nProvider lang={lang}>{children}</I18nProvider>
       </body>

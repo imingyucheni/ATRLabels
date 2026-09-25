@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import PrefToggles from "./PrefToggles";
 import { useLang, useT } from "./I18n";
 import {
-  BarChart3, Globe2, Lock, Map as MapIcon, Menu, X, CreditCard, FileSpreadsheet, FileText, LayoutDashboard, LogOut, PackagePlus, Receipt, Scale, Settings,
+  BarChart3, Globe2, Lock, Map as MapIcon, Menu, PanelLeftClose, PanelLeftOpen, X, CreditCard, FileSpreadsheet, FileText, LayoutDashboard, LogOut, PackagePlus, Receipt, Scale, Settings,
   Truck, Upload, UserCog, Users, Wallet,
 } from "lucide-react";
 
@@ -41,6 +41,16 @@ export default function Sidebar(props: {
   const [open, setOpen] = useState(false);
   useEffect(() => setOpen(false), [path]);
   const current = all.find((i) => i.href === active);
+  // 电脑上可以把菜单收成只有图标（记在 cookie 里，下次打开保持）
+  const [mini, setMini] = useState(false);
+  useEffect(() => setMini(document.documentElement.dataset.nav === "mini"), []);
+  const toggleMini = () => {
+    const v = !mini;
+    setMini(v);
+    if (v) document.documentElement.dataset.nav = "mini";
+    else delete document.documentElement.dataset.nav;
+    document.cookie = `atr_nav=${v ? "mini" : "full"}; path=/; max-age=31536000; samesite=lax`;
+  };
 
   return (
     <aside className={`sidebar ${open ? "open" : ""}`}>
@@ -69,14 +79,14 @@ export default function Sidebar(props: {
             // 还没开放的功能：灰显，点不开
             if (i.soon || g.soon)
               return (
-                <span key={i.href} className="nav-item disabled" aria-disabled="true" title={t("敬请期待")}>
+                <span key={i.href} className="nav-item disabled" aria-disabled="true" title={`${t(i.label)} · ${t("敬请期待")}`}>
                   <Icon strokeWidth={1.9} />
                   <span className="nav-label">{t(i.label)}</span>
                   <span className="nav-soon"><Lock size={10} strokeWidth={2.4} /> {lang === "en" ? "Soon" : "敬请期待"}</span>
                 </span>
               );
             return (
-              <Link key={i.href} href={i.href} className={`nav-item ${active === i.href ? "active" : ""}`} aria-current={active === i.href ? "page" : undefined}>
+              <Link key={i.href} href={i.href} title={mini ? t(i.label) + (i.count ? ` (${i.count})` : "") : undefined} className={`nav-item ${active === i.href ? "active" : ""}`} aria-current={active === i.href ? "page" : undefined}>
                 <Icon strokeWidth={1.9} />
                 <span className="nav-label">{t(i.label)}</span>
                 {!!i.count && <span className="nav-count">{i.count}</span>}
@@ -86,6 +96,10 @@ export default function Sidebar(props: {
         </nav>
       ))}
       <div className="sidebar-foot">
+        <button type="button" className="nav-collapse" onClick={toggleMini} title={mini ? t("展开菜单") : t("收起菜单")} aria-label={mini ? t("展开菜单") : t("收起菜单")}>
+          {mini ? <PanelLeftOpen size={16} strokeWidth={2} /> : <PanelLeftClose size={16} strokeWidth={2} />}
+          <span className="nav-collapse-text">{t("收起菜单")}</span>
+        </button>
         <PrefToggles showLang={props.showLang} />
         {props.envTag && <div className="env-tag">{props.envTag}</div>}
         {props.who && (
@@ -95,7 +109,7 @@ export default function Sidebar(props: {
           </div>
         )}
         <form action={props.logout}>
-          <button className="logout small"><LogOut size={14} strokeWidth={2} /> {t("退出登录")}</button>
+          <button className="logout small" title={t("退出登录")}><LogOut size={14} strokeWidth={2} /> <span className="logout-text">{t("退出登录")}</span></button>
         </form>
       </div>
     </aside>
