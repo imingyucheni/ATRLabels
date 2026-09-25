@@ -65,10 +65,17 @@ export default function ShipForm(props: {
   // 后台试算新客户时临时填写的加价（留空 = 全局 / 渠道设置）
   const [markup, setMarkup] = useState({ percent: "", fixed: "", minProfit: "" });
   const initialCustomer = customers.find((c) => c.id === props.defaultCustomerId);
-  const [sender, setSender] = useState<Partial<Address>>(initialCustomer?.sender ?? props.defaultSender ?? {});
-  const [editSender, setEditSender] = useState(!props.defaultSender);
+  const [sender, setSender] = useState<Partial<Address>>(
+    props.senders?.find((x) => x.isDefault)?.address ??
+      initialCustomer?.sender ??
+      (props.defaultSender?.address1 ? props.defaultSender : { country: "US" }),
+  );
+  // 系统默认寄件地址（设置里的发货仓）要完整才能直接用
+  const sysSender = props.defaultSender?.address1 && props.defaultSender?.zipCode ? props.defaultSender : null;
+  const bookDefault = props.senders?.find((x) => x.isDefault);
+  const [editSender, setEditSender] = useState(portal ? !bookDefault && !sysSender : !props.defaultSender);
   const [senders, setSenders] = useState<SavedSender[]>(props.senders ?? []);
-  const [senderId, setSenderId] = useState<number | "new" | "">(props.senders?.find((x) => x.isDefault)?.id ?? "");
+  const [senderId, setSenderId] = useState<number | "new" | "system">(bookDefault?.id ?? (sysSender ? "system" : "new"));
   const [senderMsg, setSenderMsg] = useState<string | null>(null);
   const [savingSender, startSaveSender] = useTransition();
   const [recipient, setRecipient] = useState<Partial<Address>>({ country: "US" });
@@ -232,7 +239,7 @@ export default function ShipForm(props: {
             <h2>寄件人</h2>
             {!editSender && <button className="small" onClick={() => setEditSender(true)}>修改</button>}
           </div>
-          {portal && senders.length > 0 && (
+          {portal && (
             <div className="sender-pick">
               <select
                 value={senderId}
@@ -243,6 +250,10 @@ export default function ShipForm(props: {
                     setSenderId("new");
                     dirty(setSender)({ country: "US" });
                     setEditSender(true);
+                  } else if (v === "system") {
+                    setSenderId("system");
+                    dirty(setSender)(sysSender ?? {});
+                    setEditSender(false);
                   } else {
                     const hit = senders.find((x) => x.id === Number(v));
                     setSenderId(Number(v));
@@ -251,12 +262,15 @@ export default function ShipForm(props: {
                   }
                 }}
               >
-                {senderId === "" && <option value="">（系统默认发货仓）</option>}
                 {senders.map((x) => <option key={x.id} value={x.id}>{x.label}{x.isDefault ? "（默认）" : ""}</option>)}
-                <option value="new">＋ 使用新的寄件地址…</option>
+                {sysSender && <option value="system">发货仓地址（{sysSender.city}）</option>}
+                <option value="new">＋ 新增寄件地址…</option>
               </select>
               <a className="small" href="/portal/account">管理地址簿</a>
             </div>
+          )}
+          {portal && !senders.length && senderId === "new" && (
+            <p className="small muted" style={{ margin: "0 0 10px" }}>还没有保存寄件地址。填好后点“保存到寄件地址簿”，下次就可以直接选择。</p>
           )}
           {editSender ? (
             <>
@@ -269,7 +283,7 @@ export default function ShipForm(props: {
                     disabled={savingSender}
                     onClick={() =>
                       startSaveSender(async () => {
-                        const editingId = typeof senderId === "number" ? senderId : undefined;
+                        const editingId = typeof senderId === "number" ? senderId : undefined; // 发货仓 / 新地址 → 新增一条
                         const r = await saveSenderBookAction({ id: editingId, address: sender, label: senders.find((x) => x.id === editingId)?.label });
                         if (r.error) return setSenderMsg(r.error);
                         setSenders(r.senders!);
@@ -286,9 +300,9 @@ export default function ShipForm(props: {
               )}
             </>
           ) : (
-            <div className="muted">
-              {sender.nameFirst} {sender.nameLast} {sender.corporateName && `· ${sender.corporateName}`}<br />
-              {sender.address1}, {sender.city} {sender.province} {sender.zipCode} {sender.country}
+            <div className="sender-summary">
+              <div><b>{[sender.nameFirst, sender.nameLast].filter(Boolean).join(" ")}</b>{sender.corporateName ? ` · ${sender.corporateName}` : ""}{sender.phone ? ` · ${sender.phone}` : ""}</div>
+              <div className="muted">{[sender.address1, sender.address2, [sender.city, sender.province, sender.zipCode].filter(Boolean).join(" "), sender.country].filter(Boolean).join(", ")}</div>
             </div>
           )}
           {senderMsg && <div className="small" style={{ marginTop: 8, color: "var(--accent)" }}>{senderMsg}</div>}

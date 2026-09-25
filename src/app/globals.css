@@ -401,3 +401,4 @@ table.list td { white-space: nowrap; }
 .sender-edit { margin-top: 12px; padding: 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2, var(--sunken)); }
 .sender-pick { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
 .sender-pick select { flex: 1; min-width: 200px; }
+.sender-summary { display: grid; gap: 2px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; font-size: 13.5px; }
