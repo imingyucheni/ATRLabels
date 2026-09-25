@@ -13,7 +13,7 @@ export default async function AdjustmentsPage() {
     <>
       <h1>{t("官方账单补差")}</h1>
       <p className="muted">
-        {t("ShipBest 系统扣的是预报价格，官方账单出来后，重量或分区有差异会多退少补。收到他们的补差表格后在这里上传，")}
+        {t("ShipBest 系统扣的是预报价格，官方账单出来后，重量或分区有差异会多退少补。收到他们的补差表格后在这里上传，")}{" "}
         {t("系统按运单号（或 ShipBest 单号 / 自定义单号）自动对应到面单和客户。当前转嫁规则：")}<b>{t(ADJUSTMENT_POLICY_LABEL[adjustmentPolicy])}</b>
         {t("（")}<Link href="/settings">{t("修改")}</Link>{t("）。")}
       </p>

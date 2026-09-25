@@ -61,7 +61,7 @@ export default async function StatementPage({
             {st.lines.map((l, i) => (
               <tr key={i}>
                 <td className="small muted">{l.date}</td>
-                <td><span className={`badge ${l.type === "补差" ? "pending" : l.type === "取消" ? "cancelled" : "labeled"}`}>{t(l.type)}</span></td>
+                <td><span className={`badge ${l.type === "补差" ? "pending" : l.type === "取消" ? "cancelled" : "labeled"}`}>{t(lang === "en" && l.type === "取消" ? "已取消" : l.type)}</span></td>
                 <td>{l.shipmentId ? <Link href={`/shipments/${l.shipmentId}`}>{l.ref}</Link> : l.ref}</td>
                 <td>{l.trackingNo}</td>
                 <td className="small">{detail(l.detail)}</td>
