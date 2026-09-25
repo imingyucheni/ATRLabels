@@ -205,6 +205,30 @@ function migrate(conn: Database.Database) {
   conn.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_customers_email ON customers(portal_email) WHERE portal_email IS NOT NULL");
   // 客户可用渠道：新客户默认一个都不开，由管理员逐个开通。
   // 第一次建表时，给已有客户开通当前已启用的全部渠道，避免升级后老客户突然无法下单。
+  conn.exec(`CREATE TABLE IF NOT EXISTS channel_zips (
+    channel_code TEXT NOT NULL,
+    zip TEXT NOT NULL,
+    zone TEXT,
+    PRIMARY KEY (channel_code, zip)
+  ) WITHOUT ROWID`);
+  conn.exec(`CREATE TABLE IF NOT EXISTS coverage_sources (
+    channel_code TEXT PRIMARY KEY,
+    filename TEXT,
+    sheet TEXT,
+    gateway TEXT,
+    zip_count INTEGER NOT NULL DEFAULT 0,
+    uploaded_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`);
+  const covCols = (conn.prepare("PRAGMA table_info(coverage_sources)").all() as { name: string }[]).map((c) => c.name);
+  if (!covCols.includes("prefilter")) conn.exec("ALTER TABLE coverage_sources ADD COLUMN prefilter INTEGER NOT NULL DEFAULT 0");
+  // 接口回复“不通邮”的 渠道 + 邮编，记住一段时间，下次直接跳过（结果来自 ShipBest，准确）
+  conn.exec(`CREATE TABLE IF NOT EXISTS zip_blocks (
+    channel_code TEXT NOT NULL,
+    zip TEXT NOT NULL,
+    reason TEXT,
+    checked_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (channel_code, zip)
+  ) WITHOUT ROWID`);
   const hadCustomerChannels = !!conn.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='customer_channels'").get();
   conn.exec(`CREATE TABLE IF NOT EXISTS customer_channels (
     customer_id INTEGER NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
@@ -272,6 +296,8 @@ export interface Settings {
   fxManualRate: number;
   /** 最近一次成功获取的实时汇率 */
   fxLast: { live: number; source: string; at: string } | null;
+  /** 发货口岸（邮编覆盖表按这个口岸取邮编），91710 Chino 对应 LAX */
+  originGateway: string;
 }
 
 /**
@@ -308,6 +334,7 @@ const DEFAULT_SETTINGS: Settings = {
   fxMarkup: 0.03,
   fxManualRate: 7.2,
   fxLast: null,
+  originGateway: "LAX",
 };
 
 export function getSettings(): Settings {

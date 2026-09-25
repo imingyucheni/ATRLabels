@@ -37,6 +37,7 @@ import {
   getCustomer,
 } from "@/lib/db";
 import type { PartialRule } from "@/lib/pricing";
+import { clearBlocks, importCoverage, lookupZip, parseCoverageWorkbook, removeCoverage, setPrefilter } from "@/lib/coverage";
 import { addLedger, balanceOf, postAdjustment } from "@/lib/ledger";
 import { saveChannelSample } from "@/lib/labels";
 import { approveTopup, rejectTopup, saveAlipayQr } from "@/lib/topup";
@@ -596,4 +597,58 @@ export async function handleResetRequestAction(_: FlashState, fd: FormData): Pro
   } catch (e) {
     return { error: (e as Error).message };
   }
+}
+
+/* ---------------- 派送范围（邮编覆盖表） ---------------- */
+
+export async function parseCoverageAction(fd: FormData) {
+  await requireAdmin();
+  try {
+    const file = fd.get("file");
+    if (!(file instanceof File) || !file.size) return { error: "请选择文件" };
+    if (file.size > 12 * 1024 * 1024) return { error: "文件不能超过 12MB" };
+    const gateway = str(fd.get("gateway"), 10).toUpperCase() || "LAX";
+    if (gateway !== getSettings().originGateway) saveSettings({ originGateway: gateway });
+    return { preview: await parseCoverageWorkbook(file.name, Buffer.from(await file.arrayBuffer()), gateway) };
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+}
+
+export async function importCoverageAction(token: string, mapping: Record<string, string>) {
+  await requireAdmin();
+  try {
+    const done = importCoverage(str(token, 64), mapping);
+    revalidatePath("/coverage");
+    return { done };
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+}
+
+export async function removeCoverageAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  await requireAdmin();
+  removeCoverage(str(fd.get("code"), 50));
+  revalidatePath("/coverage");
+  return { ok: "已移除，这个渠道改为只按接口试算结果判断" };
+}
+
+export async function setPrefilterAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  await requireAdmin();
+  const on = fd.get("on") === "1";
+  setPrefilter(str(fd.get("code"), 50), on);
+  revalidatePath("/coverage");
+  return { ok: on ? "已打开：不在邮编表里的地址不再试算这个渠道" : "已关闭：邮编表只作参考" };
+}
+
+export async function clearBlocksAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  await requireAdmin();
+  clearBlocks(str(fd.get("code"), 50) || undefined);
+  revalidatePath("/coverage");
+  return { ok: "已清除，下次试算会重新向 ShipBest 查询" };
+}
+
+export async function lookupZipAction(zip: string) {
+  await requireAdmin();
+  return lookupZip(str(zip, 10));
 }

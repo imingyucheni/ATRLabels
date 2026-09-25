@@ -1,0 +1,86 @@
+import { getSettings, listChannels } from "@/lib/db";
+import { blockStats, listCoverage } from "@/lib/coverage";
+import { fmtTime } from "@/lib/time";
+import FlashForm from "@/components/FlashForm";
+import CoverageUpload from "@/components/CoverageUpload";
+import ZipLookup from "@/components/ZipLookup";
+import { clearBlocksAction, removeCoverageAction, setPrefilterAction } from "@/app/actions";
+
+export default async function CoveragePage() {
+  const channels = listChannels();
+  const sources = new Map(listCoverage().map((c) => [c.channelCode, c]));
+  const blocks = blockStats();
+  const totalBlocks = Object.values(blocks).reduce((a, n) => a + n, 0);
+  return (
+    <>
+      <h1>派送范围</h1>
+      <div className="card">
+        <h2>怎么判断一个地址能不能送</h2>
+        <ol className="small" style={{ paddingLeft: 18, margin: 0, display: "grid", gap: 6 }}>
+          <li><b>以 ShipBest 试算结果为准</b>：每个渠道都会问一次接口，送不到的会返回“不通邮”，系统自动隐藏这个渠道。</li>
+          <li>
+            <b>自动记忆</b>：接口回复“不通邮”的 渠道 + 邮编会记住 30 天，之后同一邮编直接跳过这个渠道，批量导入更快。
+            当前记住 {totalBlocks.toLocaleString()} 条。
+          </li>
+          <li>
+            <b>邮编表（可选）</b>：服务商报价表里的邮编表可以上传作参考，并可按渠道打开“预筛”。
+            实测（80 次真实试算）表里没有、但实际能送的约占 11%，SPX 尤其多，所以默认不预筛，建议只在确认表格准确的渠道打开。
+          </li>
+        </ol>
+      </div>
+
+      <CoverageUpload
+        gateway={getSettings().originGateway}
+        channels={channels.filter((c) => c.enabled).map((c) => ({ code: c.code, name: c.name }))}
+      />
+
+      <div className="card table-wrap">
+        <h2>各渠道的邮编表</h2>
+        <table className="list">
+          <thead><tr><th>渠道</th><th>邮编表</th><th>口岸</th><th className="num">表内邮编</th><th>按邮编表预筛</th><th className="num">记住的不通邮</th><th></th></tr></thead>
+          <tbody>
+            {channels.map((c) => {
+              const s = sources.get(c.code);
+              return (
+                <tr key={c.code}>
+                  <td>{c.name}<div className="small muted">{c.code}{c.enabled ? "" : " · 已停用"}</div></td>
+                  <td>{s ? <>{s.sheet}<div className="small muted">{s.filename}</div></> : <span className="muted">未上传（全部交给接口判断）</span>}</td>
+                  <td>{s?.gateway ?? "-"}</td>
+                  <td className="num">{s ? s.zipCount.toLocaleString() : "-"}</td>
+                  <td>
+                    {s ? (
+                      <FlashForm action={setPrefilterAction} submitLabel={s.prefilter ? "关闭" : "打开"} submitClass="small" inline
+                        confirm={s.prefilter ? undefined : "打开后，不在邮编表里的地址不再试算这个渠道（可能漏掉实际能送的地址）。确定？"}>
+                        <input type="hidden" name="code" value={c.code} />
+                        <input type="hidden" name="on" value={s.prefilter ? "0" : "1"} />
+                        <span className={`badge ${s.prefilter ? "ok" : "cancelled"}`} style={{ marginRight: 8 }}>{s.prefilter ? "已打开" : "只作参考"}</span>
+                      </FlashForm>
+                    ) : "-"}
+                  </td>
+                  <td className="num">
+                    {blocks[c.code] ? (
+                      <FlashForm action={clearBlocksAction} submitLabel="清除" submitClass="small" inline confirm="清除后这些邮编下次会重新向 ShipBest 查询。确定？">
+                        <input type="hidden" name="code" value={c.code} />
+                        <span style={{ marginRight: 8 }}>{blocks[c.code].toLocaleString()}</span>
+                      </FlashForm>
+                    ) : "-"}
+                  </td>
+                  <td>
+                    {s && (
+                      <FlashForm action={removeCoverageAction} submitLabel="移除邮编表" submitClass="small" confirm="移除这个渠道的邮编表？">
+                        <input type="hidden" name="code" value={c.code} />
+                      </FlashForm>
+                    )}
+                    {s && <div className="small muted">{fmtTime(s.uploadedAt)}</div>}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <ZipLookup />
+    </>
+  );
+}

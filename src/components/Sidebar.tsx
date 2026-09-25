@@ -4,14 +4,14 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
-  BarChart3, Menu, X, CreditCard, FileSpreadsheet, FileText, LayoutDashboard, LogOut, PackagePlus, Receipt, Scale, Settings,
+  BarChart3, Map as MapIcon, Menu, X, CreditCard, FileSpreadsheet, FileText, LayoutDashboard, LogOut, PackagePlus, Receipt, Scale, Settings,
   Truck, Upload, UserCog, Users, Wallet,
 } from "lucide-react";
 
 const ICONS = {
   dashboard: LayoutDashboard, ship: PackagePlus, batch: Upload, list: Truck, reports: BarChart3, adjust: Scale,
   customers: Users, finance: Wallet, settings: Settings, topup: CreditCard, billing: Receipt, sheet: FileSpreadsheet,
-  account: UserCog, doc: FileText,
+  account: UserCog, doc: FileText, map: MapIcon,
 };
 
 export type NavItem = { href: string; label: string; icon: keyof typeof ICONS; count?: number; exact?: boolean };

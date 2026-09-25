@@ -24,7 +24,7 @@ export interface ParsedSheet {
   alreadyImported: boolean;
 }
 
-function cellText(v: ExcelJS.CellValue): string {
+export function cellText(v: ExcelJS.CellValue): string {
   if (v === null || v === undefined) return "";
   if (v instanceof Date) return v.toISOString().slice(0, 10);
   if (typeof v === "object") {

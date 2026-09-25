@@ -38,7 +38,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
               { href: "/finance", label: "财务 · 充值审核", icon: "finance", count: pendingTopups },
             ],
           },
-          { title: "系统", items: [{ href: "/settings", label: "设置", icon: "settings" }] },
+          { title: "系统", items: [{ href: "/coverage", label: "派送范围", icon: "map" }, { href: "/settings", label: "设置", icon: "settings" }] },
         ]}
       />
       <main className="main">{children}</main>

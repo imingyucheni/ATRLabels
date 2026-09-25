@@ -15,6 +15,7 @@ import {
   type Shipment,
   type ShipmentPatch,
 } from "./db";
+import { precheck, rememberQuote } from "./coverage";
 import { downloadLabel } from "./labels";
 import { chargeLabel, refundCancelled, removeShipmentLedger } from "./ledger";
 import { computePrice, resolveRule, type MarkupRule } from "./pricing";
@@ -124,6 +125,16 @@ export async function quoteChannel(customerId: number, channelCode: string, req:
 }
 
 async function quoteOne(customerId: number, channelCode: string, channelName: string, req: ShipmentRequest) {
+  // 最近查过“不通邮”的邮编（或打开了邮编表预筛）直接判定送不到，不再调接口
+  const zip = req.recipient?.zipCode ?? "";
+  const pre = precheck(channelCode, zip);
+  if (pre) return { channelCode, channelName, ok: false, error: pre } satisfies ChannelQuote;
+  const res = await quoteRemote(customerId, channelCode, channelName, req);
+  rememberQuote(channelCode, zip, res.ok, res.error);
+  return res;
+}
+
+async function quoteRemote(customerId: number, channelCode: string, channelName: string, req: ShipmentRequest): Promise<ChannelQuote> {
   const client = getShipBestClient();
   const { roundingStep } = getSettings();
   try {
