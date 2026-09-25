@@ -41,7 +41,7 @@ export default async function CustomerEdit({ params }: { params: Promise<{ id: s
         <CredentialsCard brand={getSettings().brandName} name={c.name} url={omsLogin} email={creds.email} password={creds.password}
           onHide={hideCredentialsAction.bind(null, c.id)} />
       )}
-      <FlashForm action={saveCustomerAction} submitLabel={c ? "保存" : "创建客户并生成登录信息"} className="card">
+      <FlashForm action={saveCustomerAction} submitLabel={c ? "保存" : "创建客户并生成登录信息"} className="card" review={!!c}>
         <input type="hidden" name="id" value={c?.id ?? ""} />
         <div className="grid">
           <label className="f"><span className="req">名称</span><input name="name" required defaultValue={c?.name} /></label>
@@ -64,7 +64,7 @@ export default async function CustomerEdit({ params }: { params: Promise<{ id: s
             <div className="stat"><div className="muted">客户端登录</div><div className="v" style={{ fontSize: 16 }}>{c.portalEnabled ? (c.hasPassword ? "已开通" : "未设密码") : "未开通"}</div></div>
           </div>
 
-          <FlashForm action={saveCustomerChannelsAction} submitLabel="保存渠道" className="card" id="channels">
+          <FlashForm action={saveCustomerChannelsAction} submitLabel="保存渠道" className="card" id="channels" review>
             <div className="row" style={{ justifyContent: "space-between" }}>
               <h2 style={{ margin: 0 }}>可用渠道</h2>
               <span className={`badge ${usable ? "ok" : "warn"}`}>{usable ? `已开通 ${usable} 个` : "未开通，客户无法下单"}</span>
@@ -103,7 +103,7 @@ export default async function CustomerEdit({ params }: { params: Promise<{ id: s
 
             <div className="card">
               <h2>客户端登录</h2>
-              <FlashForm action={saveCustomerPortalAction} submitLabel="保存登录设置">
+              <FlashForm action={saveCustomerPortalAction} submitLabel="保存登录设置" review>
                 <input type="hidden" name="id" value={c.id} />
                 <div className="grid" style={{ marginBottom: 12 }}>
                   <label className="f" style={{ gridColumn: "span 2" }}>登录邮箱<input name="portalEmail" type="email" defaultValue={c.portalEmail ?? c.email ?? ""} /></label>
@@ -125,7 +125,7 @@ export default async function CustomerEdit({ params }: { params: Promise<{ id: s
             </div>
           </div>
 
-          <FlashForm action={saveCustomerStampAction} submitLabel="保存" className="card">
+          <FlashForm action={saveCustomerStampAction} submitLabel="保存" className="card" review>
             <h2>面单加印 SKU</h2>
             <input type="hidden" name="id" value={c.id} />
             <div className="row" style={{ marginBottom: 12 }}>
@@ -140,7 +140,7 @@ export default async function CustomerEdit({ params }: { params: Promise<{ id: s
             </div>
           </FlashForm>
 
-          <FlashForm action={saveCustomerSenderAction} submitLabel="保存寄件地址" className="card">
+          <FlashForm action={saveCustomerSenderAction} submitLabel="保存寄件地址" className="card" review>
             <h2>客户默认寄件地址</h2>
             <p className="small muted">留空则使用系统默认寄件地址。客户也可以在客户端自己修改。</p>
             <input type="hidden" name="id" value={c.id} />

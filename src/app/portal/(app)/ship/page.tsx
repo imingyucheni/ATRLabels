@@ -14,7 +14,7 @@ export default async function PortalShipPage() {
     <>
       <h1>{t("下单")}</h1>
       <p className="muted">
-        {t("填写收件人和包裹信息，点“查询运费”，选择渠道即可出单，运费从账户余额扣除（当前余额 {balance}）。", { balance: usd(me.balance) })}
+        {t("填写收件人和包裹信息，点“查询运费”，选择渠道即可出单，运费从账户余额扣除（当前余额 {balance}）。", { balance: usd(me.balance) })}{" "}
         {t("多个订单可以用")} <Link href="/portal/batch">{t("批量下单")}</Link>{t("。")}
       </p>
       {me.balance + me.creditLimit <= 0 && (

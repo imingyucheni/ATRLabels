@@ -51,7 +51,7 @@ export const orders: Record<string, string> = {
   "类型": "Type",
   "说明": "Description",
   "金额": "Amount",
-  "开通": "enable them.",
+  "开通": "to enable them.",
   "地址未覆盖": "Address not serviceable",
   "不可用": "Unavailable",
   "只显示可下单渠道": "Show available services only",

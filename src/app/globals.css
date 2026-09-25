@@ -466,3 +466,8 @@ fieldset.bare { border: 0; padding: 0; margin: 0; min-width: 0; }
 .lock-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 12px; }
 .lock-bar .small { display: inline-flex; align-items: center; gap: 4px; }
 .warn-text { color: var(--warn); }
+
+/* 确认改动弹窗 */
+.modal-back { position: fixed; inset: 0; background: rgba(10, 10, 12, 0.45); display: grid; place-items: center; z-index: 100; padding: 16px; }
+.modal { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-pop); width: min(640px, 100%); padding: 20px; max-height: 90vh; overflow: auto; }
+.change-list td { vertical-align: top; white-space: normal; word-break: break-word; }

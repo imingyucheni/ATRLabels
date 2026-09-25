@@ -47,6 +47,7 @@ export default function StampSettings({ global, channels }: { global: Global; ch
   const invalid = (["x", "y", "fontSize", "maxWidth"] as Field[]).some((k) => outOfRange(k));
 
   function save() {
+    if (!window.confirm(target ? "这个渠道所有客户的面单都会按新位置加印，确定保存吗？" : "加印设置会用于所有客户的面单（客户单独设置的除外），确定保存吗？")) return;
     setMsg(null);
     start(async () => {
       const r = target ? await saveChannelStampAction(target, ov[target] ?? {}) : await saveStampAction(g);

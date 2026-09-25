@@ -68,7 +68,7 @@ export default async function CoveragePage() {
                     {(() => {
                       const r = dimRule(c.code, c.name);
                       return (
-                        <FlashForm action={saveDimRuleAction} submitLabel="保存" submitClass="small" className="dim-form">
+                        <FlashForm action={saveDimRuleAction} submitLabel="保存" submitClass="small" className="dim-form" review confirm="体积重规则会影响这个渠道所有客户的报价">
                           <input type="hidden" name="code" value={c.code} />
                           <label className="small">长×宽×高(英寸) ÷ <input name="divisor" type="number" min="0" step="1" defaultValue={r.divisor} style={{ width: 64 }} /></label>
                           <label className="small">超过 <input name="minCubic" type="number" min="0" step="1" defaultValue={r.minCubic} style={{ width: 70 }} /> 立方英寸才算</label>

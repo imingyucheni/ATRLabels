@@ -6,6 +6,7 @@
 import { account } from "./en/account";
 import { common } from "./en/common";
 import { orders } from "./en/orders";
+import { orderPatterns } from "./en/orderPatterns";
 import { patterns } from "./en/patterns";
 
 export type Lang = "zh" | "en";
@@ -30,7 +31,7 @@ export function translateMessage(lang: Lang, msg: string | null | undefined): st
   if (!msg) return msg ?? "";
   if (lang !== "en") return msg;
   if (EN[msg] !== undefined) return EN[msg];
-  for (const [re, rep] of patterns) {
+  for (const [re, rep] of [...patterns, ...orderPatterns]) {
     if (re.test(msg)) return msg.replace(re, rep as string);
   }
   return msg;
