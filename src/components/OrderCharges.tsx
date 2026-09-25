@@ -9,6 +9,9 @@ import { getT } from "@/lib/prefs";
 export default async function OrderCharges({ rows, linkBase, exportHref }: { rows: OrderCharge[]; linkBase: string; exportHref: string }) {
   const t = await getT();
   const sum = (k: keyof OrderCharge) => rows.reduce((a, r) => a + (r[k] as number), 0);
+  // 退款显示为负数；没有退款时显示 0.00（不要出现“-0.00”）
+  const refundTotal = sum("refund");
+  const hasRefund = Math.abs(refundTotal) >= 0.005;
   return (
     <div className="card table-wrap">
       <div className="row" style={{ justifyContent: "space-between", marginBottom: 8 }}>
@@ -33,7 +36,7 @@ export default async function OrderCharges({ rows, linkBase, exportHref }: { row
               <td className="small">{STATUS_LABEL[r.status as ShipmentStatus] ? t(STATUS_LABEL[r.status as ShipmentStatus]) : r.status}</td>
               <td className="num">{money(r.freight)}</td>
               <td className="num">{r.adjustment ? money(r.adjustment) : "-"}</td>
-              <td className="num">{r.refund ? <span className="profit-pos">-{money(r.refund)}</span> : "-"}</td>
+              <td className="num">{Math.abs(r.refund) >= 0.005 ? <span className="profit-pos">-{money(r.refund)}</span> : "-"}</td>
               <td className="num"><b>{money(r.net)}</b></td>
             </tr>
           ))}
@@ -45,7 +48,7 @@ export default async function OrderCharges({ rows, linkBase, exportHref }: { row
               <td colSpan={5}><b>{t("合计（{n} 单）", { n: rows.length })}</b></td>
               <td className="num"><b>{money(sum("freight"))}</b></td>
               <td className="num"><b>{money(sum("adjustment"))}</b></td>
-              <td className="num"><b>-{money(sum("refund"))}</b></td>
+              <td className="num"><b>{hasRefund ? `-${money(refundTotal)}` : money(0)}</b></td>
               <td className="num"><b>{money(sum("net"))}</b></td>
             </tr>
           </tfoot>

@@ -39,17 +39,16 @@ export default async function PortalShipments({ searchParams }: { searchParams: 
           id: s.id,
           hasLabel: s.hasLabel,
           cells: [
-            <span key="t" className="small muted">{fmtTime(s.createdAt)}</span>,
-            <Link key="n" href={`/portal/shipments/${s.id}`}>{s.customerRef || s.customNo}</Link>,
-            <span key="r">{s.recipient.nameFirst} {s.recipient.nameLast}<div className="small muted">{s.recipient.city}, {s.recipient.province ?? s.recipient.country} {s.recipient.zipCode}</div></span>,
-            s.channelName,
+            <span key="n"><Link href={`/portal/shipments/${s.id}`}>{s.customerRef || s.customNo}</Link><div className="small muted">{fmtTime(s.createdAt)}</div></span>,
+            <span key="r" className="cell-wrap">{s.recipient.nameFirst} {s.recipient.nameLast}<div className="small muted">{s.recipient.city}, {s.recipient.province ?? s.recipient.country} {s.recipient.zipCode}</div></span>,
+            <span key="c" className="cell-wrap">{s.channelName}</span>,
             s.trackingNo ?? "-",
             <StatusBadge key="s" status={s.status} test={s.isTest} />,
             <span key="p">{money(s.price, s.currency)}{s.adjustment ? <div className="small muted">{t("补差")} {money(s.adjustment)}</div> : null}</span>,
           ],
         }))}
-        headers={["时间", "订单号", "收件人", "渠道", "运单号", "状态", "运费"].map((h) => t(h))}
-        numericCols={[6]}
+        headers={[`${t("订单号")} / ${t("时间")}`, ...["收件人", "渠道", "运单号", "状态", "运费"].map((h) => t(h))]}
+        numericCols={[5]}
       />
     </>
   );

@@ -103,14 +103,15 @@ export default function Sidebar(props: {
           <span className="nav-collapse-text">{t("收起菜单")}</span>
         </button>
         <PrefToggles showLang={props.showLang} />
-        {props.envTag && <div className="env-tag">{props.envTag}</div>}
+        {props.envTag && <div className="env-tag" title={props.envTag}><span className="env-tag-text">{props.envTag}</span></div>}
         {props.siteLink && (
           <a className="site-link" href={props.siteLink.href} title={props.siteLink.label}>
             <ArrowLeftRight size={14} strokeWidth={2} /> <span className="nav-collapse-text">{props.siteLink.label}</span>
           </a>
         )}
         {props.who && (
-          <div className="who-card">
+          <div className="who-card" title={props.who.balance ? `${props.who.name} · ${t("余额")} ${props.who.balance}` : props.who.name}>
+            <Wallet className={`who-mini${props.who.negative ? " neg" : ""}`} size={16} strokeWidth={2} aria-hidden />
             <div className="name">{props.who.name}</div>
             {props.who.balance && <div className="bal">{t("余额")} <b className={props.who.negative ? "neg" : ""}>{props.who.balance}</b></div>}
           </div>

@@ -38,13 +38,14 @@ export default async function CustomerEdit({ params }: { params: Promise<{ id: s
       <div className="row" style={{ justifyContent: "space-between", marginBottom: 16 }}>
         <h1 style={{ margin: 0 }}>{c ? t("编辑客户：{name}", { name: c.name }) : t("新增客户")}</h1>
         <div className="row">
-          {c && <a className="btn primary" href={`/api/customers/${c.id}/oms`} target="_blank" rel="noopener">{t("进入客户 OMS ↗")}</a>}
+          {/* 在当前标签页进入：OMS 里点“退出代操作”会直接回到后台，不会多出一个后台标签页 */}
+          {c && <a className="btn primary" href={`/api/customers/${c.id}/oms`}>{t("进入客户 OMS")}</a>}
           <Link href="/customers">{t("← 返回")}</Link>
         </div>
       </div>
       {c && creds && (
         <CredentialsCard brand={getSettings().brandName} name={c.name} url={omsLogin} email={creds.email} password={creds.password}
-          onHide={hideCredentialsAction.bind(null, c.id)} />
+          onHide={hideCredentialsAction.bind(null, c.id)} noChannels={!usable} />
       )}
       <FlashForm action={saveCustomerAction} submitLabel={c ? "保存" : "创建客户并生成登录信息"} className="card" review={!!c}>
         <input type="hidden" name="id" value={c?.id ?? ""} />

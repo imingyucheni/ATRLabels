@@ -40,6 +40,11 @@ export function cleanAddress(a: Partial<Address> | undefined): Address {
   return out;
 }
 
+/** 中文品名可以不填（英文客户）：没填时用英文品名补上，ShipBest 两个字段都要有值 */
+export function fillProductNames<T extends Pick<SkuItem, "productNameCn" | "productNameEn">>(s: T): T {
+  return s.productNameCn || !s.productNameEn ? s : { ...s, productNameCn: s.productNameEn };
+}
+
 /** 客户端传来的数据不可信：统一转换类型、去掉多余字段。 */
 export function cleanRequest(raw: ShipmentRequest): ShipmentRequest {
   const p = raw?.pkg ?? ({} as ShipmentRequest["pkg"]);
@@ -59,7 +64,7 @@ export function cleanRequest(raw: ShipmentRequest): ShipmentRequest {
       currency: str(p.currency, 3).toUpperCase() || "USD",
     },
     skuList: (Array.isArray(raw?.skuList) ? raw.skuList : []).slice(0, 50).map(
-      (s: Partial<SkuItem>): SkuItem => ({
+      (s: Partial<SkuItem>): SkuItem => fillProductNames({
         sku: str(s.sku, 100),
         productNameCn: str(s.productNameCn),
         productNameEn: str(s.productNameEn),

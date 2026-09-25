@@ -16,7 +16,8 @@ export function generateMetadata() {
 export default async function PortalLayout({ children }: { children: React.ReactNode }) {
   const me = await requireCustomer();
   const { brandName } = getSettings();
-  const drafts = listDraftRows(me.id).length;
+  // 角标只数能直接提交的（已试算成功）；出错 / 失败 / 还在试算的不算
+  const drafts = listDraftRows(me.id).filter((r) => r.status === "quoted").length;
   const acting = !!(await impersonatedCustomerId());
   const t = await getT();
   return (

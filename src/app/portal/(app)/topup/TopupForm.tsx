@@ -4,6 +4,7 @@ import { useActionState, useEffect, useRef, useState, startTransition } from "re
 import { portalTopupAction } from "@/app/portal/actions";
 import FilePick from "@/components/FilePick";
 import { useT, useTMsg } from "@/components/I18n";
+import { Eye, EyeOff } from "lucide-react";
 
 export default function TopupForm(props: {
   rate: number;
@@ -11,6 +12,8 @@ export default function TopupForm(props: {
   zelleInfo: string;
   alipayInfo: string;
   alipayQr: boolean;
+  /** 后台设置的充值说明（显示在收款信息下面） */
+  instructions?: string;
 }) {
   const t = useT();
   const tMsg = useTMsg();
@@ -80,7 +83,8 @@ export default function TopupForm(props: {
         <div>
           <div className="row" style={{ justifyContent: "space-between", marginBottom: 8 }}>
             <b>{t(method === "zelle" ? "Zelle 收款信息" : "支付宝收款信息")}</b>
-            <button type="button" className={showPay ? "" : "primary"} onClick={() => setShowPay((v) => !v)}>
+            <button type="button" className="accent-outline" aria-expanded={showPay} onClick={() => setShowPay((v) => !v)}>
+              {showPay ? <EyeOff size={15} strokeWidth={2} /> : <Eye size={15} strokeWidth={2} />}
               {t(showPay ? "隐藏收款信息" : "显示收款信息")}
             </button>
           </div>
@@ -97,6 +101,7 @@ export default function TopupForm(props: {
               {t("收款账号已隐藏，点击“显示收款信息”查看")}
             </div>
           )}
+          {props.instructions && <p className="small muted" style={{ whiteSpace: "pre-wrap", marginBottom: 0 }}>{props.instructions}</p>}
         </div>
       </div>
     </form>

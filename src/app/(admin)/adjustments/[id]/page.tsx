@@ -42,7 +42,7 @@ export default async function BatchPage({ params }: { params: Promise<{ id: stri
       <p className="small muted">{t("转嫁规则：{policy}", { policy: t(ADJUSTMENT_POLICY_LABEL[b.policy]) })}{b.note ? ` · ${t("备注：{note}", { note: b.note })}` : ""}</p>
 
       {byCustomer.length > 0 && (
-        <div className="card">
+        <div className="card table-wrap">
           <h2>{t("按客户（发给客户的明细）")}</h2>
           <p className="small muted">{t("导出的明细只包含该客户自己的单，保留日期、尺寸、重量、分区、备注等说明列，金额为向客户补收/退还的金额，不含任何成本和费用列。")}</p>
           <table>
@@ -66,7 +66,7 @@ export default async function BatchPage({ params }: { params: Promise<{ id: stri
       )}
 
       {unmatched.length > 0 && (
-        <div className="card">
+        <div className="card table-wrap">
           <h2>{t("未匹配（{n}）", { n: unmatched.length })}</h2>
           <p className="small muted">{t("可能是单号格式不同，或者不是通过本系统出的单。可以输入本系统里的运单号 / 自定义单号手动关联。未关联的补差只计入我们的成本，不会算到客户头上。")}</p>
           <table>

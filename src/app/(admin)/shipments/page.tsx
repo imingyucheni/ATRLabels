@@ -66,18 +66,17 @@ export default async function ShipmentsPage({ searchParams }: { searchParams: Pr
         <table className="list">
           <thead>
             <tr>
-              <th>{t("时间")}</th><th>{t("单号")}</th><th>{t("客户")}</th><th>{t("收件人")}</th><th>{t("渠道")}</th><th>{t("运单号")}</th><th>{t("状态")}</th>
+              <th>{t("单号")} / {t("时间")}</th><th>{t("客户")}</th><th>{t("收件人")}</th><th>{t("渠道")}</th><th>{t("运单号")}</th><th>{t("状态")}</th>
               <th className="num">{t("成本")}</th><th className="num">{t("客户价")}</th><th className="num">{t("补差(客户)")}</th><th className="num">{t("利润")}</th><th>{t("面单")}</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((s) => (
               <tr key={s.id}>
-                <td className="small muted">{fmtTime(s.createdAt)}</td>
-                <td><Link href={`/shipments/${s.id}`}>{s.customNo}</Link></td>
-                <td>{s.customerName}</td>
-                <td>{s.recipient.nameFirst} {s.recipient.nameLast}<div className="small muted">{s.recipient.city}, {s.recipient.province ?? s.recipient.country} {s.recipient.zipCode}</div></td>
-                <td>{s.channelName}</td>
+                <td><Link href={`/shipments/${s.id}`}>{s.customNo}</Link><div className="small muted">{fmtTime(s.createdAt)}</div></td>
+                <td className="wrap">{s.customerName}</td>
+                <td className="wrap">{s.recipient.nameFirst} {s.recipient.nameLast}<div className="small muted">{s.recipient.city}, {s.recipient.province ?? s.recipient.country} {s.recipient.zipCode}</div></td>
+                <td className="wrap">{s.channelName}</td>
                 <td>{s.trackingNo ?? "-"}</td>
                 <td><StatusBadge status={s.status} test={s.isTest} /></td>
                 <td className="num">{money(s.actualCost ?? s.quotedCost)}{s.actualCost === null && <div className="small muted">{t("试算")}</div>}</td>
@@ -87,7 +86,7 @@ export default async function ShipmentsPage({ searchParams }: { searchParams: Pr
                 <td className="nowrap">{s.labelPath && s.status !== "cancelled" ? <a href={`/api/labels/${s.id}`} target="_blank">{t("打印")}</a> : s.status === "cancelled" ? <span className="muted small">{t("已作废")}</span> : "-"}</td>
               </tr>
             ))}
-            {!rows.length && <tr><td colSpan={12} className="muted">{t("没有符合条件的记录")}</td></tr>}
+            {!rows.length && <tr><td colSpan={11} className="muted">{t("没有符合条件的记录")}</td></tr>}
           </tbody>
         </table>
       </div>

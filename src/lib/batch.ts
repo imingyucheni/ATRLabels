@@ -16,8 +16,8 @@ export { JOB_STATUS_LABEL, type JobStatus };
 
 /** 表头顺序与 ShipBest 后台“导入订单”模板完全一致，客户可以直接用原来的表 */
 export const SHIPBEST_HEADERS = [
-  "*自定义单号", "*物流产品", "*保险服务", "保险金额", "*签名服务", "*包裹长", "*包裹宽", "*包裹高", "*包裹重量", "*包裹单位", "备注",
-  "*SKU", "*品名(中文)", "*品名(英文)", "*数量", "*申报单价", "*单件重量", "*SKU单位", "SKU长", "SKU宽", "SKU高", "HS CODE", "商品性质",
+  "*自定义单号", "物流产品", "*保险服务", "保险金额", "*签名服务", "*包裹长", "*包裹宽", "*包裹高", "*包裹重量", "*包裹单位", "备注",
+  "*SKU", "品名(中文)", "*品名(英文)", "*数量", "*申报单价", "*单件重量", "*SKU单位", "SKU长", "SKU宽", "SKU高", "HS CODE", "商品性质",
   "*收件联系人姓", "*收件联系人名", "*收件人联系电话", "*收件国家", "*收件省州", "*收件市府", "收件地区", "*收件邮编", "收件邮箱", "*收件地址1", "收件地址2", "公司名称", "街道", "门牌号", "税号",
   "*寄件联系人姓", "*寄件联系人名", "*寄件人联系电话", "*寄件国家", "*寄件省州", "*寄件市府", "寄件地区", "*寄件邮编", "寄件邮箱", "*寄件地址1", "寄件地址2", "公司名称", "街道", "门牌号", "税号",
   "申报总金额", "申报总数量",
@@ -118,7 +118,13 @@ export async function buildTemplate(
   } else {
     paintExample(ws.addRow(exampleRows(EXAMPLE_REF, "")[0]));
   }
-  // 下拉框：前 1000 行
+
+  // 2) 填写示例：两个订单，其中第一个有两个 SKU
+  styleSheet(ex, false);
+  exampleRows("A1001", "A1002").forEach((r) => ex.addRow(r));
+
+  // 下拉框：前 1000 行（要在两个工作表都写完表头和示例之后再加：
+  // 给第 2–1001 行设置下拉框会先建出这些空行，之后 addRow 就会从第 1002 行开始）
   const dv = (col: string, key: string, strict: boolean, prompt: string) => {
     if (!ref[key]) return;
     for (const sheet of [ws, ex]) {
@@ -142,10 +148,6 @@ export async function buildTemplate(
   dv("R", "unit", true, "请选择 SKU 单位");
   dv("W", "nature", false, "从下拉框选择，或手动输入");
 
-  // 2) 填写示例：两个订单，其中第一个有两个 SKU
-  styleSheet(ex, false);
-  exampleRows("A1001", "A1002").forEach((r) => ex.addRow(r));
-
   // 3) 说明
   const notes: [string, string][] = [
     ["格式", "与 ShipBest 后台“导入订单”模板相同，原来的表格可以直接上传。标题为红色（带 *）的列必填。"],
@@ -154,6 +156,7 @@ export async function buildTemplate(
     ["物流产品", "可以留空。上传后系统会用多个渠道比价，每单默认选最便宜的；也可以从下拉框指定渠道。"],
     ["单位", "包裹单位和 SKU 单位从下拉框选：cm/g、cm/kg、in/lb、in/oz。"],
     ["保险 / 签名", "从下拉框选择。保险选“需要”时要填保险金额。"],
+    ["品名", "品名(英文)必填；品名(中文)可以留空，留空时使用英文品名。"],
     ["商品性质", "从下拉框选择：一般商品选“普货”（不带磁、不带电）；带电池选“带电”，带磁铁选“带磁”。留空默认普货。"],
     ["寄件人", "寄件人整段可以留空，留空时使用账户里的默认寄件地址。"],
     ["颜色", GROUPS.map((g) => g.name).join(" / ") + "：每个区块一种颜色。"],
@@ -302,7 +305,8 @@ export function parseOrders(rows: string[][], defaultSender: Address | null): { 
     const skuUnit = parseUnit(skuUnitText, st.defaultUnit);
     const sku: SkuItem = {
       sku: skuCode,
-      productNameCn: get(r, col.cn),
+      // 中文品名可以留空：用英文品名补上
+      productNameCn: get(r, col.cn) || get(r, col.en),
       productNameEn: get(r, col.en),
       quantity: Math.round(num(get(r, col.qty))),
       declaredUnitPrice: num(get(r, col.price)),

@@ -45,6 +45,8 @@ import { listSenders, saveSender } from "@/lib/senders";
 import { clearCredentials, readablePassword, rememberCredentials } from "@/lib/credentials";
 import { clearBlocks, importCoverage, lookupZip, parseCoverageWorkbook, removeCoverage, setPrefilter } from "@/lib/coverage";
 import { addLedger, balanceOf, postAdjustment } from "@/lib/ledger";
+import { getT } from "@/lib/prefs";
+import { isUsZip } from "@/lib/geo";
 import { saveChannelSample } from "@/lib/labels";
 import { approveTopup, rejectTopup, saveAlipayQr } from "@/lib/topup";
 import { usdCnyQuote } from "@/lib/fx";
@@ -63,6 +65,7 @@ import {
   requestCancel,
   syncChannels,
   validateRequest,
+  withQuoteSkus,
   type ChannelQuote,
 } from "@/lib/service";
 
@@ -95,8 +98,9 @@ export async function quoteAction(
   markup?: PartialRule,
 ): Promise<{ errors?: string[]; quotes?: ChannelQuote[] }> {
   await requireAdmin();
-  const req = cleanRequest(raw);
-  const errors = validateRequest(req);
+  // 运费试算只需要地址和包裹：不检查商品明细，缺的用样品补上（出单时仍然严格校验）
+  const req = withQuoteSkus(cleanRequest(raw));
+  const errors = validateRequest(req, { forQuote: true });
   if (errors.length) return { errors };
   const m: PartialRule = {
     percent: markup?.percent ?? null,
@@ -268,7 +272,20 @@ export async function saveCustomerSenderAction(_: FlashState, fd: FormData): Pro
   await requireAdmin();
   const id = Number(fd.get("id"));
   const sender = cleanAddress(Object.fromEntries([...fd.entries()].filter(([k]) => k.startsWith("sender.")).map(([k, v]) => [k.slice(7), v])) as Partial<Address>);
-  if (sender.nameFirst || sender.address1) {
+  // 国家下拉框默认就有值，不算“填了”；其余全部留空 = 清除，改用系统默认寄件地址
+  const filled = (Object.keys(sender) as (keyof Address)[]).some((k) => k !== "country" && !!sender[k]);
+  if (filled) {
+    // 和客户端保存寄件地址一样检查必填项，避免存下不完整、出不了面单的地址
+    const t = await getT();
+    const us = !sender.country || sender.country === "US";
+    const errs: string[] = [];
+    if (!sender.nameFirst) errs.push("姓名");
+    if (!sender.address1) errs.push("地址1");
+    if (!sender.city) errs.push("城市");
+    if (us && !sender.province) errs.push("州/省");
+    if (!sender.zipCode) errs.push("邮编");
+    if (errs.length) return { error: t("请填写：{fields}", { fields: errs.map((x) => t(x)).join(t("、")) }) };
+    if (us && !isUsZip(sender.zipCode)) return { error: t("美国邮编是 5 位数字（可以带 4 位，例如 78701-1234）") };
     // 更新客户地址簿里的默认地址（没有就新建一个默认地址）
     const def = listSenders(id).find((x) => x.isDefault);
     saveSender(id, { id: def?.id, label: def?.label, address: sender, makeDefault: true });
@@ -569,26 +586,29 @@ export async function uploadChannelSampleAction(fd: FormData): Promise<FlashStat
 
 export async function approveTopupAction(_: FlashState, fd: FormData): Promise<FlashState> {
   await requireAdmin();
+  let id = 0;
   try {
-    const id = Number(fd.get("id"));
+    id = Number(fd.get("id"));
     approveTopup(id, n(fd.get("creditedUsd")), str(fd.get("adminNote"), 200) || null);
     revalidatePath("/finance");
-    return { ok: `#${id} 已入账` };
   } catch (e) {
     return { error: (e as Error).message };
   }
+  // 处理完这一行会从“待确认”里消失，FlashForm 的提示也跟着没了：跳回财务页，由页面顶部显示结果
+  redirect(`/finance?done=approved&id=${id}#topups`);
 }
 
 export async function rejectTopupAction(_: FlashState, fd: FormData): Promise<FlashState> {
   await requireAdmin();
+  let id = 0;
   try {
-    const id = Number(fd.get("id"));
+    id = Number(fd.get("id"));
     rejectTopup(id, str(fd.get("adminNote"), 200));
     revalidatePath("/finance");
-    return { ok: `#${id} 已拒绝` };
   } catch (e) {
     return { error: (e as Error).message };
   }
+  redirect(`/finance?done=rejected&id=${id}#topups`);
 }
 
 export async function savePaymentSettingsAction(_: FlashState, fd: FormData): Promise<FlashState> {

@@ -5,25 +5,42 @@ import { Lock, PencilLine } from "lucide-react";
 import type { FlashState } from "@/app/actions";
 import { useT, useTMsg } from "@/components/I18n";
 
-type Change = { label: string; from: string; to: string };
+const SYSTEM_VALUES = new Set(["✔ 开", "✘ 关", "（新密码 / 新 Token）"]);
 
-/** 表单里每个字段当前“显示给人看”的值（下拉框取选项文字，勾选框显示开 / 关，密码不显示内容） */
-function snapshot(form: HTMLFormElement): Map<string, { label: string; value: string }> {
-  const out = new Map<string, { label: string; value: string }>();
+type Change = { label: string; from: string; to: string; hint?: string };
+type Snap = Map<string, { label: string; value: string; hint?: string }>;
+
+/**
+ * 表单里每个字段当前“显示给人看”的值（下拉框取选项文字，勾选框显示开 / 关，密码不显示内容）。
+ * 同名的一组勾选框（例如 name="channels" 的每个渠道）按 name=value 分别记录，否则只会记住最后一个；
+ * 单选框一组只记选中的那个，按 name 记录。
+ */
+function snapshot(form: HTMLFormElement): Snap {
+  const out: Snap = new Map();
   for (const el of Array.from(form.elements)) {
     if (!(el instanceof HTMLInputElement || el instanceof HTMLSelectElement || el instanceof HTMLTextAreaElement)) continue;
     if (!el.name || el.type === "hidden" || el.type === "submit" || el.type === "button") continue;
     let value: string;
+    let key = el.name;
     if (el instanceof HTMLSelectElement) value = el.selectedOptions[0]?.textContent?.trim() ?? "";
     else if (el instanceof HTMLInputElement && (el.type === "checkbox" || el.type === "radio")) {
       if (el.type === "radio" && !el.checked) continue;
+      if (el.type === "checkbox") key = `${el.name}=${el.value}`;
       value = el.type === "radio" ? el.value : el.checked ? "✔ 开" : "✘ 关";
     } else if (el.type === "file") value = (el as HTMLInputElement).files?.[0]?.name ?? "";
     else if (el.type === "password") value = el.value ? "（新密码 / 新 Token）" : "";
     else value = el.value.trim();
-    out.set(el.name, { label: fieldLabel(el), value });
+    // 留空时沿用的默认值通常写在浅灰色提示里（例如“默认 5”），确认时一起显示
+    const hint = el instanceof HTMLSelectElement ? undefined : el.placeholder?.trim() || undefined;
+    out.set(key, { label: el instanceof HTMLInputElement && el.type === "checkbox" ? checkLabel(el) : fieldLabel(el), value, hint });
   }
   return out;
+}
+
+/** 勾选框的名字：勾选卡片里取主标题（<b>），否则按普通字段取 */
+function checkLabel(el: HTMLInputElement): string {
+  const b = el.closest("label")?.querySelector("b")?.textContent?.trim();
+  return b ? b.replace(/\s+/g, " ") : fieldLabel(el);
 }
 
 /** 字段的中文名：优先取所在 <label> 的文字；表格里取“行名 · 列名” */
@@ -49,11 +66,11 @@ function fieldLabel(el: HTMLElement): string {
   return el.getAttribute("aria-label") || el.getAttribute("placeholder") || (el as HTMLInputElement).name;
 }
 
-function diff(before: ReturnType<typeof snapshot>, after: ReturnType<typeof snapshot>): Change[] {
+function diff(before: Snap, after: Snap): Change[] {
   const out: Change[] = [];
   for (const [k, a] of after) {
     const b = before.get(k);
-    if ((b?.value ?? "") !== a.value) out.push({ label: a.label, from: b?.value ?? "", to: a.value });
+    if ((b?.value ?? "") !== a.value) out.push({ label: a.label, from: b?.value ?? "", to: a.value, hint: a.hint });
   }
   return out;
 }
@@ -94,12 +111,14 @@ export default function FlashForm({
 }) {
   const t = useT();
   const tMsg = useTMsg();
+  // 系统生成的值（开 / 关、新密码）要翻译，用户填的内容原样显示
+  const sys = (v: string) => (SYSTEM_VALUES.has(v) ? t(v) : v);
   const [state, formAction, pending] = useActionState(action, null);
   const ref = useRef<HTMLFormElement>(null);
   const [editing, setEditing] = useState(!locked);
   const [changes, setChanges] = useState<Change[] | null>(null);
   const [noChange, setNoChange] = useState(false);
-  const base = useRef<ReturnType<typeof snapshot> | null>(null);
+  const base = useRef<Snap | null>(null);
   const reviewing = review || !!locked;
 
   // 记下“修改前”的值：页面加载时、以及每次保存成功后（页面数据已刷新）
@@ -132,6 +151,9 @@ export default function FlashForm({
     send();
   };
 
+  // 空值：有浅灰色提示（沿用的默认值）时一起显示，例如“（空）· 默认 5”
+  const empty = (hint?: string) => (hint ? `${t("（空）")} · ${hint}` : t("（空）"));
+
   const dialog = changes && (
     <div className="modal-back" role="presentation" onClick={() => setChanges(null)}>
       <div className="modal" role="dialog" aria-modal="true" aria-label={t("确认修改")} onClick={(e) => e.stopPropagation()}>
@@ -144,9 +166,9 @@ export default function FlashForm({
               {changes.map((c, i) => (
                 <tr key={i}>
                   <td>{c.label}</td>
-                  <td className="muted">{c.from || t("（空）")}</td>
+                  <td className="muted">{c.from ? sys(c.from) : empty(c.hint)}</td>
                   <td className="muted">→</td>
-                  <td><b>{c.to || t("（空）")}</b></td>
+                  <td><b>{c.to ? sys(c.to) : empty(c.hint)}</b></td>
                 </tr>
               ))}
             </tbody>

@@ -51,8 +51,8 @@ export default async function CoveragePage() {
               const s = sources.get(c.code);
               return (
                 <tr key={c.code}>
-                  <td>{c.name}<div className="small muted">{c.code}{c.enabled ? "" : ` · ${t("已停用")}`}</div></td>
-                  <td>{s ? <>{s.sheet}<div className="small muted">{s.filename}</div></> : <span className="muted">{t("未上传（全部交给接口判断）")}</span>}</td>
+                  <td className="wrap">{c.name}<div className="small muted">{c.code}{c.enabled ? "" : ` · ${t("已停用")}`}</div></td>
+                  <td className="wrap">{s ? <>{s.sheet}<div className="small muted">{s.filename}</div></> : <span className="muted">{t("未上传（全部交给接口判断）")}</span>}</td>
                   <td>{s?.gateway ?? "-"}</td>
                   <td className="num">{s ? s.zipCount.toLocaleString() : "-"}</td>
                   <td>
@@ -65,8 +65,8 @@ export default async function CoveragePage() {
                       </FlashForm>
                     ) : "-"}
                   </td>
-                  <td className="small">{rates[c.code] ? t("{n} 个重量档", { n: rates[c.code].rows }) : <span className="muted">{t("未导入")}</span>}</td>
-                  <td>
+                  <td className="small wrap">{rates[c.code] ? t("{n} 个重量档", { n: rates[c.code].rows }) : <span className="muted">{t("未导入")}</span>}</td>
+                  <td className="wrap wide">
                     {(() => {
                       const r = dimRule(c.code, c.name);
                       return (

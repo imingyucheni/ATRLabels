@@ -22,8 +22,7 @@ export default async function PortalTopup() {
         <div className="stat"><div className="muted">{tr("当前余额（美元）")}</div><div className={`v ${me.balance < 0 ? "profit-neg" : ""}`}>{usd(me.balance)}</div></div>
         {me.creditLimit > 0 && <div className="stat"><div className="muted">{tr("可用额度（含信用额度）")}</div><div className="v">{usd(available)}</div></div>}
       </div>
-      <TopupForm rate={fx.rate} rateNote={tr(fx.manual ? "固定汇率" : "今日汇率，每天更新")} zelleInfo={s.zelleInfo} alipayInfo={s.alipayInfo} alipayQr={s.alipayQr} />
-      {s.topupInstructions && <p className="small muted" style={{ whiteSpace: "pre-wrap" }}>{s.topupInstructions}</p>}
+      <TopupForm rate={fx.rate} rateNote={tr(fx.manual ? "固定汇率" : "今日汇率，每天更新")} zelleInfo={s.zelleInfo} alipayInfo={s.alipayInfo} alipayQr={s.alipayQr} instructions={s.topupInstructions} />
 
       <div className="card table-wrap">
         <h2>{tr("充值记录")}</h2>
@@ -36,7 +35,8 @@ export default async function PortalTopup() {
                 <td className="small muted">{fmtTime(t.createdAt)}</td>
                 <td>{tr(TOPUP_METHOD_LABEL[t.method])}</td>
                 <td className="num">{money(t.amountUsd)}</td>
-                <td className="num">{t.payCurrency === "CNY" ? `¥${t.payAmount.toFixed(2)}` : `$${t.payAmount.toFixed(2)}`}{t.fxRate && <div className="small muted">{tr("汇率 {rate}", { rate: t.fxRate })}</div>}</td>
+                {/* 支付金额只对支付宝（人民币）有意义；Zelle 付的就是美元充值金额，不重复显示 */}
+                <td className="num">{t.payCurrency === "CNY" ? <>¥{t.payAmount.toFixed(2)}{t.fxRate && <div className="small muted">{tr("汇率 {rate}", { rate: t.fxRate })}</div>}</> : <span className="muted">-</span>}</td>
                 <td><span className={`badge ${t.status === "approved" ? "labeled" : t.status === "pending" ? "pending" : "exception"}`}>{tr(TOPUP_STATUS_LABEL[t.status])}</span></td>
                 <td className="num">{t.creditedUsd !== null ? money(t.creditedUsd) : "-"}</td>
                 <td className="small">{t.adminNote}{t.hasProof && <> <a href={`/api/topup/${t.id}/proof`} target="_blank">{tr("凭证")}</a></>}</td>

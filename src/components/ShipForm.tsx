@@ -181,6 +181,69 @@ export default function ShipForm(props: {
   const setSku = (i: number, patch: Partial<Sku>) => dirty(setSkus)(skus.map((s, j) => (j === i ? { ...s, ...patch } : s)));
   const bestPrice = quotes?.filter((q) => q.ok).map((q) => q.price!)[0];
 
+  const skuTable = (req: string) => (
+    <>
+            <div className="table-wrap">
+              <table className="sku-table">
+                <thead>
+                  <tr><th>SKU{req}</th><th>{t("中文品名")}</th><th>{t("英文品名")}{req}</th><th>{t("数量")}{req}</th><th>{t("申报单价")}{req}</th><th>{t("海关编码")}</th><th>{t("商品性质")}{req}</th><th></th></tr>
+                </thead>
+                <tbody>
+                  {skus.map((s, i) => (
+                    <tr key={i}>
+                      <td><input value={s.sku} onChange={(e) => setSku(i, { sku: e.target.value })} /></td>
+                      <td><input value={s.productNameCn} placeholder={t("可不填，默认用英文品名")} onChange={(e) => setSku(i, { productNameCn: e.target.value })} /></td>
+                      <td><input value={s.productNameEn} onChange={(e) => setSku(i, { productNameEn: e.target.value })} /></td>
+                      <td style={{ width: 80 }}><input type="number" min="1" value={s.quantity} onChange={(e) => setSku(i, { quantity: e.target.value })} /></td>
+                      <td style={{ width: 110 }}><input type="number" min="0" step="0.01" value={s.declaredUnitPrice} onChange={(e) => setSku(i, { declaredUnitPrice: e.target.value })} /></td>
+                      <td style={{ width: 130 }}><input value={s.hsCode} onChange={(e) => setSku(i, { hsCode: e.target.value })} /></td>
+                      <td style={{ minWidth: 170 }} className="small">
+                        {(() => {
+                          const preset = NATURE_PRESETS.find((p) => p.value === s.productNature)?.value ?? "custom";
+                          return (
+                            <>
+                              <select value={preset} onChange={(e) => setSku(i, { productNature: e.target.value === "custom" ? s.productNature || "2,4" : e.target.value })}>
+                                {NATURE_PRESETS.map((p) => <option key={p.value} value={p.value}>{t(p.label)}</option>)}
+                                <option value="custom">{t("自定义…")}</option>
+                              </select>
+                              {preset === "custom" && (
+                                <div style={{ marginTop: 4 }}>
+                                  {NATURE.map(([code, label]) => {
+                                    const set = new Set(s.productNature.split(",").filter(Boolean));
+                                    return (
+                                      <label key={code} style={{ marginRight: 8, whiteSpace: "nowrap" }}>
+                                        <input
+                                          type="checkbox"
+                                          checked={set.has(code)}
+                                          onChange={(e) => {
+                                            // 带磁/不带磁、带电/不带电 互斥
+                                            const opposite: Record<string, string> = { "1": "2", "2": "1", "3": "4", "4": "3" };
+                                            if (e.target.checked) {
+                                              set.add(code);
+                                              if (opposite[code]) set.delete(opposite[code]);
+                                            } else set.delete(code);
+                                            setSku(i, { productNature: [...set].sort().join(",") });
+                                          }}
+                                        /> {t(label)}
+                                      </label>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </>
+                          );
+                        })()}
+                      </td>
+                      <td>{skus.length > 1 && <button className="small danger" onClick={() => dirty(setSkus)(skus.filter((_, j) => j !== i))}>{t("删除")}</button>}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <button className="small" style={{ marginTop: 8 }} onClick={() => dirty(setSkus)([...skus, emptySku()])}>{t("＋ 添加商品")}</button>
+    </>
+  );
+
   return (
     <>
       <div className="card">
@@ -356,65 +419,18 @@ export default function ShipForm(props: {
           )}
         </div>
 
-        <h3>{t("商品明细（报关用）")}</h3>
-        <div className="table-wrap">
-          <table className="sku-table">
-            <thead>
-              <tr><th>SKU *</th><th>{t("中文品名")} *</th><th>{t("英文品名")} *</th><th>{t("数量")} *</th><th>{t("申报单价")} *</th><th>{t("海关编码")}</th><th>{t("商品性质")} *</th><th></th></tr>
-            </thead>
-            <tbody>
-              {skus.map((s, i) => (
-                <tr key={i}>
-                  <td><input value={s.sku} onChange={(e) => setSku(i, { sku: e.target.value })} /></td>
-                  <td><input value={s.productNameCn} onChange={(e) => setSku(i, { productNameCn: e.target.value })} /></td>
-                  <td><input value={s.productNameEn} onChange={(e) => setSku(i, { productNameEn: e.target.value })} /></td>
-                  <td style={{ width: 80 }}><input type="number" min="1" value={s.quantity} onChange={(e) => setSku(i, { quantity: e.target.value })} /></td>
-                  <td style={{ width: 110 }}><input type="number" min="0" step="0.01" value={s.declaredUnitPrice} onChange={(e) => setSku(i, { declaredUnitPrice: e.target.value })} /></td>
-                  <td style={{ width: 130 }}><input value={s.hsCode} onChange={(e) => setSku(i, { hsCode: e.target.value })} /></td>
-                  <td style={{ minWidth: 170 }} className="small">
-                    {(() => {
-                      const preset = NATURE_PRESETS.find((p) => p.value === s.productNature)?.value ?? "custom";
-                      return (
-                        <>
-                          <select value={preset} onChange={(e) => setSku(i, { productNature: e.target.value === "custom" ? s.productNature || "2,4" : e.target.value })}>
-                            {NATURE_PRESETS.map((p) => <option key={p.value} value={p.value}>{t(p.label)}</option>)}
-                            <option value="custom">{t("自定义…")}</option>
-                          </select>
-                          {preset === "custom" && (
-                            <div style={{ marginTop: 4 }}>
-                              {NATURE.map(([code, label]) => {
-                                const set = new Set(s.productNature.split(",").filter(Boolean));
-                                return (
-                                  <label key={code} style={{ marginRight: 8, whiteSpace: "nowrap" }}>
-                                    <input
-                                      type="checkbox"
-                                      checked={set.has(code)}
-                                      onChange={(e) => {
-                                        // 带磁/不带磁、带电/不带电 互斥
-                                        const opposite: Record<string, string> = { "1": "2", "2": "1", "3": "4", "4": "3" };
-                                        if (e.target.checked) {
-                                          set.add(code);
-                                          if (opposite[code]) set.delete(opposite[code]);
-                                        } else set.delete(code);
-                                        setSku(i, { productNature: [...set].sort().join(",") });
-                                      }}
-                                    /> {t(label)}
-                                  </label>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </>
-                      );
-                    })()}
-                  </td>
-                  <td>{skus.length > 1 && <button className="small danger" onClick={() => dirty(setSkus)(skus.filter((_, j) => j !== i))}>{t("删除")}</button>}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <button className="small" style={{ marginTop: 8 }} onClick={() => dirty(setSkus)([...skus, emptySku()])}>{t("＋ 添加商品")}</button>
+        {portal ? (
+          <>
+            <h3>{t("商品明细（报关用）")}</h3>
+            {skuTable(" *")}
+          </>
+        ) : (
+          // 后台试算只看地址和包裹：商品明细默认收起，不填也能试算
+          <details style={{ marginTop: 12 }}>
+            <summary className="small muted" style={{ cursor: "pointer" }}>{t("商品明细（可选：试算运费不需要填写）")}</summary>
+            {skuTable("")}
+          </details>
+        )}
       </div>
 
       {errors.length > 0 && (

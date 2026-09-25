@@ -60,7 +60,7 @@ export default async function CustomersPage() {
                 <td className="num">{c.creditLimit ? money(c.creditLimit) : "-"}</td>
                 <td>{show(c.markup.percent, t("默认"), "%")}</td><td>{show(c.markup.fixed, t("默认"))}</td><td>{show(c.markup.minProfit, t("默认"))}</td>
                 <td>
-                  <a href={`/api/customers/${c.id}/oms`} target="_blank" rel="noopener">{t("进入 OMS ↗")}</a> · <Link href={`/customers/${c.id}`}>{t("管理")}</Link> · <Link href={`/shipments?customerId=${c.id}`}>{t("面单")}</Link> · <Link href={`/customers/${c.id}/charges`}>{t("扣款明细")}</Link> · <Link href={`/customers/${c.id}/statement`}>{t("对账单")}</Link>
+                  <a href={`/api/customers/${c.id}/oms`}>{t("进入 OMS")}</a> · <Link href={`/customers/${c.id}`}>{t("管理")}</Link> · <Link href={`/shipments?customerId=${c.id}`}>{t("面单")}</Link> · <Link href={`/customers/${c.id}/charges`}>{t("扣款明细")}</Link> · <Link href={`/customers/${c.id}/statement`}>{t("对账单")}</Link>
                 </td>
               </tr>
             ))}

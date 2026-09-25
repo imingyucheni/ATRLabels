@@ -21,12 +21,12 @@ export function sniffMime(buf: Buffer, headerType: string | null): { mime: strin
  * 下载 ShipBest 返回的面单并存到本地。
  * ShipBest 的 labelUrl 可能过期，所以出单后立即保存一份。
  */
-export async function downloadLabel(url: string, customNo: string): Promise<{ path: string; mime: string }> {
+export async function downloadLabel(url: string, customNo: string, extra: { from?: string[] } = {}): Promise<{ path: string; mime: string }> {
   let buf: Buffer;
   let headerType: string | null = null;
   if (url.startsWith("mock://")) {
     const q = new URL(url.replace("mock://", "http://mock/")).searchParams;
-    buf = mockLabelPdf(customNo, { channel: q.get("ch") ?? undefined, tracking: q.get("t") ?? undefined, to: q.get("to")?.split("|") });
+    buf = mockLabelPdf(customNo, { channel: q.get("ch") ?? undefined, tracking: q.get("t") ?? undefined, to: q.get("to")?.split("|"), from: extra.from });
   } else {
     // 相对地址 / 省略协议的地址补全
     const full = url.startsWith("//") ? "https:" + url : url.startsWith("/") ? (process.env.SHIPBEST_BASE_URL || "https://oms.shipbest.com").replace(/\/$/, "") + url : url;
@@ -53,13 +53,25 @@ export function readLabel(relPath: string): Buffer {
   return fs.readFileSync(full);
 }
 
+/** PDF 标准字体只支持 ASCII：常见全角标点先换成半角（“GOFO-（91710）”不再印成“GOFO-?91710?”），其余非 ASCII 字符印成“?” */
+const FULLWIDTH: Record<string, string> = { "（": "(", "）": ")", "，": ",", "：": ":", "；": ";", "。": ".", "、": ",", "　": " ", "－": "-", "／": "/", "＃": "#" };
+export function pdfText(t: string): string {
+  return t
+    .replace(/[（），：；。、　－／＃]/g, (c) => FULLWIDTH[c] ?? c)
+    .replace(/[\uff01-\uff5e]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0))
+    .replace(/[^\x20-\x7e]/g, "?");
+}
+const esc = (t: string) => pdfText(t).replace(/[\\()]/g, (c) => "\\" + c);
+
+type MockInfo = { channel?: string; tracking?: string; to?: string[]; from?: string[] };
+
 /** 生成一张 4x6 英寸的模拟面单 PDF（仅模拟模式使用，版式模仿常见快递面单） */
-export function mockLabelPdf(customNo: string, info: { channel?: string; tracking?: string; to?: string[] } = {}): Buffer {
+export function mockLabelPdf(customNo: string, info: MockInfo = {}): Buffer {
   if (/usps/i.test(info.channel ?? "")) return mockUspsPdf(customNo, info);
-  const esc = (t: string) => t.replace(/[^\x20-\x7e]/g, "?").replace(/[\\()]/g, (c) => "\\" + c);
   const txt = (x: number, y: number, size: number, t: string, bold = false) => `BT /${bold ? "F2" : "F1"} ${size} Tf ${x} ${y} Td (${esc(t)}) Tj ET`;
   const tracking = info.tracking || "9400100000000000000000";
   const to = info.to?.length ? info.to : ["JOHN DOE", "500 CONGRESS AVE", "AUSTIN TX 78701-0001"];
+  const from = (info.from?.filter((l) => l.trim()).length ? info.from.filter((l) => l.trim()) : ["SENDER"]).slice(0, 3);
   // 条码：按运单号生成宽窄条
   let bars = "";
   let bx = 24;
@@ -72,7 +84,7 @@ export function mockLabelPdf(customNo: string, info: { channel?: string; trackin
   const content = [
     "0.8 w 8 8 272 416 re S",
     "8 360 m 280 360 l S", "8 250 m 280 250 l S", "8 130 m 280 130 l S", "8 92 m 280 92 l S",
-    txt(16, 404, 7, "FROM: ATR WAREHOUSE"), txt(16, 395, 7, "13950 CENTRAL AVE"), txt(16, 386, 7, "CHINO CA 91710"),
+    ...from.map((l, i) => txt(16, 404 - i * 9, 7, (i === 0 ? "FROM: " : "") + l.toUpperCase())),
     "200 368 72 48 re S", txt(214, 386, 16, "G", true),
     txt(16, 344, 9, "SHIP TO:", true),
     ...to.map((l, i) => txt(16, 328 - i * 14, 12, l.toUpperCase(), true)),
@@ -104,13 +116,14 @@ export function mockLabelPdf(customNo: string, info: { channel?: string; trackin
 }
 
 /** 模拟 USPS Ground Advantage 面单版式（按真实面单比例：底栏约 5.35–6 英寸，右下角二维码） */
-function mockUspsPdf(_customNo: string, info: { tracking?: string; to?: string[] }): Buffer {
-  const esc = (t: string) => t.replace(/[^\x20-\x7e]/g, "?").replace(/[\\()]/g, (c) => "\\" + c);
+function mockUspsPdf(_customNo: string, info: MockInfo): Buffer {
   const Y = (inch: number) => 432 - inch * 72; // 距上边英寸 → PDF 坐标
   const txt = (x: number, y: number, size: number, t: string, bold = false) => `BT /${bold ? "F2" : "F1"} ${size} Tf ${x} ${y} Td (${esc(t)}) Tj ET`;
   const hline = (inch: number, w = 1.5) => `${w} w 0 ${Y(inch)} m 288 ${Y(inch)} l S`;
   const tracking = info.tracking || "9214490424544602036283";
   const to = info.to?.length ? info.to : ["THOMAS DOE", "4867 SW TEST ST", "VICTORIA TX 77905"];
+  const from = (info.from?.filter((l) => l.trim()).length ? info.from.filter((l) => l.trim()) : ["SENDER"]).slice(0, 3);
+  const fromZip = /\b(\d{5})(?:-\d{4})?\s*$/.exec(from[from.length - 1] ?? "")?.[1];
   let bars = "";
   let bx = 20;
   for (const ch of (tracking + tracking + tracking).slice(0, 60)) {
@@ -128,11 +141,11 @@ function mockUspsPdf(_customNo: string, info: { tracking?: string; to?: string[]
     hline(0.43, 2),
     txt(14, Y(1.2), 60, "G", true), "1 w 88 " + Y(1.48) + " m 88 " + Y(0.43) + " l S",
     txt(96, Y(0.65), 6, "usps.com"), txt(96, Y(0.85), 6, "US POSTAGE", true), txt(180, Y(0.95), 8, "U.S. POSTAGE PAID", true),
-    txt(96, Y(1.4), 6, "1 lb 9 oz"), txt(180, Y(1.4), 6, "Mailed from 91710"),
+    txt(96, Y(1.4), 6, "1 lb 9 oz"), txt(180, Y(1.4), 6, fromZip ? `Mailed from ${fromZip}` : "Mailed from"),
     hline(1.48, 2),
     txt(30, Y(1.75), 14, "USPS GROUND ADVANTAGE", true),
     hline(1.89, 3),
-    txt(10, Y(2.1), 6, "ABC"), txt(10, Y(2.2), 6, "5525 DANIELS ST"), txt(10, Y(2.3), 6, "CHINO CA 91710"),
+    ...from.map((l, i) => txt(10, Y(2.1 + i * 0.1), 6, l.toUpperCase())),
     txt(230, Y(2.3), 11, "RDC 01"),
     ...to.map((l, i) => txt(70, Y(3.3 + i * 0.18), 10, l.toUpperCase())),
     "10 " + Y(3.8) + " 40 40 re S",

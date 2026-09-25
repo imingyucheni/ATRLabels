@@ -30,6 +30,12 @@ function cancelledOn(customerId: number, day: string) {
   ).n;
 }
 
+/** 日均单量：不到 1 单时保留两位小数（1 单 / 30 天显示 0.03，而不是 0.0） */
+function avgPerDay(v: number) {
+  if (!v) return "0";
+  return v < 1 ? v.toFixed(2) : v.toFixed(1);
+}
+
 /** 和昨天比 */
 function Trend({ now, prev, unit = "", upBad = false, t }: { now: number; prev: number; unit?: string; upBad?: boolean; t: T }) {
   if (!now && !prev) return <div className="small muted">{t("昨天也没有")}</div>;
@@ -134,7 +140,7 @@ export default async function PortalHome() {
         <div className="card">
           <h2>{tr("近 30 天每日出单")}</h2>
           <p className="small muted" style={{ marginTop: -6 }}>
-            {tr("共 {n} 单，日均 {avg} 单", { n: r30.totals.orders, avg: (r30.totals.orders / 30).toFixed(1) })}
+            {tr("共 {n} 单，日均 {avg} 单", { n: r30.totals.orders, avg: avgPerDay(r30.totals.orders / 30) })}
             {busiest && busiest.orders > 0 && tr("，最多的一天 {date}（{n} 单）", { date: busiest.date.slice(5), n: busiest.orders })}
           </p>
           <DailyBars data={r30.daily.map((d) => ({ date: d.date, orders: d.orders, revenue: d.revenue }))} revenueLabel={tr("运费")} />
@@ -179,8 +185,8 @@ export default async function PortalHome() {
               <tr key={s.id}>
                 <td className="small muted">{fmtTime(s.createdAt)}</td>
                 <td><Link href={`/portal/shipments/${s.id}`}>{s.customerRef || s.customNo}</Link></td>
-                <td>{s.recipient.nameFirst} {s.recipient.nameLast}<div className="small muted">{s.recipient.city}, {s.recipient.province ?? ""} {s.recipient.zipCode}</div></td>
-                <td>{s.channelName}</td>
+                <td className="wrap">{s.recipient.nameFirst} {s.recipient.nameLast}<div className="small muted">{s.recipient.city}, {s.recipient.province ?? ""} {s.recipient.zipCode}</div></td>
+                <td className="wrap">{s.channelName}</td>
                 <td>{s.trackingNo ?? "-"}</td>
                 <td><StatusBadge status={s.status} test={s.isTest} /></td>
                 <td className="num">{money(s.price, s.currency)}</td>

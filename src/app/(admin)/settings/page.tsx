@@ -40,7 +40,12 @@ export default async function SettingsPage() {
       <div className="card" id="shipbest">
         <div className="row" style={{ justifyContent: "space-between" }}>
           <h2 style={{ margin: 0 }}>{t("ShipBest 连接")}</h2>
-          <span className={`badge ${sb.mode === "live" ? "ok" : sb.mode === "sandbox" ? "test" : "pending"}`}>{t(MODE_BADGE[sb.mode])}</span>
+          {sb.mode !== "mock" && (!sb.apiId || !sb.token) ? (
+            // 正式 / 沙盒模式但没填 API 账号：接口调不通，不能显示成“正常”的绿色
+            <span className="badge exception">{t(sb.mode === "live" ? "正式模式 · 未填写 API 账号" : "沙盒模式 · 未填写 API 账号")}</span>
+          ) : (
+            <span className={`badge ${sb.mode === "live" ? "ok" : sb.mode === "sandbox" ? "test" : "pending"}`}>{t(MODE_BADGE[sb.mode])}</span>
+          )}
         </div>
         {isSandboxSite() && (
           <div className="alert warn" style={{ marginTop: 12 }}>{t("这里是沙盒站：数据和正式站分开，永远不会真实出单。选“正式”也会按沙盒处理。")}</div>
@@ -151,7 +156,9 @@ export default async function SettingsPage() {
         <div style={{ height: 12 }} />
       </FlashForm>
 
-      <FlashForm action={savePaymentSettingsAction} submitLabel="保存收款设置" className="card" locked="客户充值页会显示这里的收款账号" confirm="客户会按这里的信息付款，请再核对一遍收款账号。确定保存吗？">
+      {/* 收款设置和“立即更新汇率”是两个表单（不能嵌套），放在同一张卡片里 */}
+      <div className="card pay-card">
+      <FlashForm action={savePaymentSettingsAction} submitLabel="保存收款设置" locked="客户充值页会显示这里的收款账号" confirm="客户会按这里的信息付款，请再核对一遍收款账号。确定保存吗？">
         <h2>{t("收款方式（客户充值）")}</h2>
         <p className="small muted">{t("客户在客户端“充值”页选择 Zelle（美元）或支付宝（人民币）付款，上传凭证后提交申请；你们在“财务”页确认到账后自动加到客户余额。余额以美元记账。")}</p>
         <div className="grid2">
@@ -200,8 +207,10 @@ export default async function SettingsPage() {
           <textarea name="topupInstructions" rows={2} defaultValue={s.topupInstructions} placeholder={t("例如：转账备注请写公司名；工作日 2 小时内确认到账")} />
         </label>
       </FlashForm>
-      <div style={{ marginTop: -8, marginBottom: 16 }}>
+      <div className="fx-refresh">
+        <span className="small muted">{t("充值汇率 {rate}", { rate: fx.rate })}</span>
         <FlashForm action={refreshFxAction} submitLabel="立即更新汇率" submitClass="small" inline />
+      </div>
       </div>
 
       <StampSettings global={s.stamp} channels={channels.filter((c) => c.enabled).map((c) => ({ code: c.code, name: c.name, stamp: c.stamp }))} />

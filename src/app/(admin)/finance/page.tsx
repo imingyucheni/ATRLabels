@@ -3,13 +3,13 @@ import Link from "next/link";
 import { listCustomers } from "@/lib/db";
 import { LEDGER_TYPE_LABEL, listLedger } from "@/lib/ledger";
 import { money } from "@/lib/pricing";
-import { listTopups, TOPUP_METHOD_LABEL, TOPUP_STATUS_LABEL } from "@/lib/topup";
+import { getTopup, listTopups, TOPUP_METHOD_LABEL, TOPUP_STATUS_LABEL } from "@/lib/topup";
 import FlashForm from "@/components/FlashForm";
 import { approveTopupAction, rejectTopupAction } from "@/app/actions";
 import { getLang } from "@/lib/prefs";
 import { makeT, translateMessage } from "@/lib/i18n";
 
-export default async function FinancePage({ searchParams }: { searchParams: Promise<{ from?: string; to?: string }> }) {
+export default async function FinancePage({ searchParams }: { searchParams: Promise<{ from?: string; to?: string; done?: string; id?: string }> }) {
   const sp = await searchParams;
   const lang = await getLang();
   const tr = makeT(lang);
@@ -21,7 +21,9 @@ export default async function FinancePage({ searchParams }: { searchParams: Prom
   const byType = ledger.reduce<Record<string, number>>((m, l) => ((m[l.type] = (m[l.type] ?? 0) + l.amount), m), {});
   const pending = listTopups({ status: "pending" });
   const handled = listTopups({ limit: 30 }).filter((t) => t.status !== "pending");
-  const qs = new URLSearchParams(Object.entries(sp).filter(([, v]) => v) as [string, string][]).toString();
+  const qs = new URLSearchParams(Object.entries({ from: sp.from, to: sp.to }).filter(([, v]) => v) as [string, string][]).toString();
+  // 审核充值后跳回这里（?done=approved|rejected&id=N），在页面上显示处理结果
+  const done = sp.done === "approved" || sp.done === "rejected" ? getTopup(Number(sp.id)) : null;
 
   return (
     <>
@@ -33,6 +35,12 @@ export default async function FinancePage({ searchParams }: { searchParams: Prom
       </div>
 
       <div className="card table-wrap" id="topups">
+        {done && done.status === "approved" && (
+          <div className="alert ok">{tr("充值 #{id} 已入账：{name} +{amt}", { id: done.id, name: done.customerName, amt: money(done.creditedUsd ?? 0) })}</div>
+        )}
+        {done && done.status === "rejected" && (
+          <div className="alert ok">{tr("充值 #{id} 已拒绝：{name}，客户会看到原因。", { id: done.id, name: done.customerName })}</div>
+        )}
         <h2>{tr("待确认充值（{n}）", { n: pending.length })}</h2>
         {!pending.length && <p className="muted">{tr("没有待确认的充值申请")}</p>}
         {pending.length > 0 && (

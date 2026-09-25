@@ -22,6 +22,7 @@ import { computePrice, resolveRule, type MarkupRule, type PartialRule } from "./
 import { getShipBestClient, shipbestMode, ShipBestError } from "./shipbest/client";
 import type { Address, ShipmentRequest } from "./shipbest/types";
 import { isCountryCode, isUsZip, usStateCode } from "./geo";
+import { fillProductNames } from "./sanitize";
 
 /* ---------------- 校验 ---------------- */
 
@@ -65,7 +66,12 @@ function checkAddress(a: Address | undefined, who: string, errors: string[], zip
   for (const [k, n, label] of max) if ((a[k]?.toString().length ?? 0) > n) errors.push(`${who}${label}最多 ${n} 个字符`);
 }
 
-export function validateRequest(req: ShipmentRequest): string[] {
+export interface ValidateOptions {
+  /** 只试算运费（不出单）：不检查商品明细，试算前用 withQuoteSkus 补一个样品 */
+  forQuote?: boolean;
+}
+
+export function validateRequest(req: ShipmentRequest, opts: ValidateOptions = {}): string[] {
   const errors: string[] = [];
   checkAddress(req.sender, "寄件人", errors, true);
   checkAddress(req.recipient, "收件人", errors, true);
@@ -79,17 +85,60 @@ export function validateRequest(req: ShipmentRequest): string[] {
     if (!(p[k] > 0)) errors.push(`包裹${label}必须大于 0`);
   }
   if (p.insuranceService && !(Number(p.insuranceFee) > 0)) errors.push("需要保险时保险金额必须大于 0");
+  if (opts.forQuote) return errors;
   if (!req.skuList.length) errors.push("至少需要一个商品明细");
   req.skuList.forEach((s, i) => {
     const n = `商品 ${i + 1}：`;
     if (!s.sku) errors.push(n + "SKU 必填");
-    if (!s.productNameCn) errors.push(n + "中文品名必填");
+    // 中文品名可以不填（英文客户）：清洗时会用英文品名补上，见 sanitize.ts fillProductNames
     if (!s.productNameEn) errors.push(n + "英文品名必填");
     if (!s.productNature) errors.push(n + "商品性质必填");
     if (!(s.quantity > 0)) errors.push(n + "数量必须大于 0");
     if (!(s.declaredUnitPrice > 0)) errors.push(n + "申报单价必须大于 0");
   });
   return errors;
+}
+
+/** 试算用的样品商品（试算接口要求至少一个 SKU，但运费只看地址和包裹） */
+export const SAMPLE_SKU = { sku: "SAMPLE", productNameCn: "样品", productNameEn: "Sample", quantity: 1, declaredUnitPrice: 1, productNature: "2,4" } as const;
+
+/**
+ * 只试算时补全商品明细：完全没填的行去掉；填了一部分的行把缺的字段用样品值补上；
+ * 一行都没有时加一个样品。只用于试算，出单仍然要完整的商品明细。
+ */
+export function withQuoteSkus(req: ShipmentRequest): ShipmentRequest {
+  const p = req.pkg;
+  const filled = req.skuList
+    .filter((s) => s.sku || s.productNameCn || s.productNameEn || s.declaredUnitPrice > 0)
+    .map((s) => ({
+      ...s,
+      sku: s.sku || SAMPLE_SKU.sku,
+      productNameCn: s.productNameCn || s.productNameEn || SAMPLE_SKU.productNameCn,
+      productNameEn: s.productNameEn || SAMPLE_SKU.productNameEn,
+      quantity: s.quantity > 0 ? s.quantity : 1,
+      declaredUnitPrice: s.declaredUnitPrice > 0 ? s.declaredUnitPrice : SAMPLE_SKU.declaredUnitPrice,
+      productNature: s.productNature || SAMPLE_SKU.productNature,
+      length: s.length || p.length,
+      width: s.width || p.width,
+      height: s.height || p.height,
+      weight: s.weight || p.weight,
+    }));
+  if (filled.length) return { ...req, skuList: filled };
+  return {
+    ...req,
+    skuList: [
+      {
+        ...SAMPLE_SKU,
+        declaredCurrency: p.currency || "USD",
+        hsCode: "",
+        length: p.length,
+        width: p.width,
+        height: p.height,
+        weight: p.weight,
+        unit: p.displayUnitSystem,
+      },
+    ],
+  };
 }
 
 /* ---------------- 渠道同步 ---------------- */
@@ -245,7 +294,8 @@ export interface CreateInput {
 }
 
 export async function createLabel(input: CreateInput): Promise<number> {
-  const { customerId, channelCode, req } = input;
+  const { customerId, channelCode } = input;
+  const req: ShipmentRequest = { ...input.req, skuList: input.req.skuList.map(fillProductNames) };
   if (!getCustomer(customerId)) throw new Error("客户不存在");
   const errors = validateRequest(req);
   if (errors.length) throw new Error(errors.join("；"));
@@ -334,7 +384,7 @@ export async function refreshShipment(id: number): Promise<Shipment> {
 
   if (patch.labelUrl && !s.labelPath) {
     try {
-      const saved = await downloadLabel(patch.labelUrl, s.customNo);
+      const saved = await downloadLabel(patch.labelUrl, s.customNo, { from: senderLines(s.sender) });
       patch.labelPath = saved.path;
       patch.labelMime = saved.mime;
     } catch (e) {
@@ -344,6 +394,13 @@ export async function refreshShipment(id: number): Promise<Shipment> {
   updateShipment(id, patch);
   settleCancel(id);
   return getShipment(id)!;
+}
+
+/** 寄件人三行（模拟面单的 FROM） */
+function senderLines(a: Address | null | undefined): string[] | undefined {
+  if (!a?.address1) return undefined;
+  const name = a.corporateName || [a.nameFirst, a.nameLast].filter(Boolean).join(" ");
+  return [name, [a.address1, a.address2].filter(Boolean).join(" "), [a.city, a.province, a.zipCode].filter(Boolean).join(" ")].filter(Boolean);
 }
 
 /** 订单变成已取消后，把退款记入客户钱包（幂等） */

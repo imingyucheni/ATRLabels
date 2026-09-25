@@ -148,7 +148,14 @@ export function RevenueLines({ data }: { data: { date: string; revenue: number; 
   const [ref, width] = useWidth<HTMLDivElement>();
   const [idx, setIdx] = useState(-1);
   const h = 240;
-  const pad = { ...PAD, r: 64 }; // 右侧留给末端直接标注
+  const series = [
+    { k: "revenue" as const, label: tr("客户消费"), color: "var(--series-1)" },
+    { k: "profit" as const, label: tr("利润"), color: "var(--series-2)" },
+  ];
+  // 末端直接标注的宽度（粗估：中文约 11.5px/字，英文约 6.6px/字）；右侧留够空间，放不下就只看图例
+  const labelW = Math.max(...series.map((s) => [...s.label].reduce((a, c) => a + (/[\u3000-\u9fff\uff00-\uffef]/.test(c) ? 11.5 : 6.6), 0)));
+  const endLabels = width >= 420;
+  const pad = { ...PAD, r: endLabels ? Math.min(Math.max(64, Math.ceil(labelW) + 16), 120) : PAD.r };
   const max = Math.max(1, ...data.map((d) => Math.max(d.revenue, d.profit)));
   const min = Math.min(0, ...data.map((d) => d.profit));
   const t = ticks(max - min);
@@ -160,10 +167,6 @@ export function RevenueLines({ data }: { data: { date: string; revenue: number; 
   const line = (k: "revenue" | "profit") => data.map((d, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(d[k]).toFixed(1)}`).join(" ");
   const every = Math.ceil(data.length / Math.max(2, Math.floor(iw / 48)));
   const last = data[data.length - 1];
-  const series = [
-    { k: "revenue" as const, label: tr("客户消费"), color: "var(--series-1)" },
-    { k: "profit" as const, label: tr("利润"), color: "var(--series-2)" },
-  ];
 
   return (
     <div
@@ -196,16 +199,22 @@ export function RevenueLines({ data }: { data: { date: string; revenue: number; 
           <path key={s.k} d={line(s.k)} fill="none" stroke={s.color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
         ))}
         {/* 末端直接标注（两条线，少于 4 个系列都直接标注） */}
-        {last && (() => {
-          // 两个末端值太近（例如都是 0）时把标注上下拉开，至少 14px，避免文字叠在一起
-          const GAP = 14;
+        {last && endLabels && (() => {
+          // 两个末端值太近（例如都是 0）时把标注上下拉开，至少 16px，避免文字叠在一起；
+          // 并且整体保持在绘图区内（不压到底部日期）
+          const GAP = 16;
+          const lo = pad.t + 6;
+          const hi = pad.t + ih - 7;
           const ys = series.map((s) => y(last[s.k]));
           if (Math.abs(ys[0] - ys[1]) < GAP) {
-            const mid = (ys[0] + ys[1]) / 2;
+            const mid = Math.min(Math.max((ys[0] + ys[1]) / 2, lo + GAP / 2), hi - GAP / 2);
             // 数值大（或相等）的“客户消费”放上面
             const firstOnTop = ys[0] <= ys[1];
             ys[0] = mid + (firstOnTop ? -GAP / 2 : GAP / 2);
             ys[1] = mid + (firstOnTop ? GAP / 2 : -GAP / 2);
+          } else {
+            for (let j = 0; j < ys.length; j++) ys[j] = Math.min(Math.max(ys[j], lo), hi);
+            if (Math.abs(ys[0] - ys[1]) < GAP) return null; // 夹到边界后又挨得太近：只看图例
           }
           return series.map((s, j) => (
             <text key={s.k} x={x(data.length - 1) + 8} y={ys[j]} className="chart-label" dominantBaseline="middle">{s.label}</text>
