@@ -3,7 +3,9 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getCustomer, getPasswordHash, type Customer } from "./db";
 
-const COOKIE = "atr_session";
+// 沙盒站和正式站可能在同一个 IP 的不同端口上，浏览器 cookie 不分端口：沙盒站用不同的 cookie 名，两边可以同时登录
+const SFX = process.env.APP_ENV === "sandbox" ? "_sb" : "";
+const COOKIE = "atr_session" + SFX;
 const MAX_AGE = 60 * 60 * 24 * 7; // 7 天
 
 /**
@@ -94,7 +96,7 @@ export function clearFailures(key: string) {
 
 /* ---------------- 客户登录 ---------------- */
 
-const PORTAL_COOKIE = "atr_portal";
+const PORTAL_COOKIE = "atr_portal" + SFX;
 
 export { hashPassword, verifyPassword } from "./password";
 
@@ -120,7 +122,7 @@ export async function destroyCustomerSession() {
 
 /* ---------------- 管理员进入客户 OMS（代客户操作） ---------------- */
 
-const AS_COOKIE = "atr_portal_as";
+const AS_COOKIE = "atr_portal_as" + SFX;
 const AS_MAX_AGE = 4 * 3600;
 
 /** 后台生成的一次性进入凭证（60 秒有效），放在跳转链接里，OMS 可以在另一个域名 */
