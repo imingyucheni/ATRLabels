@@ -18,7 +18,7 @@ import {
 import { precheck, rememberQuote } from "./coverage";
 import { downloadLabel } from "./labels";
 import { chargeLabel, refundCancelled, removeShipmentLedger } from "./ledger";
-import { computePrice, resolveRule, type MarkupRule, type PartialRule } from "./pricing";
+import { computePrice, resolveRule, roundUp, type MarkupRule, type PartialRule } from "./pricing";
 import { getShipBestClient, shipbestMode, ShipBestError } from "./shipbest/client";
 import type { Address, ShipmentRequest } from "./shipbest/types";
 import { isCountryCode, isUsZip, usStateCode } from "./geo";
@@ -420,7 +420,8 @@ function wasLabeled(s: Shipment) {
 function cancelPatch(s: Shipment, charged: boolean, fees?: { cancelFee: number; sbCancelFee: number }): ShipmentPatch {
   const st = getSettings();
   const cost = s.actualCost ?? s.quotedCost;
-  const cancelFee = fees?.cancelFee ?? (charged ? round2((s.price * st.cancelFeePercent) / 100) : 0);
+  // 向客户收的取消费有零头时向上取到分
+  const cancelFee = fees?.cancelFee ?? (charged ? roundUp((s.price * st.cancelFeePercent) / 100, 0.01) : 0);
   const sbCancelFee = fees?.sbCancelFee ?? (charged ? round2((cost * st.sbCancelFeePercent) / 100) : 0);
   return {
     status: "cancelled",

@@ -22,8 +22,8 @@ export function resolveRule(global: MarkupRule, channel?: PartialRule | null, cu
 /** 按步长向上取整，例如 step=0.1 时 12.31 -> 12.4。 */
 export function roundUp(value: number, step: number): number {
   if (!(step > 0)) return Math.round(value * 100) / 100;
-  // 先按分取整，避免 12.3000000001 这类浮点误差被多进一档
-  const cents = Math.round(value * 100);
+  // 只去掉浮点误差（12.3000000001 不会被多进一档），真实的零头一律向上进：6.6144 → 6.62
+  const cents = Math.round(value * 100 * 1e6) / 1e6;
   const stepCents = Math.max(1, Math.round(step * 100));
   return (Math.ceil(cents / stepCents) * stepCents) / 100;
 }
