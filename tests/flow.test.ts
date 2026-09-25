@@ -302,14 +302,25 @@ describe("模拟模式完整流程", () => {
     const pdf = await mergeLabels(job.rows.filter((r) => r.shipmentId).map((r) => db.getShipment(r.shipmentId!)!));
     expect((await PDFDocument.load(pdf)).getPageCount()).toBe(3);
 
-    // 8) 同一张表再导一次：已出过面单的订单号标记“可能重复”，默认不勾选
-    const again = batch.createJob({ customerId: custId, createdBy: "customer", filename: "24-0924.xlsx", channels: ["LP10210028"], pickMode: "cheapest", orders: parsed.orders });
+    // 8) 同一张表再导一次：已下过单的订单号直接标错误，不能提交
+    const again = batch.createJob({ customerId: custId, createdBy: "customer", filename: "24-0924.xlsx", channels: ["LP10210028"], pickMode: "cheapest", orders: structuredClone(parsed.orders) });
     batch.ensureRunning(again);
-    const j2 = await wait(again, ["ready"]);
-    const dupRows = j2.rows.filter((r) => r.status === "quoted");
+    const j2 = await wait(again, ["ready", "done", "failed"]);
+    const shippedRefs = new Set(job.rows.filter((r) => r.status === "created").map((r) => r.customerRef));
+    const dupRows = j2.rows.filter((r) => shippedRefs.has(r.customerRef));
     expect(dupRows.length).toBe(3);
-    expect(dupRows.every((r) => r.warning?.includes("已经出过面单") && !r.selected)).toBe(true);
-    expect(() => batch.confirmJob(again)).toThrow(/勾选/);
+    expect(dupRows.every((r) => r.status === "error" && r.error?.includes("不能重复下单") && !r.selected)).toBe(true);
+    expect(j2.rows.some((r) => r.status === "quoted")).toBe(false);
+    expect(() => batch.confirmJob(again)).toThrow();
+
+    // 单个下单也一样：同一个订单号不能再下；原单取消后可以重新下
+    const first = db.getShipment(created[0].shipmentId!)!;
+    const reqAgain = { ...req, pkg: { ...req.pkg } };
+    const q1 = (await svc.quoteAll(custId, reqAgain))[0];
+    await expect(svc.createLabel({ customerId: custId, channelCode: q1.channelCode, req: reqAgain, expectedPrice: q1.price!, customerRef: ` ${first.customerRef} ` })).rejects.toThrow(/不能重复下单/);
+    (await import("@/lib/db")).db().prepare("UPDATE shipments SET status = 'cancelled' WHERE id = ?").run(first.id);
+    const reId = await svc.createLabel({ customerId: custId, channelCode: q1.channelCode, req: reqAgain, expectedPrice: q1.price!, customerRef: first.customerRef! });
+    expect(db.getShipment(reId)!.customerRef).toBe(first.customerRef);
   }, 90_000);
 
   it("批量下单：余额不足自动暂停，充值后继续", async () => {

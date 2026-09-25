@@ -14,6 +14,8 @@ import {
   upsertChannels,
   type Shipment,
   type ShipmentPatch,
+  activeShipmentByRef,
+  duplicateRefMessage,
 } from "./db";
 import { precheck, rememberQuote } from "./coverage";
 import { downloadLabel } from "./labels";
@@ -302,6 +304,10 @@ export async function createLabel(input: CreateInput): Promise<number> {
   const { customerId, channelCode } = input;
   const req: ShipmentRequest = { ...input.req, skuList: input.req.skuList.map(fillProductNames) };
   if (!getCustomer(customerId)) throw new Error("客户不存在");
+  const ref = input.customerRef?.trim() || "";
+  // 同一个订单号不能重复下单（取消后可以重新下）
+  const dupe = ref ? activeShipmentByRef(customerId, ref) : undefined;
+  if (dupe) throw new Error(duplicateRefMessage(ref, dupe));
   const errors = validateRequest(req);
   if (errors.length) throw new Error(errors.join("；"));
 
@@ -318,6 +324,9 @@ export async function createLabel(input: CreateInput): Promise<number> {
   const createdBy = input.createdBy ?? "admin";
   // 建本地记录和扣款放在同一个事务里：余额不足时什么都不留下
   const id = db().transaction(() => {
+    // 试算期间可能已经有同号的单提交了（重复点击 / 两个页面同时下单），入库前再查一次
+    const again = ref ? activeShipmentByRef(customerId, ref) : undefined;
+    if (again) throw new Error(duplicateRefMessage(ref, again));
     const newId = insertShipment({
     customNo,
     customerId,
@@ -333,7 +342,7 @@ export async function createLabel(input: CreateInput): Promise<number> {
     price: quote.price!,
     rule: quote.rule!,
     remark: input.remark || null,
-    customerRef: input.customerRef || null,
+    customerRef: ref || null,
     createdBy,
     env: shipbestMode(),
     addressCheck: input.addressCheck && input.addressCheck.status !== "unavailable" && input.addressCheck.status !== "skipped" ? JSON.stringify(input.addressCheck) : null,

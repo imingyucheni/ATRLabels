@@ -105,6 +105,7 @@ export const orderPatterns: [RegExp, string][] = [
   // 批量导入
   [/^表格缺少必填列：(.+)$/, "Spreadsheet is missing required columns: $1"],
   [/^订单号 (.+) 已经出过面单（(.+)，(\d{4}-\d\d-\d\d)），可能是重复导入，默认不提交$/, "Order ref $1 was already labeled ($2, $3). Possible duplicate — not submitted by default."],
+  [/^订单号 (.+) 已经下过单（(.+)，(\d{4}-\d\d-\d\d)），不能重复下单。如需重新下单，请先取消原订单$/, "Order ref $1 has already been shipped ($2, $3) and can't be ordered again. To reorder, cancel the original order first."],
   [/^订单号 (.+) 在另一个未提交的批次里（(.+)，(\d{4}-\d\d-\d\d)），可能是重复导入，默认不提交$/, "Order ref $1 is in another unsubmitted batch ($2, $3). Possible duplicate — not submitted by default."],
   [/^所有渠道都无法报价：(.+)$/, "No service could quote: $1"],
   [/^处理出错：(.+)$/, "Processing error: $1"],

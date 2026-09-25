@@ -319,7 +319,7 @@ export default function BatchOrders(props: {
           </label>
         </div>
         {dupes > 0 && editable && (
-          <div className="alert warn">⚠ {t("{n} 单的订单号之前已经出过面单（或在别的批次里待提交），可能是重复导入，已默认不勾选。确认需要重复出单的，再手动勾选提交。", { n: dupes })}</div>
+          <div className="alert warn">⚠ {t("{n} 单的订单号在别的批次里还没提交，可能是重复导入，已默认不勾选。同一个订单号只能下一次单，哪边先提交就算哪边的。", { n: dupes })}</div>
         )}
         {addrIssues > 0 && editable && (
           <div className="alert warn">⚠ {t("{n} 单的收件地址核对有问题（查不到或缺公寓号），已默认不勾选。请检查地址；确认无误的再手动勾选提交。", { n: addrIssues })}</div>

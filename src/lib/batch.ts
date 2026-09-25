@@ -6,7 +6,7 @@
 import { publicChannel } from "./carriers";
 import { checkAddress, needsAck, type AddressCheck } from "./addressCheck";
 import ExcelJS from "exceljs";
-import { customerChannels, db, getChannel, getCustomer, getSettings, getShipment, listChannels } from "./db";
+import { activeShipmentByRef, customerChannels, db, duplicateRefMessage, getChannel, getCustomer, getSettings, getShipment, listChannels } from "./db";
 import { InsufficientBalanceError } from "./ledger";
 import { createLabel, PriceChangedError, quoteChannel, refreshShipment, validateRequest } from "./service";
 import type { Address, ShipmentRequest, SkuItem, UnitSystem } from "./shipbest/types";
@@ -472,25 +472,21 @@ export function createJob(input: {
       "INSERT INTO batch_job_rows (job_id, row_no, customer_ref, req_json, file_channel, status, error, warning, selected) VALUES (?,?,?,?,?,?,?,?,?)",
     );
     for (const o of input.orders) {
-      const warning = o.customerRef ? duplicateWarning(input.customerId, o.customerRef, jobId) : null;
-      stmt.run(jobId, o.rowNo, o.customerRef || null, JSON.stringify(o.req), o.fileChannel || null, o.errors.length ? "error" : "pending", o.errors.join("；") || null, warning, warning ? 0 : 1);
+      // 订单号已经下过单（没取消）：直接标错误，不能提交
+      const shipped = o.customerRef ? activeShipmentByRef(input.customerId, o.customerRef) : undefined;
+      if (shipped) o.errors.push(duplicateRefMessage(o.customerRef, shipped));
+      const warning = o.customerRef && !shipped ? duplicateWarning(input.customerId, o.customerRef, jobId) : null;
+      stmt.run(jobId, o.rowNo, o.customerRef || null, JSON.stringify(o.req), o.fileChannel || null, o.errors.length ? "error" : "pending", o.errors.join("；") || null, warning, warning || o.errors.length ? 0 : 1);
     }
     return jobId;
   })();
 }
 
 /**
- * 同一客户的订单号已经出过面单、或者在另一个还没提交的批次里 → 提醒可能重复导入。
- * 不直接拦截（补发等情况确实需要重复出单），但默认不勾选。
+ * 同一客户的订单号在另一个还没提交的批次里 → 提醒可能重复导入，默认不勾选。
+ * （已经下过单的在上面直接标错误；两个批次都勾选提交时，后提交的那单会被拦下）
  */
 function duplicateWarning(customerId: number, ref: string, jobId: number): string | null {
-  const s = db()
-    .prepare(
-      `SELECT custom_no, tracking_no, created_at FROM shipments
-       WHERE customer_id = ? AND customer_ref = ? AND status NOT IN ('cancelled', 'exception') ORDER BY id DESC LIMIT 1`,
-    )
-    .get(customerId, ref) as { custom_no: string; tracking_no: string | null; created_at: string } | undefined;
-  if (s) return `订单号 ${ref} 已经出过面单（${s.tracking_no ?? s.custom_no}，${s.created_at.slice(0, 10)}），可能是重复导入，默认不提交`;
   const r = db()
     .prepare(
       `SELECT j.id, j.filename, j.created_at FROM batch_job_rows r JOIN batch_jobs j ON j.id = r.job_id

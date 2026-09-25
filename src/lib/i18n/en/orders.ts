@@ -258,8 +258,8 @@ export const orders: Record<string, string> = {
   "放弃这个批次？": "Discard this batch?",
   "放弃这个批次": "Discard batch",
   "只看有问题的订单": "Show problems only",
-  "{n} 单的订单号之前已经出过面单（或在别的批次里待提交），可能是重复导入，已默认不勾选。确认需要重复出单的，再手动勾选提交。":
-    "{n} orders have an order ref that was already labeled (or is pending in another batch) and may be duplicates, so they are unchecked. Check them manually if you really want to ship them again.",
+  "{n} 单的订单号在别的批次里还没提交，可能是重复导入，已默认不勾选。同一个订单号只能下一次单，哪边先提交就算哪边的。":
+    "{n} orders have an order ref that is also waiting in another batch, so they are unchecked. An order ref can only be shipped once — whichever batch submits first wins.",
   "有错误的订单不会提交。请在表格里改好后，把这些订单重新导入。": "Orders with errors won't be submitted. Fix them in the spreadsheet and import them again.",
   "物流产品 / 价格": "Service / Rate",
   "已扣款 · 面单生成中": "Charged · generating label",
