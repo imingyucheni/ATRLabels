@@ -1,0 +1,11 @@
+{
+  "name": "ATR 面单系统（演示）",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:1-22-bookworm",
+  "hostRequirements": { "cpus": 2 },
+  "postCreateCommand": "npm install",
+  "postAttachCommand": "npm run demo",
+  "forwardPorts": [3000],
+  "portsAttributes": {
+    "3000": { "label": "ATR 面单系统", "onAutoForward": "openBrowser" }
+  }
+}

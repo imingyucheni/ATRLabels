@@ -4,7 +4,20 @@
 
 ## 一、马上试用（演示模式）
 
-演示模式用**模拟接口**，不会真实下单、不会扣 ShipBest 余额。需要 Node.js 20 或以上版本。
+演示模式用**模拟接口**，不会真实下单、不会扣 ShipBest 余额。
+
+### 方式 1：在 GitHub 上直接打开（不用安装任何东西）
+
+1. 打开 GitHub 仓库页面，点绿色的 **Code** 按钮 → **Codespaces** 标签 → **Create codespace on …**。
+2. 等 2～3 分钟（第一次会自动安装和构建），终端里出现“演示环境已启动”。
+3. 右下角会弹出提示，点 **Open in Browser**，或者在下方 **PORTS（端口）** 标签里点 3000 端口的地址。这个网址就是系统的网址。
+4. 想让别人（比如同事）也能打开：在 PORTS 标签里右键 3000 端口 → **Port Visibility → Public**。
+
+Codespaces 按使用时间计费，个人账号每月有免费额度；不用的时候在 github.com/codespaces 里停止或删除即可。
+
+### 方式 2：在自己电脑上运行
+
+需要 Node.js 20 或以上版本。
 
 ```bash
 npm install
@@ -64,7 +77,16 @@ npm run demo
 
 数据（SQLite 数据库和面单文件）存在 `DATA_DIR` 目录里，需要一台有持久磁盘的服务器或 VPS，**请定期备份这个目录**。
 
-### 方式 A：Docker（推荐）
+### 方式 A：Render 一键部署（最简单，约 7 美元/月）
+
+1. 注册 [Render](https://render.com)，用 GitHub 账号登录，并授权访问这个仓库。
+2. 打开 `https://render.com/deploy?repo=https://github.com/imingyucheni/ATRLabels`（仓库里的 `render.yaml` 已经配好：Node 运行环境 + 1GB 持久磁盘存数据）。
+3. 按提示填写 `ADMIN_PASSWORD`（后台密码）、`SHIPBEST_API_ID`、`SHIPBEST_ACCESS_TOKEN`，点部署。
+4. 部署完成后会得到一个 `https://atrlabels-xxxx.onrender.com` 网址：后台是这个网址，客户端是网址后面加 `/portal`。
+5. 默认先以**模拟模式 + 演示数据**启动。测试没问题后，在 Render 的 Environment 里把 `SHIPBEST_MOCK` 改成 `0`、`DEMO_SEED` 改成 `0`，然后按下面“正式上线步骤”操作。演示客户可以在后台停用登录。
+6. 绑定自己的域名：Render 后台 Settings → Custom Domains；并在环境变量里加 `ALLOWED_ORIGINS=你的域名`。
+
+### 方式 B：Docker（自己的服务器）
 
 ```bash
 cp .env.example .env      # 填写配置，见下表
@@ -73,7 +95,7 @@ docker compose up -d --build
 
 打开 `http://服务器IP:3000`（后台）和 `http://服务器IP:3000/portal`（客户端）。正式使用时建议加一个域名，并用 Nginx 或 Caddy 配 HTTPS。
 
-### 方式 B：直接用 Node.js
+### 方式 C：直接用 Node.js
 
 ```bash
 npm install
@@ -94,6 +116,7 @@ npm start            # 默认端口 3000，可以配合 pm2 / systemd 常驻
 | `DATA_DIR` | 数据目录，默认 `./data` |
 | `COOKIE_SECURE` | 不填则自动判断；配了 HTTPS 可以填 `1` |
 | `DEMO_SEED` | `1` 时首次启动创建演示数据，正式环境不要开 |
+| `ALLOWED_ORIGINS` | 用自定义域名时填写，例如 `ship.example.com`（多个用逗号分隔） |
 
 ### 正式上线步骤
 
