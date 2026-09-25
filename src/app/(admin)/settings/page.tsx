@@ -1,4 +1,4 @@
-import { getSettings, listChannels } from "@/lib/db";
+import { ADJUSTMENT_POLICY_LABEL, getSettings, listChannels } from "@/lib/db";
 import { computePrice, money, resolveRule, type MarkupRule } from "@/lib/pricing";
 import { isMockMode } from "@/lib/shipbest/client";
 import AddressFields from "@/components/AddressFields";
@@ -56,6 +56,16 @@ export default async function SettingsPage() {
           <label className="f">ShipBest 收取取消费 %<input name="sbCancelFeePercent" type="number" step="0.01" defaultValue={s.sbCancelFeePercent} /></label>
         </div>
         <p className="small muted">客户取消费按客户价计算，ShipBest 取消费按我们的成本计算；只有已出面单的订单才收取。确认取消时可以手动修改。</p>
+
+        <h3>官方账单补差（多退少补）</h3>
+        <div className="grid">
+          <label className="f" style={{ gridColumn: "span 2" }}>补差如何转嫁给客户
+            <select name="adjustmentPolicy" defaultValue={s.adjustmentPolicy}>
+              {Object.entries(ADJUSTMENT_POLICY_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </select>
+          </label>
+        </div>
+        <p className="small muted">ShipBest 扣的是预报价，官方账单出来后按重量或分区差异多退少补。在“补差导入”上传他们的表格时，按这里的规则计算向客户补收或退还的金额（导入时的规则会记录在批次上）。</p>
 
         <h3>默认值</h3>
         <div className="grid">

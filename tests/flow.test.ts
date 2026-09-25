@@ -68,4 +68,56 @@ describe("模拟模式完整流程", () => {
     expect(c.refundAmount).toBeCloseTo(s.price - fees.cancelFee, 2);
     expect(db.shipmentProfit(c)).toBeCloseTo(fees.cancelFee - fees.sbCancelFee, 2);
   }, 30_000);
+
+  it("导入官方账单补差并计入客户对账单", async () => {
+    const ExcelJS = (await import("exceljs")).default;
+    const adj = await import("@/lib/adjustments");
+    const { buildStatement } = await import("@/lib/statement");
+    const custId = db.saveCustomer(null, { name: "补差客户", contact: null, phone: null, email: null, note: null, markup: {} });
+    const q = (await svc.quoteAll(custId, req))[0];
+    const id = await svc.createLabel({ customerId: custId, channelCode: q.channelCode, req, expectedPrice: q.price! });
+    const s = db.getShipment(id)!;
+
+    // 模拟 ShipBest 给的表格：标题行 + 表头 + 数据 + 合计
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet("补差");
+    ws.addRow(["2026年9月官方账单补差"]);
+    ws.addRow(["跟踪号", "预报重量", "实际重量", "补差金额", "原因"]);
+    ws.addRow([s.trackingNo, 2, 3, 1.25, "重量差异"]);
+    ws.addRow(["NOT-IN-SYSTEM", 1, 1, -0.4, "分区"]);
+    ws.addRow(["合计", "", "", 0.85, ""]);
+    const buf = Buffer.from(await wb.xlsx.writeBuffer());
+
+    const sheet = await adj.parseSheet("bill.xlsx", buf);
+    expect(sheet.headerRow).toBe(1);
+    const cols = adj.guessColumns(sheet.rows[sheet.headerRow]);
+    const mapping = { headerRow: sheet.headerRow, ...cols, positiveMeans: "charge" as const };
+    const preview = adj.buildPreview(sheet.rows, mapping);
+    expect(preview.rows.length).toBe(2); // 合计行被跳过
+    expect(preview.unmatched).toBe(1);
+    expect(preview.byCustomer).toEqual([{ customerId: custId, customerName: "补差客户", count: 1, costTotal: 1.25, customerTotal: 1.25 }]);
+
+    const batchId = adj.importAdjustments("bill.xlsx", sheet.rows, mapping, null);
+    expect(() => adj.importAdjustments("bill.xlsx", sheet.rows, mapping, null)).toThrow(/已经导入过/);
+    // 同样内容重新另存（文件字节不同）也能识别
+    const resaved = await adj.parseSheet("bill-copy.csv", Buffer.from(sheet.rows.map((r) => r.join(",")).join("\n")));
+    expect(resaved.alreadyImported).toBe(true);
+
+    const after = db.getShipment(id)!;
+    expect(after.costAdj).toBe(1.25);
+    expect(after.customerAdj).toBe(1.25);
+    expect(db.shipmentProfit(after)).toBeCloseTo(s.price - s.actualCost!, 2); // 按原金额转嫁，利润不变
+
+    const st = buildStatement(custId)!;
+    expect(st.totals.adjustments).toBe(1.25);
+    expect(st.totals.total).toBeCloseTo(s.price + 1.25, 2);
+
+    // 再次预览会提示可能重复
+    const again = adj.buildPreview(sheet.rows, mapping);
+    expect(again.rows.find((r) => r.shipmentId)!.possibleDuplicate).toBe(true);
+
+    // 撤销批次
+    db.deleteAdjustmentBatch(batchId);
+    expect(db.getShipment(id)!.costAdj).toBe(0);
+  }, 30_000);
 });

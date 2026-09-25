@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getShipment, shipmentProfit } from "@/lib/db";
+import { getShipment, listAdjustments, shipmentProfit } from "@/lib/db";
 import { money } from "@/lib/pricing";
 import { defaultCancelFees } from "@/lib/service";
 import { SB_STATUS, type Address } from "@/lib/shipbest/types";
@@ -28,6 +28,7 @@ export default async function ShipmentDetail({ params }: { params: Promise<{ id:
   if (!s) notFound();
   const [wu, lu] = UNITS[s.pkg.displayUnitSystem];
   const fees = defaultCancelFees(s);
+  const adjustments = listAdjustments({ shipmentId: s.id });
   const canCancel = s.status === "pending" || s.status === "labeled" || s.status === "exception";
 
   return (
@@ -89,6 +90,7 @@ export default async function ShipmentDetail({ params }: { params: Promise<{ id:
           <dl className="kv">
             <dt>客户</dt><dd>{s.customerName}</dd>
             <dt>渠道</dt><dd>{s.channelName} <span className="muted small">({s.channelCode})</span></dd>
+            <dt>分区</dt><dd>{s.zone ?? "-"}</dd>
             <dt>试算成本</dt><dd>{money(s.quotedCost, s.currency)}</dd>
             <dt>实扣成本</dt><dd>{money(s.actualCost, s.currency)}{s.actualCost !== null && Math.abs(s.actualCost - s.quotedCost) > 0.005 && <span className="profit-neg small">（与试算不同）</span>}</dd>
             <dt>加价规则</dt><dd>+{s.rule.percent}% + {money(s.rule.fixed)}，最低利润 {money(s.rule.minProfit)}</dd>
@@ -98,6 +100,11 @@ export default async function ShipmentDetail({ params }: { params: Promise<{ id:
                 <dt>客户取消费</dt><dd>{money(s.cancelFee, s.currency)}</dd>
                 <dt>ShipBest取消费</dt><dd>{money(s.sbCancelFee, s.currency)}</dd>
                 <dt>应退客户</dt><dd><b>{money(s.refundAmount, s.currency)}</b></dd>
+              </>
+            )}
+            {adjustments.length > 0 && (
+              <>
+                <dt>账单补差</dt><dd>ShipBest {money(s.costAdj, s.currency)} · 向客户 {money(s.customerAdj, s.currency)}</dd>
               </>
             )}
             <dt>利润</dt><dd><Profit value={shipmentProfit(s)} currency={s.currency} /></dd>
@@ -113,6 +120,26 @@ export default async function ShipmentDetail({ params }: { params: Promise<{ id:
           </dl>
         </div>
       </div>
+
+      {adjustments.length > 0 && (
+        <div className="card">
+          <h2>官方账单补差</h2>
+          <table>
+            <thead><tr><th>导入时间</th><th>批次</th><th className="num">ShipBest 补差</th><th className="num">向客户</th><th>原因</th></tr></thead>
+            <tbody>
+              {adjustments.map((a) => (
+                <tr key={a.id}>
+                  <td className="small muted">{a.createdAt}</td>
+                  <td><Link href={`/adjustments/${a.batchId}`}>{a.batchFilename}</Link></td>
+                  <td className="num">{money(a.costAmount)}</td>
+                  <td className="num">{money(a.customerAmount)}</td>
+                  <td className="small">{a.reason}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       <div className="grid2">
         <div className="card"><h2>寄件人</h2><Addr a={s.sender} /></div>

@@ -4,7 +4,20 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { checkPassword, createSession, destroySession, requireAdmin } from "@/lib/auth";
 import {
+  buildPreview,
+  customerAmountFor,
+  importAdjustments,
+  parseSheet,
+  type Mapping,
+  type ParsedSheet,
+  type Preview,
+} from "@/lib/adjustments";
+import {
+  deleteAdjustmentBatch,
+  findShipmentByKey,
+  getAdjustment,
   getSettings,
+  linkAdjustment,
   listChannels,
   saveCustomer,
   saveSettings,
@@ -239,6 +252,7 @@ export async function saveSettingsAction(_: FlashState, fd: FormData): Promise<F
     sbCancelFeePercent: optNum(fd.get("sbCancelFeePercent")) ?? cur.sbCancelFeePercent,
     defaultUnit: unit(fd.get("defaultUnit")),
     defaultCurrency: str(fd.get("defaultCurrency"), 3).toUpperCase() || "USD",
+    adjustmentPolicy: (["at_cost", "with_markup", "none"] as const).find((p) => p === fd.get("adjustmentPolicy")) ?? cur.adjustmentPolicy,
   };
   const sender = cleanAddress(Object.fromEntries([...fd.entries()].filter(([k]) => k.startsWith("sender.")).map(([k, v]) => [k.slice(7), v])) as Partial<Address>);
   patch.sender = sender.nameFirst || sender.address1 ? sender : null;
@@ -275,4 +289,77 @@ export async function verifyAction(_: FlashState): Promise<FlashState> {
   } catch (e) {
     return { error: (e as Error).message };
   }
+}
+
+/* ---------------- 官方账单补差 ---------------- */
+
+export async function parseAdjustmentFileAction(fd: FormData): Promise<{ error?: string; sheet?: ParsedSheet }> {
+  await requireAdmin();
+  const file = fd.get("file");
+  if (!(file instanceof File) || !file.size) return { error: "请选择文件" };
+  if (file.size > 10 * 1024 * 1024) return { error: "文件不能超过 10MB" };
+  try {
+    return { sheet: await parseSheet(file.name, Buffer.from(await file.arrayBuffer())) };
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+}
+
+function cleanMapping(m: Mapping): Mapping {
+  return {
+    headerRow: Math.max(0, Math.floor(n(m.headerRow))),
+    keyCol: Math.floor(n(m.keyCol)),
+    amountCol: Math.floor(n(m.amountCol)),
+    reasonCol: Number.isInteger(m.reasonCol) ? m.reasonCol : -1,
+    positiveMeans: m.positiveMeans === "refund" ? "refund" : "charge",
+  };
+}
+
+function cleanRows(rows: unknown): string[][] {
+  if (!Array.isArray(rows)) return [];
+  return rows.slice(0, 20000).map((r) => (Array.isArray(r) ? r.slice(0, 100).map((c) => str(c, 500)) : []));
+}
+
+export async function previewAdjustmentAction(rows: string[][], mapping: Mapping): Promise<{ error?: string; preview?: Preview }> {
+  await requireAdmin();
+  const m = cleanMapping(mapping);
+  if (m.keyCol < 0 || m.amountCol < 0) return { error: "请选择单号列和金额列" };
+  return { preview: buildPreview(cleanRows(rows), m) };
+}
+
+export async function importAdjustmentAction(input: {
+  filename: string;
+  rows: string[][];
+  mapping: Mapping;
+  note?: string;
+}): Promise<{ error?: string; batchId?: number }> {
+  await requireAdmin();
+  try {
+    const m = cleanMapping(input.mapping);
+    if (m.keyCol < 0 || m.amountCol < 0) return { error: "请选择单号列和金额列" };
+    const batchId = importAdjustments(str(input.filename), cleanRows(input.rows), m, str(input.note, 500) || null);
+    revalidatePath("/adjustments");
+    return { batchId };
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+}
+
+export async function deleteBatchAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  await requireAdmin();
+  deleteAdjustmentBatch(Number(fd.get("id")));
+  revalidatePath("/adjustments");
+  redirect("/adjustments");
+}
+
+export async function linkAdjustmentAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  await requireAdmin();
+  const adj = getAdjustment(Number(fd.get("id")));
+  if (!adj) return { error: "记录不存在" };
+  if (adj.shipment_id) return { error: "已经关联过了" };
+  const s = findShipmentByKey(str(fd.get("key")));
+  if (!s) return { error: "找不到这个单号对应的面单" };
+  linkAdjustment(adj.id, s.id, s.customerId, customerAmountFor(adj.cost_amount, adj.policy, s.rule));
+  revalidatePath(`/adjustments`);
+  return { ok: `已关联到 ${s.customNo}（${s.customerName}）` };
 }

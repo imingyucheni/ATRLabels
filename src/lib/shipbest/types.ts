@@ -72,6 +72,10 @@ export interface FeeQuote {
   totalShippingFee: number;
   totalDiscountShippingFee: number;
   currency: string;
+  /** 分区，例如 zone6（文档未列出，实际接口有返回） */
+  zone?: string | null;
+  /** 该渠道试算失败的原因（文档未列出，实际接口有返回） */
+  errorMsg?: string | null;
 }
 
 /** ShipBest 订单状态 */

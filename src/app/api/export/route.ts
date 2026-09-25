@@ -1,12 +1,6 @@
 import { isLoggedIn } from "@/lib/auth";
+import { csvResponse } from "@/lib/csv";
 import { listShipments, shipmentProfit, STATUS_LABEL } from "@/lib/db";
-
-function csvCell(v: unknown): string {
-  const s = v === null || v === undefined ? "" : String(v);
-  // 防止 Excel 公式注入
-  const safe = /^[=+\-@]/.test(s) ? "'" + s : s;
-  return /[",\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
-}
 
 export async function GET(req: Request) {
   if (!(await isLoggedIn())) return new Response("Unauthorized", { status: 401 });
@@ -20,21 +14,17 @@ export async function GET(req: Request) {
   });
   const header = [
     "创建时间(UTC)", "客户", "自定义单号", "ShipBest单号", "运单号", "渠道", "状态",
-    "收件人", "收件国家", "收件邮编", "币种", "试算成本", "实扣成本", "客户价", "取消手续费", "ShipBest取消费", "退款", "利润",
+    "收件人", "收件国家", "收件邮编", "分区", "币种", "试算成本", "实扣成本(预报)", "客户价",
+    "取消手续费", "ShipBest取消费", "退款", "补差成本", "补差向客户", "利润",
   ];
-  const lines = rows.map((s) =>
-    [
+  return csvResponse(
+    `shipments-${new Date().toISOString().slice(0, 10)}.csv`,
+    header,
+    rows.map((s) => [
       s.createdAt, s.customerName, s.customNo, s.orderNo, s.trackingNo, s.channelName, STATUS_LABEL[s.status],
-      `${s.recipient.nameFirst} ${s.recipient.nameLast}`, s.recipient.country, s.recipient.zipCode, s.currency,
-      s.quotedCost, s.actualCost, s.price, s.cancelFee, s.sbCancelFee, s.refundAmount, shipmentProfit(s)?.toFixed(2),
-    ].map(csvCell).join(","),
+      `${s.recipient.nameFirst} ${s.recipient.nameLast}`, s.recipient.country, s.recipient.zipCode, s.zone, s.currency,
+      s.quotedCost, s.actualCost, s.price, s.cancelFee, s.sbCancelFee, s.refundAmount,
+      s.costAdj || "", s.customerAdj || "", shipmentProfit(s)?.toFixed(2),
+    ]),
   );
-  // 加 BOM，Excel 打开中文不乱码
-  const body = "﻿" + [header.join(","), ...lines].join("\n");
-  return new Response(body, {
-    headers: {
-      "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="shipments-${new Date().toISOString().slice(0, 10)}.csv"`,
-    },
-  });
 }

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { listCustomers, listShipments, shipmentProfit, STATUS_LABEL } from "@/lib/db";
+import { listCustomers, listShipments, shipmentCost, shipmentProfit, shipmentReceivable, STATUS_LABEL } from "@/lib/db";
 import { money } from "@/lib/pricing";
 import StatusBadge from "@/components/StatusBadge";
 import Profit from "@/components/Profit";
@@ -21,9 +21,8 @@ export default async function ShipmentsPage({ searchParams }: { searchParams: Pr
 
   const totals = rows.reduce(
     (t, s) => {
-      if (s.status === "exception") return t;
-      t.cost += s.status === "cancelled" ? s.sbCancelFee ?? 0 : s.actualCost ?? s.quotedCost;
-      t.revenue += s.status === "cancelled" ? s.cancelFee ?? 0 : s.price;
+      t.cost += shipmentCost(s);
+      t.revenue += shipmentReceivable(s);
       t.profit += shipmentProfit(s) ?? 0;
       return t;
     },
@@ -65,7 +64,7 @@ export default async function ShipmentsPage({ searchParams }: { searchParams: Pr
           <thead>
             <tr>
               <th>时间</th><th>单号</th><th>客户</th><th>收件人</th><th>渠道</th><th>运单号</th><th>状态</th>
-              <th className="num">成本</th><th className="num">客户价</th><th className="num">利润</th><th>面单</th>
+              <th className="num">成本</th><th className="num">客户价</th><th className="num">补差(客户)</th><th className="num">利润</th><th>面单</th>
             </tr>
           </thead>
           <tbody>
@@ -80,15 +79,16 @@ export default async function ShipmentsPage({ searchParams }: { searchParams: Pr
                 <td><StatusBadge status={s.status} /></td>
                 <td className="num">{money(s.actualCost ?? s.quotedCost)}{s.actualCost === null && <div className="small muted">试算</div>}</td>
                 <td className="num">{money(s.price, s.currency)}</td>
+                <td className="num">{s.costAdj || s.customerAdj ? <>{money(s.customerAdj)}<div className="small muted">成本 {money(s.costAdj)}</div></> : "-"}</td>
                 <td className="num"><Profit value={shipmentProfit(s)} /></td>
                 <td>{s.labelPath ? <a href={`/api/labels/${s.id}`} target="_blank">打印</a> : "-"}</td>
               </tr>
             ))}
-            {!rows.length && <tr><td colSpan={11} className="muted">没有符合条件的记录</td></tr>}
+            {!rows.length && <tr><td colSpan={12} className="muted">没有符合条件的记录</td></tr>}
           </tbody>
         </table>
       </div>
-      <p className="small muted">时间为 UTC；成本优先显示 ShipBest 实扣金额，没有实扣时显示试算成本。</p>
+      <p className="small muted">时间为 UTC；成本优先显示 ShipBest 实扣（预报价），没有实扣时显示试算成本。合计已包含官方账单补差和取消费。</p>
     </>
   );
 }

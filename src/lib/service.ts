@@ -100,6 +100,7 @@ export interface ChannelQuote {
   /** 未优惠前的总运费（仅供参考） */
   listCost?: number;
   currency?: string;
+  zone?: string | null;
   rule?: MarkupRule;
   price?: number;
   profit?: number;
@@ -127,6 +128,7 @@ async function quoteOne(customerId: number, channelCode: string, channelName: st
       cost,
       listCost: q.totalShippingFee,
       currency: q.currency,
+      zone: q.zone ?? null,
       rule,
       price,
       profit: Math.round((price - cost) * 100) / 100,
@@ -204,6 +206,7 @@ export async function createLabel(input: CreateInput): Promise<number> {
     skuList: req.skuList,
     quotedCost: quote.cost!,
     currency: quote.currency!,
+    zone: quote.zone ?? null,
     price: quote.price!,
     rule: quote.rule!,
     remark: input.remark || null,

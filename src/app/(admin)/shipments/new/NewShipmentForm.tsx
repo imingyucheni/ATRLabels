@@ -272,13 +272,14 @@ export default function NewShipmentForm(props: {
           <div className="table-wrap">
             <table>
               <thead>
-                <tr><th>渠道</th><th className="num">原价</th><th className="num">我们的成本</th><th>加价规则</th><th className="num">客户价</th><th className="num">利润</th><th></th></tr>
+                <tr><th>渠道</th><th>分区</th><th className="num">原价</th><th className="num">我们的成本</th><th>加价规则</th><th className="num">客户价</th><th className="num">利润</th><th></th></tr>
               </thead>
               <tbody>
                 {quotes.map((q) =>
                   q.ok ? (
                     <tr key={q.channelCode} className={q.price === bestPrice ? "best" : ""}>
                       <td>{q.channelName}<div className="small muted">{q.channelCode}</div></td>
+                      <td>{q.zone ?? "-"}</td>
                       <td className="num muted">{money(q.listCost)}</td>
                       <td className="num">{money(q.cost, q.currency)}</td>
                       <td className="small">+{q.rule!.percent}% + {q.rule!.fixed}，最低利润 {q.rule!.minProfit}</td>
@@ -293,7 +294,7 @@ export default function NewShipmentForm(props: {
                   ) : (
                     <tr key={q.channelCode}>
                       <td>{q.channelName}<div className="small muted">{q.channelCode}</div></td>
-                      <td colSpan={6} className="small" style={{ color: "var(--err)" }}>{q.error}</td>
+                      <td colSpan={7} className="small" style={{ color: "var(--err)" }}>{q.error}</td>
                     </tr>
                   ),
                 )}

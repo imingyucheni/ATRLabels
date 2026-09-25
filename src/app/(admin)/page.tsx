@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { listChannels, listShipments, shipmentProfit } from "@/lib/db";
+import { listChannels, listShipments, shipmentProfit, shipmentReceivable } from "@/lib/db";
 import { money } from "@/lib/pricing";
 import StatusBadge from "@/components/StatusBadge";
 import Profit from "@/components/Profit";
@@ -10,11 +10,10 @@ function localDate(offsetDays = 0) {
 }
 
 function summarize(rows: ReturnType<typeof listShipments>) {
-  const valid = rows.filter((s) => s.status !== "exception");
   return {
     count: rows.filter((s) => s.status === "labeled").length,
-    revenue: valid.reduce((a, s) => a + (s.status === "cancelled" ? s.cancelFee ?? 0 : s.price), 0),
-    profit: valid.reduce((a, s) => a + (shipmentProfit(s) ?? 0), 0),
+    revenue: rows.reduce((a, s) => a + shipmentReceivable(s), 0),
+    profit: rows.reduce((a, s) => a + (shipmentProfit(s) ?? 0), 0),
   };
 }
 

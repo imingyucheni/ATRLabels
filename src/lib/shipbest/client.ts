@@ -10,7 +10,6 @@ import type {
 /** 常见错误码的中文说明（完整列表见 ShipBest 文档“常见报错”）。 */
 const ERROR_HINTS: Record<number, string> = {
   [-1]: "ShipBest 系统维护升级中",
-  1: "ShipBest 服务器错误，请稍后重试",
   10022: "物流产品不存在",
   10023: "物流产品已停用",
   10024: "包裹重量不在该渠道的下单重量范围内",
@@ -128,6 +127,7 @@ export class HttpShipBestClient implements ShipBestClient {
     );
     const q = data?.orderFeeCalcVos?.[0];
     if (!q) return null;
+    if (q.errorMsg) throw new ShipBestError(10061, q.errorMsg);
     return {
       ...q,
       baseShippingFee: num(q.baseShippingFee),
@@ -189,6 +189,7 @@ export class MockShipBestClient implements ShipBestClient {
       totalShippingFee: base + extra,
       totalDiscountShippingFee: Math.round((discount + extra) * 100) / 100,
       currency: "USD",
+      zone: `zone${Math.min(8, 2 + (req.recipient.zipCode.charCodeAt(0) % 7))}`,
     };
   }
 
