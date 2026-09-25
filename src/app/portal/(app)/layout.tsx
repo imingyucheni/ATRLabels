@@ -4,6 +4,7 @@ import { getSettings } from "@/lib/db";
 import { money, usd } from "@/lib/pricing";
 import Sidebar from "@/components/Sidebar";
 import { listDraftRows } from "@/lib/batch";
+import { getT } from "@/lib/prefs";
 import { leaveCustomerAction, portalLogoutAction } from "../actions";
 
 export const dynamic = "force-dynamic";
@@ -17,6 +18,7 @@ export default async function PortalLayout({ children }: { children: React.React
   const { brandName } = getSettings();
   const drafts = listDraftRows(me.id).length;
   const acting = !!(await impersonatedCustomerId());
+  const t = await getT();
   return (
     <div className="shell">
       <Sidebar
@@ -50,11 +52,11 @@ export default async function PortalLayout({ children }: { children: React.React
         ]}
       />
       <main className="main">
-        {isMockMode() && <div className="acting-bar">演示模式：运费是按报价表模拟的，面单也是模拟的，不会真实出单。</div>}
+        {isMockMode() && <div className="acting-bar">{t("演示模式：运费是按报价表模拟的，面单也是模拟的，不会真实出单。")}</div>}
         {acting && (
           <form action={leaveCustomerAction} className="acting-bar">
-            <span>管理员正在以 <b>{me.name}</b> 的身份操作这个客户的 OMS，下单、充值等记录会标记为管理员代操作。</span>
-            <button className="small">退出代操作，返回后台</button>
+            <span>{t("管理员正在以")} <b>{me.name}</b> {t("的身份操作这个客户的 OMS，下单、充值等记录会标记为管理员代操作。")}</span>
+            <button className="small">{t("退出代操作，返回后台")}</button>
           </form>
         )}
         {children}

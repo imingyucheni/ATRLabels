@@ -7,6 +7,7 @@ import type { SavedSender } from "@/lib/senders";
 import { portalCreateAction, portalQuoteAction, saveSenderBookAction } from "@/app/portal/actions";
 import type { PublicQuote } from "@/lib/portal";
 import AddressFields from "@/components/AddressFields";
+import { useT, useTMsg } from "@/components/I18n";
 import { money } from "@/lib/pricing";
 import type { ChannelQuote } from "@/lib/service";
 import type { Address, ShipmentRequest, UnitSystem } from "@/lib/shipbest/types";
@@ -57,6 +58,8 @@ export default function ShipForm(props: {
   defaultCurrency: string;
 }) {
   const router = useRouter();
+  const t = useT();
+  const tm = useTMsg();
   const portal = props.mode === "portal";
   const customers = props.customers ?? [];
   // 后台默认不选客户，避免替错客户下单
@@ -153,7 +156,7 @@ export default function ShipForm(props: {
   }
 
   async function onCreate(q: Quote) {
-    const msg = `确认用 ${q.channelName} 出单？\n运费：${money(q.price, q.currency)}（从账户余额扣除）`;
+    const msg = t("确认用 {channel} 出单？\n运费：{price}（从账户余额扣除）", { channel: q.channelName, price: money(q.price, q.currency) });
     if (!window.confirm(msg)) return;
     setCreating(q.channelCode);
     setErrors([]);
@@ -168,7 +171,7 @@ export default function ShipForm(props: {
         setQuotes((qs) => qs?.map((x) => (x.channelCode === r.quote!.channelCode ? r.quote! : x)) ?? null);
         setNotice(r.error ?? null);
       } else {
-        setErrors([r.error ?? "出单失败"]);
+        setErrors([r.error ?? t("出单失败")]);
       }
     } finally {
       setCreating(null);
@@ -184,7 +187,7 @@ export default function ShipForm(props: {
         <div className="row">
           {!portal && (
             <label className="f" style={{ minWidth: 240 }}>
-              <span>按哪个客户的价格试算</span>
+              <span>{t("按哪个客户的价格试算")}</span>
               <select
                 value={customerId}
                 onChange={(e) => {
@@ -195,17 +198,17 @@ export default function ShipForm(props: {
                   setSender(c?.sender ?? props.defaultSender ?? {});
                 }}
               >
-                <option value={0}>新客户 / 自定义加价</option>
+                <option value={0}>{t("新客户 / 自定义加价")}</option>
                 {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
               {(() => {
                 const c = customers.find((x) => x.id === customerId);
                 return (
                   <>
-                    {!c && <span className="small muted">用所有已启用的渠道，按右边填写的加价试算</span>}
-                    {c && <span className="small muted">按这个客户已开通的渠道和他的加价试算</span>}
+                    {!c && <span className="small muted">{t("用所有已启用的渠道，按右边填写的加价试算")}</span>}
+                    {c && <span className="small muted">{t("按这个客户已开通的渠道和他的加价试算")}</span>}
                     {c?.channelCount === 0 && (
-                      <span className="small" style={{ color: "var(--warn)" }}>未开通任何渠道，请先到 <a href={`/customers/${c.id}#channels`}>客户详情</a> 开通</span>
+                      <span className="small" style={{ color: "var(--warn)" }}>{t("未开通任何渠道，请先到")} <a href={`/customers/${c.id}#channels`}>{t("客户详情")}</a> {t("开通")}</span>
                     )}
                   </>
                 );
@@ -215,19 +218,19 @@ export default function ShipForm(props: {
           {portal ? (
             <>
               <label className="f" style={{ minWidth: 200 }}>
-                我的订单号（可选）
+                {t("我的订单号（可选）")}
                 <input value={customerRef} maxLength={50} onChange={(e) => setCustomerRef(e.target.value)} />
               </label>
               <label className="f" style={{ flex: 1 }}>
-                备注（可选）
+                {t("备注（可选）")}
                 <input value={remark} maxLength={200} onChange={(e) => setRemark(e.target.value)} />
               </label>
             </>
           ) : customerId === 0 ? (
             <>
-              <label className="f" style={{ width: 120 }}>加价 %<input type="number" min="0" step="0.01" value={markup.percent} placeholder="全局设置" onChange={(e) => setMarkup({ ...markup, percent: e.target.value })} /></label>
-              <label className="f" style={{ width: 120 }}>每单固定加价<input type="number" min="0" step="0.01" value={markup.fixed} placeholder="全局设置" onChange={(e) => setMarkup({ ...markup, fixed: e.target.value })} /></label>
-              <label className="f" style={{ width: 120 }}>每单最低利润<input type="number" min="0" step="0.01" value={markup.minProfit} placeholder="全局设置" onChange={(e) => setMarkup({ ...markup, minProfit: e.target.value })} /></label>
+              <label className="f" style={{ width: 120 }}>{t("加价 %")}<input type="number" min="0" step="0.01" value={markup.percent} placeholder={t("全局设置")} onChange={(e) => setMarkup({ ...markup, percent: e.target.value })} /></label>
+              <label className="f" style={{ width: 120 }}>{t("每单固定加价")}<input type="number" min="0" step="0.01" value={markup.fixed} placeholder={t("全局设置")} onChange={(e) => setMarkup({ ...markup, fixed: e.target.value })} /></label>
+              <label className="f" style={{ width: 120 }}>{t("每单最低利润")}<input type="number" min="0" step="0.01" value={markup.minProfit} placeholder={t("全局设置")} onChange={(e) => setMarkup({ ...markup, minProfit: e.target.value })} /></label>
             </>
           ) : null}
         </div>
@@ -236,8 +239,8 @@ export default function ShipForm(props: {
       <div className="grid2">
         <div className="card">
           <div className="row" style={{ justifyContent: "space-between" }}>
-            <h2>寄件人</h2>
-            {!editSender && <button className="small" onClick={() => setEditSender(true)}>修改</button>}
+            <h2>{t("寄件人")}</h2>
+            {!editSender && <button className="small" onClick={() => setEditSender(true)}>{t("修改")}</button>}
           </div>
           {portal && (
             <div className="sender-pick">
@@ -262,15 +265,15 @@ export default function ShipForm(props: {
                   }
                 }}
               >
-                {senders.map((x) => <option key={x.id} value={x.id}>{x.label}{x.isDefault ? "（默认）" : ""}</option>)}
-                {sysSender && <option value="system">发货仓地址（{sysSender.city}）</option>}
-                <option value="new">＋ 新增寄件地址…</option>
+                {senders.map((x) => <option key={x.id} value={x.id}>{x.label}{x.isDefault ? t("（默认）") : ""}</option>)}
+                {sysSender && <option value="system">{t("发货仓地址（{city}）", { city: sysSender.city })}</option>}
+                <option value="new">{t("＋ 新增寄件地址…")}</option>
               </select>
-              <a className="small" href="/portal/account">管理地址簿</a>
+              <a className="small" href="/portal/account">{t("管理地址簿")}</a>
             </div>
           )}
           {portal && !senders.length && senderId === "new" && (
-            <p className="small muted" style={{ margin: "0 0 10px" }}>还没有保存寄件地址。填好后点“保存到寄件地址簿”，下次就可以直接选择。</p>
+            <p className="small muted" style={{ margin: "0 0 10px" }}>{t("还没有保存寄件地址。填好后点“保存到寄件地址簿”，下次就可以直接选择。")}</p>
           )}
           {editSender ? (
             <>
@@ -285,17 +288,17 @@ export default function ShipForm(props: {
                       startSaveSender(async () => {
                         const editingId = typeof senderId === "number" ? senderId : undefined; // 发货仓 / 新地址 → 新增一条
                         const r = await saveSenderBookAction({ id: editingId, address: sender, label: senders.find((x) => x.id === editingId)?.label });
-                        if (r.error) return setSenderMsg(r.error);
+                        if (r.error) return setSenderMsg(tm(r.error));
                         setSenders(r.senders!);
                         setSenderId(r.id!);
                         setEditSender(false);
-                        setSenderMsg(editingId ? "已更新地址簿里的这个地址" : "已保存到寄件地址簿，下次可以直接选择");
+                        setSenderMsg(editingId ? t("已更新地址簿里的这个地址") : t("已保存到寄件地址簿，下次可以直接选择"));
                       })
                     }
                   >
-                    {savingSender ? "保存中…" : typeof senderId === "number" ? "更新到地址簿" : "保存到寄件地址簿"}
+                    {savingSender ? t("保存中…") : typeof senderId === "number" ? t("更新到地址簿") : t("保存到寄件地址簿")}
                   </button>
-                  <span className="small muted">不保存也可以直接下单</span>
+                  <span className="small muted">{t("不保存也可以直接下单")}</span>
                 </div>
               )}
             </>
@@ -308,15 +311,15 @@ export default function ShipForm(props: {
           {senderMsg && <div className="small" style={{ marginTop: 8, color: "var(--accent)" }}>{senderMsg}</div>}
         </div>
         <div className="card">
-          <h2>收件人</h2>
+          <h2>{t("收件人")}</h2>
           <AddressFields value={recipient} onChange={dirty(setRecipient)} />
         </div>
       </div>
 
       <div className="card">
-        <h2>包裹</h2>
+        <h2>{t("包裹")}</h2>
         <div className="grid">
-          <label className="f">单位
+          <label className="f">{t("单位")}
             <select value={unit} onChange={(e) => dirty(setUnit)(Number(e.target.value) as UnitSystem)}>
               <option value={3}>lb / in</option>
               <option value={2}>kg / cm</option>
@@ -324,40 +327,40 @@ export default function ShipForm(props: {
             </select>
           </label>
           {(["length", "width", "height"] as const).map((k) => (
-            <label key={k} className="f"><span className="req">{{ length: "长", width: "宽", height: "高" }[k]}（{lu}）</span>
+            <label key={k} className="f"><span className="req">{t({ length: "长（{u}）", width: "宽（{u}）", height: "高（{u}）" }[k], { u: lu })}</span>
               <input type="number" min="0" step="0.01" value={pkg[k]} onChange={(e) => dirty(setPkg)({ ...pkg, [k]: e.target.value })} />
             </label>
           ))}
-          <label className="f"><span className="req">重量（{wu}）</span>
+          <label className="f"><span className="req">{t("重量（{u}）", { u: wu })}</span>
             <input type="number" min="0" step="0.001" value={pkg.weight} onChange={(e) => dirty(setPkg)({ ...pkg, weight: e.target.value })} />
           </label>
-          <label className="f">签名服务
+          <label className="f">{t("签名服务")}
             <select value={signType} onChange={(e) => dirty(setSignType)(Number(e.target.value))}>
-              <option value={0}>不需要签名</option>
-              <option value={1}>直接签名</option>
-              <option value={2}>间接签名</option>
-              <option value={3}>成人签名</option>
+              <option value={0}>{t("不需要签名")}</option>
+              <option value={1}>{t("直接签名")}</option>
+              <option value={2}>{t("间接签名")}</option>
+              <option value={3}>{t("成人签名")}</option>
             </select>
           </label>
-          <label className="f">币种<input value={currency} maxLength={3} onChange={(e) => dirty(setCurrency)(e.target.value.toUpperCase())} /></label>
-          <label className="f">保险
+          <label className="f">{t("币种")}<input value={currency} maxLength={3} onChange={(e) => dirty(setCurrency)(e.target.value.toUpperCase())} /></label>
+          <label className="f">{t("保险")}
             <select value={insurance.on ? 1 : 0} onChange={(e) => dirty(setInsurance)({ ...insurance, on: e.target.value === "1" })}>
-              <option value={0}>不需要</option>
-              <option value={1}>需要</option>
+              <option value={0}>{t("不需要")}</option>
+              <option value={1}>{t("需要")}</option>
             </select>
           </label>
           {insurance.on && (
-            <label className="f"><span className="req">保险金额</span>
+            <label className="f"><span className="req">{t("保险金额")}</span>
               <input type="number" min="0" step="0.01" value={insurance.fee} onChange={(e) => dirty(setInsurance)({ ...insurance, fee: e.target.value })} />
             </label>
           )}
         </div>
 
-        <h3>商品明细（报关用）</h3>
+        <h3>{t("商品明细（报关用）")}</h3>
         <div className="table-wrap">
           <table className="sku-table">
             <thead>
-              <tr><th>SKU *</th><th>中文品名 *</th><th>英文品名 *</th><th>数量 *</th><th>申报单价 *</th><th>海关编码</th><th>商品性质 *</th><th></th></tr>
+              <tr><th>SKU *</th><th>{t("中文品名")} *</th><th>{t("英文品名")} *</th><th>{t("数量")} *</th><th>{t("申报单价")} *</th><th>{t("海关编码")}</th><th>{t("商品性质")} *</th><th></th></tr>
             </thead>
             <tbody>
               {skus.map((s, i) => (
@@ -374,8 +377,8 @@ export default function ShipForm(props: {
                       return (
                         <>
                           <select value={preset} onChange={(e) => setSku(i, { productNature: e.target.value === "custom" ? s.productNature || "2,4" : e.target.value })}>
-                            {NATURE_PRESETS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
-                            <option value="custom">自定义…</option>
+                            {NATURE_PRESETS.map((p) => <option key={p.value} value={p.value}>{t(p.label)}</option>)}
+                            <option value="custom">{t("自定义…")}</option>
                           </select>
                           {preset === "custom" && (
                             <div style={{ marginTop: 4 }}>
@@ -395,7 +398,7 @@ export default function ShipForm(props: {
                                         } else set.delete(code);
                                         setSku(i, { productNature: [...set].sort().join(",") });
                                       }}
-                                    /> {label}
+                                    /> {t(label)}
                                   </label>
                                 );
                               })}
@@ -405,45 +408,45 @@ export default function ShipForm(props: {
                       );
                     })()}
                   </td>
-                  <td>{skus.length > 1 && <button className="small danger" onClick={() => dirty(setSkus)(skus.filter((_, j) => j !== i))}>删除</button>}</td>
+                  <td>{skus.length > 1 && <button className="small danger" onClick={() => dirty(setSkus)(skus.filter((_, j) => j !== i))}>{t("删除")}</button>}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        <button className="small" style={{ marginTop: 8 }} onClick={() => dirty(setSkus)([...skus, emptySku()])}>＋ 添加商品</button>
+        <button className="small" style={{ marginTop: 8 }} onClick={() => dirty(setSkus)([...skus, emptySku()])}>{t("＋ 添加商品")}</button>
       </div>
 
       {errors.length > 0 && (
-        <div className="alert err"><ul>{errors.map((e, i) => <li key={i}>{e}</li>)}</ul></div>
+        <div className="alert err"><ul>{errors.map((e, i) => <li key={i}>{tm(e)}</li>)}</ul></div>
       )}
 
       <div className="card">
         <div className="row" style={{ justifyContent: "space-between", marginBottom: quotes ? 12 : 0 }}>
-          <h2 style={{ margin: 0 }}>报价</h2>
+          <h2 style={{ margin: 0 }}>{t("报价")}</h2>
           <button className="primary" onClick={onQuote} disabled={quoting}>
-            {quoting ? "查询中…" : quotes ? "重新查询运费" : "查询运费"}
+            {quoting ? t("查询中…") : quotes ? t("重新查询运费") : t("查询运费")}
           </button>
         </div>
-        {notice && <div className="alert warn">{notice}</div>}
+        {notice && <div className="alert warn">{tm(notice)}</div>}
         {quotes && (
           <div className="row small" style={{ justifyContent: "space-between", marginBottom: 8, alignItems: "center" }}>
             <span className="muted">
-              {quotes.filter((q) => q.ok).length} 个渠道可以送达
-              {quotes.some((q) => !q.ok) && `，${quotes.filter((q) => !q.ok).length} 个渠道地址未覆盖或不可用（${quotes.filter((q) => !q.ok).map((q) => q.channelName).join("、")}）`}
+              {t("{n} 个渠道可以送达", { n: quotes.filter((q) => q.ok).length })}
+              {quotes.some((q) => !q.ok) && t("，{n} 个渠道地址未覆盖或不可用（{list}）", { n: quotes.filter((q) => !q.ok).length, list: quotes.filter((q) => !q.ok).map((q) => q.channelName).join(t("、")) })}
             </span>
-            <label><input type="checkbox" checked={onlyAvailable} onChange={(e) => setOnlyAvailable(e.target.checked)} /> 只显示可下单渠道</label>
+            <label><input type="checkbox" checked={onlyAvailable} onChange={(e) => setOnlyAvailable(e.target.checked)} /> {t("只显示可下单渠道")}</label>
           </div>
         )}
-        {quotes && !quotes.some((q) => q.ok) && <div className="alert err">所有渠道都不支持这个地址或包裹，请检查邮编、地址或重量尺寸。</div>}
+        {quotes && !quotes.some((q) => q.ok) && <div className="alert err">{t("所有渠道都不支持这个地址或包裹，请检查邮编、地址或重量尺寸。")}</div>}
         {quotes && (
           <div className="table-wrap">
             <table>
               <thead>
                 {portal ? (
-                  <tr><th>渠道</th><th>分区</th><th className="num">运费</th><th></th></tr>
+                  <tr><th>{t("渠道")}</th><th>{t("分区")}</th><th className="num">{t("运费")}</th><th></th></tr>
                 ) : (
-                  <tr><th>渠道</th><th>分区</th><th className="num">原价</th><th className="num">我们的成本</th><th>加价规则</th><th className="num">客户价</th><th className="num">利润</th></tr>
+                  <tr><th>{t("渠道")}</th><th>{t("分区")}</th><th className="num">{t("原价")}</th><th className="num">{t("我们的成本")}</th><th>{t("加价规则")}</th><th className="num">{t("客户价")}</th><th className="num">{t("利润")}</th></tr>
                 )}
               </thead>
               <tbody>
@@ -456,7 +459,7 @@ export default function ShipForm(props: {
                         <>
                           <td className="num muted">{money(q.listCost)}</td>
                           <td className="num">{money(q.cost, q.currency)}</td>
-                          <td className="small">+{q.rule!.percent}% + {q.rule!.fixed}，最低利润 {q.rule!.minProfit}</td>
+                          <td className="small">+{q.rule!.percent}% + {q.rule!.fixed}{t("，最低利润")} {q.rule!.minProfit}</td>
                         </>
                       )}
                       <td className="num"><b>{money(q.price, q.currency)}</b></td>
@@ -464,7 +467,7 @@ export default function ShipForm(props: {
                       {portal && (
                         <td>
                           <button className="primary small" disabled={!!creating} onClick={() => onCreate(q)}>
-                            {creating === q.channelCode ? "出单中…" : "用此渠道出单"}
+                            {creating === q.channelCode ? t("出单中…") : t("用此渠道出单")}
                           </button>
                         </td>
                       )}
@@ -473,8 +476,8 @@ export default function ShipForm(props: {
                     <tr key={q.channelCode}>
                       <td>{q.channelName}</td>
                       <td colSpan={portal ? 3 : 6} className="small" style={{ color: "var(--err)" }}>
-                        <b>{/不通邮|派送范围|未覆盖/.test(q.error ?? "") ? "地址未覆盖" : "不可用"}</b>
-                        {q.error && !/^地址未覆盖/.test(q.error) ? `：${q.error}` : q.error ? `：${q.error.replace(/^地址未覆盖：/, "")}` : ""}
+                        <b>{/不通邮|派送范围|未覆盖/.test(q.error ?? "") ? t("地址未覆盖") : t("不可用")}</b>
+                        {q.error && !/^地址未覆盖/.test(q.error) ? `${t("：")}${tm(q.error)}` : q.error ? `${t("：")}${tm(q.error.replace(/^地址未覆盖：/, ""))}` : ""}
                       </td>
                     </tr>
                   ),

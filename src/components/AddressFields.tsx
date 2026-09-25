@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { parseAddress } from "@/lib/addressParse";
+import { useT } from "@/components/I18n";
 import { COMMON_COUNTRIES, isCountryCode, isUsZip, US_STATES, usStateCode } from "@/lib/geo";
 import type { Address } from "@/lib/shipbest/types";
 
@@ -37,6 +38,7 @@ export default function AddressFields({
   onChange?: (a: Partial<Address>) => void;
   namePrefix?: string;
 }) {
+  const t = useT();
   const controlled = !!onChange;
   // 选了“其他国家”正在输入时，不要把空国家自动改回 US
   const [otherMode, setOtherMode] = useState(!!value?.country && !COMMON_CODES.has(value.country.toUpperCase()));
@@ -63,7 +65,7 @@ export default function AddressFields({
 
   const countryField = () => {
     const custom = otherMode || !COMMON_CODES.has(country);
-    const hint = country && !isCountryCode(country) ? `“${country}”不是有效的国家代码` : null;
+    const hint = country && !isCountryCode(country) ? t("“{code}”不是有效的国家代码", { code: country }) : null;
     const onPick = (v: string) => {
       setOtherMode(v === "__other");
       if (controlled) set("country", v === "__other" ? "" : v);
@@ -77,14 +79,14 @@ export default function AddressFields({
           onChange={(e) => onPick(e.target.value)}
         >
           {COMMON_COUNTRIES.map(([c, n]) => <option key={c} value={c}>{c} · {n}</option>)}
-          <option value="__other">其他国家（输入二字码）…</option>
+          <option value="__other">{t("其他国家（输入二字码）…")}</option>
         </select>
         {custom && (
           controlled ? (
-            <input value={value?.country ?? ""} maxLength={2} placeholder="例如 SG" style={{ marginTop: 6 }}
+            <input value={value?.country ?? ""} maxLength={2} placeholder={t("例如 SG")} style={{ marginTop: 6 }}
               onChange={(e) => set("country", e.target.value.toUpperCase())} />
           ) : (
-            <input name={namePrefix + "country"} defaultValue={country} maxLength={2} placeholder="例如 SG" style={{ marginTop: 6 }}
+            <input name={namePrefix + "country"} defaultValue={country} maxLength={2} placeholder={t("例如 SG")} style={{ marginTop: 6 }}
               onChange={(e) => setUncCountry(e.target.value.toUpperCase())} />
           )
         )}
@@ -102,21 +104,21 @@ export default function AddressFields({
       <>
         {controlled ? (
           <select value={code ?? ""} onChange={(e) => set("province", e.target.value)}>
-            <option value="">{unknown ? `（无法识别：${raw}）请选择` : "请选择州"}</option>
+            <option value="">{unknown ? t("（无法识别：{raw}）请选择", { raw }) : t("请选择州")}</option>
             {US_STATES.map(([c, n]) => <option key={c} value={c}>{c} · {n}</option>)}
           </select>
         ) : (
           <select name={namePrefix + "province"} defaultValue={code ?? ""}>
-            <option value="">请选择州</option>
+            <option value="">{t("请选择州")}</option>
             {US_STATES.map(([c, n]) => <option key={c} value={c}>{c} · {n}</option>)}
           </select>
         )}
-        {unknown && <span className="field-hint">“{raw}”不是美国的州，请从下拉框选择</span>}
+        {unknown && <span className="field-hint">{t("“{raw}”不是美国的州，请从下拉框选择", { raw })}</span>}
       </>
     );
   };
 
-  const zipHint = controlled && isUS && value?.zipCode && !isUsZip(value.zipCode) ? "美国邮编是 5 位数字（可以带 4 位，例如 78701-1234）" : null;
+  const zipHint = controlled && isUS && value?.zipCode && !isUsZip(value.zipCode) ? t("美国邮编是 5 位数字（可以带 4 位，例如 78701-1234）") : null;
 
   return (
     <>
@@ -124,7 +126,7 @@ export default function AddressFields({
       <div className="grid">
         {FIELDS.map((f) => (
           <label key={f.k} className="f" style={f.wide ? { gridColumn: "span 2" } : undefined}>
-            <span className={f.req && (f.k !== "province" || isUS) ? "req" : ""}>{f.label}</span>
+            <span className={f.req && (f.k !== "province" || isUS) ? "req" : ""}>{t(f.label)}</span>
             {f.k === "country" ? countryField() : f.k === "province" ? stateField() : input(f)}
             {f.k === "zipCode" && zipHint && <span className="field-hint">{zipHint}</span>}
           </label>
@@ -136,22 +138,23 @@ export default function AddressFields({
 
 /** 智能识别：粘贴一段复制来的地址，自动拆到各个字段 */
 function SmartPaste({ onParsed }: { onParsed: (a: Partial<Address>) => void }) {
+  const t = useT();
   const [text, setText] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
   const run = (t: string) => {
     const p = parseAddress(t);
     const n = Object.keys(p).length;
-    if (!n) return setMsg("没有识别出地址，请检查粘贴的内容");
+    if (!n) return setMsg(t("没有识别出地址，请检查粘贴的内容"));
     onParsed(p);
     const missing = (["nameFirst", "address1", "city", "province", "zipCode"] as const).filter((k) => !p[k]);
-    setMsg(missing.length ? `已识别 ${n} 项，请补充：${missing.map((k) => ({ nameFirst: "姓名", address1: "地址", city: "城市", province: "州", zipCode: "邮编" })[k]).join("、")}` : `已识别 ${n} 项，请核对一下`);
+    setMsg(missing.length ? t("已识别 {n} 项，请补充：{list}", { n, list: missing.map((k) => t({ nameFirst: "姓名", address1: "地址", city: "城市", province: "州", zipCode: "邮编" }[k])).join(t("、")) }) : t("已识别 {n} 项，请核对一下", { n }));
   };
   return (
     <div className="smart-paste">
       <textarea
         rows={2}
         value={text}
-        placeholder={"智能识别：把复制的整段地址粘贴到这里，例如\nJohn Doe, 500 Congress Ave, Austin, TX 78701, 512-555-0100"}
+        placeholder={t("智能识别：把复制的整段地址粘贴到这里，例如\nJohn Doe, 500 Congress Ave, Austin, TX 78701, 512-555-0100")}
         onChange={(e) => setText(e.target.value)}
         onPaste={(e) => {
           // 粘贴后自动识别
@@ -160,10 +163,10 @@ function SmartPaste({ onParsed }: { onParsed: (a: Partial<Address>) => void }) {
         }}
       />
       <div className="row" style={{ justifyContent: "space-between" }}>
-        <span className="small muted">{msg ?? "粘贴后自动识别姓名、电话、邮箱、地址、城市、州、邮编"}</span>
+        <span className="small muted">{msg ?? t("粘贴后自动识别姓名、电话、邮箱、地址、城市、州、邮编")}</span>
         <div className="row">
-          {text && <button type="button" className="small" onClick={() => { setText(""); setMsg(null); }}>清空</button>}
-          <button type="button" className="small" disabled={!text.trim()} onClick={() => run(text)}>识别</button>
+          {text && <button type="button" className="small" onClick={() => { setText(""); setMsg(null); }}>{t("清空")}</button>}
+          <button type="button" className="small" disabled={!text.trim()} onClick={() => run(text)}>{t("识别")}</button>
         </div>
       </div>
     </div>

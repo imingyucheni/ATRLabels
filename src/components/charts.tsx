@@ -6,6 +6,7 @@
  * 每个图都有悬停提示（柱状图逐柱提示、折线图十字线）；数值同时在下方表格里可查。
  */
 import { useEffect, useRef, useState } from "react";
+import { useT } from "@/components/I18n";
 
 function useWidth<T extends HTMLElement>() {
   const ref = useRef<T>(null);
@@ -64,6 +65,7 @@ const PAD = { l: 44, r: 12, t: 12, b: 26 };
 /* ---------------- 每日订单：柱状图（单系列） ---------------- */
 
 export function DailyBars({ data, revenueLabel = "客户消费" }: { data: { date: string; orders: number; revenue: number; profit?: number }[]; revenueLabel?: string }) {
+  const tr = useT();
   const [ref, width] = useWidth<HTMLDivElement>();
   const [tip, setTip] = useState<Tip | null>(null);
   const [hover, setHover] = useState(-1);
@@ -80,7 +82,7 @@ export function DailyBars({ data, revenueLabel = "客户消费" }: { data: { dat
 
   return (
     <div ref={ref} className="chart" onPointerLeave={() => { setTip(null); setHover(-1); }}>
-      <svg width={width} height={h} role="img" aria-label="每日订单数柱状图">
+      <svg width={width} height={h} role="img" aria-label={tr("每日订单数柱状图")}>
         {t.map((v) => (
           <g key={v}>
             <line x1={PAD.l} x2={width - PAD.r} y1={y(v)} y2={y(v)} className="chart-grid" />
@@ -115,15 +117,15 @@ export function DailyBars({ data, revenueLabel = "客户消费" }: { data: { dat
                     y: Math.max(0, e.clientY - box.top - 60),
                     title: d.date,
                     rows: [
-                      { label: "订单", value: String(d.orders) },
-                      { label: revenueLabel, value: `$${d.revenue.toFixed(2)}` },
-                      ...(d.profit !== undefined ? [{ label: "利润", value: `$${d.profit.toFixed(2)}` }] : []),
+                      { label: tr("订单"), value: String(d.orders) },
+                      { label: tr(revenueLabel), value: `$${d.revenue.toFixed(2)}` },
+                      ...(d.profit !== undefined ? [{ label: tr("利润"), value: `$${d.profit.toFixed(2)}` }] : []),
                     ],
                   });
                 }}
                 onFocus={() => {
                   setHover(i);
-                  setTip({ x: Math.min(x, width - 170), y: 0, title: d.date, rows: [{ label: "订单", value: String(d.orders) }] });
+                  setTip({ x: Math.min(x, width - 170), y: 0, title: d.date, rows: [{ label: tr("订单"), value: String(d.orders) }] });
                 }}
               />
               {i % every === 0 && (
@@ -142,6 +144,7 @@ export function DailyBars({ data, revenueLabel = "客户消费" }: { data: { dat
 /* ---------------- 每日收入与利润：折线图（两个系列，同单位同一坐标轴） ---------------- */
 
 export function RevenueLines({ data }: { data: { date: string; revenue: number; profit: number }[] }) {
+  const tr = useT();
   const [ref, width] = useWidth<HTMLDivElement>();
   const [idx, setIdx] = useState(-1);
   const h = 240;
@@ -158,8 +161,8 @@ export function RevenueLines({ data }: { data: { date: string; revenue: number; 
   const every = Math.ceil(data.length / Math.max(2, Math.floor(iw / 48)));
   const last = data[data.length - 1];
   const series = [
-    { k: "revenue" as const, label: "客户消费", color: "var(--series-1)" },
-    { k: "profit" as const, label: "利润", color: "var(--series-2)" },
+    { k: "revenue" as const, label: tr("客户消费"), color: "var(--series-1)" },
+    { k: "profit" as const, label: tr("利润"), color: "var(--series-2)" },
   ];
 
   return (
@@ -179,7 +182,7 @@ export function RevenueLines({ data }: { data: { date: string; revenue: number; 
           <span key={s.k}><span className="chart-key-line" style={{ background: s.color }} />{s.label}</span>
         ))}
       </div>
-      <svg width={width} height={h} role="img" aria-label="每日客户消费与利润折线图">
+      <svg width={width} height={h} role="img" aria-label={tr("每日客户消费与利润折线图")}>
         {t.map((v) => (
           <g key={v}>
             <line x1={pad.l} x2={width - pad.r} y1={y(min + v)} y2={y(min + v)} className="chart-grid" />
@@ -227,6 +230,7 @@ export function RevenueLines({ data }: { data: { date: string; revenue: number; 
 /* ---------------- 渠道单量：横向柱状图（单系列，按单量排序） ---------------- */
 
 export function ChannelBars({ data, revenueLabel = "客户消费" }: { data: { name: string; orders: number; share: number; revenue: number; profit?: number }[]; revenueLabel?: string }) {
+  const tr = useT();
   const [tip, setTip] = useState<{ i: number } | null>(null);
   const max = Math.max(1, ...data.map((d) => d.orders));
   return (
@@ -248,14 +252,14 @@ export function ChannelBars({ data, revenueLabel = "客户消费" }: { data: { n
           {tip?.i === i && (
             <div className="chart-tip hbar-tip">
               <div className="chart-tip-title">{d.name}</div>
-              <div className="chart-tip-row"><b>{d.orders}</b><span>订单（{(d.share * 100).toFixed(1)}%）</span></div>
-              <div className="chart-tip-row"><b>${d.revenue.toFixed(2)}</b><span>{revenueLabel}</span></div>
-              {d.profit !== undefined && <div className="chart-tip-row"><b>${d.profit.toFixed(2)}</b><span>利润</span></div>}
+              <div className="chart-tip-row"><b>{d.orders}</b><span>{tr("订单（{pct}%）", { pct: (d.share * 100).toFixed(1) })}</span></div>
+              <div className="chart-tip-row"><b>${d.revenue.toFixed(2)}</b><span>{tr(revenueLabel)}</span></div>
+              {d.profit !== undefined && <div className="chart-tip-row"><b>${d.profit.toFixed(2)}</b><span>{tr("利润")}</span></div>}
             </div>
           )}
         </div>
       ))}
-      {!data.length && <div className="muted small">这个期间没有订单</div>}
+      {!data.length && <div className="muted small">{tr("这个期间没有订单")}</div>}
     </div>
   );
 }
