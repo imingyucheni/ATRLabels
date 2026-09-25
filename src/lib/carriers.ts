@@ -32,6 +32,14 @@ export const CARRIERS: Carrier[] = [
 
 const byId = new Map(CARRIERS.map((c) => [c.id, c]));
 
+/** 渠道名后面的服务商标记（只给后台看）：· SB = ShipBest，· GDE = 嘉谷万邑 */
+const PROVIDER_TAG = /\s·\s*(SB|GDE|嘉谷)\s*$/;
+
+/** 去掉服务商标记：“GOFO-（91710） · SB” → “GOFO-（91710）” */
+export function stripProviderTag(channelName: string): string {
+  return (channelName || "").replace(PROVIDER_TAG, "");
+}
+
 /** 按渠道名猜物流商 */
 export function guessCarrier(channelName: string): string {
   const n = (channelName || "").toUpperCase().replace(/\s+/g, "");
@@ -67,9 +75,10 @@ export function carrierById(id: string | null | undefined): Carrier {
  * “GOFO-（91710）” → “Gofo Express”，“YWE Air-91710” → “Yanwen Express Air”，“SPX-LAX” → “SPX Express”
  */
 export function defaultPublicName(channelName: string, carrierId?: string | null): string {
-  // 带服务商后缀（例如“ · 嘉谷”）的渠道名全是服务商的内部写法（D价、不预上网、仓库代码），只显示物流商全称
-  const tagged = /\s·\s*[^·]+$/.test(channelName || "");
-  const own = (channelName || "").replace(/\s*·\s*[^·]+$/, "");
+  // 嘉谷（· GDE）的渠道名全是服务商的内部写法（D价、不预上网、仓库代码），只显示物流商全称；
+  // ShipBest（· SB）的去掉标记后照旧处理（保留 “YWE Air” 里的 Air 这类服务说明）
+  const tagged = /\s·\s*(GDE|嘉谷)\s*$/.test(channelName || "");
+  const own = stripProviderTag(channelName);
   const clean = cleanChannelName(own);
   const c = carrierById(carrierId || guessCarrier(own));
   if (!c.fullName) return tagged ? own.replace(/[\u3400-\u9fff（）()]+.*$/, "").trim() || own : clean;

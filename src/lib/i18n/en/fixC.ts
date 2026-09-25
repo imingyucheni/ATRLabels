@@ -103,7 +103,7 @@ export const fixC: Record<string, string> = {
     "Don't need this label? Click \"Request cancel\": orders without a label are fully refunded; issued labels incur a {pct}% fee.",
   // 嘉谷万邑
   "嘉谷万邑连接": "Jiagu (Dragon) connection",
-  "第二个面单服务商（尾程订单）。启用后点上面的“同步渠道”，嘉谷的渠道会出现在渠道列表里，名称后面带“· 嘉谷”，只有后台看得到；客户只看到物流商名称。模拟 / 沙盒 / 正式模式和 ShipBest 共用：沙盒模式下嘉谷也是真实报价、模拟出单。": "A second label provider (last-mile orders). After enabling, click \u201cSync services\u201d above: Jiagu services appear in the service list with a \u201c\u00b7 \u5609\u8c37\u201d tag that only admins see; customers only see the carrier name. Demo / sandbox / live mode is shared with ShipBest: in sandbox mode Jiagu quotes are real and orders are simulated.",
+  "第二个面单服务商（尾程订单）。启用后点上面的“同步渠道”，嘉谷的渠道会出现在渠道列表里，名称后面带“· GDE”（ShipBest 的带“· SB”），只有后台看得到；客户只看到物流商名称。模拟 / 沙盒 / 正式模式和 ShipBest 共用：沙盒模式下嘉谷也是真实报价、模拟出单。": "A second label provider (last-mile orders). After enabling, click \u201cSync services\u201d above: Jiagu services appear in the service list tagged \u201c\u00b7 GDE\u201d (ShipBest ones are tagged \u201c\u00b7 SB\u201d); only admins see the tag, customers only see the carrier name. Demo / sandbox / live mode is shared with ShipBest: in sandbox mode Jiagu quotes are real and orders are simulated.",
   "以下渠道还没有仓库 ID，报价和下单会失败，请向嘉谷索取：{list}": "These services have no warehouse ID yet, so quotes and orders will fail. Ask Jiagu for it: {list}",
   "修改后所有客户使用嘉谷渠道的报价和出单都会受影响": "Changes affect quotes and orders on Jiagu services for all customers",
   "启用": "Enabled",

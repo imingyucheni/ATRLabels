@@ -116,7 +116,7 @@ export default async function SettingsPage() {
               <span className={`badge ${jg.enabled && ready ? "ok" : "pending"}`}>{jg.enabled && ready ? t("已启用") : ready ? t("已停用") : t("未配置")}</span>
             </div>
             <p className="small muted" style={{ marginTop: 10 }}>
-              {t("第二个面单服务商（尾程订单）。启用后点上面的“同步渠道”，嘉谷的渠道会出现在渠道列表里，名称后面带“· 嘉谷”，只有后台看得到；客户只看到物流商名称。模拟 / 沙盒 / 正式模式和 ShipBest 共用：沙盒模式下嘉谷也是真实报价、模拟出单。")}
+              {t("第二个面单服务商（尾程订单）。启用后点上面的“同步渠道”，嘉谷的渠道会出现在渠道列表里，名称后面带“· GDE”（ShipBest 的带“· SB”），只有后台看得到；客户只看到物流商名称。模拟 / 沙盒 / 正式模式和 ShipBest 共用：沙盒模式下嘉谷也是真实报价、模拟出单。")}
             </p>
             {(() => {
               const missing = jgChannels.filter((c) => !jgWarehouse(c.code));

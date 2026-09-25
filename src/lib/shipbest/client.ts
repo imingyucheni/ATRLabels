@@ -12,6 +12,9 @@ import type {
 
 import { ShipBestError } from "./errors";
 import { getJiaguClient, isJiaguCode, jgOrders, type JiaguClient } from "./jiagu";
+
+/** ShipBest 渠道名后面加的标记（只有后台看得到，客户看到的是物流商名称） */
+export const SB_SUFFIX = " · SB";
 export { ShipBestError };
 
 export interface ShipBestClient {
@@ -322,7 +325,7 @@ export class MultiProviderClient implements ShipBestClient {
 
   async getProducts() {
     const out: Product[] = [];
-    if (this.sb) out.push(...(await this.sb.getProducts()));
+    if (this.sb) out.push(...(await this.sb.getProducts()).map((p) => ({ ...p, name: p.name.endsWith(SB_SUFFIX) ? p.name : `${p.name}${SB_SUFFIX}` })));
     if (this.jg) out.push(...(await this.jg.getProducts()));
     return out;
   }

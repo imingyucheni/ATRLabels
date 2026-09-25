@@ -1,6 +1,6 @@
 /**
  * 嘉谷万邑（Dragon Open API）尾程面单：和 ShipBest 并列的第二个服务商。
- * 渠道代码统一加前缀 JG-（例如 JG-580914），渠道名后面加“· 嘉谷”，只有后台看得到；客户看到的是物流商名称。
+ * 渠道代码统一加前缀 JG-（例如 JG-580914），渠道名后面加“· GDE”，只有后台看得到；客户看到的是物流商名称。
  * 文档：https://www.showdoc.com.cn/IOTEasy/8005120408974400 （尾程订单 OrderType = 20120）
  *
  * 注意：对方的授权服务只认 http 地址签发的令牌（https 拿到的令牌接口会拒绝），接口本身也只有 http。
@@ -10,7 +10,7 @@ import { ShipBestError } from "./errors";
 import type { FeeQuote, OrderDetail, Product, ShipmentRequest } from "./types";
 
 export const JG_PREFIX = "JG-";
-export const JG_SUFFIX = " · 嘉谷";
+export const JG_SUFFIX = " · GDE";
 const ORDER_TYPE_LASTMILE = 20120;
 
 /** 嘉谷给的“产品 ID → 仓库 ID”（不同渠道从不同仓库出）；后台可以改，这里是默认值 */

@@ -77,7 +77,7 @@ describe("嘉谷万邑接口", () => {
     const client = sb.getShipBestClient();
     const products = await client.getProducts();
     expect(products.map((p) => p.code)).toEqual(["JG-579181", "JG-307699"]);
-    expect(products[0].name).toBe("GOFO-LAX-917(不预上网) · 嘉谷");
+    expect(products[0].name).toBe("GOFO-LAX-917(不预上网) · GDE");
     db.upsertChannels(products);
 
     const q = await client.trialPrice("JG-579181", req);
@@ -108,24 +108,36 @@ describe("嘉谷万邑接口", () => {
 
   it("客户看到的名称：只显示物流商全称，不露出服务商和内部说明", async () => {
     const { defaultPublicName } = await import("@/lib/carriers");
-    expect(defaultPublicName("USPS-D价-GA-917不预上网 · 嘉谷")).toBe("USPS");
-    expect(defaultPublicName("GOFO-H-LAX-917 · 嘉谷")).toBe("Gofo Express");
-    expect(defaultPublicName("Fedex NG末端-N · 嘉谷")).toBe("FedEx");
-    expect(defaultPublicName("uniuni-LAX-917(不预上网) · 嘉谷")).toBe("UniUni Express");
-    expect(defaultPublicName("UPS-D价-GROUND-923 · 嘉谷")).toBe("UPS");
-    // ShipBest 的名称照旧
+    expect(defaultPublicName("USPS-D价-GA-917不预上网 · GDE")).toBe("USPS");
+    expect(defaultPublicName("GOFO-H-LAX-917 · GDE")).toBe("Gofo Express");
+    expect(defaultPublicName("Fedex NG末端-N · GDE")).toBe("FedEx");
+    expect(defaultPublicName("uniuni-LAX-917(不预上网) · GDE")).toBe("UniUni Express");
+    expect(defaultPublicName("UPS-D价-GROUND-923 · GDE")).toBe("UPS");
+    // ShipBest 的名称照旧（带不带“· SB”标记都一样）
     expect(defaultPublicName("GOFO-（91710）")).toBe("Gofo Express");
+    expect(defaultPublicName("GOFO-（91710） · SB")).toBe("Gofo Express");
+    expect(defaultPublicName("YWE Air-91710 · SB")).toBe("Yanwen Express Air");
+    expect(defaultPublicName("SPX-LAX · SB")).toBe("SPX Express");
+    expect(defaultPublicName("USPS-（91710） · SB")).toBe("USPS");
     const { publicError } = await import("@/lib/portal");
     expect(publicError("[10061] 运费试算失败（嘉谷：算价失败）")).not.toContain("嘉谷");
   });
 
   it("同一个客户不能开通两个客户看起来一样的渠道", async () => {
     const { sameNameChannels, clearChannelNameCache } = await import("@/lib/channelDisplay");
-    db.upsertChannels([{ code: "LP-USPS", name: "USPS-（91710）" }, { code: "JG-580914", name: "USPS-D价-GA-917不预上网 · 嘉谷" }]);
+    db.upsertChannels([{ code: "LP-USPS", name: "USPS-（91710） · SB" }, { code: "JG-580914", name: "USPS-D价-GA-917不预上网 · GDE" }]);
     clearChannelNameCache();
     const clash = sameNameChannels(["LP-USPS", "JG-580914", "JG-579181"]);
     expect(clash?.publicName).toBe("USPS");
     expect(clash?.names.length).toBe(2);
     expect(sameNameChannels(["LP-USPS", "JG-579181"])).toBeNull();
+
+    // ShipBest 导单表里写的是原来的渠道名（没有“· SB”），照样能对上渠道；订单里记的原名也能查到客户显示名
+    const { matchChannel } = await import("@/lib/batch");
+    expect(matchChannel("USPS-（91710）")).toBe("LP-USPS");
+    const { displayChannel } = await import("@/lib/channelDisplay");
+    db.setChannelDisplay("LP-USPS", "USPS Ground Advantage", "usps");
+    clearChannelNameCache();
+    expect(displayChannel("USPS-（91710）").name).toBe("USPS Ground Advantage");
   });
 });

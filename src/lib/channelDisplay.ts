@@ -1,6 +1,6 @@
 /** 客户端显示用：渠道代码 / 原名 → 客户看到的名称 + 物流商 */
 import { getChannel, listChannels } from "./db";
-import { publicChannel } from "./carriers";
+import { publicChannel, stripProviderTag } from "./carriers";
 
 export type ChannelNameMap = Record<string, { name: string; carrier: string }>;
 
@@ -18,6 +18,8 @@ export function channelNameMap(): ChannelNameMap {
     const p = publicChannel(ch);
     map[ch.code] = p;
     map[ch.name] = p;
+    // 订单里记的是服务商原来的渠道名（没有“· SB / · GDE”标记）
+    map[stripProviderTag(ch.name)] ??= p;
   }
   cache = { at: Date.now(), map };
   return map;

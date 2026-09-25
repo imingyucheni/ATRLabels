@@ -101,7 +101,8 @@ function guessChannel(sheet: string): string | null {
     [/USPS/, /USPS/i],
     [/YWE|燕文/, /^YWE-/i],
   ];
-  const chans = listChannels(true);
+  // 邮编表是 ShipBest 给的：优先匹配 ShipBest 的渠道（嘉谷 JG- 渠道也有 GOFO / USPS）
+  const chans = listChannels(true).sort((a, b) => Number(a.code.startsWith("JG-")) - Number(b.code.startsWith("JG-")));
   for (const [sk, ck] of keys) if (sk.test(s)) return chans.find((c) => ck.test(c.name.replace(/\s/g, "")))?.code ?? null;
   return null;
 }
