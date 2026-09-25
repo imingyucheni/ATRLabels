@@ -18,7 +18,9 @@ export function seedDemo(conn: Database.Database) {
   const settings: Record<string, unknown> = {
     markup: { percent: 5, fixed: 0, minProfit: 0.3 },
     roundingStep: 0.01,
-    brandName: "ATR Logistics（演示）",
+    brandName: "ATR Logistics (Demo)",
+    // 演示数据默认用模拟模式（不连 ShipBest）
+    shipbest: { mode: "mock", apiId: "", token: "" },
     supportContact: "演示环境 · 客服微信 atr-demo",
     zelleInfo: "Zelle：pay@atr-demo.com\n户名：ATR Logistics LLC（演示）",
     alipayInfo: "支付宝账号：atr-demo@example.com\n户名：演示公司",
@@ -36,8 +38,8 @@ export function seedDemo(conn: Database.Database) {
   const ledger = conn.prepare("INSERT INTO ledger (customer_id, type, amount, note, created_by) VALUES (?, 'topup', ?, ?, 'admin')");
   ledger.run(a, 200, "演示充值");
 
-  // 模拟模式下直接放入渠道（真实模式请在“设置”里同步）
-  if (process.env.SHIPBEST_MOCK === "1") {
+  // 演示数据是模拟模式，直接放入模拟渠道（切换到真实模式后请在“设置”里同步）
+  {
     const ch = conn.prepare("INSERT OR IGNORE INTO channels (code, name, synced_at, stamp_json) VALUES (?, ?, datetime('now'), ?)");
     for (const [code, name] of [
       ["LP10210028", "UniUni-（91710）"], ["LP10210029", "GOFO-（91710）"], ["LP10210030", "USPS-（91710）"],
