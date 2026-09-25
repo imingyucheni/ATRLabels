@@ -356,3 +356,5 @@ tr.best td { background: var(--accent-soft); }
   .hbar-row { grid-template-columns: 100px 1fr 80px; }
   .kv { grid-template-columns: 100px 1fr; }
 }
+
+tr.row-warn > td { background: var(--warn-soft); }

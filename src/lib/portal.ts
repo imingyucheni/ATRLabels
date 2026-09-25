@@ -86,7 +86,7 @@ export function toPortalShipment(s: Shipment): PortalShipment {
     cancelFee: s.status === "cancelled" ? s.cancelFee : null,
     refundAmount: s.status === "cancelled" ? s.refundAmount : null,
     adjustment: s.customerAdj,
-    hasLabel: !!s.labelPath,
+    hasLabel: !!s.labelPath && s.status !== "cancelled",
     labelMime: s.labelMime,
     problem: s.status === "exception" ? publicError(s.errorMsg ?? undefined) : null,
     sender: s.sender,

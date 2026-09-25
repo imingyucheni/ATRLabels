@@ -13,9 +13,9 @@ export default function RuleInputs({
   const v = (x: number | null | undefined) => (x === null || x === undefined ? "" : String(x));
   return (
     <>
-      <label className="f">加价 %<input name={prefix + "percent"} type="number" step="0.01" defaultValue={v(value?.percent)} placeholder={placeholder?.percent} /></label>
-      <label className="f">每单固定加价<input name={prefix + "fixed"} type="number" step="0.01" defaultValue={v(value?.fixed)} placeholder={placeholder?.fixed} /></label>
-      <label className="f">每单最低利润<input name={prefix + "minProfit"} type="number" step="0.01" defaultValue={v(value?.minProfit)} placeholder={placeholder?.minProfit} /></label>
+      <label className="f">加价 %<input name={prefix + "percent"} type="number" step="0.01" min="0" defaultValue={v(value?.percent)} placeholder={placeholder?.percent} /></label>
+      <label className="f">每单固定加价<input name={prefix + "fixed"} type="number" step="0.01" min="0" defaultValue={v(value?.fixed)} placeholder={placeholder?.fixed} /></label>
+      <label className="f">每单最低利润<input name={prefix + "minProfit"} type="number" step="0.01" min="0" defaultValue={v(value?.minProfit)} placeholder={placeholder?.minProfit} /></label>
     </>
   );
 }

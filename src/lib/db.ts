@@ -189,6 +189,7 @@ function migrate(conn: Database.Database) {
   if (!rcols.includes("quotes_json")) conn.exec("ALTER TABLE batch_job_rows ADD COLUMN quotes_json TEXT");
   if (!rcols.includes("selected")) conn.exec("ALTER TABLE batch_job_rows ADD COLUMN selected INTEGER NOT NULL DEFAULT 1");
   if (!rcols.includes("file_channel")) conn.exec("ALTER TABLE batch_job_rows ADD COLUMN file_channel TEXT");
+  if (!rcols.includes("warning")) conn.exec("ALTER TABLE batch_job_rows ADD COLUMN warning TEXT");
   const addCust: [string, string][] = [
     ["portal_email", "TEXT"],
     ["password_hash", "TEXT"],
@@ -899,16 +900,24 @@ export function shipmentCost(s: Shipment): number {
 /* ---------------- 官方账单补差 ---------------- */
 
 /** 按运单号 / ShipBest 单号 / 自定义单号查找面单 */
-export function findShipmentByKey(key: string): { id: number; customerId: number; rule: MarkupRule; customNo: string; trackingNo: string | null; customerName: string } | null {
+export function findShipmentByKey(key: string): {
+  id: number; customerId: number; rule: MarkupRule; customNo: string; trackingNo: string | null; customerName: string;
+  status: ShipmentStatus; channelName: string | null;
+} | null {
   const r = db()
     .prepare(
-      `SELECT s.id, s.customer_id, s.rule_json, s.custom_no, s.tracking_no, c.name AS customer_name
+      `SELECT s.id, s.customer_id, s.rule_json, s.custom_no, s.tracking_no, s.status, s.channel_name, c.name AS customer_name
        FROM shipments s JOIN customers c ON c.id = s.customer_id
        WHERE s.tracking_no = @k OR s.order_no = @k OR s.custom_no = @k ORDER BY s.id DESC LIMIT 1`,
     )
-    .get({ k: key }) as { id: number; customer_id: number; rule_json: string; custom_no: string; tracking_no: string | null; customer_name: string } | undefined;
+    .get({ k: key }) as
+    | { id: number; customer_id: number; rule_json: string; custom_no: string; tracking_no: string | null; customer_name: string; status: ShipmentStatus; channel_name: string | null }
+    | undefined;
   return r
-    ? { id: r.id, customerId: r.customer_id, rule: JSON.parse(r.rule_json), customNo: r.custom_no, trackingNo: r.tracking_no, customerName: r.customer_name }
+    ? {
+        id: r.id, customerId: r.customer_id, rule: JSON.parse(r.rule_json), customNo: r.custom_no, trackingNo: r.tracking_no,
+        customerName: r.customer_name, status: r.status, channelName: r.channel_name,
+      }
     : null;
 }
 
@@ -1066,6 +1075,14 @@ export function linkAdjustment(id: number, shipmentId: number, customerId: numbe
 
 export function getAdjustment(id: number) {
   return db().prepare("SELECT a.*, b.policy FROM adjustments a JOIN adjustment_batches b ON b.id = a.batch_id WHERE a.id = ?").get(id) as
-    | { id: number; cost_amount: number; shipment_id: number | null; policy: AdjustmentPolicy }
+    | { id: number; batch_id: number; cost_amount: number; shipment_id: number | null; customer_id: number | null; reason: string | null; policy: AdjustmentPolicy }
     | undefined;
+}
+
+/** 取消某一条补差和面单的关联（连同钱包里的补差扣 / 退一起撤回），可以重新关联 */
+export function unlinkAdjustment(id: number) {
+  db().transaction(() => {
+    db().prepare("DELETE FROM ledger WHERE adjustment_id = ?").run(id);
+    db().prepare("UPDATE adjustments SET shipment_id = NULL, customer_id = NULL, customer_amount = 0 WHERE id = ?").run(id);
+  })();
 }

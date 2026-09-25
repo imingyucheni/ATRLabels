@@ -17,7 +17,7 @@ import {
   setSelected,
   type BatchJob,
 } from "@/lib/batch";
-import { getCustomer } from "@/lib/db";
+import { getCustomer, getSettings } from "@/lib/db";
 import { publicError } from "@/lib/portal";
 import { str } from "@/lib/sanitize";
 
@@ -67,6 +67,7 @@ export async function createBatchJobAction(fd: FormData): Promise<{ jobId?: numb
 export interface BatchJobView extends BatchJob {
   balance: number;
   available: number;
+  balanceRule: "positive" | "cover";
 }
 
 export async function getBatchJobAction(jobId: number): Promise<{ job?: BatchJobView; error?: string }> {
@@ -87,7 +88,7 @@ export async function getBatchJobAction(jobId: number): Promise<{ job?: BatchJob
             quotes: r.quotes.map((q) => (q.error ? { ...q, error: publicError(q.error) } : q)),
           })),
         };
-    return { job: { ...view, balance: c.balance, available: c.balance + c.creditLimit } };
+    return { job: { ...view, balance: c.balance, available: c.balance + c.creditLimit, balanceRule: getSettings().balanceRule } };
   } catch (e) {
     return { error: (e as Error).message };
   }

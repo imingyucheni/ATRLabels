@@ -1,7 +1,7 @@
 import { currentCustomerId, isLoggedIn } from "@/lib/auth";
 import { getShipment } from "@/lib/db";
 import { readLabel } from "@/lib/labels";
-import { stampedLabel } from "@/lib/stamp";
+import { stampedLabel, voidLabel } from "@/lib/stamp";
 
 /** 面单文件：后台可以看全部，客户只能看自己的 */
 export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }) {
@@ -15,6 +15,14 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
   if (!s?.labelPath) return new Response("面单不存在", { status: 404 });
   const params = new URL(req.url).searchParams;
   const download = params.has("download");
+  // 已取消的面单不能再打印：客户看不到；后台只能看到印了 VOID 的留档
+  if (s.status === "cancelled") {
+    if (!admin) return new Response("这张面单已取消作废，不能再打印", { status: 410, headers: { "Content-Type": "text/plain; charset=utf-8" } });
+    const v = await voidLabel(s);
+    return new Response(new Uint8Array(v!), {
+      headers: { "Content-Type": "application/pdf", "Content-Disposition": `inline; filename="VOID-${s.trackingNo || s.customNo}.pdf"`, "Cache-Control": "private, no-store" },
+    });
+  }
   // 默认返回加印 SKU 的版本；?raw=1 返回 ShipBest 原始面单
   const stamped = params.has("raw") ? null : await stampedLabel(s);
   const buf = stamped ?? readLabel(s.labelPath);

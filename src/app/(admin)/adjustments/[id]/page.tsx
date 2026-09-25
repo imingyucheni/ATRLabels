@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { ADJUSTMENT_POLICY_LABEL, getAdjustmentBatch, listAdjustments } from "@/lib/db";
 import { money } from "@/lib/pricing";
 import FlashForm from "@/components/FlashForm";
-import { deleteBatchAction, linkAdjustmentAction } from "@/app/actions";
+import { deleteBatchAction, linkAdjustmentAction, unlinkAdjustmentAction } from "@/app/actions";
 
 export default async function BatchPage({ params }: { params: Promise<{ id: string }> }) {
   const b = getAdjustmentBatch(Number((await params).id));
@@ -73,6 +73,7 @@ export default async function BatchPage({ params }: { params: Promise<{ id: stri
                     <FlashForm action={linkAdjustmentAction} submitLabel="关联" submitClass="small">
                       <input type="hidden" name="id" value={r.id} />
                       <input name="key" placeholder="运单号 / 自定义单号" required style={{ width: 200, marginRight: 6 }} />
+                      <label className="small nowrap" style={{ marginRight: 6 }}><input type="checkbox" name="force" value="1" /> 仍然关联</label>
                     </FlashForm>
                   </td>
                 </tr>
@@ -85,7 +86,7 @@ export default async function BatchPage({ params }: { params: Promise<{ id: stri
       <div className="card table-wrap">
         <h2>明细</h2>
         <table>
-          <thead><tr><th>行</th><th>单号</th><th>面单</th><th>客户</th><th className="num">ShipBest 补差</th><th className="num">向客户</th><th>原因</th></tr></thead>
+          <thead><tr><th>行</th><th>单号</th><th>面单</th><th>客户</th><th className="num">ShipBest 补差</th><th className="num">向客户</th><th>原因</th><th></th></tr></thead>
           <tbody>
             {rows.map((r) => (
               <tr key={r.id}>
@@ -96,6 +97,13 @@ export default async function BatchPage({ params }: { params: Promise<{ id: stri
                 <td className="num">{money(r.costAmount)}</td>
                 <td className="num">{r.shipmentId ? money(r.customerAmount) : "-"}</td>
                 <td className="small">{r.reason}</td>
+                <td>
+                  {r.shipmentId && (
+                    <FlashForm action={unlinkAdjustmentAction} submitLabel="取消关联" submitClass="small" confirm="取消这一条的关联？客户钱包里这笔补差会一起撤回。">
+                      <input type="hidden" name="id" value={r.id} />
+                    </FlashForm>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>

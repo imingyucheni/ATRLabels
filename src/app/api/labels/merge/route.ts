@@ -14,7 +14,7 @@ export async function GET(req: Request) {
     .slice(0, 300);
   const list = ids
     .map((id) => getShipment(id))
-    .filter((s): s is NonNullable<typeof s> => !!s && !!s.labelPath && (admin || s.customerId === own));
+    .filter((s): s is NonNullable<typeof s> => !!s && !!s.labelPath && s.status !== "cancelled" && (admin || s.customerId === own));
   if (!list.length) return new Response("没有可打印的面单", { status: 404 });
   const pdf = await mergeLabels(list);
   return new Response(new Uint8Array(pdf), {

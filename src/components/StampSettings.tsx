@@ -5,6 +5,8 @@ import { saveChannelStampAction, saveStampAction, uploadChannelSampleAction } fr
 import type { StampOverride, StampSettings as Global } from "@/lib/stampConfig";
 
 type Field = "x" | "y" | "fontSize" | "maxWidth" | "rotate";
+/** 4×6 英寸面单上的合理范围 */
+const LIMITS: Partial<Record<Field, [number, number]>> = { x: [0, 3.9], y: [0, 5.9], fontSize: [5, 24], maxWidth: [0.5, 4] };
 
 /** 面单加印 SKU 设置：全局默认 + 每个渠道单独调整位置，右侧实时预览 */
 export default function StampSettings({ global, channels }: { global: Global; channels: { code: string; name: string; stamp: StampOverride | null }[] }) {
@@ -36,6 +38,12 @@ export default function StampSettings({ global, channels }: { global: Global; ch
     else if (n !== undefined) setG((x) => ({ ...x, [k]: n }));
   };
   const val = (k: Field) => (target ? (cur?.[k] ?? "") : g[k]);
+  const outOfRange = (k: Field) => {
+    const v = val(k);
+    const lim = LIMITS[k];
+    return lim && v !== "" && v !== undefined && (Number(v) < lim[0] || Number(v) > lim[1]) ? lim : null;
+  };
+  const invalid = (["x", "y", "fontSize", "maxWidth"] as Field[]).some((k) => outOfRange(k));
 
   function save() {
     setMsg(null);
@@ -45,11 +53,16 @@ export default function StampSettings({ global, channels }: { global: Global; ch
     });
   }
 
-  const num = (k: Field, label: string, step = "0.05") => (
-    <label className="f">{label}
-      <input type="number" step={step} value={val(k)} placeholder={target ? `默认 ${g[k]}` : undefined} onChange={(e) => setField(k, e.target.value)} />
-    </label>
-  );
+  const num = (k: Field, label: string, step = "0.05") => {
+    const bad = outOfRange(k);
+    return (
+      <label className="f">{label}
+        <input type="number" step={step} min={LIMITS[k]?.[0]} max={LIMITS[k]?.[1]} value={val(k)} aria-invalid={!!bad}
+          placeholder={target ? `默认 ${g[k]}` : undefined} onChange={(e) => setField(k, e.target.value)} />
+        {bad && <span className="small" style={{ color: "var(--err)" }}>请填 {bad[0]}–{bad[1]}</span>}
+      </label>
+    );
+  };
 
   return (
     <div className="card">
@@ -153,7 +166,7 @@ export default function StampSettings({ global, channels }: { global: Global; ch
           )}
           {msg?.ok && <div className="alert ok">{msg.ok}</div>}
           {msg?.error && <div className="alert err">{msg.error}</div>}
-          <button className="primary" onClick={save} disabled={busy} style={{ marginTop: 12 }}>{busy ? "保存中…" : target ? "保存该渠道位置" : "保存加印设置"}</button>
+          <button className="primary" onClick={save} disabled={busy || invalid} style={{ marginTop: 12 }}>{busy ? "保存中…" : target ? "保存该渠道位置" : "保存加印设置"}</button>
         </div>
         <div>
           <div className="small muted" style={{ marginBottom: 4 }}>预览</div>

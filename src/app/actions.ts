@@ -23,6 +23,7 @@ import {
   linkAdjustment,
   listChannels,
   setCustomerChannels,
+  unlinkAdjustment,
   saveCustomer,
   saveSettings,
   setChannelStamp,
@@ -50,6 +51,7 @@ import {
   createLabel,
   PriceChangedError,
   quoteAll,
+  withdrawCancel,
   refreshShipment,
   requestCancel,
   syncChannels,
@@ -150,6 +152,18 @@ export async function cancelAction(_: FlashState, fd: FormData): Promise<FlashSt
   }
 }
 
+export async function withdrawCancelAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  await requireAdmin();
+  const id = Number(fd.get("id"));
+  try {
+    withdrawCancel(id);
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+  revalidatePath(`/shipments/${id}`);
+  return { ok: "已撤回取消申请，面单恢复可用" };
+}
+
 export async function confirmCancelAction(_: FlashState, fd: FormData): Promise<FlashState> {
   await requireAdmin();
   const id = Number(fd.get("id"));
@@ -172,11 +186,20 @@ function ruleFromForm(fd: FormData, prefix = ""): PartialRule {
   };
 }
 
+/** 加价不允许负数（会低于成本出单） */
+function negativeRule(r: PartialRule, who = ""): string | null {
+  return [r.percent, r.fixed, r.minProfit].some((v) => v !== null && v !== undefined && v < 0)
+    ? `${who}加价、固定加价、最低利润不能为负数（会低于成本出单）`
+    : null;
+}
+
 export async function saveCustomerAction(_: FlashState, fd: FormData): Promise<FlashState> {
   await requireAdmin();
   const name = str(fd.get("name"));
   if (!name) return { error: "客户名称必填" };
   const idRaw = Number(fd.get("id"));
+  const neg = negativeRule(ruleFromForm(fd));
+  if (neg) return { error: neg };
   const savedId = saveCustomer(idRaw > 0 ? idRaw : null, {
     name,
     contact: str(fd.get("contact")) || null,
@@ -247,6 +270,8 @@ export async function ledgerEntryAction(_: FlashState, fd: FormData): Promise<Fl
 export async function saveSettingsAction(_: FlashState, fd: FormData): Promise<FlashState> {
   await requireAdmin();
   const cur = getSettings();
+  const negG = negativeRule({ percent: optNum(fd.get("percent")), fixed: optNum(fd.get("fixed")), minProfit: optNum(fd.get("minProfit")) }, "全局");
+  if (negG) return { error: negG };
   const patch: Partial<Settings> = {
     markup: {
       percent: optNum(fd.get("percent")) ?? 0,
@@ -272,6 +297,10 @@ export async function saveSettingsAction(_: FlashState, fd: FormData): Promise<F
 
 export async function saveChannelsAction(_: FlashState, fd: FormData): Promise<FlashState> {
   await requireAdmin();
+  for (const c of listChannels()) {
+    const neg = negativeRule(ruleFromForm(fd, `${c.code}.`), `${c.name}：`);
+    if (neg) return { error: neg };
+  }
   for (const c of listChannels()) {
     updateChannel(c.code, fd.get(`enabled.${c.code}`) === "on", ruleFromForm(fd, `${c.code}.`));
   }
@@ -369,11 +398,38 @@ export async function linkAdjustmentAction(_: FlashState, fd: FormData): Promise
   if (adj.shipment_id) return { error: "已经关联过了" };
   const s = findShipmentByKey(str(fd.get("key")));
   if (!s) return { error: "找不到这个单号对应的面单" };
+  // 关联到异常状态的面单时先提醒，勾选“仍然关联”后再提交
+  if (fd.get("force") !== "1") {
+    const warn: string[] = [];
+    if (s.status === "cancelled") warn.push("这张面单已经取消");
+    if (s.status === "exception") warn.push("这张面单是异常状态");
+    if (adj.reason && s.channelName && !sameCarrier(adj.reason, s.channelName)) warn.push(`补差原因里的渠道和面单渠道（${s.channelName}）可能不一致`);
+    if (warn.length) return { error: `${warn.join("；")}。确认没关联错的话，勾选“仍然关联”再提交。` };
+  }
   const amount = customerAmountFor(adj.cost_amount, adj.policy, s.rule);
   linkAdjustment(adj.id, s.id, s.customerId, amount);
-  postAdjustment(adj.id, s.customerId, s.id, amount, null);
-  revalidatePath(`/adjustments`);
-  return { ok: `已关联到 ${s.customNo}（${s.customerName}）` };
+  postAdjustment(adj.id, s.customerId, s.id, amount, adj.reason || `账单补差 · ${s.trackingNo ?? s.customNo}`);
+  revalidatePath(`/adjustments/${adj.batch_id}`);
+  return { ok: `已关联到 ${s.customNo}（${s.customerName}），向客户${amount >= 0 ? "补收" : "退回"} ${Math.abs(amount).toFixed(2)}` };
+}
+
+/** 补差原因里提到了某个承运商、而面单是另一个承运商时提醒 */
+function sameCarrier(reason: string, channel: string) {
+  const carriers = ["GOFO", "USPS", "UNIUNI", "UNI", "SWIFTX", "YWE", "SPX", "SPEEDX", "FEDEX", "UPS"];
+  const r = reason.toUpperCase();
+  const c = channel.toUpperCase();
+  const mentioned = carriers.filter((k) => r.includes(k));
+  return !mentioned.length || mentioned.some((k) => c.includes(k));
+}
+
+export async function unlinkAdjustmentAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  await requireAdmin();
+  const adj = getAdjustment(Number(fd.get("id")));
+  if (!adj) return { error: "记录不存在" };
+  if (!adj.shipment_id) return { error: "这条还没有关联" };
+  unlinkAdjustment(adj.id);
+  revalidatePath(`/adjustments/${adj.batch_id}`);
+  return { ok: "已取消关联，客户钱包里的这笔补差已撤回" };
 }
 
 /* ---------------- 面单加印 SKU ---------------- */
@@ -384,7 +440,7 @@ function cleanStamp(o: Partial<StampConfig>): Partial<StampConfig> {
     const x = Number(v);
     return v === undefined || v === null || v === "" || !Number.isFinite(x) ? undefined : Math.min(max, Math.max(min, x));
   };
-  const x = numIn(o.x, 0, 8.5), y = numIn(o.y, 0, 11), fs = numIn(o.fontSize, 5, 24), mw = numIn(o.maxWidth, 0.5, 8), ml = numIn(o.maxLines, 1, 5);
+  const x = numIn(o.x, 0, 3.9), y = numIn(o.y, 0, 5.9), fs = numIn(o.fontSize, 5, 24), mw = numIn(o.maxWidth, 0.5, 4), ml = numIn(o.maxLines, 1, 5);
   if (x !== undefined) out.x = x;
   if (y !== undefined) out.y = y;
   if (fs !== undefined) out.fontSize = fs;

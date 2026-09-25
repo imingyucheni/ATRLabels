@@ -143,3 +143,27 @@ export async function stampedLabel(s: Shipment): Promise<Uint8Array | null> {
   if (!text) return null;
   return stampLabelBytes(readLabel(s.labelPath), s.labelMime, text, cfg);
 }
+
+/** 已取消的面单：整页斜印 “VOID / CANCELLED”，防止误贴（后台留档查看用） */
+export async function voidLabel(s: Shipment): Promise<Uint8Array | null> {
+  if (!s.labelPath) return null;
+  const base = (await stampedLabel(s)) ?? (await stampLabelBytes(readLabel(s.labelPath), s.labelMime, "", mergeStamp(getSettings().stamp, null)));
+  const doc = await PDFDocument.load(base, { ignoreEncryption: true });
+  const font = await doc.embedFont(StandardFonts.HelveticaBold);
+  for (const page of doc.getPages()) {
+    const { width, height } = page.getSize();
+    const size = Math.min(width, height) / 3.2;
+    const text = "VOID";
+    const tw = font.widthOfTextAtSize(text, size);
+    const rad = Math.atan2(height, width);
+    // 以页面中心为基准沿对角线居中
+    const cx = width / 2 - (tw / 2) * Math.cos(rad) + (size / 3) * Math.sin(rad);
+    const cy = height / 2 - (tw / 2) * Math.sin(rad) - (size / 3) * Math.cos(rad);
+    page.drawText(text, { x: cx, y: cy, size, font, color: rgb(0.85, 0.1, 0.1), opacity: 0.55, rotate: degrees((rad * 180) / Math.PI) });
+    const note = "CANCELLED - DO NOT SHIP";
+    const ns = 14;
+    page.drawRectangle({ x: 0, y: height - 30, width, height: 30, color: rgb(0.85, 0.1, 0.1) });
+    page.drawText(note, { x: (width - font.widthOfTextAtSize(note, ns)) / 2, y: height - 21, size: ns, font, color: rgb(1, 1, 1) });
+  }
+  return doc.save();
+}

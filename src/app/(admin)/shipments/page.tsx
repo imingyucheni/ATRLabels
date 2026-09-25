@@ -81,7 +81,7 @@ export default async function ShipmentsPage({ searchParams }: { searchParams: Pr
                 <td className="num">{money(s.price, s.currency)}</td>
                 <td className="num">{s.costAdj || s.customerAdj ? <>{money(s.customerAdj)}<div className="small muted">成本 {money(s.costAdj)}</div></> : "-"}</td>
                 <td className="num"><Profit value={shipmentProfit(s)} /></td>
-                <td>{s.labelPath ? <a href={`/api/labels/${s.id}`} target="_blank">打印</a> : "-"}</td>
+                <td className="nowrap">{s.labelPath && s.status !== "cancelled" ? <a href={`/api/labels/${s.id}`} target="_blank">打印</a> : s.status === "cancelled" ? <span className="muted small">已作废</span> : "-"}</td>
               </tr>
             ))}
             {!rows.length && <tr><td colSpan={12} className="muted">没有符合条件的记录</td></tr>}

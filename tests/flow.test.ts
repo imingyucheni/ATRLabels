@@ -245,6 +245,15 @@ describe("模拟模式完整流程", () => {
 
     const pdf = await mergeLabels(job.rows.filter((r) => r.shipmentId).map((r) => db.getShipment(r.shipmentId!)!));
     expect((await PDFDocument.load(pdf)).getPageCount()).toBe(3);
+
+    // 8) 同一张表再导一次：已出过面单的订单号标记“可能重复”，默认不勾选
+    const again = batch.createJob({ customerId: custId, createdBy: "customer", filename: "24-0924.xlsx", channels: ["LP10210028"], pickMode: "cheapest", orders: parsed.orders });
+    batch.ensureRunning(again);
+    const j2 = await wait(again, ["ready"]);
+    const dupRows = j2.rows.filter((r) => r.status === "quoted");
+    expect(dupRows.length).toBe(3);
+    expect(dupRows.every((r) => r.warning?.includes("已经出过面单") && !r.selected)).toBe(true);
+    expect(() => batch.confirmJob(again)).toThrow(/勾选/);
   }, 90_000);
 
   it("批量下单：余额不足自动暂停，充值后继续", async () => {

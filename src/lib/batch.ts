@@ -288,9 +288,13 @@ export interface BatchRow {
   selected: boolean;
   status: RowStatus;
   error: string | null;
+  /** 可能重复导入等提醒 */
+  warning: string | null;
   shipmentId: number | null;
   trackingNo: string | null;
   hasLabel: boolean;
+  /** 已扣款、面单还在生成中 */
+  labelPending: boolean;
 }
 
 export function createJob(input: {
@@ -310,13 +314,36 @@ export function createJob(input: {
       .run(input.customerId, input.createdBy, input.filename, input.pickMode, JSON.stringify(channels.length ? channels : enabled), input.pickMode);
     const jobId = Number(r.lastInsertRowid);
     const stmt = db().prepare(
-      "INSERT INTO batch_job_rows (job_id, row_no, customer_ref, req_json, file_channel, status, error) VALUES (?,?,?,?,?,?,?)",
+      "INSERT INTO batch_job_rows (job_id, row_no, customer_ref, req_json, file_channel, status, error, warning, selected) VALUES (?,?,?,?,?,?,?,?,?)",
     );
     for (const o of input.orders) {
-      stmt.run(jobId, o.rowNo, o.customerRef || null, JSON.stringify(o.req), o.fileChannel || null, o.errors.length ? "error" : "pending", o.errors.join("；") || null);
+      const warning = o.customerRef ? duplicateWarning(input.customerId, o.customerRef, jobId) : null;
+      stmt.run(jobId, o.rowNo, o.customerRef || null, JSON.stringify(o.req), o.fileChannel || null, o.errors.length ? "error" : "pending", o.errors.join("；") || null, warning, warning ? 0 : 1);
     }
     return jobId;
   })();
+}
+
+/**
+ * 同一客户的订单号已经出过面单、或者在另一个还没提交的批次里 → 提醒可能重复导入。
+ * 不直接拦截（补发等情况确实需要重复出单），但默认不勾选。
+ */
+function duplicateWarning(customerId: number, ref: string, jobId: number): string | null {
+  const s = db()
+    .prepare(
+      `SELECT custom_no, tracking_no, created_at FROM shipments
+       WHERE customer_id = ? AND customer_ref = ? AND status NOT IN ('cancelled', 'exception') ORDER BY id DESC LIMIT 1`,
+    )
+    .get(customerId, ref) as { custom_no: string; tracking_no: string | null; created_at: string } | undefined;
+  if (s) return `订单号 ${ref} 已经出过面单（${s.tracking_no ?? s.custom_no}，${s.created_at.slice(0, 10)}），可能是重复导入，默认不提交`;
+  const r = db()
+    .prepare(
+      `SELECT j.id FROM batch_job_rows r JOIN batch_jobs j ON j.id = r.job_id
+       WHERE j.customer_id = ? AND r.customer_ref = ? AND r.job_id <> ? AND r.status IN ('pending', 'quoted') LIMIT 1`,
+    )
+    .get(customerId, ref, jobId) as { id: number } | undefined;
+  if (r) return `订单号 ${ref} 在批次 #${r.id} 里还没提交，可能是重复导入，默认不提交`;
+  return null;
 }
 
 interface JobRowDb {
@@ -334,6 +361,7 @@ interface JobRowDb {
   selected: number;
   status: RowStatus;
   error: string | null;
+  warning: string | null;
   shipment_id: number | null;
 }
 
@@ -395,9 +423,11 @@ export function getJob(jobId: number): BatchJob | null {
         selected: !!r.selected,
         status: r.status,
         error: r.error,
+        warning: r.warning,
         shipmentId: r.shipment_id,
         trackingNo: s?.trackingNo ?? null,
         hasLabel: !!s?.labelPath,
+        labelPending: s?.status === "pending",
       };
     }),
   };
@@ -638,28 +668,36 @@ async function createJobLabels(jobId: number) {
   }
   if (stopped || priceChanged) {
     setJob(jobId, "ready", stopped ?? `${priceChanged} 单运费有变化，请确认后再点“提交订单”`);
+    // 已经提交、扣过款的订单照样在后台取回面单（不占用任务，充值后可以马上继续提交）
+    void refreshCreatedLabels(jobId).catch(() => null);
     return;
   }
   setJob(jobId, "labeling");
   await waitLabels(jobId);
 }
 
-async function waitLabels(jobId: number) {
-  const deadline = Date.now() + 120_000;
+/** 轮询本批次里已提交、面单还没生成的订单，直到都出面单或超时 */
+async function refreshCreatedLabels(jobId: number, timeoutMs = 180_000) {
+  const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const pending = jobRows(jobId)
       .filter((r) => r.status === "created" && r.shipment_id)
       .map((r) => getShipment(r.shipment_id!)!)
       .filter((s) => s && s.status === "pending");
-    if (!pending.length) break;
+    if (!pending.length) return;
     await pool(pending, 3, async (s) => {
       await refreshShipment(s.id).catch(() => null);
     });
     await new Promise((r) => setTimeout(r, 2000));
   }
-  // 还有没提交的订单时回到“待确认”，可以继续提交
-  const left = jobRows(jobId).some((r) => r.status === "quoted");
-  setJob(jobId, left ? "ready" : "done");
+}
+
+async function waitLabels(jobId: number) {
+  await refreshCreatedLabels(jobId, 120_000);
+  // 还有没提交的订单时回到“待确认”，可以继续提交；剩下的订单重新默认勾选（有重复提醒的除外）
+  const left = jobRows(jobId).filter((r) => r.status === "quoted");
+  for (const r of left) if (!r.selected && !r.warning) setRow(r.id, { selected: 1 });
+  setJob(jobId, left.length ? "ready" : "done");
 }
 
 /** 任务所属客户的默认寄件地址 */

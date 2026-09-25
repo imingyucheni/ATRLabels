@@ -67,8 +67,9 @@ export default function BatchOrders(props: {
 
   // 后台处理中时每 2 秒刷新进度
   useEffect(() => {
-    if (!job || !["quoting", "creating", "labeling"].includes(job.status)) return;
-    const t = setTimeout(() => load(job.id), 2000);
+    const labelsPending = job?.rows.some((r) => r.labelPending);
+    if (!job || (!["quoting", "creating", "labeling"].includes(job.status) && !labelsPending)) return;
+    const t = setTimeout(() => load(job.id), labelsPending && job.status === "ready" ? 4000 : 2000);
     return () => clearTimeout(t);
   }, [job, load]);
 
@@ -170,13 +171,18 @@ export default function BatchOrders(props: {
   const createdTotal = created.reduce((a, r) => a + (r.price ?? 0), 0);
   const labeled = created.filter((r) => r.hasLabel);
   const problems = job.rows.filter((r) => r.status === "error" || r.status === "failed").length;
+  const dupes = quoted.filter((r) => r.warning).length;
   const processed = job.rows.filter((r) => r.status !== "pending").length;
   const allSelected = quoted.length > 0 && quoted.every((r) => r.selected);
-  const rows = job.rows.filter((r) => !onlyProblems || r.status === "error" || r.status === "failed" || r.error);
+  const rows = job.rows.filter((r) => !onlyProblems || r.status === "error" || r.status === "failed" || r.error || (r.warning && r.status === "quoted"));
   const cheapestTotal = chosen.reduce((a, r) => a + Math.min(...r.quotes.filter((q) => q.ok).map((q) => q.price!)), 0);
 
   function onSubmit() {
-    const warn = total > job!.available ? `\n\n⚠ 可用余额 ${money(job!.available)} 不够全部提交，余额用完会自动暂停。` : "";
+    const warn = total > job!.available
+      ? job!.balanceRule === "positive"
+        ? `\n\n⚠ 可用余额 ${money(job!.available)} 不够全部提交。余额大于 0 时会继续出单，最后一单可能让余额变成负数（下次充值时抵扣）；余额 ≤ 0 时自动暂停，充值后可以继续提交。`
+        : `\n\n⚠ 可用余额 ${money(job!.available)} 不够全部提交，不够付下一单时会自动暂停，充值后可以继续提交。`
+      : "";
     if (!window.confirm(`提交 ${chosen.length} 单，预计应付 ${money(total)}（从${props.mode === "portal" ? "账户" : "客户"}余额扣除）？${warn}`)) return;
     act(() => confirmBatchJobAction(job!.id));
   }
@@ -280,6 +286,9 @@ export default function BatchOrders(props: {
             <input type="checkbox" checked={onlyProblems} onChange={(e) => setOnlyProblems(e.target.checked)} /> 只看有问题的订单
           </label>
         </div>
+        {dupes > 0 && editable && (
+          <div className="alert warn">⚠ {dupes} 单的订单号之前已经出过面单（或在别的批次里待提交），可能是重复导入，已默认不勾选。确认需要重复出单的，再手动勾选提交。</div>
+        )}
         {problems > 0 && editable && <p className="small muted">有错误的订单不会提交。请在表格里改好后，把这些订单重新导入。</p>}
       </div>
 
@@ -306,10 +315,10 @@ export default function BatchOrders(props: {
           </thead>
           <tbody>
             {rows.map((r) => {
-              const [label, cls] = ROW_STATUS[r.status];
+              const [label, cls] = r.labelPending ? ["已扣款 · 面单生成中", "pending"] : ROW_STATUS[r.status];
               const rowEditable = editable && r.status === "quoted";
               return (
-                <tr key={r.id}>
+                <tr key={r.id} className={r.warning && r.status === "quoted" ? "row-warn" : undefined}>
                   <td>
                     {rowEditable && (
                       <input
@@ -375,6 +384,7 @@ export default function BatchOrders(props: {
                       </div>
                     ) : null}
                     {r.error && <div style={{ color: r.status === "quoted" ? "var(--warn)" : "var(--err)", maxWidth: 260 }}>{r.error}</div>}
+                    {r.warning && r.status !== "created" && <div style={{ color: "var(--warn)", maxWidth: 260 }}>⚠ {r.warning}</div>}
                   </td>
                 </tr>
               );

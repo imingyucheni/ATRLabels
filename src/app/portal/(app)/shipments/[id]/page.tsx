@@ -62,6 +62,8 @@ export default async function PortalShipmentDetail({ params }: { params: Promise
                 <iframe src={`/api/labels/${s.id}`} style={{ width: "100%", height: 480, border: "1px solid var(--line)", borderRadius: 8 }} />
               )}
             </>
+          ) : s.status === "cancelled" ? (
+            <p className="muted">这张面单已取消作废，不能再打印使用。</p>
           ) : s.status === "pending" ? (
             <p className="muted">面单生成中，一般几秒到一分钟。可以点“刷新”。</p>
           ) : (

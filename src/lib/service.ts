@@ -367,6 +367,14 @@ export function confirmCancelled(id: number, cancelFee: number, sbCancelFee: num
   settleCancel(id);
 }
 
+/** ShipBest 拒绝取消（或申请错了）：撤回取消申请，恢复原状态 */
+export function withdrawCancel(id: number) {
+  const s = getShipment(id);
+  if (!s) throw new Error("记录不存在");
+  if (s.status !== "cancel_requested") throw new Error("这张面单不在取消处理中");
+  updateShipment(id, { status: s.labelPath ? "labeled" : "pending", errorMsg: null });
+}
+
 /** 取消费默认值（给页面预填用） */
 export function defaultCancelFees(s: Shipment) {
   const st = getSettings();
@@ -374,4 +382,40 @@ export function defaultCancelFees(s: Shipment) {
     cancelFee: round2((s.price * st.cancelFeePercent) / 100),
     sbCancelFee: round2(((s.actualCost ?? s.quotedCost) * st.sbCancelFeePercent) / 100),
   };
+}
+
+/* ---------------- 后台自动取回面单 ---------------- */
+
+/**
+ * 已扣款但面单还没生成的订单（最近 3 天），定时向 ShipBest 刷新一次。
+ * 避免客户离开页面后面单一直停在“等待出单”，需要逐单点“刷新”。
+ */
+export async function refreshPendingShipments(limit = 30) {
+  const ids = (
+    db()
+      .prepare(
+        `SELECT id FROM shipments WHERE status = 'pending' AND created_at >= datetime('now', '-3 days')
+         AND created_at <= datetime('now', '-20 seconds') ORDER BY id LIMIT ?`,
+      )
+      .all(limit) as { id: number }[]
+  ).map((r) => r.id);
+  for (const id of ids) await refreshShipment(id).catch(() => null);
+  return ids.length;
+}
+
+const sweeper = globalThis as unknown as { __atrSweeper?: NodeJS.Timeout };
+
+export function startPendingSweeper(intervalMs = 60_000) {
+  if (sweeper.__atrSweeper) return;
+  let busy = false;
+  sweeper.__atrSweeper = setInterval(async () => {
+    if (busy) return;
+    busy = true;
+    try {
+      await refreshPendingShipments();
+    } finally {
+      busy = false;
+    }
+  }, intervalMs);
+  sweeper.__atrSweeper.unref?.();
 }

@@ -7,7 +7,7 @@ import { SB_STATUS, type Address } from "@/lib/shipbest/types";
 import FlashForm from "@/components/FlashForm";
 import StatusBadge from "@/components/StatusBadge";
 import Profit from "@/components/Profit";
-import { cancelAction, confirmCancelAction, refreshAction, saveLabelNoteAction } from "@/app/actions";
+import { cancelAction, confirmCancelAction, refreshAction, saveLabelNoteAction, withdrawCancelAction } from "@/app/actions";
 import { stampFor, stampText } from "@/lib/stamp";
 import { LEDGER_TYPE_LABEL, listLedger } from "@/lib/ledger";
 
@@ -47,8 +47,14 @@ export default async function ShipmentDetail({ params }: { params: Promise<{ id:
       <div className="grid2">
         <div className="card">
           <h2>面单</h2>
-          {s.labelPath ? (
+          {s.labelPath && s.status === "cancelled" ? (
             <>
+              <div className="alert err">这张面单已取消作废，不能再打印使用。下面是印了 VOID 的留档。</div>
+              <iframe src={`/api/labels/${s.id}`} style={{ width: "100%", height: 480, border: "1px solid var(--line)", borderRadius: 8 }} />
+            </>
+          ) : s.labelPath ? (
+            <>
+              {s.status === "cancel_requested" && <div className="alert warn">已申请取消：在 ShipBest 确认取消前请不要使用这张面单。</div>}
               <div className="row" style={{ marginBottom: 12 }}>
                 <a className="btn primary" href={`/api/labels/${s.id}`} target="_blank">打开 / 打印 4×6 面单</a>
                 <a className="btn" href={`/api/labels/${s.id}?download=1`}>下载</a>
@@ -92,6 +98,10 @@ export default async function ShipmentDetail({ params }: { params: Promise<{ id:
                   <label className="f">向客户收取的取消手续费<input name="cancelFee" type="number" step="0.01" defaultValue={fees.cancelFee} /></label>
                   <label className="f">ShipBest 收取的取消费<input name="sbCancelFee" type="number" step="0.01" defaultValue={fees.sbCancelFee} /></label>
                 </div>
+              </FlashForm>
+              <p className="small muted" style={{ marginTop: 12 }}>ShipBest 拒绝取消、或者申请错了：</p>
+              <FlashForm action={withdrawCancelAction} submitLabel="撤回取消申请" submitClass="" confirm="撤回后面单恢复为“已出面单”，客户可以继续使用。确定？">
+                <input type="hidden" name="id" value={s.id} />
               </FlashForm>
             </div>
           )}

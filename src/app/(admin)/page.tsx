@@ -1,26 +1,21 @@
 import Link from "next/link";
-import { listChannels, listShipments, shipmentProfit, shipmentReceivable } from "@/lib/db";
+import { listChannels, listShipments, shipmentProfit } from "@/lib/db";
+import { buildReport, localDate } from "@/lib/reports";
 import { money } from "@/lib/pricing";
 import StatusBadge from "@/components/StatusBadge";
 import { pendingTopupCount } from "@/lib/topup";
 import Profit from "@/components/Profit";
 
-function localDate(offsetDays = 0) {
-  const d = new Date(Date.now() - offsetDays * 86400_000);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-function summarize(rows: ReturnType<typeof listShipments>) {
-  return {
-    count: rows.filter((s) => s.status === "labeled").length,
-    revenue: rows.reduce((a, s) => a + shipmentReceivable(s), 0),
-    profit: rows.reduce((a, s) => a + (shipmentProfit(s) ?? 0), 0),
-  };
+/** 和“报表”同一口径：订单数不含已取消 / 异常，含面单生成中的 */
+function summarize(from: string, to: string) {
+  const r = buildReport(from, to);
+  const pending = listShipments({ from, to }).filter((s) => s.status === "pending").length;
+  return { count: r.totals.orders, revenue: r.totals.revenue, profit: r.totals.profit, pending };
 }
 
 export default async function Dashboard() {
-  const today = summarize(listShipments({ from: localDate() }));
-  const month = summarize(listShipments({ from: localDate().slice(0, 8) + "01" }));
+  const today = summarize(localDate(), localDate());
+  const month = summarize(localDate().slice(0, 8) + "01", localDate());
   const attention = listShipments({ limit: 200 }).filter((s) =>
     ["pending", "exception", "cancel_requested"].includes(s.status),
   );
@@ -41,7 +36,7 @@ export default async function Dashboard() {
         </div>
       )}
       <div className="stats">
-        <div className="stat"><div className="muted">今日出单</div><div className="v">{today.count}</div></div>
+        <div className="stat"><div className="muted">今日出单</div><div className="v">{today.count}</div>{today.pending > 0 && <div className="small muted">含面单生成中 {today.pending} 单</div>}</div>
         <div className="stat"><div className="muted">今日收入</div><div className="v">{money(today.revenue)}</div></div>
         <div className="stat"><div className="muted">今日利润</div><div className="v">{money(today.profit)}</div></div>
         <div className="stat"><div className="muted">本月出单</div><div className="v">{month.count}</div></div>
