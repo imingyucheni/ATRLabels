@@ -12,4 +12,15 @@ export const admin1Patterns: [RegExp, string][] = [
   [/^已经有 (\d+) 张正式订单，不能清空（只能在上线前使用）$/, "There are already $1 live orders, so test data can't be cleared (only available before go-live)"],
   // 对账单说明（按“ · ”拆开逐段翻译）：已取消的面单
   [/^已取消（原价 ([\d.]+)，已退 ([\d.]+)）$/, "Cancelled (orig. $1, refunded $2)"],
+  // 嘉谷万邑
+  [/^已保存：开通了 (\d+) 个渠道，账户余额 \$([\d.]+)（预付）。点上面的“同步渠道”把嘉谷渠道加进渠道列表。还没有仓库 ID 的渠道：(.+)$/, "Saved: $1 services, balance $$$2 (prepaid). Click “Sync services” above to add Jiagu services. Services without a warehouse ID: $3"],
+  [/^已保存：开通了 (\d+) 个渠道，账户余额 \$([\d.]+)（预付）。点上面的“同步渠道”把嘉谷渠道加进渠道列表。$/, "Saved: $1 services, balance $$$2 (prepaid). Click “Sync services” above to add Jiagu services."],
+  [/^已保存：开通了 (\d+) 个渠道。点上面的“同步渠道”把嘉谷渠道加进渠道列表。还没有仓库 ID 的渠道：(.+)$/, "Saved: $1 services. Click “Sync services” above to add Jiagu services. Services without a warehouse ID: $2"],
+  [/^已保存：开通了 (\d+) 个渠道。点上面的“同步渠道”把嘉谷渠道加进渠道列表。$/, "Saved: $1 services. Click “Sync services” above to add Jiagu services."],
+  [/^连接成功：开通了 (\d+) 个渠道，账户余额 \$([\d.]+)（预付）。点上面的“同步渠道”把嘉谷渠道加进渠道列表。还没有仓库 ID 的渠道：(.+)$/, "Connected: $1 services, balance $$$2 (prepaid). Click “Sync services” above to add Jiagu services. Services without a warehouse ID: $3"],
+  [/^连接成功：开通了 (\d+) 个渠道，账户余额 \$([\d.]+)（预付）。点上面的“同步渠道”把嘉谷渠道加进渠道列表。$/, "Connected: $1 services, balance $$$2 (prepaid). Click “Sync services” above to add Jiagu services."],
+  [/^连接成功：开通了 (\d+) 个渠道。点上面的“同步渠道”把嘉谷渠道加进渠道列表。还没有仓库 ID 的渠道：(.+)$/, "Connected: $1 services. Click “Sync services” above to add Jiagu services. Services without a warehouse ID: $2"],
+  [/^连接成功：开通了 (\d+) 个渠道。点上面的“同步渠道”把嘉谷渠道加进渠道列表。$/, "Connected: $1 services. Click “Sync services” above to add Jiagu services."],
+  [/^(已保存|连接成功)，但连接测试失败：(.+)$/, "$1, but the connection test failed: $2"],
+  [/^“(.+)”开通了 (\d+) 个（(.+)），客户看到的名称一样，只能选一个$/, "$2 services show to the customer as “$1” ($3). Pick only one."],
 ];

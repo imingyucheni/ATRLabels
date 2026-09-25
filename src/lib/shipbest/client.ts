@@ -10,40 +10,9 @@ import type {
   ShipmentRequest,
 } from "./types";
 
-/** 常见错误码的中文说明（完整列表见 ShipBest 文档“常见报错”）。 */
-const ERROR_HINTS: Record<number, string> = {
-  [-1]: "ShipBest 系统维护升级中",
-  10022: "物流产品不存在",
-  10023: "物流产品已停用",
-  10024: "包裹重量不在该渠道的下单重量范围内",
-  10061: "运费试算失败",
-  10062: "该物流产品没有设置价格，请联系 ShipBest",
-  10063: "自定义单号重复",
-  11004: "API 授权信息无效（检查 apiId / accessToken）",
-  11005: "请求频率超限，请稍后再试",
-  11012: "签名错误",
-  11013: "重复提交",
-  11014: "时间戳无效（检查服务器时间）",
-  11200: "OMS 账户余额不足，请先充值",
-  11201: "OMS 账号已被停用",
-  11202: "订单在 ShipBest 系统中不存在",
-  11203: "该订单不支持取消",
-  11204: "订单已取消，不能重复取消",
-  11205: "订单异常，不支持取消",
-  11206: "创建订单异常",
-};
-
-export class ShipBestError extends Error {
-  constructor(
-    public code: number,
-    public apiMessage: string,
-    public requestId?: string,
-  ) {
-    const hint = ERROR_HINTS[code];
-    super(`[${code}] ${hint ? `${hint}（${apiMessage}）` : apiMessage}`);
-    this.name = "ShipBestError";
-  }
-}
+import { ShipBestError } from "./errors";
+import { getJiaguClient, isJiaguCode, jgOrders, type JiaguClient } from "./jiagu";
+export { ShipBestError };
 
 export interface ShipBestClient {
   verify(): Promise<void>;
@@ -310,7 +279,7 @@ export class MockShipBestClient implements ShipBestClient {
  * 下单 / 面单 / 取消是模拟的，不会真实出单扣费。用来在上线前或测试新功能时核对真实价格。
  */
 export class SandboxShipBestClient extends MockShipBestClient {
-  constructor(private real: HttpShipBestClient) {
+  constructor(private real: ShipBestClient) {
     super();
   }
   async verify() {
@@ -323,6 +292,64 @@ export class SandboxShipBestClient extends MockShipBestClient {
     const q = await this.real.trialPrice(productCode, req);
     if (!q) throw new ShipBestError(10061, "trial price failed");
     return q;
+  }
+}
+
+/**
+ * 多个服务商：按渠道代码分给 ShipBest 或嘉谷（JG- 开头）。
+ * 订单查询 / 取消按自定义单号判断是哪家的单（嘉谷的单在 provider_orders 里有记录）。
+ */
+export class MultiProviderClient implements ShipBestClient {
+  constructor(private sb: ShipBestClient | null, private jg: JiaguClient | null) {}
+
+  private pick(code: string): ShipBestClient | JiaguClient {
+    if (isJiaguCode(code)) {
+      if (!this.jg) throw new ShipBestError(10023, "嘉谷接口没有启用或没有填写账号（设置 → 嘉谷万邑）");
+      return this.jg;
+    }
+    if (!this.sb) throw new ShipBestError(11004, "还没有填写 ShipBest API ID / Token（设置 → ShipBest 连接）");
+    return this.sb;
+  }
+
+  private isJgOrder(key: { orderNo?: string; customNo?: string }) {
+    return !!this.jg && !!key.customNo && !!jgOrders.get(key.customNo);
+  }
+
+  async verify() {
+    if (this.sb) await this.sb.verify();
+    if (this.jg) await this.jg.verify();
+  }
+
+  async getProducts() {
+    const out: Product[] = [];
+    if (this.sb) out.push(...(await this.sb.getProducts()));
+    if (this.jg) out.push(...(await this.jg.getProducts()));
+    return out;
+  }
+
+  async trialPrice(code: string, req: ShipmentRequest) {
+    return this.pick(code).trialPrice(code, req);
+  }
+
+  async createOrder(customNo: string, code: string, req: ShipmentRequest, remark?: string) {
+    const c = this.pick(code);
+    if (c === this.jg) {
+      const name = (db().prepare("SELECT name FROM channels WHERE code = ?").get(code) as { name: string } | undefined)?.name;
+      return this.jg!.createOrder(customNo, code, req, name ?? code);
+    }
+    return (c as ShipBestClient).createOrder(customNo, code, req, remark);
+  }
+
+  async getOrder(key: { orderNo?: string; customNo?: string }) {
+    if (this.isJgOrder(key)) return this.jg!.getOrder(key.customNo!);
+    if (!this.sb) throw new ShipBestError(11202, "订单不存在");
+    return this.sb.getOrder(key);
+  }
+
+  async cancelOrder(key: { orderNo?: string; customNo?: string }) {
+    if (this.isJgOrder(key)) return this.jg!.cancelOrder(key.customNo!);
+    if (!this.sb) throw new ShipBestError(11202, "订单不存在");
+    return this.sb.cancelOrder(key);
   }
 }
 
@@ -366,18 +393,20 @@ export function shipbestMode(): ShipBestMode {
   return shipbestConfig().mode;
 }
 
-let live: { key: string; client: ShipBestClient } | null = null;
+let live: { key: string; jg: JiaguClient | null; client: ShipBestClient } | null = null;
 
 export function getShipBestClient(): ShipBestClient {
   const c = shipbestConfig();
   if (c.mode === "mock") return (g.__shipbestMock ??= new MockShipBestClient());
-  if (!c.apiId || !c.token) {
+  const jg = getJiaguClient();
+  const hasSb = !!(c.apiId && c.token);
+  if (!hasSb && !jg) {
     throw new Error("还没有填写 ShipBest API ID / Token，请到后台“设置 → ShipBest 连接”填写");
   }
-  const key = `${c.mode}|${c.baseUrl}|${c.apiId}|${c.token}`;
-  if (live?.key !== key) {
-    const http = new HttpShipBestClient(c.baseUrl, c.apiId, c.token);
-    live = { key, client: c.mode === "sandbox" ? new SandboxShipBestClient(http) : http };
+  const key = `${c.mode}|${c.baseUrl}|${c.apiId}|${c.token}|${jg ? "jg" : ""}`;
+  if (live?.key !== key || live.jg !== jg) {
+    const real = new MultiProviderClient(hasSb ? new HttpShipBestClient(c.baseUrl, c.apiId, c.token) : null, jg);
+    live = { key, jg, client: c.mode === "sandbox" ? new SandboxShipBestClient(real) : real };
   }
   return live.client;
 }

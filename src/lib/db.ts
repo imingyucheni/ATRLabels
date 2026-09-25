@@ -420,6 +420,8 @@ export interface Settings {
   originGateway: string;
   /** ShipBest 接口：在后台“设置”里填写；mode = env 时按服务器环境变量 */
   shipbest: { mode: "env" | "mock" | "sandbox" | "live"; apiId: string; token: string; baseUrl?: string };
+  /** 嘉谷万邑（Dragon Open API）尾程面单：第二个服务商 */
+  jiagu: { enabled: boolean; clientId: string; secret: string; ownershipId: string; customerId: string; warehouseId: string; warehouses?: Record<string, string>; authUrl?: string; apiUrl?: string };
   /** USPS 地址核对（Addresses API v3） */
   usps: { enabled: boolean; consumerKey: string; consumerSecret: string };
   /** 收件地址核对：服务商、Google 密钥、每月上限 */
@@ -470,6 +472,7 @@ const DEFAULT_SETTINGS: Settings = {
   fxDaily: null,
   originGateway: "LAX",
   shipbest: { mode: "env", apiId: "", token: "" },
+  jiagu: { enabled: false, clientId: "", secret: "", ownershipId: "", customerId: "", warehouseId: "" },
   usps: { enabled: true, consumerKey: "", consumerSecret: "" },
   addrCheck: { enabled: true, provider: "google", googleKey: "", monthlyCap: 5000 },
   financePin: null,

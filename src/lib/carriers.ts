@@ -67,9 +67,13 @@ export function carrierById(id: string | null | undefined): Carrier {
  * “GOFO-（91710）” → “Gofo Express”，“YWE Air-91710” → “Yanwen Express Air”，“SPX-LAX” → “SPX Express”
  */
 export function defaultPublicName(channelName: string, carrierId?: string | null): string {
-  const clean = cleanChannelName(channelName);
-  const c = carrierById(carrierId || guessCarrier(channelName));
-  if (!c.fullName) return clean;
+  // 带服务商后缀（例如“ · 嘉谷”）的渠道名全是服务商的内部写法（D价、不预上网、仓库代码），只显示物流商全称
+  const tagged = /\s·\s*[^·]+$/.test(channelName || "");
+  const own = (channelName || "").replace(/\s*·\s*[^·]+$/, "");
+  const clean = cleanChannelName(own);
+  const c = carrierById(carrierId || guessCarrier(own));
+  if (!c.fullName) return tagged ? own.replace(/[\u3400-\u9fff（）()]+.*$/, "").trim() || own : clean;
+  if (tagged || /[\u3400-\u9fff]/.test(clean)) return c.fullName;
   const short = c.name.toUpperCase();
   const up = clean.toUpperCase();
   const at = up.indexOf(short);

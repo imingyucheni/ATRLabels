@@ -6,7 +6,8 @@ import { isSandboxSite, shipbestConfig, type ShipBestMode } from "@/lib/shipbest
 import StampSettings from "@/components/StampSettings";
 import FlashForm from "@/components/FlashForm";
 import RuleInputs from "@/components/RuleInputs";
-import { resetTestEnvAction, saveSmtpAction, testMailAction, setFinancePinAction, clearTestDataAction, saveAddrCheckAction, testAddrAction, refreshFxAction, saveChannelsAction, savePaymentSettingsAction, saveSettingsAction, saveShipBestAction, syncChannelsAction, verifyAction } from "@/app/actions";
+import { DEFAULT_JG_WAREHOUSES, isJiaguCode, JG_PREFIX, JG_SUFFIX } from "@/lib/shipbest/jiagu";
+import { saveJiaguAction, testJiaguAction, resetTestEnvAction, saveSmtpAction, testMailAction, setFinancePinAction, clearTestDataAction, saveAddrCheckAction, testAddrAction, refreshFxAction, saveChannelsAction, savePaymentSettingsAction, saveSettingsAction, saveShipBestAction, syncChannelsAction, verifyAction } from "@/app/actions";
 import { cnyToPay, usdCnyQuote } from "@/lib/fx";
 import FilePick from "@/components/FilePick";
 import { CarrierMark } from "@/components/ChannelLabel";
@@ -99,6 +100,81 @@ export default async function SettingsPage() {
           <FlashForm action={syncChannelsAction} submitLabel="同步渠道" inline />
         </div>
       </div>
+
+      {(() => {
+        const jg = s.jiagu ?? { enabled: false, clientId: "", secret: "", ownershipId: "", customerId: "", warehouseId: "" };
+        const ready = !!(jg.clientId && jg.secret && jg.ownershipId && jg.customerId);
+        const jgChannels = listChannels().filter((c) => isJiaguCode(c.code));
+        const jgWarehouse = (code: string) => {
+          const pid = code.slice(JG_PREFIX.length);
+          return jg.warehouses?.[pid] || DEFAULT_JG_WAREHOUSES[pid] || jg.warehouseId;
+        };
+        return (
+          <div className="card" id="jiagu">
+            <div className="row" style={{ justifyContent: "space-between" }}>
+              <h2 style={{ margin: 0 }}>{t("嘉谷万邑连接")}</h2>
+              <span className={`badge ${jg.enabled && ready ? "ok" : "pending"}`}>{jg.enabled && ready ? t("已启用") : ready ? t("已停用") : t("未配置")}</span>
+            </div>
+            <p className="small muted" style={{ marginTop: 10 }}>
+              {t("第二个面单服务商（尾程订单）。启用后点上面的“同步渠道”，嘉谷的渠道会出现在渠道列表里，名称后面带“· 嘉谷”，只有后台看得到；客户只看到物流商名称。模拟 / 沙盒 / 正式模式和 ShipBest 共用：沙盒模式下嘉谷也是真实报价、模拟出单。")}
+            </p>
+            {(() => {
+              const missing = jgChannels.filter((c) => !jgWarehouse(c.code));
+              return jg.enabled && ready && missing.length > 0 ? (
+                <div className="alert warn">{t("以下渠道还没有仓库 ID，报价和下单会失败，请向嘉谷索取：{list}", { list: missing.map((c) => c.name.replace(JG_SUFFIX, "")).join("、") })}</div>
+              ) : null;
+            })()}
+            <FlashForm action={saveJiaguAction} submitLabel="保存并测试连接" locked="修改后所有客户使用嘉谷渠道的报价和出单都会受影响" review>
+              <div className="grid" style={{ margin: "12px 0" }}>
+                <label className="f">{t("启用")}
+                  <select name="enabled" defaultValue={jg.enabled ? "1" : "0"}>
+                    <option value="1">{t("启用")}</option>
+                    <option value="0">{t("停用")}</option>
+                  </select>
+                </label>
+                <label className="f">Client ID
+                  <input name="clientId" defaultValue={jg.clientId} autoComplete="off" />
+                </label>
+                <label className="f">Client Secret
+                  <input name="secret" type="password" autoComplete="new-password"
+                    placeholder={jg.secret ? t("已保存（尾号 {tail}），留空不修改", { tail: jg.secret.slice(-4) }) : ""} />
+                </label>
+                <label className="f">{t("权属 ID（OwnershipID）")}
+                  <input name="ownershipId" defaultValue={jg.ownershipId} inputMode="numeric" autoComplete="off" />
+                </label>
+                <label className="f">{t("客户 ID（CustomerID）")}
+                  <input name="customerId" defaultValue={jg.customerId} inputMode="numeric" autoComplete="off" />
+                </label>
+                <label className="f">{t("默认仓库 ID（WarehouseID）")}
+                  <input name="warehouseId" defaultValue={jg.warehouseId} inputMode="numeric" autoComplete="off" placeholder={t("下面没单独填的渠道用这个")} />
+                </label>
+              </div>
+              {jgChannels.length > 0 && (
+                <div className="table-wrap" style={{ marginBottom: 12 }}>
+                  <table className="list">
+                    <thead><tr><th>{t("嘉谷渠道")}</th><th>{t("产品 ID")}</th><th>{t("仓库 ID")}</th></tr></thead>
+                    <tbody>
+                      {jgChannels.map((c) => {
+                        const pid = c.code.slice(JG_PREFIX.length);
+                        return (
+                          <tr key={c.code}>
+                            <td>{c.name.replace(JG_SUFFIX, "")}</td>
+                            <td className="small muted">{pid}</td>
+                            <td><input name={`wh_${pid}`} defaultValue={jg.warehouses?.[pid] ?? DEFAULT_JG_WAREHOUSES[pid] ?? ""} inputMode="numeric" autoComplete="off" style={{ width: 120 }} placeholder={jg.warehouseId || t("未填写")} /></td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </FlashForm>
+            <div className="row" style={{ marginTop: 8 }}>
+              <FlashForm action={testJiaguAction} submitLabel="测试连接 / 查余额" submitClass="" inline />
+            </div>
+          </div>
+        );
+      })()}
 
       {(() => {
         const ac = addrConfig();

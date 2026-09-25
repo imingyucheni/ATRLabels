@@ -34,7 +34,8 @@ export function toPublicQuote(q: ChannelQuote): PublicQuote {
 export function publicError(msg?: string | null): string {
   if (!msg) return "该渠道暂不可用";
   // 去掉错误码前缀，例如 “[10024] ”（只去开头或冒号后的，不动“邮编[78701]”这类内容）
-  const raw = msg.replace(/(^|[：:]\s*)\[-?\d+\]\s*/g, "$1");
+  // 去掉服务商名称（客户不需要知道是哪家服务商）
+  const raw = msg.replace(/(^|[：:]\s*)\[-?\d+\]\s*/g, "$1").replace(/嘉谷[：:]\s*/g, "").replace(/嘉谷/g, "");
   // 地址不在派送范围：统一说成“地址未覆盖”
   if (/不通邮|派送范围/.test(raw)) return "地址未覆盖：这个渠道送不到该邮编";
   if (raw.includes("还没有开通任何物流渠道")) return "您的账户还没有开通物流渠道，请联系客服开通";

@@ -101,4 +101,23 @@ export const fixC: Record<string, string> = {
     "Request cancellation of this order? No label has been issued yet, so the full charge will be refunded to your balance.",
   "不需要这张面单了可以点“申请取消”：未出面单的全额退款；已出面单的收取 {pct}% 手续费。":
     "Don't need this label? Click \"Request cancel\": orders without a label are fully refunded; issued labels incur a {pct}% fee.",
+  // 嘉谷万邑
+  "嘉谷万邑连接": "Jiagu (Dragon) connection",
+  "第二个面单服务商（尾程订单）。启用后点上面的“同步渠道”，嘉谷的渠道会出现在渠道列表里，名称后面带“· 嘉谷”，只有后台看得到；客户只看到物流商名称。模拟 / 沙盒 / 正式模式和 ShipBest 共用：沙盒模式下嘉谷也是真实报价、模拟出单。": "A second label provider (last-mile orders). After enabling, click \u201cSync services\u201d above: Jiagu services appear in the service list with a \u201c\u00b7 \u5609\u8c37\u201d tag that only admins see; customers only see the carrier name. Demo / sandbox / live mode is shared with ShipBest: in sandbox mode Jiagu quotes are real and orders are simulated.",
+  "以下渠道还没有仓库 ID，报价和下单会失败，请向嘉谷索取：{list}": "These services have no warehouse ID yet, so quotes and orders will fail. Ask Jiagu for it: {list}",
+  "修改后所有客户使用嘉谷渠道的报价和出单都会受影响": "Changes affect quotes and orders on Jiagu services for all customers",
+  "启用": "Enabled",
+  "停用": "Disabled",
+  "权属 ID（OwnershipID）": "Ownership ID",
+  "客户 ID（CustomerID）": "Customer ID",
+  "默认仓库 ID（WarehouseID）": "Default warehouse ID",
+  "下面没单独填的渠道用这个": "Used by services without their own warehouse below",
+  "嘉谷渠道": "Jiagu service",
+  "产品 ID": "Product ID",
+  "仓库 ID": "Warehouse ID",
+  "未填写": "Not set",
+  "测试连接 / 查余额": "Test connection / check balance",
+  "启用前请填写 Client ID、Client Secret、权属 ID 和客户 ID": "Fill in Client ID, Client Secret, Ownership ID and Customer ID before enabling",
+  "已保存（嘉谷已停用，嘉谷渠道暂时不能报价和下单）": "Saved (Jiagu disabled \u2014 its services can't quote or ship for now)",
+  "嘉谷没有启用或账号没填完整": "Jiagu is not enabled or the account details are incomplete",
 };

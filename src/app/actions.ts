@@ -38,13 +38,15 @@ import {
   setChannelDisplay,
   type Settings,
   getCustomer,
+  getChannel,
 } from "@/lib/db";
 import type { PartialRule } from "@/lib/pricing";
 import { getShipBestClient, shipbestMode } from "@/lib/shipbest/client";
 import { saveDimRule } from "@/lib/rates";
 import { CARRIERS } from "@/lib/carriers";
-import { clearChannelNameCache } from "@/lib/channelDisplay";
+import { clearChannelNameCache, sameNameChannels } from "@/lib/channelDisplay";
 import { clearTestData } from "@/lib/cleanup";
+import { getJiaguClient, jiaguConfig, JG_PREFIX, JG_SUFFIX, warehouseFor } from "@/lib/shipbest/jiagu";
 import { createBackup, deleteBackup, restoreBackup } from "@/lib/backup";
 import { resetTestEnv, setStoredMode } from "@/lib/db";
 import { sendMail } from "@/lib/mailer";
@@ -688,6 +690,9 @@ export async function saveCustomerChannelsAction(_: FlashState, fd: FormData): P
   const id = Number(fd.get("id"));
   if (!getCustomer(id)) return { error: "客户不存在" };
   const codes = fd.getAll("channels").map((v) => str(v, 50)).filter(Boolean);
+  // 同一个客户不能开通两个客户看起来一样的渠道（例如两家服务商的 USPS）：客户分不清，只能选一个
+  const clash = sameNameChannels(codes);
+  if (clash) return { error: `“${clash.publicName}”开通了 ${clash.names.length} 个（${clash.names.join("、")}），客户看到的名称一样，只能选一个` };
   setCustomerChannels(id, codes);
   revalidatePath(`/customers/${id}`);
   revalidatePath("/customers");
@@ -885,6 +890,56 @@ export async function saveShipBestAction(_: FlashState, fd: FormData): Promise<F
     return { ok: "已切换到正式模式，连接成功。请点“同步渠道”获取真实渠道，之后的报价和出单都是真实的。" };
   }
   return { ok: mode === "mock" ? "已切换到模拟模式（价格是模拟的，不会真实出单）" : "已保存" };
+}
+
+/* ---------------- 嘉谷万邑 ---------------- */
+
+export async function saveJiaguAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  await requireAdmin();
+  const cur = getSettings().jiagu ?? { enabled: false, clientId: "", secret: "", ownershipId: "", customerId: "", warehouseId: "" };
+  const id = (k: string) => str(fd.get(k), 20).replace(/\D/g, "");
+  const next = {
+    ...cur,
+    enabled: fd.get("enabled") === "1",
+    clientId: str(fd.get("clientId"), 100),
+    secret: str(fd.get("secret"), 200) || cur.secret, // 留空 = 不修改
+    ownershipId: id("ownershipId"),
+    customerId: id("customerId"),
+    warehouseId: id("warehouseId"),
+    // 每个渠道的仓库：表单里 wh_产品ID
+    warehouses: Object.fromEntries(
+      [...fd.keys()].filter((k) => /^wh_\d+$/.test(k)).map((k) => [k.slice(3), id(k)] as const).filter(([, v]) => v),
+    ),
+  };
+  if (next.enabled && (!next.clientId || !next.secret || !next.ownershipId || !next.customerId)) {
+    return { error: "启用前请填写 Client ID、Client Secret、权属 ID 和客户 ID" };
+  }
+  saveSettings({ jiagu: next });
+  clearChannelNameCache();
+  revalidatePath("/", "layout");
+  if (!next.enabled) return { ok: "已保存（嘉谷已停用，嘉谷渠道暂时不能报价和下单）" };
+  return jiaguStatus("已保存");
+}
+
+export async function testJiaguAction(_: FlashState): Promise<FlashState> {
+  await requireAdmin();
+  return jiaguStatus("连接成功");
+}
+
+async function jiaguStatus(prefix: string): Promise<FlashState> {
+  const c = getJiaguClient();
+  if (!c) return { error: "嘉谷没有启用或账号没填完整" };
+  try {
+    const products = await c.getProducts();
+    const bal = await c.balance().catch(() => null);
+    const cfg = jiaguConfig()!;
+    const noWh = products.filter((p) => !warehouseFor(cfg, Number(p.code.slice(JG_PREFIX.length)))).map((p) => p.name.replace(JG_SUFFIX, ""));
+    return {
+      ok: `${prefix}：开通了 ${products.length} 个渠道${bal ? `，账户余额 $${bal.usd.toFixed(2)}${bal.type ? `（${bal.type}）` : ""}` : ""}。点上面的“同步渠道”把嘉谷渠道加进渠道列表。${noWh.length ? `还没有仓库 ID 的渠道：${noWh.join("、")}` : ""}`,
+    };
+  } catch (e) {
+    return { error: `${prefix}，但连接测试失败：${(e as Error).message}` };
+  }
 }
 
 export async function saveDimRuleAction(_: FlashState, fd: FormData): Promise<FlashState> {
