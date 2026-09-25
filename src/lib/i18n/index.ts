@@ -42,9 +42,38 @@ export function translateMessage(lang: Lang, msg: string | null | undefined): st
   if (lang !== "en") return msg;
   if (EN[msg] !== undefined) return EN[msg];
   for (const [re, rep] of PATTERNS) {
-    if (re.test(msg)) return msg.replace(re, rep as string);
+    if (re.test(msg)) return fragments(msg.replace(re, rep as string));
   }
-  return msg;
+  return fragments(msg);
+}
+
+/** ShipBest 错误码的中文说明会嵌在各种提示里（例如 “[11203] 该订单不支持取消（…）”），逐段替换成英文 */
+const FRAGMENTS: [string, string][] = [
+  ["ShipBest 系统维护升级中", "ShipBest is under maintenance"],
+  ["物流产品不存在", "Service does not exist"],
+  ["物流产品已停用", "Service is disabled"],
+  ["包裹重量不在该渠道的下单重量范围内", "Package weight is outside this service's range"],
+  ["运费试算失败", "Rate quote failed"],
+  ["该物流产品没有设置价格，请联系 ShipBest", "No price set for this service; contact ShipBest"],
+  ["自定义单号重复", "Duplicate order number"],
+  ["API 授权信息无效（检查 apiId / accessToken）", "Invalid API credentials (check apiId / accessToken)"],
+  ["请求频率超限，请稍后再试", "Too many requests, please try again later"],
+  ["签名错误", "Signature error"],
+  ["重复提交", "Duplicate submission"],
+  ["时间戳无效（检查服务器时间）", "Invalid timestamp (check server time)"],
+  ["OMS 账户余额不足，请先充值", "ShipBest account balance is too low"],
+  ["OMS 账号已被停用", "ShipBest account is disabled"],
+  ["订单在 ShipBest 系统中不存在", "Order not found in ShipBest"],
+  ["该订单不支持取消", "This order can't be cancelled via API"],
+  ["订单已取消，不能重复取消", "Order is already cancelled"],
+  ["订单异常，不支持取消", "Order has an exception and can't be cancelled"],
+  ["创建订单异常", "Order creation error"],
+  ["不通邮", "not serviceable"],
+];
+function fragments(msg: string) {
+  let out = msg;
+  for (const [zh, en] of FRAGMENTS) if (out.includes(zh)) out = out.split(zh).join(en);
+  return out.replace(/（/g, " (").replace(/）/g, ")");
 }
 
 export type T = (key: string, vars?: Vars) => string;

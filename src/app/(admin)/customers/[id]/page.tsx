@@ -148,7 +148,7 @@ export default async function CustomerEdit({ params }: { params: Promise<{ id: s
 
           <FlashForm action={saveCustomerSenderAction} submitLabel="保存寄件地址" className="card" review>
             <h2>{t("客户默认寄件地址")}</h2>
-            <p className="small muted">{t("留空则使用系统默认寄件地址。客户也可以在客户端自己修改。")}</p>
+            <p className="small muted">{t("客户下单时默认使用这个地址；客户也可以在客户端的寄件地址簿里自己添加和修改。")}</p>
             <input type="hidden" name="id" value={c.id} />
             <AddressFields value={c.sender} namePrefix="sender." />
             <div style={{ height: 12 }} />

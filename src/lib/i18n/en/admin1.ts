@@ -267,8 +267,7 @@ export const admin1: Record<string, string> = {
   "位置和样式在“设置 → 面单加印 SKU”里调整。": "Set position and style under “Settings → SKU stamp on labels”.",
   "保存寄件地址": "Save sender address",
   "客户默认寄件地址": "Customer default sender address",
-  "留空则使用系统默认寄件地址。客户也可以在客户端自己修改。":
-    "Leave blank to use the system default sender address. Customers can also change it in the portal.",
+  "客户下单时默认使用这个地址；客户也可以在客户端的寄件地址簿里自己添加和修改。": "Used as the customer's default sender when ordering; customers can also add and edit addresses in their own address book.",
   "账户流水（最近 100 条）": "Account activity (last 100)",
   "后台": "Admin",
   "还没有流水": "No activity yet",
