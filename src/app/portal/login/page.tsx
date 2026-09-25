@@ -11,7 +11,7 @@ export function generateMetadata() {
 export default function PortalLoginPage() {
   const { brandName, supportContact } = getSettings();
   return (
-    <AuthShell
+    <AuthShell showLang
       brand={brandName}
       headline="美国尾程派送，下单更简单"
       sub="实时比较多个渠道的运费，批量导单、打印 4×6 面单、查看账单。"
