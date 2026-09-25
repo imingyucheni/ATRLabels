@@ -205,7 +205,16 @@ export default async function ShipmentDetail({ params }: { params: Promise<{ id:
 
       <div className="grid2">
         <div className="card"><h2>{t("寄件人")}</h2><Addr a={s.sender} /></div>
-        <div className="card"><h2>{t("收件人")}</h2><Addr a={s.recipient} /></div>
+        <div className="card">
+          <h2>{t("收件人")}</h2>
+          <Addr a={s.recipient} />
+          {s.addressCheck && (
+            <p className={`addr-mini ${["missing_unit", "bad_unit", "not_found"].includes(s.addressCheck.status) ? (s.addressCheck.status === "not_found" ? "err" : "warn") : "ok"}`}>
+              {t("下单时 USPS 核对")}{t("：")}{s.addressCheck.message ? t(s.addressCheck.message) : s.addressCheck.status}
+              {(s.addressCheck as { acknowledged?: boolean }).acknowledged && <b> · {t("客户已确认地址无误")}</b>}
+            </p>
+          )}
+        </div>
       </div>
 
       <div className="card">

@@ -6,12 +6,13 @@ import { isSandboxSite, shipbestConfig, type ShipBestMode } from "@/lib/shipbest
 import StampSettings from "@/components/StampSettings";
 import FlashForm from "@/components/FlashForm";
 import RuleInputs from "@/components/RuleInputs";
-import { clearTestDataAction, refreshFxAction, saveChannelsAction, savePaymentSettingsAction, saveSettingsAction, saveShipBestAction, syncChannelsAction, verifyAction } from "@/app/actions";
+import { clearTestDataAction, saveUspsAction, refreshFxAction, saveChannelsAction, savePaymentSettingsAction, saveSettingsAction, saveShipBestAction, syncChannelsAction, verifyAction } from "@/app/actions";
 import { cnyToPay, usdCnyQuote } from "@/lib/fx";
 import FilePick from "@/components/FilePick";
 import { CarrierMark } from "@/components/ChannelLabel";
 import { CARRIERS, carrierById, defaultPublicName, guessCarrier, publicChannel } from "@/lib/carriers";
 import { testDataStats } from "@/lib/cleanup";
+import { uspsConfig } from "@/lib/addressCheck";
 import { getLang, getT } from "@/lib/prefs";
 import type { T } from "@/lib/i18n";
 
@@ -86,6 +87,36 @@ export default async function SettingsPage() {
           <FlashForm action={syncChannelsAction} submitLabel="同步渠道" inline />
         </div>
       </div>
+
+      {(() => {
+        const u = uspsConfig();
+        const saved = s.usps ?? { enabled: true, consumerKey: "", consumerSecret: "" };
+        return (
+          <div className="card" id="usps">
+            <div className="row" style={{ justifyContent: "space-between" }}>
+              <h2 style={{ margin: 0 }}>{t("收件地址核对（USPS）")}</h2>
+              <span className={`badge ${u.enabled ? "ok" : "pending"}`}>{u.enabled ? t("已启用") : u.configured ? t("已停用") : t("未配置")}</span>
+            </div>
+            <p className="small muted">
+              {t("客户查运费时自动用 USPS 核对收件地址：地址不存在或缺公寓号会提醒客户，必须确认后才能下单；写法不标准会给出建议地址。免费，需要在 developers.usps.com 注册并创建 App，拿到 Consumer Key 和 Consumer Secret。USPS 默认每小时 60 次，同一个地址 30 天内只查一次。")}
+            </p>
+            <FlashForm action={saveUspsAction} submitLabel="保存并测试连接" locked="修改后所有客户下单都会用新的设置核对地址">
+              <div className="grid" style={{ margin: "12px 0" }}>
+                <label className="f">Consumer Key
+                  <input name="consumerKey" defaultValue={saved.consumerKey} autoComplete="off" placeholder={t("USPS 开发者平台 → Apps 里的 Consumer Key")} />
+                </label>
+                <label className="f">Consumer Secret
+                  <input name="consumerSecret" type="password" autoComplete="new-password"
+                    placeholder={u.consumerSecret ? t("已保存（尾号 {tail}），留空不修改", { tail: u.consumerSecret.slice(-4) }) : t("USPS 开发者平台 → Apps 里的 Consumer Secret")} />
+                </label>
+                <label className="f" style={{ alignSelf: "end" }}>
+                  <span><input type="checkbox" name="enabled" defaultChecked={saved.enabled !== false} /> {t("启用地址核对")}</span>
+                </label>
+              </div>
+            </FlashForm>
+          </div>
+        );
+      })()}
 
       <FlashForm action={saveSettingsAction} submitLabel="保存设置" className="card" locked="修改会影响所有客户的价格和余额规则" confirm="加价、取消费、补差和余额规则会对所有客户生效，确定保存吗？">
         <h2>{t("全局加价规则")}</h2>

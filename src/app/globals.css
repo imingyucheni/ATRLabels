@@ -600,3 +600,24 @@ button.accent-outline:hover, .btn.accent-outline:hover { background: var(--accen
 
 /* 送不到的渠道：整行变淡、不能选 */
 tr.row-disabled td:first-child { opacity: 0.55; }
+
+/* 收件地址核对 */
+.addr-check { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; display: grid; gap: 8px; font-size: 13px; }
+.addr-check-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.addr-check.ok { background: var(--ok-soft); border-color: color-mix(in srgb, var(--ok) 25%, transparent); }
+.addr-check.ok .addr-check-head svg, .addr-check.ok b { color: var(--ok); }
+.addr-check.info { background: var(--info-soft); border-color: color-mix(in srgb, var(--series-1) 30%, transparent); }
+.addr-check.info .addr-check-head svg, .addr-check.info b { color: var(--series-1); }
+.addr-check.warn { background: var(--warn-soft); border-color: color-mix(in srgb, var(--warn) 30%, transparent); }
+.addr-check.warn .addr-check-head svg, .addr-check.warn b { color: var(--warn); }
+.addr-check.err { background: var(--err-soft); border-color: color-mix(in srgb, var(--err) 30%, transparent); }
+.addr-check.err .addr-check-head svg, .addr-check.err b { color: var(--err); }
+.addr-suggest { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.addr-line { font-weight: 600; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
+.addr-ack { display: flex; gap: 8px; align-items: flex-start; font-weight: 600; cursor: pointer; }
+.addr-ack input { margin-top: 3px; }
+.addr-mini { margin-top: 3px; font-size: 12px; }
+.addr-mini.ok { color: var(--ok); }
+.addr-mini.info { color: var(--series-1); }
+.addr-mini.warn { color: var(--warn); }
+.addr-mini.err { color: var(--err); }

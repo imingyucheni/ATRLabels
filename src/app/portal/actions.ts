@@ -31,6 +31,7 @@ import { requestReset, resetWithToken } from "@/lib/passwordReset";
 import type { Address, ShipmentRequest } from "@/lib/shipbest/types";
 import type { FlashState } from "@/app/actions";
 import { getT, tMsg } from "@/lib/prefs";
+import { checkAddress, needsAck, type AddressCheck } from "@/lib/addressCheck";
 
 async function clientIp() {
   const h = await headers();
@@ -71,16 +72,19 @@ export async function leaveCustomerAction() {
 
 /* ---------------- 报价 / 下单 ---------------- */
 
-export async function portalQuoteAction(raw: ShipmentRequest): Promise<{ errors?: string[]; quotes?: PublicQuote[] }> {
+export async function portalQuoteAction(raw: ShipmentRequest): Promise<{ errors?: string[]; quotes?: PublicQuote[]; address?: AddressCheck }> {
   const me = await requireCustomer();
   const req = cleanRequest(raw);
   const errors = validateRequest(req);
   if (errors.length) return { errors: await Promise.all(errors.map((m) => tMsg(m))) };
   try {
-    const quotes = (await quoteAll(me.id, req)).map(toPublicQuote);
+    // 报价和地址核对同时进行
+    const [all, address] = await Promise.all([quoteAll(me.id, req), checkAddress(req.recipient)]);
+    const quotes = all.map(toPublicQuote);
     // 渠道不可用的原因按界面语言显示
     for (const q of quotes) if (q.error) q.error = await tMsg(q.error);
-    return { quotes };
+    if (address.message) address.message = await tMsg(address.message);
+    return { quotes, address };
   } catch (e) {
     return { errors: [await tMsg(publicError((e as Error).message))] };
   }
@@ -92,10 +96,18 @@ export async function portalCreateAction(input: {
   expectedPrice: number;
   customerRef?: string;
   remark?: string;
-}): Promise<{ id?: number; error?: string; quote?: PublicQuote }> {
+  /** 客户已确认有问题的收件地址无误 */
+  addressAck?: boolean;
+}): Promise<{ id?: number; error?: string; quote?: PublicQuote; needAddressAck?: boolean }> {
   const me = await requireCustomer();
   try {
+    // 地址有问题（查不到 / 缺公寓号）时必须客户确认过才能下单
+    const address = await checkAddress(cleanRequest(input.req).recipient);
+    if (needsAck(address) && !input.addressAck) {
+      return { error: await tMsg("收件地址可能有问题，请检查地址，或勾选“我确认地址无误”后再下单"), needAddressAck: true };
+    }
     const id = await createLabel({
+      addressCheck: needsAck(address) ? { ...address, acknowledged: true } as AddressCheck : address,
       customerId: me.id,
       channelCode: str(input.channelCode),
       req: cleanRequest(input.req),

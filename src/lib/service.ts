@@ -19,6 +19,7 @@ import { precheck, rememberQuote } from "./coverage";
 import { downloadLabel } from "./labels";
 import { chargeLabel, refundCancelled, removeShipmentLedger } from "./ledger";
 import { displayChannel } from "./channelDisplay";
+import type { AddressCheck } from "./addressCheck";
 import { computePrice, resolveRule, roundUp, type MarkupRule, type PartialRule } from "./pricing";
 import { getShipBestClient, shipbestMode, ShipBestError } from "./shipbest/client";
 import type { Address, ShipmentRequest } from "./shipbest/types";
@@ -292,6 +293,8 @@ export interface CreateInput {
   createdBy?: "admin" | "customer";
   /** 下单后是否等待面单生成（批量下单时关闭，最后统一刷新） */
   waitForLabel?: boolean;
+  /** 收件地址核对结果（客户确认过的问题地址也会记下来） */
+  addressCheck?: AddressCheck | null;
 }
 
 export async function createLabel(input: CreateInput): Promise<number> {
@@ -332,6 +335,7 @@ export async function createLabel(input: CreateInput): Promise<number> {
     customerRef: input.customerRef || null,
     createdBy,
     env: shipbestMode(),
+    addressCheck: input.addressCheck && input.addressCheck.status !== "unavailable" && input.addressCheck.status !== "skipped" ? JSON.stringify(input.addressCheck) : null,
     });
     chargeLabel(customerId, newId, quote.price!, createdBy, `运费 · ${displayChannel(channelCode).name || quote.channelName}${quote.zone ? ` · ${quote.zone}` : ""}`);
     return newId;

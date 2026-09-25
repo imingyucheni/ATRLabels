@@ -202,9 +202,11 @@ export default function BatchOrders(props: {
   const labeled = created.filter((r) => r.hasLabel);
   const problems = job.rows.filter((r) => r.status === "error" || r.status === "failed").length;
   const dupes = quoted.filter((r) => r.warning).length;
+  const addrBad = (r: { address: { status: string } | null }) => !!r.address && ["missing_unit", "bad_unit", "not_found"].includes(r.address.status);
+  const addrIssues = quoted.filter(addrBad).length;
   const processed = job.rows.filter((r) => r.status !== "pending").length;
   const allSelected = quoted.length > 0 && quoted.every((r) => r.selected);
-  const rows = job.rows.filter((r) => !onlyProblems || r.status === "error" || r.status === "failed" || r.error || (r.warning && r.status === "quoted"));
+  const rows = job.rows.filter((r) => !onlyProblems || r.status === "error" || r.status === "failed" || r.error || ((r.warning || addrBad(r)) && r.status === "quoted"));
   const cheapestTotal = chosen.reduce((a, r) => a + Math.min(...r.quotes.filter((q) => q.ok).map((q) => q.price!)), 0);
 
   function onSubmit() {
@@ -319,6 +321,9 @@ export default function BatchOrders(props: {
         {dupes > 0 && editable && (
           <div className="alert warn">⚠ {t("{n} 单的订单号之前已经出过面单（或在别的批次里待提交），可能是重复导入，已默认不勾选。确认需要重复出单的，再手动勾选提交。", { n: dupes })}</div>
         )}
+        {addrIssues > 0 && editable && (
+          <div className="alert warn">⚠ {t("{n} 单的收件地址 USPS 核对有问题（查不到或缺公寓号），已默认不勾选。请检查地址；确认无误的再手动勾选提交。", { n: addrIssues })}</div>
+        )}
         {problems > 0 && editable && <p className="small muted">{t("有错误的订单不会提交。请在表格里改好后，把这些订单重新导入。")}</p>}
       </div>
 
@@ -348,7 +353,7 @@ export default function BatchOrders(props: {
               const [label, cls] = r.labelPending ? [t("已扣款 · 面单生成中"), "pending"] : [t(ROW_STATUS[r.status][0]), ROW_STATUS[r.status][1]];
               const rowEditable = editable && r.status === "quoted";
               return (
-                <tr key={r.id} className={r.warning && r.status === "quoted" ? "row-warn" : undefined}>
+                <tr key={r.id} className={(r.warning || addrBad(r)) && r.status === "quoted" ? "row-warn" : undefined}>
                   <td>
                     {rowEditable && (
                       <input
@@ -365,7 +370,15 @@ export default function BatchOrders(props: {
                   </td>
                   <td className="muted">{r.rowNo}</td>
                   <td>{r.customerRef ?? "-"}</td>
-                  <td className="small">{r.recipient}</td>
+                  <td className="small">
+                    {r.recipient}
+                    {r.address && r.status !== "created" && (
+                      <div className={`addr-mini ${addrBad(r) ? (r.address.status === "not_found" ? "err" : "warn") : r.address.status === "corrected" ? "info" : "ok"}`} title={r.address.suggestion ? `${t("建议地址")}${t("：")}${[r.address.suggestion.address1, r.address.suggestion.address2, r.address.suggestion.city, r.address.suggestion.province, r.address.suggestion.zipCode].filter(Boolean).join(", ")}` : undefined}>
+                        {r.address.status === "ok" ? `✓ ${t("地址已验证")}` : r.address.status === "corrected" ? `✓ ${t("地址存在（写法可优化）")}` : `⚠ ${tr(r.address.message ?? "")}`}
+                        {addrBad(r) && r.status === "quoted" && <span className="muted"> · {t("确认无误请勾选这一单")}</span>}
+                      </div>
+                    )}
+                  </td>
                   <td className="small">{r.pkg}</td>
                   <td>
                     {r.status === "created" || r.status === "failed" ? (

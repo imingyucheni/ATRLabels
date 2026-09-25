@@ -44,6 +44,7 @@ import { saveDimRule } from "@/lib/rates";
 import { CARRIERS } from "@/lib/carriers";
 import { clearChannelNameCache } from "@/lib/channelDisplay";
 import { clearTestData } from "@/lib/cleanup";
+import { testUsps } from "@/lib/addressCheck";
 import { listSenders, saveSender } from "@/lib/senders";
 import { clearCredentials, readablePassword, rememberCredentials } from "@/lib/credentials";
 import { clearBlocks, importCoverage, lookupZip, parseCoverageWorkbook, removeCoverage, setPrefilter } from "@/lib/coverage";
@@ -372,6 +373,23 @@ export async function syncChannelsAction(_: FlashState): Promise<FlashState> {
   } catch (e) {
     return { error: (e as Error).message };
   }
+}
+
+export async function saveUspsAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  await requireAdmin();
+  const cur = getSettings().usps ?? { enabled: true, consumerKey: "", consumerSecret: "" };
+  const consumerKey = str(fd.get("consumerKey"), 200) || cur.consumerKey;
+  const consumerSecret = str(fd.get("consumerSecret"), 200) || cur.consumerSecret; // 留空 = 不修改
+  saveSettings({ usps: { enabled: fd.get("enabled") === "on", consumerKey, consumerSecret } });
+  revalidatePath("/settings");
+  if (fd.get("enabled") === "on" && consumerKey && consumerSecret) {
+    try {
+      return { ok: await testUsps() };
+    } catch (e) {
+      return { error: `已保存，但连接测试失败：${(e as Error).message}` };
+    }
+  }
+  return { ok: "已保存" };
 }
 
 export async function clearTestDataAction(_: FlashState, fd: FormData): Promise<FlashState> {

@@ -1,9 +1,11 @@
 "use client";
 
 import ChannelLabel, { useChannelDisplay } from "@/components/ChannelLabel";
+import AddressCheckPanel from "@/components/AddressCheckPanel";
+import type { AddressCheck } from "@/lib/addressCheck";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { quoteAction } from "@/app/actions";
 import type { SavedSender } from "@/lib/senders";
 import { portalCreateAction, portalQuoteAction, saveSenderBookAction } from "@/app/portal/actions";
@@ -100,6 +102,10 @@ export default function ShipForm(props: {
   const [notice, setNotice] = useState<string | null>(null);
   const [quoting, startQuote] = useTransition();
   const [creating, setCreating] = useState<string | null>(null);
+  // 收件地址核对（USPS）
+  const [addr, setAddr] = useState<AddressCheck | null>(null);
+  const [addrAck, setAddrAck] = useState(false);
+  const [requote, setRequote] = useState(false);
 
   const [wu, lu] = UNIT_LABEL[unit];
 
@@ -108,6 +114,8 @@ export default function ShipForm(props: {
     fn(v);
     setQuotes(null);
     setNotice(null);
+    setAddr(null);
+    setAddrAck(false);
   };
 
   function buildRequest(): ShipmentRequest {
@@ -156,16 +164,34 @@ export default function ShipForm(props: {
         : await quoteAction(customerId, buildRequest(), { percent: optNum(markup.percent), fixed: optNum(markup.fixed), minProfit: optNum(markup.minProfit) });
       setErrors(r.errors ?? []);
       setQuotes(r.quotes ?? null);
+      setAddr(("address" in r && r.address) || null);
+      setAddrAck(false);
     });
   }
 
+  // 采用 USPS 建议地址后自动重新查询
+  useEffect(() => {
+    if (requote) {
+      setRequote(false);
+      onQuote();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requote]);
+
+  const addrNeedsAck = !!addr && ["missing_unit", "bad_unit", "not_found"].includes(addr.status);
+
   async function onCreate(q: Quote) {
+    if (addrNeedsAck && !addrAck) {
+      setErrors([t("收件地址可能有问题，请检查地址，或勾选“我确认地址无误”后再下单")]);
+      document.getElementById("addr-check")?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
     const msg = t("确认用 {channel} 出单？\n运费：{price}（从账户余额扣除）", { channel: chName(q.channelCode, q.channelName).name, price: money(q.price, q.currency) });
     if (!window.confirm(msg)) return;
     setCreating(q.channelCode);
     setErrors([]);
     try {
-      const r = await portalCreateAction({ channelCode: q.channelCode, req: buildRequest(), expectedPrice: q.price!, remark, customerRef });
+      const r = await portalCreateAction({ channelCode: q.channelCode, req: buildRequest(), expectedPrice: q.price!, remark, customerRef, addressAck: addrAck });
       if (r.id) {
         router.push(`/portal/shipments/${r.id}`);
         return;
@@ -449,6 +475,18 @@ export default function ShipForm(props: {
           </button>
         </div>
         {notice && <div className="alert warn">{tm(notice)}</div>}
+        {portal && addr && addr.status !== "unavailable" && addr.status !== "skipped" && (
+          <AddressCheckPanel
+            check={addr}
+            ack={addrAck}
+            onAck={setAddrAck}
+            onUse={(sug) => {
+              setRecipient({ ...recipient, ...sug });
+              setAddr(null);
+              setRequote(true);
+            }}
+          />
+        )}
         {quotes && (
           <div className="row small" style={{ justifyContent: "space-between", marginBottom: 8, alignItems: "center" }}>
             <span className="muted">

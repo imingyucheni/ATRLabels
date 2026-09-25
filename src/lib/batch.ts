@@ -4,6 +4,7 @@
  * 任务在服务进程里后台执行，页面轮询进度；服务重启后打开任务页会自动继续。
  */
 import { publicChannel } from "./carriers";
+import { checkAddress, needsAck, type AddressCheck } from "./addressCheck";
 import ExcelJS from "exceljs";
 import { customerChannels, db, getChannel, getCustomer, getSettings, getShipment, listChannels } from "./db";
 import { InsufficientBalanceError } from "./ledger";
@@ -442,6 +443,8 @@ export interface BatchRow {
   error: string | null;
   /** 可能重复导入等提醒 */
   warning: string | null;
+  /** 收件地址核对（USPS） */
+  address: AddressCheck | null;
   shipmentId: number | null;
   trackingNo: string | null;
   hasLabel: boolean;
@@ -515,9 +518,10 @@ interface JobRowDb {
   error: string | null;
   warning: string | null;
   shipment_id: number | null;
+  addr_json?: string | null;
 }
 
-type RowPatch = Partial<Pick<JobRowDb, "channel_code" | "channel_name" | "price" | "currency" | "status" | "error" | "shipment_id" | "quotes_json" | "selected">>;
+type RowPatch = Partial<Pick<JobRowDb, "channel_code" | "channel_name" | "price" | "currency" | "status" | "error" | "shipment_id" | "quotes_json" | "selected" | "addr_json">>;
 
 function jobRows(jobId: number): JobRowDb[] {
   return db().prepare("SELECT * FROM batch_job_rows WHERE job_id = ? ORDER BY row_no").all(jobId) as JobRowDb[];
@@ -576,6 +580,7 @@ export function getJob(jobId: number): BatchJob | null {
         status: r.status,
         error: r.error,
         warning: r.warning,
+        address: r.addr_json ? (JSON.parse(r.addr_json) as AddressCheck) : null,
         shipmentId: r.shipment_id,
         trackingNo: s?.trackingNo ?? null,
         hasLabel: !!s?.labelPath,
@@ -760,6 +765,12 @@ async function quoteJob(jobId: number) {
       }
     }
     quotes.sort((a, b) => Number(b.ok) - Number(a.ok) || (a.price ?? 0) - (b.price ?? 0));
+    // 收件地址核对：有问题的单默认不勾选，客户确认（重新勾选）后才提交
+    const firstCheck = !r.addr_json;
+    const addr = await checkAddress(req.recipient);
+    const addrPatch: RowPatch = { addr_json: addr.status === "unavailable" || addr.status === "skipped" ? null : JSON.stringify(addr) };
+    if (firstCheck && needsAck(addr)) addrPatch.selected = 0;
+    setRow(r.id, addrPatch);
     // 重新试算时尽量保留之前选的渠道
     const keep = r.channel_code ? quotes.find((q) => q.ok && q.code === r.channel_code) : undefined;
     const pick = keep ?? pickFor(quotes, job.pickMode, r.file_channel);
@@ -805,6 +816,8 @@ async function createJobLabels(jobId: number) {
         customerRef: r.customer_ref ?? undefined,
         createdBy: job.createdBy === "customer" ? "customer" : "admin",
         waitForLabel: false,
+        // 勾选了有问题地址的单 = 客户确认过
+        addressCheck: r.addr_json ? { ...(JSON.parse(r.addr_json) as AddressCheck), ...(needsAck(JSON.parse(r.addr_json)) ? { acknowledged: true } : {}) } : null,
       });
       setRow(r.id, { status: "created", shipment_id: id, error: null });
     } catch (e) {
@@ -848,7 +861,7 @@ async function waitLabels(jobId: number) {
   await refreshCreatedLabels(jobId, 120_000);
   // 还有没提交的订单时回到“待确认”，可以继续提交；剩下的订单重新默认勾选（有重复提醒的除外）
   const left = jobRows(jobId).filter((r) => r.status === "quoted");
-  for (const r of left) if (!r.selected && !r.warning) setRow(r.id, { selected: 1 });
+  for (const r of left) if (!r.selected && !r.warning && !needsAck(r.addr_json ? JSON.parse(r.addr_json) : null)) setRow(r.id, { selected: 1 });
   setJob(jobId, left.length ? "ready" : "done");
 }
 

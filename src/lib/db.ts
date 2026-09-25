@@ -190,6 +190,8 @@ function migrate(conn: Database.Database) {
   if (!rcols.includes("selected")) conn.exec("ALTER TABLE batch_job_rows ADD COLUMN selected INTEGER NOT NULL DEFAULT 1");
   if (!rcols.includes("file_channel")) conn.exec("ALTER TABLE batch_job_rows ADD COLUMN file_channel TEXT");
   if (!rcols.includes("warning")) conn.exec("ALTER TABLE batch_job_rows ADD COLUMN warning TEXT");
+  // 收件地址核对结果（JSON）
+  if (!rcols.includes("addr_json")) conn.exec("ALTER TABLE batch_job_rows ADD COLUMN addr_json TEXT");
   const addCust: [string, string][] = [
     ["portal_email", "TEXT"],
     ["password_hash", "TEXT"],
@@ -208,6 +210,8 @@ function migrate(conn: Database.Database) {
   // 渠道：给客户看的名称、物流商（显示 logo）
   if (!chcols.includes("display_name")) conn.exec("ALTER TABLE channels ADD COLUMN display_name TEXT");
   if (!chcols.includes("carrier")) conn.exec("ALTER TABLE channels ADD COLUMN carrier TEXT");
+  // 下单时的收件地址核对结果（JSON）
+  if (!cols.includes("addr_check")) conn.exec("ALTER TABLE shipments ADD COLUMN addr_check TEXT");
   conn.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_customers_email ON customers(portal_email) WHERE portal_email IS NOT NULL");
   // 客户可用渠道：新客户默认一个都不开，由管理员逐个开通。
   // 第一次建表时，给已有客户开通当前已启用的全部渠道，避免升级后老客户突然无法下单。
@@ -310,6 +314,8 @@ export interface Settings {
   originGateway: string;
   /** ShipBest 接口：在后台“设置”里填写；mode = env 时按服务器环境变量 */
   shipbest: { mode: "env" | "mock" | "sandbox" | "live"; apiId: string; token: string; baseUrl?: string };
+  /** USPS 地址核对（Addresses API v3） */
+  usps: { enabled: boolean; consumerKey: string; consumerSecret: string };
 }
 
 /**
@@ -350,6 +356,7 @@ const DEFAULT_SETTINGS: Settings = {
   fxDaily: null,
   originGateway: "LAX",
   shipbest: { mode: "env", apiId: "", token: "" },
+  usps: { enabled: true, consumerKey: "", consumerSecret: "" },
 };
 
 export function getSettings(): Settings {
@@ -706,6 +713,8 @@ export interface Shipment {
   labelNote: string | null;
   /** 测试单（模拟 / 沙盒模式下的单，面单不是真的） */
   isTest: boolean;
+  /** 下单时的收件地址核对结果 */
+  addressCheck: { status: string; message?: string } | null;
   /** 官方账单补差合计：正数 = ShipBest 向我们补扣，负数 = 退给我们 */
   costAdj: number;
   /** 向客户补收（正）/ 退客户（负）的合计 */
@@ -747,6 +756,7 @@ interface ShipmentRow {
   created_by: string | null;
   label_note: string | null;
   env: string | null;
+  addr_check?: string | null;
   cost_adj: number | null;
   customer_adj: number | null;
   created_at: string;
@@ -787,6 +797,7 @@ function toShipment(r: ShipmentRow): Shipment {
     createdBy: r.created_by,
     labelNote: r.label_note,
     isTest: r.env ? r.env !== "live" : !!r.label_url?.startsWith("mock://"),
+    addressCheck: r.addr_check ? JSON.parse(r.addr_check) : null,
     costAdj: r.cost_adj ?? 0,
     customerAdj: r.customer_adj ?? 0,
     createdAt: r.created_at,
@@ -812,14 +823,15 @@ export interface NewShipment {
   customerRef?: string | null;
   createdBy?: string | null;
   env?: string | null;
+  addressCheck?: string | null;
 }
 
 export function insertShipment(s: NewShipment): number {
   const r = db()
     .prepare(
       `INSERT INTO shipments (custom_no, customer_id, channel_code, channel_name, sender_json, recipient_json,
-        package_json, sku_json, quoted_cost, currency, zone, price, rule_json, status, remark, customer_ref, created_by, env)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?, 'pending', ?, ?, ?, ?)`,
+        package_json, sku_json, quoted_cost, currency, zone, price, rule_json, status, remark, customer_ref, created_by, env, addr_check)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?, 'pending', ?, ?, ?, ?, ?)`,
     )
     .run(
       s.customNo,
@@ -839,6 +851,7 @@ export function insertShipment(s: NewShipment): number {
       s.customerRef ?? null,
       s.createdBy ?? null,
       s.env ?? null,
+      s.addressCheck ?? null,
     );
   return Number(r.lastInsertRowid);
 }
