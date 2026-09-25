@@ -1,6 +1,6 @@
 import { listJobs } from "@/lib/batch";
 import RecentJobs from "@/components/RecentJobs";
-import { listChannels, listCustomers } from "@/lib/db";
+import { customerChannels, listCustomers } from "@/lib/db";
 import BatchOrders from "@/components/BatchOrders";
 
 export default async function AdminBatchPage({ searchParams }: { searchParams: Promise<{ job?: string }> }) {
@@ -13,8 +13,11 @@ export default async function AdminBatchPage({ searchParams }: { searchParams: P
         mode="admin"
         basePath="/shipments/batch"
         jobId={Number(job) || undefined}
-        customers={listCustomers().map((c) => ({ id: c.id, name: c.name }))}
-        channels={listChannels(true).map((c) => ({ code: c.code, name: c.name }))}
+        customers={listCustomers().map((c) => ({
+          id: c.id,
+          name: c.name,
+          channels: customerChannels(c.id).map((ch) => ({ code: ch.code, name: ch.name })),
+        }))}
       />
       <RecentJobs jobs={jobs} basePath="/shipments/batch" showCustomer />
     </>

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getSettings, listCustomers } from "@/lib/db";
+import { customerChannels, getSettings, listCustomers } from "@/lib/db";
 import { money } from "@/lib/pricing";
 import { pendingResets } from "@/lib/passwordReset";
 import FlashForm from "@/components/FlashForm";
@@ -40,13 +40,19 @@ export default async function CustomersPage() {
       <div className="card table-wrap">
         <table>
           <thead>
-            <tr><th>名称</th><th>联系人</th><th>电话</th><th>登录</th><th className="num">余额</th><th className="num">信用额度</th><th>加价 %</th><th>固定加价</th><th>最低利润</th><th></th></tr>
+            <tr><th>名称</th><th>联系人</th><th>电话</th><th>登录</th><th>渠道</th><th className="num">余额</th><th className="num">信用额度</th><th>加价 %</th><th>固定加价</th><th>最低利润</th><th></th></tr>
           </thead>
           <tbody>
             {customers.map((c) => (
               <tr key={c.id}>
                 <td>{c.name}</td><td>{c.contact}</td><td>{c.phone}</td>
                 <td className="small">{c.portalEnabled ? c.portalEmail : <span className="muted">未开通</span>}</td>
+                <td className="small">
+                  {(() => {
+                    const n = customerChannels(c.id).length;
+                    return n ? <Link href={`/customers/${c.id}#channels`}>{n} 个</Link> : <Link href={`/customers/${c.id}#channels`} style={{ color: "var(--warn)" }}>未开通</Link>;
+                  })()}
+                </td>
                 <td className={`num ${c.balance < 0 ? "profit-neg" : ""}`}>{money(c.balance)}</td>
                 <td className="num">{c.creditLimit ? money(c.creditLimit) : "-"}</td>
                 <td>{show(c.markup.percent, "%")}</td><td>{show(c.markup.fixed)}</td><td>{show(c.markup.minProfit)}</td>
@@ -55,7 +61,7 @@ export default async function CustomersPage() {
                 </td>
               </tr>
             ))}
-            {!customers.length && <tr><td colSpan={10} className="muted">还没有客户，先新增一个</td></tr>}
+            {!customers.length && <tr><td colSpan={11} className="muted">还没有客户，先新增一个</td></tr>}
           </tbody>
         </table>
       </div>

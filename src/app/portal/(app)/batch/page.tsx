@@ -1,6 +1,6 @@
 import { requireCustomer } from "@/lib/auth";
 import { listJobs } from "@/lib/batch";
-import { listChannels } from "@/lib/db";
+import { customerChannels } from "@/lib/db";
 import BatchOrders from "@/components/BatchOrders";
 import RecentJobs from "@/components/RecentJobs";
 
@@ -15,7 +15,7 @@ export default async function PortalBatchPage({ searchParams }: { searchParams: 
         mode="portal"
         basePath="/portal/batch"
         jobId={Number(job) || undefined}
-        channels={listChannels(true).map((c) => ({ code: c.code, name: c.name }))}
+        channels={customerChannels(me.id).map((c) => ({ code: c.code, name: c.name }))}
       />
       <RecentJobs jobs={listJobs(me.id, 20)} basePath="/portal/batch" />
     </>

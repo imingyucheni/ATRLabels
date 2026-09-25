@@ -254,6 +254,23 @@ tr.best td { background: var(--accent-soft); }
 .badge.pending, .badge.cancel_requested { background: var(--warn-soft); color: var(--warn); }
 .badge.exception { background: var(--err-soft); color: var(--err); }
 .badge.cancelled { background: var(--sunken); color: var(--muted); }
+.badge.ok { background: var(--ok-soft); color: var(--ok); }
+.badge.warn { background: var(--warn-soft); color: var(--warn); }
+
+/* 勾选卡片（客户可用渠道） */
+.check-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+.check-tile {
+  display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px;
+  border: 1px solid var(--line); border-radius: 10px; background: var(--surface); cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+.check-tile:hover { border-color: var(--line-strong, var(--muted)); }
+.check-tile:has(input:checked) { border-color: var(--accent); background: var(--accent-soft, var(--sunken)); }
+.check-tile input { margin-top: 3px; }
+.check-tile > span { display: grid; gap: 2px; min-width: 0; }
+.check-tile b { font-weight: 600; font-size: 13.5px; }
+.check-tile.disabled { opacity: .6; }
+.customer-channels { display: flex; flex-wrap: wrap; gap: 4px; }
 
 /* ---------------- 提示条 ---------------- */
 .alert { padding: 10px 14px; border-radius: 10px; margin-bottom: 12px; font-size: 13.5px; border: 1px solid transparent; }

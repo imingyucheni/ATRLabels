@@ -17,6 +17,7 @@ export default function FlashForm({
   confirm,
   inline,
   resetOnSuccess,
+  id,
 }: {
   action: (state: FlashState, fd: FormData) => Promise<FlashState>;
   children?: React.ReactNode;
@@ -26,6 +27,7 @@ export default function FlashForm({
   confirm?: string;
   inline?: boolean;
   resetOnSuccess?: boolean;
+  id?: string;
 }) {
   const [state, formAction, pending] = useActionState(action, null);
   const ref = useRef<HTMLFormElement>(null);
@@ -37,6 +39,7 @@ export default function FlashForm({
   return (
     <form
       ref={ref}
+      id={id}
       className={className}
       style={inline ? { display: "inline-block" } : undefined}
       onSubmit={(e) => {

@@ -202,6 +202,17 @@ function migrate(conn: Database.Database) {
   if (!chcols.includes("stamp_json")) conn.exec("ALTER TABLE channels ADD COLUMN stamp_json TEXT");
   if (!cols.includes("label_note")) conn.exec("ALTER TABLE shipments ADD COLUMN label_note TEXT");
   conn.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_customers_email ON customers(portal_email) WHERE portal_email IS NOT NULL");
+  // 客户可用渠道：新客户默认一个都不开，由管理员逐个开通。
+  // 第一次建表时，给已有客户开通当前已启用的全部渠道，避免升级后老客户突然无法下单。
+  const hadCustomerChannels = !!conn.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='customer_channels'").get();
+  conn.exec(`CREATE TABLE IF NOT EXISTS customer_channels (
+    customer_id INTEGER NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+    channel_code TEXT NOT NULL,
+    PRIMARY KEY (customer_id, channel_code)
+  )`);
+  if (!hadCustomerChannels) {
+    conn.exec("INSERT OR IGNORE INTO customer_channels (customer_id, channel_code) SELECT cu.id, ch.code FROM customers cu, channels ch WHERE ch.enabled = 1");
+  }
 }
 
 const g = globalThis as unknown as { __db?: Database.Database };
@@ -382,6 +393,44 @@ export function upsertChannels(list: { code: string; name: string }[]) {
       if (pr) preset.run(JSON.stringify(pr), p.code);
     }),
   )();
+}
+
+/** 客户已开通的渠道代码（不管渠道是否在全局停用） */
+export function customerChannelCodes(customerId: number): string[] {
+  return (db().prepare("SELECT channel_code FROM customer_channels WHERE customer_id = ?").all(customerId) as { channel_code: string }[]).map(
+    (r) => r.channel_code,
+  );
+}
+
+/** 客户可以使用的渠道 = 全局已启用 ∩ 给这个客户开通的 */
+export function customerChannels(customerId: number): Channel[] {
+  const rows = db()
+    .prepare(
+      `SELECT ch.* FROM channels ch JOIN customer_channels cc ON cc.channel_code = ch.code
+       WHERE cc.customer_id = ? AND ch.enabled = 1 ORDER BY ch.name`,
+    )
+    .all(customerId) as ChannelRow[];
+  return rows.map(toChannel);
+}
+
+export function customerCanUse(customerId: number, code: string): boolean {
+  return customerChannels(customerId).some((c) => c.code === code);
+}
+
+export function setCustomerChannels(customerId: number, codes: string[]) {
+  const known = new Set(listChannels().map((c) => c.code));
+  const list = [...new Set(codes)].filter((c) => known.has(c));
+  db().transaction(() => {
+    db().prepare("DELETE FROM customer_channels WHERE customer_id = ?").run(customerId);
+    const ins = db().prepare("INSERT INTO customer_channels (customer_id, channel_code) VALUES (?, ?)");
+    for (const c of list) ins.run(customerId, c);
+  })();
+}
+
+/** 每个渠道开通给了多少客户（设置页展示用） */
+export function channelCustomerCounts(): Record<string, number> {
+  const rows = db().prepare("SELECT channel_code, COUNT(*) AS n FROM customer_channels GROUP BY channel_code").all() as { channel_code: string; n: number }[];
+  return Object.fromEntries(rows.map((r) => [r.channel_code, r.n]));
 }
 
 export function updateChannel(code: string, enabled: boolean, markup: PartialRule) {

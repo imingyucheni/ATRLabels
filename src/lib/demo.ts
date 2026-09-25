@@ -43,6 +43,9 @@ export function seedDemo(conn: Database.Database) {
       ["LP10210028", "UniUni-（91710）"], ["LP10210029", "GOFO-（91710）"], ["LP10210030", "USPS-（91710）"],
       ["LP10210433", "SwiftX-91710"], ["LP10210434", "YWE-91710"],
     ]) ch.run(code, name, presetForChannel(name) ? JSON.stringify(presetForChannel(name)) : null);
+    // 演示：预付客户开通全部渠道，月结客户只开通 3 个（演示“按客户开通渠道”）
+    const grant = conn.prepare("INSERT OR IGNORE INTO customer_channels (customer_id, channel_code) VALUES (?, ?)");
+    for (const code of ["LP10210028", "LP10210029", "LP10210030", "LP10210433", "LP10210434"]) grant.run(a, code);
+    for (const code of ["LP10210028", "LP10210029", "LP10210030"]) grant.run(b, code);
   }
-  void b;
 }

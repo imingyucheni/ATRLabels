@@ -4,7 +4,7 @@
  * 任务在服务进程里后台执行，页面轮询进度；服务重启后打开任务页会自动继续。
  */
 import ExcelJS from "exceljs";
-import { db, getChannel, getCustomer, getSettings, getShipment, listChannels } from "./db";
+import { customerChannels, db, getChannel, getCustomer, getSettings, getShipment, listChannels } from "./db";
 import { InsufficientBalanceError } from "./ledger";
 import { createLabel, PriceChangedError, quoteChannel, refreshShipment, validateRequest } from "./service";
 import type { Address, ShipmentRequest, SkuItem, UnitSystem } from "./shipbest/types";
@@ -301,7 +301,8 @@ export function createJob(input: {
   pickMode: PickMode;
   orders: ParsedOrder[];
 }): number {
-  const enabled = listChannels(true).map((c) => c.code);
+  const enabled = customerChannels(input.customerId).map((c) => c.code);
+  if (!enabled.length) throw new Error("该客户还没有开通任何物流渠道，请到客户详情里开通");
   const channels = input.channels.filter((c) => enabled.includes(c));
   return db().transaction(() => {
     const r = db()
@@ -517,7 +518,7 @@ export function listDraftRows(customerId?: number) {
 /** 换一组渠道重新试算（未下单的订单） */
 export function requote(jobId: number, channels: string[]) {
   assertEditable(jobId);
-  const enabled = listChannels(true).map((c) => c.code);
+  const enabled = customerChannels(getJob(jobId)!.customerId).map((c) => c.code);
   const list = channels.filter((c) => enabled.includes(c));
   if (!list.length) throw new Error("请至少选择一个渠道");
   db().prepare("UPDATE batch_jobs SET channels_json = ? WHERE id = ?").run(JSON.stringify(list), jobId);

@@ -31,6 +31,7 @@ describe("充值与按订单扣款", () => {
 
   it("Zelle / 支付宝充值申请 → 确认到账记入钱包；拒绝不入账；不能重复处理", async () => {
     const c = db.saveCustomer(null, { name: "充值客户", contact: null, phone: null, email: null, note: null, markup: {} });
+    db.setCustomerChannels(c, db.listChannels().map((c) => c.code));
     const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==", "base64");
     const z = await topup.createTopup({ customerId: c, method: "zelle", amountUsd: 200, reference: "ZL123", proof: png });
     const a = await topup.createTopup({ customerId: c, method: "alipay", amountUsd: 100 });
@@ -65,6 +66,7 @@ describe("充值与按订单扣款", () => {
       skuList: [{ sku: "A1", productNameCn: "T恤", productNameEn: "T-shirt", quantity: 1, declaredUnitPrice: 5, declaredCurrency: "USD", hsCode: "", productNature: "2,4", length: 10, width: 8, height: 4, weight: 2, unit: 3 }],
     };
     const c = db.saveCustomer(null, { name: "明细客户", contact: null, phone: null, email: null, note: null, markup: {} });
+    db.setCustomerChannels(c, db.listChannels().map((c) => c.code));
     ledger.addLedger({ customerId: c, type: "topup", amount: 100, createdBy: "admin" });
     const q = (await svc.quoteAll(c, req))[0];
     const id1 = await svc.createLabel({ customerId: c, channelCode: q.channelCode, req, expectedPrice: q.price! });

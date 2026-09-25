@@ -1,4 +1,4 @@
-import { ADJUSTMENT_POLICY_LABEL, getSettings, listChannels } from "@/lib/db";
+import { ADJUSTMENT_POLICY_LABEL, channelCustomerCounts, getSettings, listChannels } from "@/lib/db";
 import { BALANCE_RULE_LABEL } from "@/lib/ledger";
 import { computePrice, money, resolveRule, type MarkupRule } from "@/lib/pricing";
 import { isMockMode } from "@/lib/shipbest/client";
@@ -13,6 +13,7 @@ export default async function SettingsPage() {
   const s = getSettings();
   const fx = await usdCnyQuote();
   const channels = listChannels();
+  const opened = channelCustomerCounts();
   const configured = isMockMode() || (!!process.env.SHIPBEST_API_ID && !!process.env.SHIPBEST_ACCESS_TOKEN);
   const example = [5, 10, 20];
 
@@ -153,11 +154,11 @@ export default async function SettingsPage() {
 
       <FlashForm action={saveChannelsAction} submitLabel="保存渠道设置" className="card">
         <h2>物流渠道</h2>
-        <p className="small muted">勾选的渠道会出现在报价里。加价留空 = 沿用全局设置。</p>
+        <p className="small muted">这里是总开关：取消勾选的渠道所有客户都不能用。每个客户具体能用哪些渠道，在“客户”详情里单独开通（新客户默认不开通）。加价留空 = 沿用全局设置。</p>
         <div className="table-wrap">
           <table>
             <thead>
-              <tr><th>启用</th><th>渠道</th><th>加价 %</th><th>固定加价</th><th>最低利润</th><th>成本 10.00 时客户价</th></tr>
+              <tr><th>启用</th><th>渠道</th><th>加价 %</th><th>固定加价</th><th>最低利润</th><th>成本 10.00 时客户价</th><th className="num">开通客户</th></tr>
             </thead>
             <tbody>
               {channels.map((c) => (
@@ -166,9 +167,10 @@ export default async function SettingsPage() {
                   <td>{c.name}<div className="small muted">{c.code}</div></td>
                   <RuleCells prefix={`${c.code}.`} value={c.markup} global={s.markup} />
                   <td>{money(computePrice(10, resolveRule(s.markup, c.markup), s.roundingStep))}</td>
+                  <td className="num">{opened[c.code] ?? 0}</td>
                 </tr>
               ))}
-              {!channels.length && <tr><td colSpan={6} className="muted">还没有渠道，请点上方“同步渠道”</td></tr>}
+              {!channels.length && <tr><td colSpan={7} className="muted">还没有渠道，请点上方“同步渠道”</td></tr>}
             </tbody>
           </table>
         </div>

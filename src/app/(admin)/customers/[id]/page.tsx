@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getCustomer, getSettings } from "@/lib/db";
+import { customerChannelCodes, getCustomer, getSettings, listChannels } from "@/lib/db";
 import FlashForm from "@/components/FlashForm";
 import RuleInputs from "@/components/RuleInputs";
 import AddressFields from "@/components/AddressFields";
 import { LEDGER_TYPE_LABEL, listLedger } from "@/lib/ledger";
 import { money } from "@/lib/pricing";
-import { ledgerEntryAction, saveCustomerAction, saveCustomerPortalAction, saveCustomerSenderAction, saveCustomerStampAction, setCustomerPasswordAction } from "@/app/actions";
+import { ledgerEntryAction, saveCustomerAction, saveCustomerChannelsAction, saveCustomerPortalAction, saveCustomerSenderAction, saveCustomerStampAction, setCustomerPasswordAction } from "@/app/actions";
 
 export default async function CustomerEdit({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -14,6 +14,9 @@ export default async function CustomerEdit({ params }: { params: Promise<{ id: s
   if (id !== "new" && !c) notFound();
   const { markup } = getSettings();
   const ledger = c ? listLedger({ customerId: c.id, limit: 100 }) : [];
+  const allChannels = listChannels();
+  const opened = new Set(c ? customerChannelCodes(c.id) : []);
+  const usable = allChannels.filter((ch) => ch.enabled && opened.has(ch.code)).length;
   return (
     <>
       <div className="row" style={{ justifyContent: "space-between", marginBottom: 16 }}>
@@ -42,6 +45,27 @@ export default async function CustomerEdit({ params }: { params: Promise<{ id: s
             <div className="stat"><div className="muted">可用额度</div><div className="v">{money(c.balance + c.creditLimit)}</div></div>
             <div className="stat"><div className="muted">客户端登录</div><div className="v" style={{ fontSize: 16 }}>{c.portalEnabled ? (c.hasPassword ? "已开通" : "未设密码") : "未开通"}</div></div>
           </div>
+
+          <FlashForm action={saveCustomerChannelsAction} submitLabel="保存渠道" className="card" id="channels">
+            <div className="row" style={{ justifyContent: "space-between" }}>
+              <h2 style={{ margin: 0 }}>可用渠道</h2>
+              <span className={`badge ${usable ? "ok" : "warn"}`}>{usable ? `已开通 ${usable} 个` : "未开通，客户无法下单"}</span>
+            </div>
+            <p className="small muted">新客户默认不开通任何渠道。勾选后客户才能用这些渠道查询运费、下单和批量导入；后台代下单也只能用这里开通的渠道。</p>
+            <input type="hidden" name="id" value={c.id} />
+            <div className="check-grid" style={{ margin: "8px 0 12px" }}>
+              {allChannels.map((ch) => (
+                <label key={ch.code} className={`check-tile ${ch.enabled ? "" : "disabled"}`}>
+                  <input type="checkbox" name="channels" value={ch.code} defaultChecked={opened.has(ch.code)} />
+                  <span>
+                    <b>{ch.name}</b>
+                    <span className="small muted">{ch.code}{ch.enabled ? "" : " · 设置里已停用，暂不可用"}</span>
+                  </span>
+                </label>
+              ))}
+              {!allChannels.length && <span className="small muted">还没有渠道，请先到 <Link href="/settings">设置</Link> 同步渠道。</span>}
+            </div>
+          </FlashForm>
 
           <div className="grid2">
             <FlashForm action={ledgerEntryAction} submitLabel="确认" className="card" resetOnSuccess>

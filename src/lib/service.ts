@@ -1,6 +1,8 @@
 import { randomBytes } from "node:crypto";
 import {
   db,
+  customerCanUse,
+  customerChannels,
   getChannel,
   getCustomer,
   getSettings,
@@ -115,6 +117,9 @@ function ruleFor(customerId: number, channelCode: string): MarkupRule {
 /** 指定渠道试算（渠道名从本地渠道表取） */
 export async function quoteChannel(customerId: number, channelCode: string, req: ShipmentRequest): Promise<ChannelQuote> {
   const ch = getChannel(channelCode);
+  if (!customerCanUse(customerId, channelCode)) {
+    return { channelCode, channelName: ch?.name ?? channelCode, ok: false, error: "该客户未开通此渠道" };
+  }
   return quoteOne(customerId, channelCode, ch?.name ?? channelCode, req);
 }
 
@@ -146,12 +151,13 @@ async function quoteOne(customerId: number, channelCode: string, channelName: st
 }
 
 /**
- * 对所有已启用的渠道逐个试算。
+ * 对这个客户已开通（且全局启用）的渠道逐个试算。
  * 注：试算接口只返回渠道 id 和名称、不返回 code，所以按 code 逐个请求，保证下单时 code 对得上。
  */
 export async function quoteAll(customerId: number, req: ShipmentRequest): Promise<ChannelQuote[]> {
-  const channels = listChannels(true);
-  if (!channels.length) throw new Error("没有启用的物流渠道，请先到“设置”里同步渠道");
+  if (!listChannels(true).length) throw new Error("没有启用的物流渠道，请先到“设置”里同步渠道");
+  const channels = customerChannels(customerId);
+  if (!channels.length) throw new NoChannelsError();
   const results: ChannelQuote[] = [];
   // 小并发，避免触发频率限制（11005）
   const queue = [...channels];
@@ -162,6 +168,13 @@ export async function quoteAll(customerId: number, req: ShipmentRequest): Promis
   });
   await Promise.all(workers);
   return results.sort((a, b) => Number(b.ok) - Number(a.ok) || (a.price ?? 0) - (b.price ?? 0));
+}
+
+/** 客户还没有开通任何渠道（门户里提示“请联系客服开通”） */
+export class NoChannelsError extends Error {
+  constructor() {
+    super("该客户还没有开通任何物流渠道，请到客户详情里开通");
+  }
 }
 
 /* ---------------- 下单出面单 ---------------- */
@@ -201,6 +214,7 @@ export async function createLabel(input: CreateInput): Promise<number> {
 
   const channel = getChannel(channelCode);
   if (!channel?.enabled) throw new Error("渠道不存在或已停用");
+  if (!customerCanUse(customerId, channelCode)) throw new Error("该客户未开通此渠道");
 
   // 下单前重新试算一次，价格有变化则让员工确认
   const quote = await quoteOne(customerId, channelCode, channel.name, req);

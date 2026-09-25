@@ -34,6 +34,8 @@ export function publicError(msg?: string | null): string {
   if (!msg) return "该渠道暂不可用";
   // 去掉错误码前缀，例如 “[10024] ”（只去开头或冒号后的，不动“邮编[78701]”这类内容）
   const raw = msg.replace(/(^|[：:]\s*)\[-?\d+\]\s*/g, "$1");
+  if (raw.includes("还没有开通任何物流渠道")) return "您的账户还没有开通物流渠道，请联系客服开通";
+  if (raw.includes("未开通此渠道")) return "您的账户未开通此渠道，请联系客服";
   // 涉及我们和 ShipBest 之间的账户、授权、余额等问题，不给客户看原因
   if (/授权|签名|OMS|TIMESTAMP|SIGN|token|服务商|ShipBest|账户余额不足|balance sufficient|api auth/i.test(raw)) {
     return "系统繁忙，请稍后再试或联系客服";

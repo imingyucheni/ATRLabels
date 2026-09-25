@@ -38,7 +38,7 @@ type Quote = PublicQuote & Partial<Pick<ChannelQuote, "cost" | "listCost" | "rul
 export default function ShipForm(props: {
   /** portal = 客户自助下单：不选客户、只显示客户价 */
   mode?: "admin" | "portal";
-  customers?: { id: number; name: string; balance?: number; available?: number; sender?: Address | null }[];
+  customers?: { id: number; name: string; balance?: number; available?: number; sender?: Address | null; channelCount?: number }[];
   defaultCustomerId?: number;
   defaultSender: Address | null;
   defaultUnit: UnitSystem;
@@ -175,9 +175,16 @@ export default function ShipForm(props: {
               </select>
               {(() => {
                 const c = customers.find((x) => x.id === customerId);
-                return c?.balance !== undefined ? (
-                  <span className={`small ${c.available! <= 0 ? "profit-neg" : "muted"}`}>余额 {money(c.balance)} · 可用 {money(c.available)}</span>
-                ) : null;
+                return (
+                  <>
+                    {c?.balance !== undefined && (
+                      <span className={`small ${c.available! <= 0 ? "profit-neg" : "muted"}`}>余额 {money(c.balance)} · 可用 {money(c.available)}</span>
+                    )}
+                    {c?.channelCount === 0 && (
+                      <span className="small" style={{ color: "var(--warn)" }}>未开通任何渠道，请先到 <a href={`/customers/${c.id}#channels`}>客户详情</a> 开通</span>
+                    )}
+                  </>
+                );
               })()}
             </label>
           )}

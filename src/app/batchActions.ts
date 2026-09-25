@@ -59,7 +59,8 @@ export async function createBatchJobAction(fd: FormData): Promise<{ jobId?: numb
     ensureRunning(jobId);
     return { jobId };
   } catch (e) {
-    return { error: (e as Error).message };
+    const msg = (e as Error).message;
+    return { error: (await actor().catch(() => null))?.admin ? msg : publicError(msg) };
   }
 }
 

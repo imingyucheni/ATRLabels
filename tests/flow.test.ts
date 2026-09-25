@@ -40,6 +40,7 @@ describe("模拟模式完整流程", () => {
 
   it("报价 → 出单 → 面单 → 取消", async () => {
     const custId = db.saveCustomer(null, { name: "测试客户", contact: null, phone: null, email: null, note: null, markup: { percent: 10 } });
+    db.setCustomerChannels(custId, db.listChannels().map((c) => c.code));
     const quotes = await svc.quoteAll(custId, req);
 
     // 余额不足不能出单，也不留下任何记录
@@ -88,6 +89,7 @@ describe("模拟模式完整流程", () => {
     const adj = await import("@/lib/adjustments");
     const { buildStatement } = await import("@/lib/statement");
     const custId = db.saveCustomer(null, { name: "补差客户", contact: null, phone: null, email: null, note: null, markup: {} });
+    db.setCustomerChannels(custId, db.listChannels().map((c) => c.code));
     ledger.addLedger({ customerId: custId, type: "topup", amount: 50, createdBy: "admin" });
     const q = (await svc.quoteAll(custId, req))[0];
     const id = await svc.createLabel({ customerId: custId, channelCode: q.channelCode, req, expectedPrice: q.price! });
@@ -155,6 +157,7 @@ describe("模拟模式完整流程", () => {
       throw new Error("timeout " + batch.getJob(id)!.status);
     };
     const custId = db.saveCustomer(null, { name: "批量客户", contact: null, phone: null, email: null, note: null, markup: {} });
+    db.setCustomerChannels(custId, db.listChannels().map((c) => c.code));
 
     // 1) 系统模板本身可以直接上传：3 行示例 = 2 单（A1001 两个 SKU）
     const tplRows = await readSheetRows("t.xlsx", await batch.buildTemplate(req.sender), "first");
@@ -258,6 +261,7 @@ describe("模拟模式完整流程", () => {
     // “必须够付这一单”规则
     db.saveSettings({ balanceRule: "cover" });
     const custId = db.saveCustomer(null, { name: "余额客户", contact: null, phone: null, email: null, note: null, markup: {} });
+    db.setCustomerChannels(custId, db.listChannels().map((c) => c.code));
     const rows = await readSheetRows("t.xlsx", await batch.buildTemplate(req.sender), "first");
     const jobId = batch.createJob({ customerId: custId, createdBy: "admin", filename: "t.xlsx", channels: ["LP10210030"], pickMode: "cheapest", orders: batch.parseOrders(rows, null).orders });
     batch.ensureRunning(jobId);
@@ -286,6 +290,7 @@ describe("模拟模式完整流程", () => {
 
     db.saveSettings({ balanceRule: "positive" });
     const custId = db.saveCustomer(null, { name: "透支客户", contact: null, phone: null, email: null, note: null, markup: {} });
+    db.setCustomerChannels(custId, db.listChannels().map((c) => c.code));
     ledger.addLedger({ customerId: custId, type: "topup", amount: 1, createdBy: "admin" });
     const q = (await svc.quoteAll(custId, req))[0];
     // 余额 1，运费约 6：可以下单，余额变负
@@ -301,6 +306,7 @@ describe("模拟模式完整流程", () => {
     const { stampFor, stampedLabel } = await import("@/lib/stamp");
     const { readLabel } = await import("@/lib/labels");
     const custId = db.saveCustomer(null, { name: "加印客户", contact: null, phone: null, email: null, note: null, markup: {} });
+    db.setCustomerChannels(custId, db.listChannels().map((c) => c.code));
     ledger.addLedger({ customerId: custId, type: "topup", amount: 50, createdBy: "admin" });
     const q = (await svc.quoteAll(custId, req))[0];
     const id = await svc.createLabel({ customerId: custId, channelCode: q.channelCode, req, expectedPrice: q.price! });
@@ -341,4 +347,32 @@ describe("模拟模式完整流程", () => {
     db.setLabelNote(id, "PICK: A-01");
     expect(db.getShipment(id)!.labelNote).toBe("PICK: A-01");
   }, 30_000);
+});
+
+describe("按客户开通渠道", () => {
+  it("新客户默认没有渠道；只能用开通的渠道试算和下单", async () => {
+    const db = await import("@/lib/db");
+    const svc = await import("@/lib/service");
+    const ledger = await import("@/lib/ledger");
+    await svc.syncChannels();
+    const id = db.saveCustomer(null, { name: "渠道客户", contact: null, phone: null, email: null, note: null, markup: {} });
+    ledger.addLedger({ customerId: id, type: "topup", amount: 100, createdBy: "admin" });
+    expect(db.customerChannels(id)).toHaveLength(0);
+    await expect(svc.quoteAll(id, req)).rejects.toThrow("还没有开通任何物流渠道");
+
+    const [first, second] = db.listChannels(true);
+    db.setCustomerChannels(id, [first.code, "NOT_A_CHANNEL"]);
+    expect(db.customerChannelCodes(id)).toEqual([first.code]);
+    const quotes = await svc.quoteAll(id, req);
+    expect(quotes.map((q) => q.channelCode)).toEqual([first.code]);
+
+    const denied = await svc.quoteChannel(id, second.code, req);
+    expect(denied.ok).toBe(false);
+    await expect(svc.createLabel({ customerId: id, channelCode: second.code, req, expectedPrice: 1 })).rejects.toThrow("未开通此渠道");
+
+    // 渠道在设置里全局停用后，已开通的客户也不能用
+    db.updateChannel(first.code, false, {});
+    expect(db.customerChannels(id)).toHaveLength(0);
+    db.updateChannel(first.code, true, {});
+  });
 });

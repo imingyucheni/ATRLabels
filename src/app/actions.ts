@@ -22,6 +22,7 @@ import {
   getSettings,
   linkAdjustment,
   listChannels,
+  setCustomerChannels,
   saveCustomer,
   saveSettings,
   setChannelStamp,
@@ -32,6 +33,7 @@ import {
   updateCustomerPortal,
   updateChannel,
   type Settings,
+  getCustomer,
 } from "@/lib/db";
 import type { PartialRule } from "@/lib/pricing";
 import { addLedger, balanceOf, postAdjustment } from "@/lib/ledger";
@@ -428,6 +430,17 @@ export async function saveCustomerStampAction(_: FlashState, fd: FormData): Prom
   setCustomerStampMode(id, m === "on" || m === "off" ? m : "inherit");
   revalidatePath(`/customers/${id}`);
   return { ok: "已保存" };
+}
+
+export async function saveCustomerChannelsAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  await requireAdmin();
+  const id = Number(fd.get("id"));
+  if (!getCustomer(id)) return { error: "客户不存在" };
+  const codes = fd.getAll("channels").map((v) => str(v, 50)).filter(Boolean);
+  setCustomerChannels(id, codes);
+  revalidatePath(`/customers/${id}`);
+  revalidatePath("/customers");
+  return { ok: codes.length ? `已保存，开通 ${codes.length} 个渠道` : "已保存：这个客户现在没有可用渠道，无法下单" };
 }
 
 export async function saveLabelNoteAction(_: FlashState, fd: FormData): Promise<FlashState> {

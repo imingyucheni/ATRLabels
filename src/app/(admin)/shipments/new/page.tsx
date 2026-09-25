@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getSettings, listChannels, listCustomers } from "@/lib/db";
+import { customerChannels, getSettings, listChannels, listCustomers } from "@/lib/db";
 import ShipForm from "@/components/ShipForm";
 
 export default async function NewShipmentPage({ searchParams }: { searchParams: Promise<{ customerId?: string }> }) {
@@ -14,7 +14,7 @@ export default async function NewShipmentPage({ searchParams }: { searchParams: 
       {!hasChannels && <div className="alert warn">没有启用的渠道，请先到 <Link href="/settings">设置</Link> 同步渠道。</div>}
       {!s.sender && <div className="alert warn">还没有设置默认寄件地址，可以到 <Link href="/settings">设置</Link> 填写，省去每次输入。</div>}
       <ShipForm
-        customers={customers.map((c) => ({ id: c.id, name: c.name, balance: c.balance, available: c.balance + c.creditLimit, sender: c.sender }))}
+        customers={customers.map((c) => ({ id: c.id, name: c.name, balance: c.balance, available: c.balance + c.creditLimit, sender: c.sender, channelCount: customerChannels(c.id).length }))}
         defaultCustomerId={Number(customerId) || undefined}
         defaultSender={s.sender}
         defaultUnit={s.defaultUnit}

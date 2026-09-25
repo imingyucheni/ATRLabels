@@ -27,8 +27,10 @@ const ROW_STATUS: Record<string, [string, string]> = {
 
 export default function BatchOrders(props: {
   mode: "admin" | "portal";
-  customers?: { id: number; name: string }[];
-  channels: { code: string; name: string }[];
+  /** 后台：客户列表，每个客户带自己已开通的渠道 */
+  customers?: { id: number; name: string; channels: { code: string; name: string }[] }[];
+  /** 客户端：当前客户已开通的渠道 */
+  channels?: { code: string; name: string }[];
   jobId?: number;
   basePath: string;
 }) {
@@ -42,6 +44,10 @@ export default function BatchOrders(props: {
   const [onlyAvailable, setOnlyAvailable] = useState(true);
   const [requoteSet, setRequoteSet] = useState<Set<string>>(new Set());
   const [bulkChannel, setBulkChannel] = useState("");
+  const [custId, setCustId] = useState<number | undefined>(props.customers?.[0]?.id);
+  const channelsOf = (id?: number) =>
+    props.mode === "admin" ? props.customers?.find((c) => c.id === id)?.channels ?? [] : props.channels ?? [];
+  const uploadChannels = channelsOf(custId);
 
   const load = useCallback(async (id: number) => {
     const r = await getBatchJobAction(id);
@@ -117,7 +123,7 @@ export default function BatchOrders(props: {
           <div className="grid" style={{ alignItems: "end" }}>
             {props.mode === "admin" && (
               <label className="f"><span className="req">客户</span>
-                <select name="customerId" required>
+                <select name="customerId" required value={custId ?? ""} onChange={(e) => setCustId(Number(e.target.value))}>
                   {props.customers?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </label>
@@ -134,13 +140,18 @@ export default function BatchOrders(props: {
           </div>
           <div>
             <div className="small muted" style={{ marginBottom: 4 }}>试算渠道（渠道越多试算越慢）</div>
-            <div className="row" style={{ gap: 14 }}>
-              {props.channels.map((c) => (
+            <div className="row" style={{ gap: 14 }} key={custId}>
+              {uploadChannels.map((c) => (
                 <label key={c.code} className="small"><input type="checkbox" name="channels" value={c.code} defaultChecked /> {c.name}</label>
               ))}
+              {!uploadChannels.length && (
+                <span className="small" style={{ color: "var(--warn)" }}>
+                  {props.mode === "admin" ? "这个客户还没有开通任何渠道，请先到“客户”详情里开通。" : "您的账户还没有开通物流渠道，请联系客服开通。"}
+                </span>
+              )}
             </div>
           </div>
-          <div><button className="primary" disabled={busy}>{busy ? "导入中…" : "导入并试算"}</button></div>
+          <div><button className="primary" disabled={busy || !uploadChannels.length}>{busy ? "导入中…" : "导入并试算"}</button></div>
         </form>
         {error && <div className="alert err" style={{ marginTop: 12 }}>{error}</div>}
       </div>
@@ -222,7 +233,7 @@ export default function BatchOrders(props: {
             </div>
             <div className="row" style={{ gap: 12 }}>
               <span className="small muted">试算渠道：</span>
-              {props.channels.map((c) => (
+              {channelsOf(job.customerId).map((c) => (
                 <label key={c.code} className="small">
                   <input
                     type="checkbox"
