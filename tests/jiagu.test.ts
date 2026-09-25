@@ -50,6 +50,8 @@ describe("嘉谷万邑接口", () => {
     const cfg = jg.jiaguConfig()!;
     const b = jg.buildJiaguBody(cfg, req, 579181);
     expect(b.WarehouseID).toBe(196845); // 默认表里 GOFO 的仓库
+    expect(jg.buildJiaguBody(cfg, req, 580914).WarehouseID).toBe(196845); // USPS
+    expect(jg.buildJiaguBody(cfg, req, 590297).WarehouseID).toBe(229615); // UPS
     expect(jg.buildJiaguBody(cfg, req, 111).WarehouseID).toBe(999); // 后台设置的
     expect(b.OrderType).toBe(20120);
     expect(b.NeedSignService).toBe("10"); // 成人签名
@@ -66,7 +68,7 @@ describe("嘉谷万邑接口", () => {
         const id = (b.Products as { ID: number }[])[0].ID;
         return id === 307699
           ? { IsSuccess: true, Result: [{ ID: id, TotalCharge: 0, Message: "订单未匹配到分区" }] }
-          : { IsSuccess: true, Result: [{ ID: id, ProductName: "GOFO", TotalCharge: 5.39, RatesList: [{ Currency: "USD", ZoneCode: "8", Amount: 5.39 }] }] };
+          : { IsSuccess: true, Result: [{ ID: id, ProductName: "GOFO", TotalCharge: 5.38, RatesList: [{ Currency: "USD", ZoneCode: "8", Amount: 5.39 }] }] };
       },
       "/api/gts/ShippingLabel": () => ({ IsSuccess: false, ErrorCode: "100", Message: "供应商异步未及时返回单号" }),
       "/api/gts/GetMailNoByOrderNbr": () => ({ IsSuccess: true, Result: { TrackingNbr: "GFUS123", WaybillUrl: "http://x/label.pdf" } }),

@@ -21,6 +21,7 @@ export const DEFAULT_JG_WAREHOUSES: Record<string, string> = {
   "590297": "229615", // UPS-D-GROUND-923 · CA-92374
   "307699": "196845", // uniuni-LAX-917(不预上网) · GALAX
   "581808": "196845", // Swiftx-LAX-917 · GALAX
+  "580914": "196845", // USPS-D价-GA-917不预上网 · GALAX
 };
 
 export interface JiaguConfig {
@@ -253,7 +254,9 @@ export class JiaguClient {
       if (/分区/.test(msg)) throw new JiaguError(1, `邮编[${req.recipient.zipCode}]不通邮（${msg}）`);
       throw new JiaguError(10061, msg);
     }
-    const total = Math.round(q.TotalCharge * 100) / 100;
+    // 总价和明细合计偶尔差 1 分（例如 5.56 / 5.57），取较高的作为成本，避免少收
+    const lines = (q.RatesList ?? []).reduce((a, x) => a + (Number(x.Amount) || 0), 0);
+    const total = Math.round(Math.max(q.TotalCharge, lines) * 100) / 100;
     const zone = q.RatesList?.find((x) => x.ZoneCode)?.ZoneCode;
     return {
       logisticsProductId: id,
