@@ -44,7 +44,8 @@ export function uspsConfig() {
 }
 
 const BASE = "https://apis.usps.com";
-let token: { key: string; value: string; exp: number } | null = null;
+let token: { key: string; value: string; exp: number; scope?: string } | null = null;
+const tokenScope = (): string | undefined => token?.scope;
 
 async function accessToken(key: string, secret: string, scope?: string): Promise<string> {
   const tag = key + (scope ?? "");
@@ -56,9 +57,9 @@ async function accessToken(key: string, secret: string, scope?: string): Promise
     signal: AbortSignal.timeout(15_000),
     cache: "no-store",
   });
-  const j = (await res.json().catch(() => ({}))) as { access_token?: string; expires_in?: number; error_description?: string; error?: string };
+  const j = (await res.json().catch(() => ({}))) as { access_token?: string; expires_in?: number; error_description?: string; error?: string; scope?: string };
   if (!res.ok || !j.access_token) throw new Error(`USPS 授权失败：${j.error_description || j.error || res.status}`);
-  token = { key: tag, value: j.access_token, exp: Date.now() + (Number(j.expires_in) || 3600) * 1000 };
+  token = { key: tag, value: j.access_token, exp: Date.now() + (Number(j.expires_in) || 3600) * 1000, scope: j.scope };
   return token.value;
 }
 
@@ -176,6 +177,11 @@ export async function testUsps(): Promise<string> {
   if (!cfg.configured) throw new Error("请先填写 USPS Consumer Key 和 Consumer Secret");
   token = null;
   const r = await checkAddress({ country: "US", address1: "1600 Pennsylvania Ave NW", city: "Washington", province: "DC", zipCode: "20500" }, { fresh: true, force: true });
-  if (r.status === "unavailable") throw new Error(r.message || "USPS 暂时无法核对");
+  if (r.status === "unavailable") {
+    // 403 多半是 App 没有地址接口权限：把令牌里实际拿到的权限列出来
+    const sc = tokenScope();
+    const scopes = sc ? `（令牌权限：${sc}${/\baddresses\b/.test(sc) ? "" : "，不包含 addresses"}）` : "";
+    throw new Error((r.message || "USPS 暂时无法核对") + scopes);
+  }
   return "USPS 连接成功";
 }
