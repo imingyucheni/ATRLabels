@@ -568,6 +568,10 @@ export function updateCustomerPortal(id: number, p: { email: string | null; enab
     .run(p.email ? p.email.toLowerCase() : null, p.enabled ? 1 : 0, p.creditLimit, id);
 }
 
+export function portalEmailTaken(email: string, exceptId = 0): boolean {
+  return !!db().prepare("SELECT id FROM customers WHERE portal_email = ? COLLATE NOCASE AND id != ?").get(email, exceptId);
+}
+
 export function setCustomerPassword(id: number, hash: string) {
   db().prepare("UPDATE customers SET password_hash = ? WHERE id = ?").run(hash, id);
 }

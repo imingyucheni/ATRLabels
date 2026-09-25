@@ -23,6 +23,7 @@ import {
   linkAdjustment,
   listChannels,
   setCustomerChannels,
+  portalEmailTaken,
   unlinkAdjustment,
   saveCustomer,
   saveSettings,
@@ -37,6 +38,7 @@ import {
   getCustomer,
 } from "@/lib/db";
 import type { PartialRule } from "@/lib/pricing";
+import { clearCredentials, readablePassword, rememberCredentials } from "@/lib/credentials";
 import { clearBlocks, importCoverage, lookupZip, parseCoverageWorkbook, removeCoverage, setPrefilter } from "@/lib/coverage";
 import { addLedger, balanceOf, postAdjustment } from "@/lib/ledger";
 import { saveChannelSample } from "@/lib/labels";
@@ -183,20 +185,39 @@ export async function saveCustomerAction(_: FlashState, fd: FormData): Promise<F
   const name = str(fd.get("name"));
   if (!name) return { error: "客户名称必填" };
   const idRaw = Number(fd.get("id"));
+  const isNew = !(idRaw > 0);
+  const email = str(fd.get("email"), 100).toLowerCase() || null;
+  if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return { error: "邮箱格式不正确" };
+  // 新客户：邮箱就是 OMS 登录账号，保存时直接开通登录并生成初始密码
+  if (isNew && email && portalEmailTaken(email)) return { error: "这个邮箱已经被其他客户用作登录账号" };
   const neg = negativeRule(ruleFromForm(fd));
   if (neg) return { error: neg };
-  const savedId = saveCustomer(idRaw > 0 ? idRaw : null, {
+  const savedId = saveCustomer(isNew ? null : idRaw, {
     name,
     contact: str(fd.get("contact")) || null,
     phone: str(fd.get("phone")) || null,
-    email: str(fd.get("email")) || null,
+    email,
     note: str(fd.get("note"), 1000) || null,
     markup: ruleFromForm(fd),
   });
   revalidatePath("/customers");
-  // 新客户保存后进入详情页，继续开通登录、充值
-  if (!(idRaw > 0)) redirect(`/customers/${savedId}`);
+  if (isNew) {
+    if (email) {
+      updateCustomerPortal(savedId, { email, enabled: true, creditLimit: 0 });
+      const pw = readablePassword();
+      setCustomerPassword(savedId, hashPassword(pw));
+      rememberCredentials(savedId, email, pw);
+    }
+    // 新客户保存后进入详情页：显示开户信息，继续开通渠道、充值
+    redirect(`/customers/${savedId}`);
+  }
   return { ok: "已保存" };
+}
+
+export async function hideCredentialsAction(id: number) {
+  await requireAdmin();
+  clearCredentials(id);
+  revalidatePath(`/customers/${id}`);
 }
 
 export async function saveCustomerPortalAction(_: FlashState, fd: FormData): Promise<FlashState> {
@@ -218,13 +239,17 @@ export async function saveCustomerPortalAction(_: FlashState, fd: FormData): Pro
 export async function setCustomerPasswordAction(_: FlashState, fd: FormData): Promise<FlashState> {
   await requireAdmin();
   const id = Number(fd.get("id"));
+  const c = getCustomer(id);
+  if (!c) return { error: "客户不存在" };
+  if (!c.portalEmail) return { error: "请先在上面填写登录邮箱并保存" };
   let pw = String(fd.get("password") ?? "").trim();
   const generated = !pw;
-  if (generated) pw = randomBytes(6).toString("base64url");
+  if (generated) pw = readablePassword();
   if (pw.length < 8 && !generated) return { error: "密码至少 8 位（留空则自动生成）" };
   setCustomerPassword(id, hashPassword(pw));
+  rememberCredentials(id, c.portalEmail, pw);
   revalidatePath(`/customers/${id}`);
-  return { ok: `密码已设置为：${pw}　请发给客户，客户登录后可以自己修改。这个密码只显示这一次。` };
+  return { ok: "密码已更新，页面上方的“开户信息”可以直接复制发给客户。客户原来的登录会失效。" };
 }
 
 export async function saveCustomerSenderAction(_: FlashState, fd: FormData): Promise<FlashState> {

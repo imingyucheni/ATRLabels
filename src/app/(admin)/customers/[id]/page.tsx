@@ -2,6 +2,8 @@ import { fmtTime } from "@/lib/time";
 import Link from "next/link";
 import { headers } from "next/headers";
 import { omsLoginUrl } from "@/lib/sites";
+import { pendingCredentials } from "@/lib/credentials";
+import CredentialsCard from "@/components/CredentialsCard";
 import { notFound } from "next/navigation";
 import { customerChannelCodes, getCustomer, getSettings, listChannels } from "@/lib/db";
 import FlashForm from "@/components/FlashForm";
@@ -9,7 +11,7 @@ import RuleInputs from "@/components/RuleInputs";
 import AddressFields from "@/components/AddressFields";
 import { LEDGER_TYPE_LABEL, listLedger } from "@/lib/ledger";
 import { money } from "@/lib/pricing";
-import { ledgerEntryAction, saveCustomerAction, saveCustomerChannelsAction, saveCustomerPortalAction, saveCustomerSenderAction, saveCustomerStampAction, setCustomerPasswordAction } from "@/app/actions";
+import { ledgerEntryAction, hideCredentialsAction, saveCustomerAction, saveCustomerChannelsAction, saveCustomerPortalAction, saveCustomerSenderAction, saveCustomerStampAction, setCustomerPasswordAction } from "@/app/actions";
 
 export default async function CustomerEdit({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -17,6 +19,7 @@ export default async function CustomerEdit({ params }: { params: Promise<{ id: s
   if (id !== "new" && !c) notFound();
   const { markup } = getSettings();
   const h = await headers();
+  const creds = c ? pendingCredentials(c.id) : null;
   const omsLogin = omsLoginUrl(`${h.get("x-forwarded-proto") ?? "http"}://${h.get("x-forwarded-host") ?? h.get("host")}`);
   const ledger = c ? listLedger({ customerId: c.id, limit: 100 }) : [];
   const allChannels = listChannels();
@@ -34,13 +37,17 @@ export default async function CustomerEdit({ params }: { params: Promise<{ id: s
           <Link href="/customers">← 返回</Link>
         </div>
       </div>
-      <FlashForm action={saveCustomerAction} submitLabel="保存" className="card">
+      {c && creds && (
+        <CredentialsCard brand={getSettings().brandName} name={c.name} url={omsLogin} email={creds.email} password={creds.password}
+          onHide={hideCredentialsAction.bind(null, c.id)} />
+      )}
+      <FlashForm action={saveCustomerAction} submitLabel={c ? "保存" : "创建客户并生成登录信息"} className="card">
         <input type="hidden" name="id" value={c?.id ?? ""} />
         <div className="grid">
           <label className="f"><span className="req">名称</span><input name="name" required defaultValue={c?.name} /></label>
           <label className="f">联系人<input name="contact" defaultValue={c?.contact ?? ""} /></label>
           <label className="f">电话<input name="phone" defaultValue={c?.phone ?? ""} /></label>
-          <label className="f">邮箱<input name="email" type="email" defaultValue={c?.email ?? ""} /></label>
+          <label className="f">{c ? "邮箱" : <span className="req">邮箱（客户 OMS 登录账号）</span>}<input name="email" type="email" required={!c} defaultValue={c?.email ?? ""} /></label>
         </div>
         <h3>专属加价（留空 = 沿用渠道 / 全局设置）</h3>
         <div className="grid">
@@ -110,7 +117,7 @@ export default async function CustomerEdit({ params }: { params: Promise<{ id: s
                 <p className="small muted">信用额度：余额可以透支到负多少。预付客户填 0；月结客户填一个额度。后台代客户下单也按这个额度检查。</p>
               </FlashForm>
               <div style={{ height: 16 }} />
-              <FlashForm action={setCustomerPasswordAction} submitLabel={c.hasPassword ? "重置密码" : "设置密码"} submitClass="">
+              <FlashForm action={setCustomerPasswordAction} submitLabel={c.hasPassword ? "重新生成密码" : "生成登录密码"} submitClass="">
                 <input type="hidden" name="id" value={c.id} />
                 <label className="f" style={{ marginBottom: 8 }}>新密码（至少 8 位；留空自动生成）<input name="password" type="text" autoComplete="off" minLength={8} /></label>
               </FlashForm>

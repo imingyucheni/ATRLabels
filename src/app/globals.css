@@ -384,3 +384,8 @@ table.list td { white-space: nowrap; }
 .acting-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
   margin: -4px 0 16px; padding: 10px 14px; border-radius: 10px; background: var(--warn-soft); color: var(--warn); font-size: 13px; }
 .acting-bar b { color: var(--text, inherit); }
+
+/* 开户信息 */
+.cred-card { border-color: var(--accent); background: var(--accent-soft); }
+.cred-text { margin: 12px 0; padding: 12px 14px; border-radius: 8px; background: var(--surface); border: 1px solid var(--line);
+  font-family: inherit; font-size: 13.5px; line-height: 1.7; white-space: pre-wrap; user-select: all; }
