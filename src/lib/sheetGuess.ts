@@ -112,7 +112,8 @@ export function describeRow(header: string[], row: string[], reasonCol: number):
   const reason = reasonCol >= 0 ? row[reasonCol] ?? "" : "";
   const parts: string[] = [];
   const w = weightDiff(header, row);
-  if (w) {
+  // 预报和结算重量都是 0 说明没有数据，不显示
+  if (w && (w.declared > 0 || w.billed > 0)) {
     const trend = w.diff > 0 ? `超出 ${w.diff} ${w.unit}` : w.diff < 0 ? `少 ${-w.diff} ${w.unit}` : "无差异";
     parts.push(`${reason ? reason + "：" : ""}预报 ${w.declared} ${w.unit} → 结算 ${w.billed} ${w.unit}（${trend}）`);
   } else if (reason) {
@@ -125,8 +126,9 @@ export function describeRow(header: string[], row: string[], reasonCol: number):
   }
   const dz = d.declaredZone >= 0 ? row[d.declaredZone] : "";
   const az = d.actualZone >= 0 ? row[d.actualZone] : "";
-  if (dz && az && zoneNum(dz) !== zoneNum(az)) parts.push(`分区 ${dz} → zone${zoneNum(az)}`);
-  else if (az || dz) parts.push(`zone${zoneNum(az || dz)}`);
+  const valid = (v: string) => !!zoneNum(v) && zoneNum(v) !== "0";
+  if (valid(dz) && valid(az) && zoneNum(dz) !== zoneNum(az)) parts.push(`分区 ${dz} → zone${zoneNum(az)}`);
+  else if (valid(az) || valid(dz)) parts.push(`zone${zoneNum(valid(az) ? az : dz)}`);
   return parts.join(" · ");
 }
 
