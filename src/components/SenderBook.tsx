@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import AddressFields from "@/components/AddressFields";
+import AddressFields, { SENDER_EXAMPLE } from "@/components/AddressFields";
 import { useT, useTMsg } from "@/components/I18n";
 import { deleteSenderAction, saveSenderBookAction, setDefaultSenderAction } from "@/app/portal/actions";
 import type { SavedSender } from "@/lib/senders";
@@ -35,7 +35,7 @@ export default function SenderBook({ initial }: { initial: SavedSender[] }) {
           <label className="f" style={{ maxWidth: 320, marginBottom: 12 }}>{t("地址名称（可选，例如“洛杉矶仓”）")}
             <input value={edit.label} maxLength={50} onChange={(e) => setEdit({ ...edit, label: e.target.value })} />
           </label>
-          <AddressFields value={edit.address} onChange={(a) => setEdit({ ...edit, address: a })} />
+          <AddressFields value={edit.address} placeholders={SENDER_EXAMPLE} onChange={(a) => setEdit({ ...edit, address: a })} />
           <div className="row" style={{ marginTop: 12 }}>
             <label className="small"><input type="checkbox" checked={edit.makeDefault} onChange={(e) => setEdit({ ...edit, makeDefault: e.target.checked })} /> {t("设为默认")}</label>
             <button

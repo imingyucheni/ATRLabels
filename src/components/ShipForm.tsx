@@ -6,7 +6,7 @@ import { quoteAction } from "@/app/actions";
 import type { SavedSender } from "@/lib/senders";
 import { portalCreateAction, portalQuoteAction, saveSenderBookAction } from "@/app/portal/actions";
 import type { PublicQuote } from "@/lib/portal";
-import AddressFields from "@/components/AddressFields";
+import AddressFields, { SENDER_EXAMPLE } from "@/components/AddressFields";
 import { useT, useTMsg } from "@/components/I18n";
 import { money } from "@/lib/pricing";
 import type { ChannelQuote } from "@/lib/service";
@@ -277,7 +277,7 @@ export default function ShipForm(props: {
           )}
           {editSender ? (
             <>
-              <AddressFields value={sender} onChange={(a) => { dirty(setSender)(a); setSenderMsg(null); }} />
+              <AddressFields value={sender} placeholders={portal ? SENDER_EXAMPLE : undefined} onChange={(a) => { dirty(setSender)(a); setSenderMsg(null); }} />
               {portal && (
                 <div className="row" style={{ marginTop: 10 }}>
                   <button

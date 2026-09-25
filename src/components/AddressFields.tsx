@@ -22,6 +22,12 @@ const FIELDS: Field[] = [
   { k: "address2", label: "地址2（公寓 / 单元号，可选）", wide: true },
 ];
 
+/** 客户填寄件地址时的浅灰色示例 */
+export const SENDER_EXAMPLE = {
+  nameFirst: "John", nameLast: "Smith", corporateName: "ABC Trading LLC", phone: "909-555-0100", email: "ship@example.com",
+  city: "Chino", zipCode: "91710", address1: "13900 Example Ave", address2: "Suite 100",
+};
+
 const COMMON_CODES = new Set(COMMON_COUNTRIES.map(([c]) => c));
 
 /**
@@ -33,10 +39,13 @@ export default function AddressFields({
   value,
   onChange,
   namePrefix = "",
+  placeholders,
 }: {
   value?: Partial<Address> | null;
   onChange?: (a: Partial<Address>) => void;
   namePrefix?: string;
+  /** 浅灰色示例（只是提示，不会被提交） */
+  placeholders?: Partial<Record<keyof Address, string>>;
 }) {
   const t = useT();
   const controlled = !!onChange;
@@ -56,10 +65,11 @@ export default function AddressFields({
   const input = (f: Field) => {
     const v = value?.[f.k] ?? "";
     const max = f.wide ? 100 : 50;
+    const ph = f.ph ?? placeholders?.[f.k];
     return controlled ? (
-      <input value={v} placeholder={f.ph} maxLength={max} onChange={(e) => set(f.k, e.target.value)} />
+      <input value={v} placeholder={ph} maxLength={max} onChange={(e) => set(f.k, e.target.value)} />
     ) : (
-      <input name={namePrefix + f.k} defaultValue={v} placeholder={f.ph} maxLength={max} />
+      <input name={namePrefix + f.k} defaultValue={v} placeholder={ph} maxLength={max} />
     );
   };
 

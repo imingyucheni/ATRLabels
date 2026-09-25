@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import PrefToggles from "./PrefToggles";
-import { useT } from "./I18n";
+import { useLang, useT } from "./I18n";
 import {
   BarChart3, Globe2, Lock, Map as MapIcon, Menu, X, CreditCard, FileSpreadsheet, FileText, LayoutDashboard, LogOut, PackagePlus, Receipt, Scale, Settings,
   Truck, Upload, UserCog, Users, Wallet,
@@ -30,6 +30,7 @@ export default function Sidebar(props: {
   showLang?: boolean;
 }) {
   const t = useT();
+  const lang = useLang();
   const path = usePathname();
   // 选中“最长匹配”的菜单，避免 /shipments 和 /shipments/new 同时高亮
   const all = props.groups.flatMap((g) => g.items);
@@ -70,14 +71,14 @@ export default function Sidebar(props: {
               return (
                 <span key={i.href} className="nav-item disabled" aria-disabled="true" title={t("敬请期待")}>
                   <Icon strokeWidth={1.9} />
-                  {t(i.label)}
-                  <span className="nav-soon"><Lock size={10} strokeWidth={2.4} /> {t("敬请期待")}</span>
+                  <span className="nav-label">{t(i.label)}</span>
+                  <span className="nav-soon"><Lock size={10} strokeWidth={2.4} /> {lang === "en" ? "Soon" : "敬请期待"}</span>
                 </span>
               );
             return (
               <Link key={i.href} href={i.href} className={`nav-item ${active === i.href ? "active" : ""}`} aria-current={active === i.href ? "page" : undefined}>
                 <Icon strokeWidth={1.9} />
-                {t(i.label)}
+                <span className="nav-label">{t(i.label)}</span>
                 {!!i.count && <span className="nav-count">{i.count}</span>}
               </Link>
             );

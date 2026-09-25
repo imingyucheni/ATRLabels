@@ -471,3 +471,10 @@ fieldset.bare { border: 0; padding: 0; margin: 0; min-width: 0; }
 .modal-back { position: fixed; inset: 0; background: rgba(10, 10, 12, 0.45); display: grid; place-items: center; z-index: 100; padding: 16px; }
 .modal { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-pop); width: min(640px, 100%); padding: 20px; max-height: 90vh; overflow: auto; }
 .change-list td { vertical-align: top; white-space: normal; word-break: break-word; }
+
+/* 英文界面：英文比中文长，收紧字距、允许省略 */
+.nav-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+html[lang="en"] .nav-section { letter-spacing: 0.02em; font-size: 11.5px; text-transform: none; }
+html[lang="en"] .nav-item { font-size: 13.5px; }
+button, .btn { white-space: nowrap; }
+html[lang="en"] .kpi-label { line-height: 1.3; }
