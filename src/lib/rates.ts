@@ -13,6 +13,11 @@ export interface RateRow {
 
 function ensure() {
   const conn = db();
+  conn.exec(`CREATE TABLE IF NOT EXISTS channel_rate_rules (
+    channel_code TEXT PRIMARY KEY,
+    divisor REAL NOT NULL,
+    min_cubic REAL NOT NULL DEFAULT 0
+  )`);
   conn.exec(`CREATE TABLE IF NOT EXISTS channel_rates (
     channel_code TEXT NOT NULL,
     max_oz REAL NOT NULL,
@@ -114,6 +119,49 @@ export function removeRates(code: string) {
   ensure().prepare("DELETE FROM channel_rates WHERE channel_code = ?").run(code);
 }
 
+/* ---------------- 体积重 ---------------- */
+
+export interface DimRule {
+  /** 体积重系数（立方英寸 ÷ 系数 = 磅）；0 = 不算体积重 */
+  divisor: number;
+  /** 体积超过多少立方英寸才算体积重（USPS 是 1728，即 1 立方英尺） */
+  minCubic: number;
+}
+
+/** 默认规则（按渠道名称猜）：可以在后台“派送范围与价格表”里改 */
+export function defaultDimRule(name: string): DimRule {
+  if (/USPS/i.test(name)) return { divisor: 166, minCubic: 1728 };
+  if (/GOFO|SWIFTX/i.test(name)) return { divisor: 139, minCubic: 0 };
+  return { divisor: 166, minCubic: 0 };
+}
+
+export function dimRule(code: string, name = ""): DimRule {
+  const r = ensure().prepare("SELECT divisor, min_cubic FROM channel_rate_rules WHERE channel_code = ?").get(code) as { divisor: number; min_cubic: number } | undefined;
+  return r ? { divisor: r.divisor, minCubic: r.min_cubic } : defaultDimRule(name);
+}
+
+export function saveDimRule(code: string, rule: DimRule) {
+  ensure()
+    .prepare("INSERT INTO channel_rate_rules (channel_code, divisor, min_cubic) VALUES (?,?,?) ON CONFLICT(channel_code) DO UPDATE SET divisor = excluded.divisor, min_cubic = excluded.min_cubic")
+    .run(code, Math.max(0, rule.divisor), Math.max(0, rule.minCubic));
+}
+
+/** 包裹体积（立方英寸） */
+export function cubicInches(req: ShipmentRequest): number {
+  const { length, width, height, displayUnitSystem: u } = req.pkg;
+  const k = u === 3 ? 1 : 1 / 2.54; // cm → in
+  return (Number(length) || 0) * k * ((Number(width) || 0) * k) * ((Number(height) || 0) * k);
+}
+
+/** 计费重量（oz）：实重和体积重取大；体积重按磅向上取整 */
+export function billableOz(req: ShipmentRequest, rule: DimRule): { oz: number; dimLb: number | null } {
+  const actual = weightOz(req);
+  const cubic = cubicInches(req);
+  if (!rule.divisor || cubic <= rule.minCubic) return { oz: actual, dimLb: null };
+  const dimLb = Math.ceil(cubic / rule.divisor - 1e-9);
+  return { oz: Math.max(actual, dimLb * 16), dimLb };
+}
+
 /** 包裹重量换算成 oz */
 export function weightOz(req: ShipmentRequest): number {
   const w = Number(req.pkg.weight) || 0;
@@ -151,9 +199,9 @@ export function zoneFor(code: string, zip: string): number {
 }
 
 /** 模拟报价：按报价表算成本；这个渠道没有导入报价表时返回 null */
-export function rateQuote(code: string, req: ShipmentRequest): { price: number; zone: number } | null {
+export function rateQuote(code: string, req: ShipmentRequest, name = ""): { price: number; zone: number; billableOz: number } | null {
   const conn = ensure();
-  const oz = Math.max(weightOz(req), 0.01);
+  const oz = Math.max(billableOz(req, dimRule(code, name)).oz, 0.01);
   const zone = zoneFor(code, req.recipient?.zipCode ?? "");
   // 找第一个 ≥ 包裹重量的重量档；超过最大档用最大档
   const tier = (conn.prepare("SELECT max_oz FROM channel_rates WHERE channel_code = ? AND max_oz >= ? ORDER BY max_oz LIMIT 1").get(code, oz - 1e-9) as { max_oz: number } | undefined)
@@ -163,5 +211,5 @@ export function rateQuote(code: string, req: ShipmentRequest): { price: number; 
   if (!rows.length) return null;
   // 没有这个分区的价格时用最接近的更高分区（再没有就用最高分区）
   const hit = rows.find((r) => r.zone === zone) ?? rows.filter((r) => r.zone > zone).sort((a, b) => a.zone - b.zone)[0] ?? rows.sort((a, b) => b.zone - a.zone)[0];
-  return { price: hit.price, zone: hit.zone };
+  return { price: hit.price, zone: hit.zone, billableOz: oz };
 }

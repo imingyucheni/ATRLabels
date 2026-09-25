@@ -140,13 +140,29 @@ describe("价格表（模拟报价按成本价）", () => {
     expect(r.map((x) => x.maxOz)).toEqual([4, 15.99, 16, 32, 48]);
     rates.importRates("LP10210030", r);
     // 1.5 lb（24 oz）到 Austin 78701（没有邮编表时按估算分区：7 开头 → zone 6）
-    const q = rates.rateQuote("LP10210030", { ...req("78701"), pkg: { ...req("78701").pkg, weight: 1.5, displayUnitSystem: 3 } });
-    expect(q).toEqual({ price: 5.5, zone: 6 });
+    const q = rates.rateQuote("LP10210030", { ...req("78701"), pkg: { ...req("78701").pkg, weight: 1.5, displayUnitSystem: 3 } }, "USPS-（91710）");
+    expect(q).toEqual({ price: 5.5, zone: 6, billableOz: 24 });
     // 报价：成本 = 价格表价格，客户价在上面加价
     db.saveSettings({ markup: { percent: 10, fixed: 0, minProfit: 0 }, roundingStep: 0.01 });
     const id = db.saveCustomer(null, { name: "价格表客户", contact: null, phone: null, email: null, note: null, markup: {} });
     db.setCustomerChannels(id, ["LP10210030"]);
     const quotes = await svc.quoteAll(id, { ...req("78701"), pkg: { ...req("78701").pkg, weight: 1.5, displayUnitSystem: 3 } });
     expect(quotes[0]).toMatchObject({ ok: true, cost: 5.5, price: 6.05, zone: "zone6" });
+  });
+
+  it("体积重：实重和体积重取大（例：10×8×6 英寸 1 lb）", async () => {
+    const rates = await import("@/lib/rates");
+    const pkg = { ...req("07304"), pkg: { ...req("07304").pkg, length: 10, width: 8, height: 6, weight: 1, displayUnitSystem: 3 as const } };
+    // ÷139：480/139 = 3.45 → 4 lb
+    expect(rates.billableOz(pkg, { divisor: 139, minCubic: 0 })).toEqual({ oz: 64, dimLb: 4 });
+    // ÷166：480/166 = 2.89 → 3 lb
+    expect(rates.billableOz(pkg, { divisor: 166, minCubic: 0 })).toEqual({ oz: 48, dimLb: 3 });
+    // USPS：不到 1728 立方英寸按实重
+    expect(rates.billableOz(pkg, { divisor: 166, minCubic: 1728 })).toEqual({ oz: 16, dimLb: null });
+    // 厘米也能算：25.4×20.32×15.24 cm = 10×8×6 in
+    const cm = { ...pkg, pkg: { ...pkg.pkg, length: 25.4, width: 20.32, height: 15.24, weight: 453.6, displayUnitSystem: 1 as const } };
+    expect(rates.billableOz(cm, { divisor: 139, minCubic: 0 }).dimLb).toBe(4);
+    expect(rates.defaultDimRule("GOFO-（91710）")).toEqual({ divisor: 139, minCubic: 0 });
+    expect(rates.defaultDimRule("USPS-（91710）")).toEqual({ divisor: 166, minCubic: 1728 });
   });
 });

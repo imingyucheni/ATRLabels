@@ -197,7 +197,7 @@ export class MockShipBestClient implements ShipBestClient {
       throw new ShipBestError(1, `国家[${req.recipient.country}],邮编[${req.recipient.zipCode}]不通邮`);
     }
     // 上传了服务商报价表的渠道：按“重量 + 分区”查成本价（没有折扣）
-    const rated = rateQuote(productCode, req);
+    const rated = rateQuote(productCode, req, this.products[idx].name);
     if (rated) {
       const extra = req.pkg.signServiceType ? 3 : 0;
       const total = Math.round((rated.price + extra) * 100) / 100;

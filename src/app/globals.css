@@ -403,3 +403,6 @@ table.list td { white-space: nowrap; }
 .sender-pick select { flex: 1; min-width: 200px; }
 .sender-summary { display: grid; gap: 2px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; font-size: 13.5px; }
 .field-hint { display: block; margin-top: 4px; font-size: 12px; color: var(--warn); }
+.dim-form { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.dim-form .alert { width: 100%; margin: 0; padding: 4px 8px; }
+.dim-form input { height: 30px; padding: 2px 6px; }

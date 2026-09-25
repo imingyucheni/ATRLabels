@@ -1,11 +1,11 @@
 import { getSettings, listChannels } from "@/lib/db";
 import { blockStats, listCoverage } from "@/lib/coverage";
-import { rateStats } from "@/lib/rates";
+import { dimRule, rateStats } from "@/lib/rates";
 import { fmtTime } from "@/lib/time";
 import FlashForm from "@/components/FlashForm";
 import CoverageUpload from "@/components/CoverageUpload";
 import ZipLookup from "@/components/ZipLookup";
-import { clearBlocksAction, removeCoverageAction, setPrefilterAction } from "@/app/actions";
+import { clearBlocksAction, removeCoverageAction, saveDimRuleAction, setPrefilterAction } from "@/app/actions";
 
 export default async function CoveragePage() {
   const channels = listChannels();
@@ -25,6 +25,10 @@ export default async function CoveragePage() {
             当前记住 {totalBlocks.toLocaleString()} 条。
           </li>
           <li>
+            <b>模拟报价</b>：模拟模式下，成本 = 报价表里“计费重量 + 分区”对应的价格。计费重量 = 实重和体积重取大的（体积重 = 长×宽×高 ÷ 系数，按磅向上取整）。
+            各渠道的系数在下表里改，填 0 表示不算体积重；USPS 默认超过 1728 立方英寸（1 立方英尺）才算体积重。
+          </li>
+          <li>
             <b>邮编表（可选）</b>：服务商报价表里的邮编表可以上传作参考，并可按渠道打开“预筛”。
             实测（80 次真实试算）表里没有、但实际能送的约占 11%，SPX 尤其多，所以默认不预筛，建议只在确认表格准确的渠道打开。
           </li>
@@ -39,7 +43,7 @@ export default async function CoveragePage() {
       <div className="card table-wrap">
         <h2>各渠道的邮编表</h2>
         <table className="list">
-          <thead><tr><th>渠道</th><th>邮编表</th><th>口岸</th><th className="num">表内邮编</th><th>按邮编表预筛</th><th>价格表（模拟报价用）</th><th className="num">记住的不通邮</th><th></th></tr></thead>
+          <thead><tr><th>渠道</th><th>邮编表</th><th>口岸</th><th className="num">表内邮编</th><th>按邮编表预筛</th><th>价格表（模拟报价用）</th><th>体积重</th><th className="num">记住的不通邮</th><th></th></tr></thead>
           <tbody>
             {channels.map((c) => {
               const s = sources.get(c.code);
@@ -60,6 +64,18 @@ export default async function CoveragePage() {
                     ) : "-"}
                   </td>
                   <td className="small">{rates[c.code] ? `${rates[c.code].rows} 个重量档` : <span className="muted">未导入</span>}</td>
+                  <td>
+                    {(() => {
+                      const r = dimRule(c.code, c.name);
+                      return (
+                        <FlashForm action={saveDimRuleAction} submitLabel="保存" submitClass="small" className="dim-form">
+                          <input type="hidden" name="code" value={c.code} />
+                          <label className="small">长×宽×高(英寸) ÷ <input name="divisor" type="number" min="0" step="1" defaultValue={r.divisor} style={{ width: 64 }} /></label>
+                          <label className="small">超过 <input name="minCubic" type="number" min="0" step="1" defaultValue={r.minCubic} style={{ width: 70 }} /> 立方英寸才算</label>
+                        </FlashForm>
+                      );
+                    })()}
+                  </td>
                   <td className="num">
                     {blocks[c.code] ? (
                       <FlashForm action={clearBlocksAction} submitLabel="清除" submitClass="small" inline confirm="清除后这些邮编下次会重新向 ShipBest 查询。确定？">

@@ -39,6 +39,7 @@ import {
 } from "@/lib/db";
 import type { PartialRule } from "@/lib/pricing";
 import { getShipBestClient } from "@/lib/shipbest/client";
+import { saveDimRule } from "@/lib/rates";
 import { listSenders, saveSender } from "@/lib/senders";
 import { clearCredentials, readablePassword, rememberCredentials } from "@/lib/credentials";
 import { clearBlocks, importCoverage, lookupZip, parseCoverageWorkbook, removeCoverage, setPrefilter } from "@/lib/coverage";
@@ -699,4 +700,15 @@ export async function saveShipBestAction(_: FlashState, fd: FormData): Promise<F
     return { ok: "已切换到正式模式，连接成功。请点“同步渠道”获取真实渠道，之后的报价和出单都是真实的。" };
   }
   return { ok: mode === "mock" ? "已切换到模拟模式（价格是模拟的，不会真实出单）" : "已保存" };
+}
+
+export async function saveDimRuleAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  await requireAdmin();
+  const code = str(fd.get("code"), 50);
+  const divisor = optNum(fd.get("divisor")) ?? 0;
+  const minCubic = optNum(fd.get("minCubic")) ?? 0;
+  if (divisor < 0 || minCubic < 0) return { error: "请填写正数" };
+  saveDimRule(code, { divisor, minCubic });
+  revalidatePath("/coverage");
+  return { ok: "已保存" };
 }
