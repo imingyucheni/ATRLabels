@@ -1,4 +1,4 @@
-import { isPaperSize, PAPER_LABEL, type PaperSize } from "@/lib/labelLayout";
+import { isPaperSize, type PaperSize } from "@/lib/labelLayout";
 import ChannelLabel from "@/components/ChannelLabel";
 import { fmtTime } from "@/lib/time";
 import Link from "next/link";
@@ -35,7 +35,7 @@ export default async function PortalShipments({ searchParams }: { searchParams: 
         <a className="btn" href={`/api/portal/export?${qs}`}>{t("导出 CSV")}</a>
       </form>
       <SelectPrint
-        paperNote={t(PAPER_LABEL[(isPaperSize(me.labelPaper) ? me.labelPaper : "4x6") as PaperSize])}
+        defaultPaper={(isPaperSize(me.labelPaper) ? me.labelPaper : "4x6") as PaperSize}
         rows={rows.map((s) => ({
           id: s.id,
           hasLabel: s.hasLabel,

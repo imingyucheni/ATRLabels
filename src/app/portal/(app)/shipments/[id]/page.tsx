@@ -10,7 +10,8 @@ import type { Address } from "@/lib/shipbest/types";
 import FlashForm from "@/components/FlashForm";
 import StatusBadge from "@/components/StatusBadge";
 import { portalCancelAction, portalRefreshAction, portalSaveLabelNoteAction } from "@/app/portal/actions";
-import { isPaperSize, PAPER_LABEL } from "@/lib/labelLayout";
+import { isPaperSize } from "@/lib/labelLayout";
+import LabelActions from "@/components/LabelActions";
 import { getSettings } from "@/lib/db";
 import { makeT, translateMessage, type T } from "@/lib/i18n";
 import { getLang } from "@/lib/prefs";
@@ -66,13 +67,7 @@ export default async function PortalShipmentDetail({ params }: { params: Promise
           <h2>{t("面单")}</h2>
           {s.hasLabel ? (
             <>
-              <div className="row" style={{ marginBottom: 12 }}>
-                <a className="btn primary" href={`/api/labels/${s.id}`} target="_blank">{t("打开 / 打印面单 · {paper}", { paper: t(PAPER_LABEL[paper]).replace(/\s*[（(](默认|default)[）)]/, "") })}</a>
-                <a className="btn" href={`/api/labels/${s.id}?download=1`}>{t("下载")}</a>
-              </div>
-              {s.labelMime === "application/pdf" && (
-                <iframe src={`/api/labels/${s.id}`} style={{ width: "100%", height: 480, border: "1px solid var(--line)", borderRadius: 8 }} />
-              )}
+              <LabelActions id={s.id} defaultPaper={paper} preview={s.labelMime === "application/pdf"} />
             </>
           ) : s.status === "cancelled" ? (
             <p className="muted">{t("这张面单已取消作废，不能再打印使用。")}</p>
