@@ -18,6 +18,7 @@ import {
 import { precheck, rememberQuote } from "./coverage";
 import { downloadLabel } from "./labels";
 import { chargeLabel, refundCancelled, removeShipmentLedger } from "./ledger";
+import { displayChannel } from "./channelDisplay";
 import { computePrice, resolveRule, roundUp, type MarkupRule, type PartialRule } from "./pricing";
 import { getShipBestClient, shipbestMode, ShipBestError } from "./shipbest/client";
 import type { Address, ShipmentRequest } from "./shipbest/types";
@@ -332,7 +333,7 @@ export async function createLabel(input: CreateInput): Promise<number> {
     createdBy,
     env: shipbestMode(),
     });
-    chargeLabel(customerId, newId, quote.price!, createdBy, `运费 · ${quote.channelName}${quote.zone ? ` · ${quote.zone}` : ""}`);
+    chargeLabel(customerId, newId, quote.price!, createdBy, `运费 · ${displayChannel(channelCode).name || quote.channelName}${quote.zone ? ` · ${quote.zone}` : ""}`);
     return newId;
   })();
 

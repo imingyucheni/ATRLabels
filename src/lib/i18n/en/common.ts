@@ -23,6 +23,9 @@ export const common: Record<string, string> = {
   "深色": "Dark",
   "跟随系统": "System",
   "外观": "Appearance",
+  "客户看到的名称 / 物流商": "Customer-facing name / carrier",
+  "自动识别：{name}": "Auto: {name}",
+  "其他": "Other",
   // 上线检查清单
   "上线检查清单": "Go-live checklist",
   "已完成 {a} / {b}": "{a} of {b} done",

@@ -1,4 +1,6 @@
 import { fmtTime } from "@/lib/time";
+import ChannelLabel from "@/components/ChannelLabel";
+import { displayChannel } from "@/lib/channelDisplay";
 import Link from "next/link";
 import { requireCustomer } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -151,7 +153,7 @@ export default async function PortalHome() {
             {r30.totals.orders ? tr("平均每单 {amount}", { amount: usd(r30.totals.revenue / r30.totals.orders) }) : tr("还没有出单")}
           </p>
           {r30.channels.length ? (
-            <ChannelBars data={r30.channels.map((c) => ({ name: c.name, orders: c.orders, share: c.share, revenue: c.revenue }))} revenueLabel={tr("运费")} />
+            <ChannelBars data={r30.channels.map((c) => ({ name: displayChannel(c.code).name, orders: c.orders, share: c.share, revenue: c.revenue }))} revenueLabel={tr("运费")} />
           ) : (
             <div className="muted small">{tr("出单后这里会显示各渠道的单量")}</div>
           )}
@@ -186,7 +188,7 @@ export default async function PortalHome() {
                 <td className="small muted">{fmtTime(s.createdAt)}</td>
                 <td><Link href={`/portal/shipments/${s.id}`}>{s.customerRef || s.customNo}</Link></td>
                 <td className="wrap">{s.recipient.nameFirst} {s.recipient.nameLast}<div className="small muted">{s.recipient.city}, {s.recipient.province ?? ""} {s.recipient.zipCode}</div></td>
-                <td className="wrap">{s.channelName}</td>
+                <td className="wrap"><ChannelLabel code={s.channelCode} name={s.channelName} /></td>
                 <td>{s.trackingNo ?? "-"}</td>
                 <td><StatusBadge status={s.status} test={s.isTest} /></td>
                 <td className="num">{money(s.price, s.currency)}</td>

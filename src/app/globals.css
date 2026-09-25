@@ -588,3 +588,12 @@ button.accent-outline:hover, .btn.accent-outline:hover { background: var(--accen
 .pay-card:has(.locked-form.editing) { box-shadow: 0 0 0 2px var(--warn); }
 .pay-card .locked-form.editing { box-shadow: none; }
 .fx-refresh { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+
+/* 物流商 logo + 渠道名 */
+.channel-label { display: inline-flex; align-items: center; gap: 8px; vertical-align: middle; }
+.carrier-mark { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; background: #fff; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.carrier-mark.md { height: 32px; min-width: 80px; padding: 4px 7px; }
+.carrier-mark.sm { height: 22px; min-width: 48px; padding: 2px 5px; }
+.carrier-mark img { height: 100%; width: auto; max-width: 96px; object-fit: contain; display: block; }
+.carrier-mark.sm img { max-width: 64px; }
+.carrier-text { font-weight: 800; font-size: 11px; letter-spacing: 0.02em; white-space: nowrap; }

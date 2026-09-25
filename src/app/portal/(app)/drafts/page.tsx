@@ -1,4 +1,5 @@
 import Link from "next/link";
+import ChannelLabel from "@/components/ChannelLabel";
 import { requireCustomer } from "@/lib/auth";
 import { listDraftRows } from "@/lib/batch";
 import { money } from "@/lib/pricing";
@@ -56,7 +57,7 @@ export default async function DraftsPage() {
                       <td className="muted">{r.row_no}</td>
                       <td>{r.customer_ref ?? "-"}</td>
                       <td className="small">{r.recipient}</td>
-                      <td>{r.channel_name ?? "-"}</td>
+                      <td>{r.channel_name ? <ChannelLabel name={r.channel_name} /> : "-"}</td>
                       <td className="num">{r.price !== null ? money(r.price) : "-"}</td>
                       <td><span className={`badge ${cls}`}>{t(label)}</span>{r.error && <div className="small neg">{tr(r.error)}</div>}</td>
                     </tr>

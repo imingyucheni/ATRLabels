@@ -1,5 +1,7 @@
 "use client";
 
+import ChannelLabel, { useChannelDisplay } from "@/components/ChannelLabel";
+
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState, useTransition } from "react";
 import {
@@ -58,6 +60,7 @@ export default function BatchOrders(props: {
 }) {
   const router = useRouter();
   const t = useT();
+  const chName = useChannelDisplay();
   const tr = useTrMsg();
   const [job, setJob] = useState<BatchJobView | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -169,7 +172,7 @@ export default function BatchOrders(props: {
             <div className="small muted" style={{ marginBottom: 4 }}>{t("试算渠道（渠道越多试算越慢）")}</div>
             <div className="row" style={{ gap: 14 }} key={custId}>
               {uploadChannels.map((c) => (
-                <label key={c.code} className="small"><input type="checkbox" name="channels" value={c.code} defaultChecked /> {c.name}</label>
+                <label key={c.code} className="small"><input type="checkbox" name="channels" value={c.code} defaultChecked /> <ChannelLabel code={c.code} name={c.name} /></label>
               ))}
               {!uploadChannels.length && (
                 <span className="small" style={{ color: "var(--warn)" }}>
@@ -249,7 +252,7 @@ export default function BatchOrders(props: {
               <button className="small" disabled={busy} onClick={() => act(() => chooseAllAction(job.id, "file", chosen.map((r) => r.id)))}>{t("按表格物流产品")}</button>
               <select className="small" style={{ width: "auto" }} value={bulkChannel} onChange={(e) => setBulkChannel(e.target.value)}>
                 <option value="">{t("统一改为某个渠道…")}</option>
-                {job.channels.map((c) => <option key={c.code} value={c.code}>{c.name}</option>)}
+                {job.channels.map((c) => <option key={c.code} value={c.code}>{chName(c.code, c.name).name}</option>)}
               </select>
               <button className="small" disabled={busy || !bulkChannel} onClick={() => act(() => chooseAllAction(job.id, bulkChannel, chosen.map((r) => r.id)))}>{t("应用")}</button>
               <button className="small danger" disabled={busy || !chosen.length} onClick={() => {
@@ -276,7 +279,7 @@ export default function BatchOrders(props: {
                       else n.delete(c.code);
                       return n;
                     })}
-                  /> {c.name}
+                  /> <ChannelLabel code={c.code} name={c.name} />
                 </label>
               ))}
               <button className="small" disabled={busy || !requoteSet.size} onClick={() => act(() => requoteAction(job.id, [...requoteSet]))}>{t("重新试算")}</button>
@@ -365,7 +368,7 @@ export default function BatchOrders(props: {
                   <td className="small">{r.pkg}</td>
                   <td>
                     {r.status === "created" || r.status === "failed" ? (
-                      <span>{r.channelName} <b>{r.price !== null ? money(r.price, r.currency ?? "") : ""}</b></span>
+                      <span><ChannelLabel code={r.channelCode} name={r.channelName} /> <b>{r.price !== null ? money(r.price, r.currency ?? "") : ""}</b></span>
                     ) : r.quotes.length ? (
                       <div style={{ display: "grid", gap: 2 }}>
                         {r.quotes.filter((q) => q.ok || !onlyAvailable).map((q) => (
@@ -386,7 +389,7 @@ export default function BatchOrders(props: {
                                   act(() => chooseRowAction(job.id, r.id, q.code));
                                 }}
                               />{" "}
-                              {q.name}{q.zone ? <span className="muted"> · {q.zone}</span> : null}
+                              <ChannelLabel code={q.code} name={q.name} />{q.zone ? <span className="muted"> · {q.zone}</span> : null}
                             </span>
                             <span className="nowrap">
                               {q.ok && props.mode === "admin" && q.cost !== undefined && (
@@ -397,8 +400,8 @@ export default function BatchOrders(props: {
                           </label>
                         ))}
                         {onlyAvailable && r.quotes.some((q) => !q.ok) && (
-                          <span className="small muted" title={r.quotes.filter((q) => !q.ok).map((q) => `${q.name}${t("：")}${q.error ? tr(q.error) : t("不可用")}`).join("\n")}>
-                            {t("另有 {n} 个渠道地址未覆盖或不可用（{list}）", { n: r.quotes.filter((q) => !q.ok).length, list: r.quotes.filter((q) => !q.ok).map((q) => q.name).join(t("、")) })}
+                          <span className="small muted" title={r.quotes.filter((q) => !q.ok).map((q) => `${chName(q.code, q.name).name}${t("：")}${q.error ? tr(q.error) : t("不可用")}`).join("\n")}>
+                            {t("另有 {n} 个渠道地址未覆盖或不可用（{list}）", { n: r.quotes.filter((q) => !q.ok).length, list: r.quotes.filter((q) => !q.ok).map((q) => chName(q.code, q.name).name).join(t("、")) })}
                           </span>
                         )}
                       </div>

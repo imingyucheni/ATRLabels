@@ -3,6 +3,7 @@
  * 客户端页面和接口只能通过这里的函数取数据。
  */
 import { getSettings, getShipment, listAdjustments, listShipments, type Shipment, type ShipmentFilter, type ShipmentStatus } from "./db";
+import { displayChannel } from "./channelDisplay";
 import type { ChannelQuote } from "./service";
 import { stampFor, stampText } from "./stamp";
 import type { Address, PackageInfo, SkuItem } from "./shipbest/types";
@@ -20,7 +21,7 @@ export interface PublicQuote {
 export function toPublicQuote(q: ChannelQuote): PublicQuote {
   return {
     channelCode: q.channelCode,
-    channelName: q.channelName,
+    channelName: displayChannel(q.channelCode).name || q.channelName,
     ok: q.ok,
     error: q.ok ? undefined : publicError(q.error),
     zone: q.zone,
@@ -49,6 +50,8 @@ export interface PortalShipment {
   id: number;
   customNo: string;
   customerRef: string | null;
+  channelCode: string;
+  /** 客户看到的渠道名称（不带仓库邮编） */
   channelName: string | null;
   zone: string | null;
   trackingNo: string | null;
@@ -81,7 +84,8 @@ export function toPortalShipment(s: Shipment): PortalShipment {
     id: s.id,
     customNo: s.customNo,
     customerRef: s.customerRef,
-    channelName: s.channelName,
+    channelCode: s.channelCode,
+    channelName: displayChannel(s.channelCode).name || s.channelName,
     zone: s.zone,
     trackingNo: s.trackingNo,
     status: s.status,

@@ -1,4 +1,5 @@
 import { fmtTime } from "@/lib/time";
+import ChannelLabel from "@/components/ChannelLabel";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireCustomer } from "@/lib/auth";
@@ -121,7 +122,7 @@ export default async function PortalShipmentDetail({ params }: { params: Promise
         <div className="card">
           <h2>{t("费用")}</h2>
           <dl className="kv">
-            <dt>{t("渠道")}</dt><dd>{s.channelName}</dd>
+            <dt>{t("渠道")}</dt><dd><ChannelLabel code={s.channelCode} name={s.channelName} /></dd>
             <dt>{t("分区")}</dt><dd>{s.zone ?? "-"}</dd>
             <dt>{t("运单号")}</dt><dd>{s.trackingNo ?? "-"}</dd>
             <dt>{t("运费")}</dt><dd><b>{money(s.price, s.currency)}</b></dd>

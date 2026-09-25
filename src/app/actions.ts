@@ -34,12 +34,15 @@ import {
   setCustomerSender,
   updateCustomerPortal,
   updateChannel,
+  setChannelDisplay,
   type Settings,
   getCustomer,
 } from "@/lib/db";
 import type { PartialRule } from "@/lib/pricing";
 import { getShipBestClient, shipbestMode } from "@/lib/shipbest/client";
 import { saveDimRule } from "@/lib/rates";
+import { CARRIERS } from "@/lib/carriers";
+import { clearChannelNameCache } from "@/lib/channelDisplay";
 import { clearTestData } from "@/lib/cleanup";
 import { listSenders, saveSender } from "@/lib/senders";
 import { clearCredentials, readablePassword, rememberCredentials } from "@/lib/credentials";
@@ -349,8 +352,14 @@ export async function saveChannelsAction(_: FlashState, fd: FormData): Promise<F
   }
   for (const c of listChannels()) {
     updateChannel(c.code, fd.get(`enabled.${c.code}`) === "on", ruleFromForm(fd, `${c.code}.`));
+    // 客户看到的名称 / 物流商（空 = 自动）
+    if (fd.has(`display.${c.code}`)) {
+      const carrier = str(fd.get(`carrier.${c.code}`), 20);
+      setChannelDisplay(c.code, str(fd.get(`display.${c.code}`), 40) || null, CARRIERS.some((x) => x.id === carrier) ? carrier : null);
+    }
   }
-  revalidatePath("/settings");
+  clearChannelNameCache();
+  revalidatePath("/", "layout");
   return { ok: "渠道设置已保存" };
 }
 

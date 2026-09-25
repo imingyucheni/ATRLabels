@@ -205,6 +205,9 @@ function migrate(conn: Database.Database) {
   if (!cols.includes("label_note")) conn.exec("ALTER TABLE shipments ADD COLUMN label_note TEXT");
   // 下单时的接口模式：mock / sandbox / live（老数据为空：面单地址是 mock:// 的就是模拟单）
   if (!cols.includes("env")) conn.exec("ALTER TABLE shipments ADD COLUMN env TEXT");
+  // 渠道：给客户看的名称、物流商（显示 logo）
+  if (!chcols.includes("display_name")) conn.exec("ALTER TABLE channels ADD COLUMN display_name TEXT");
+  if (!chcols.includes("carrier")) conn.exec("ALTER TABLE channels ADD COLUMN carrier TEXT");
   conn.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_customers_email ON customers(portal_email) WHERE portal_email IS NOT NULL");
   // 客户可用渠道：新客户默认一个都不开，由管理员逐个开通。
   // 第一次建表时，给已有客户开通当前已启用的全部渠道，避免升级后老客户突然无法下单。
@@ -378,6 +381,10 @@ export interface Channel {
   syncedAt: string | null;
   /** 该渠道面单加印 SKU 的位置（覆盖全局） */
   stamp: StampOverride | null;
+  /** 给客户看的名称（空 = 自动去掉仓库邮编后缀） */
+  displayName: string | null;
+  /** 物流商（空 = 按名称自动识别） */
+  carrier: string | null;
 }
 
 interface ChannelRow {
@@ -389,6 +396,8 @@ interface ChannelRow {
   markup_min_profit: number | null;
   synced_at: string | null;
   stamp_json: string | null;
+  display_name?: string | null;
+  carrier?: string | null;
 }
 
 function toChannel(r: ChannelRow): Channel {
@@ -399,7 +408,14 @@ function toChannel(r: ChannelRow): Channel {
     markup: { percent: r.markup_percent, fixed: r.markup_fixed, minProfit: r.markup_min_profit },
     syncedAt: r.synced_at,
     stamp: r.stamp_json ? JSON.parse(r.stamp_json) : null,
+    displayName: r.display_name ?? null,
+    carrier: r.carrier ?? null,
   };
+}
+
+/** 设置渠道给客户看的名称和物流商（空 = 自动） */
+export function setChannelDisplay(code: string, displayName: string | null, carrier: string | null) {
+  db().prepare("UPDATE channels SET display_name = ?, carrier = ? WHERE code = ?").run(displayName || null, carrier || null, code);
 }
 
 export function setChannelStamp(code: string, stamp: StampOverride | null) {

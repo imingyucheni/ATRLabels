@@ -3,6 +3,7 @@
  * 上传 ShipBest 标准导单模板 → 每单按所选渠道逐个试算 → 每单默认选最便宜（可改）→ 勾选订单提交 → 刷新面单 → 合并打印。
  * 任务在服务进程里后台执行，页面轮询进度；服务重启后打开任务页会自动继续。
  */
+import { publicChannel } from "./carriers";
 import ExcelJS from "exceljs";
 import { customerChannels, db, getChannel, getCustomer, getSettings, getShipment, listChannels } from "./db";
 import { InsufficientBalanceError } from "./ledger";
@@ -383,7 +384,9 @@ export function parseOrders(rows: string[][], defaultSender: Address | null): { 
 export function matchChannel(name: string): string | null {
   if (!name) return null;
   const n = norm(name);
-  const c = listChannels(true).find((ch) => norm(ch.name) === n || norm(ch.code) === n);
+  const list = listChannels(true);
+  // 渠道原名、代码，或客户看到的名称（客户下载的模板里是这个）
+  const c = list.find((ch) => norm(ch.name) === n || norm(ch.code) === n) ?? list.find((ch) => norm(publicChannel(ch).name) === n);
   return c?.code ?? null;
 }
 

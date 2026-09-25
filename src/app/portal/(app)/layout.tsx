@@ -4,6 +4,8 @@ import { getSettings } from "@/lib/db";
 import { money, usd } from "@/lib/pricing";
 import Sidebar from "@/components/Sidebar";
 import { listDraftRows } from "@/lib/batch";
+import { channelNameMap } from "@/lib/channelDisplay";
+import { ChannelNamesProvider } from "@/components/ChannelLabel";
 import { getT } from "@/lib/prefs";
 import { leaveCustomerAction, portalLogoutAction } from "../actions";
 
@@ -21,6 +23,7 @@ export default async function PortalLayout({ children }: { children: React.React
   const acting = !!(await impersonatedCustomerId());
   const t = await getT();
   return (
+    <ChannelNamesProvider map={channelNameMap()}>
     <div className="shell">
       <Sidebar
         brand={brandName}
@@ -65,5 +68,6 @@ export default async function PortalLayout({ children }: { children: React.React
         {children}
       </main>
     </div>
+    </ChannelNamesProvider>
   );
 }

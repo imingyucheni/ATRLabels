@@ -9,6 +9,8 @@ import RuleInputs from "@/components/RuleInputs";
 import { clearTestDataAction, refreshFxAction, saveChannelsAction, savePaymentSettingsAction, saveSettingsAction, saveShipBestAction, syncChannelsAction, verifyAction } from "@/app/actions";
 import { cnyToPay, usdCnyQuote } from "@/lib/fx";
 import FilePick from "@/components/FilePick";
+import { CarrierMark } from "@/components/ChannelLabel";
+import { CARRIERS, carrierById, cleanChannelName, guessCarrier, publicChannel } from "@/lib/carriers";
 import { testDataStats } from "@/lib/cleanup";
 import { getLang, getT } from "@/lib/prefs";
 import type { T } from "@/lib/i18n";
@@ -221,19 +223,29 @@ export default async function SettingsPage() {
         <div className="table-wrap">
           <table>
             <thead>
-              <tr><th>{t("启用")}</th><th>{t("渠道")}</th><th>{t("加价 %")}</th><th>{t("固定加价")}</th><th>{t("最低利润")}</th><th>{t("成本 10.00 时客户价")}</th><th className="num">{t("开通客户")}</th></tr>
+              <tr><th>{t("启用")}</th><th>{t("渠道")}</th><th>{t("客户看到的名称 / 物流商")}</th><th>{t("加价 %")}</th><th>{t("固定加价")}</th><th>{t("最低利润")}</th><th>{t("成本 10.00 时客户价")}</th><th className="num">{t("开通客户")}</th></tr>
             </thead>
             <tbody>
               {channels.map((c) => (
                 <tr key={c.code}>
                   <td><input type="checkbox" name={`enabled.${c.code}`} defaultChecked={c.enabled} /></td>
                   <td>{c.name}<div className="small muted">{c.code}</div></td>
+                  <td>
+                    <div className="row" style={{ gap: 6, flexWrap: "nowrap" }}>
+                      <CarrierMark carrier={publicChannel(c).carrier} size="sm" />
+                      <input name={`display.${c.code}`} defaultValue={c.displayName ?? ""} placeholder={cleanChannelName(c.name)} maxLength={40} style={{ width: 150 }} />
+                    </div>
+                    <select name={`carrier.${c.code}`} defaultValue={c.carrier ?? ""} style={{ marginTop: 6, width: 190 }}>
+                      <option value="">{t("自动识别：{name}", { name: carrierById(guessCarrier(c.name)).name })}</option>
+                      {CARRIERS.map((x) => <option key={x.id} value={x.id}>{t(x.name)}</option>)}
+                    </select>
+                  </td>
                   <RuleCells prefix={`${c.code}.`} value={c.markup} global={s.markup} t={t} />
                   <td>{money(computePrice(10, resolveRule(s.markup, c.markup), s.roundingStep))}</td>
                   <td className="num">{opened[c.code] ?? 0}</td>
                 </tr>
               ))}
-              {!channels.length && <tr><td colSpan={7} className="muted">{t("还没有渠道，请点上方“同步渠道”")}</td></tr>}
+              {!channels.length && <tr><td colSpan={8} className="muted">{t("还没有渠道，请点上方“同步渠道”")}</td></tr>}
             </tbody>
           </table>
         </div>

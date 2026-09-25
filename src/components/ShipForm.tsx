@@ -1,5 +1,7 @@
 "use client";
 
+import ChannelLabel, { useChannelDisplay } from "@/components/ChannelLabel";
+
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { quoteAction } from "@/app/actions";
@@ -59,6 +61,7 @@ export default function ShipForm(props: {
 }) {
   const router = useRouter();
   const t = useT();
+  const chName = useChannelDisplay();
   const tm = useTMsg();
   const portal = props.mode === "portal";
   const customers = props.customers ?? [];
@@ -156,7 +159,7 @@ export default function ShipForm(props: {
   }
 
   async function onCreate(q: Quote) {
-    const msg = t("确认用 {channel} 出单？\n运费：{price}（从账户余额扣除）", { channel: q.channelName, price: money(q.price, q.currency) });
+    const msg = t("确认用 {channel} 出单？\n运费：{price}（从账户余额扣除）", { channel: chName(q.channelCode, q.channelName).name, price: money(q.price, q.currency) });
     if (!window.confirm(msg)) return;
     setCreating(q.channelCode);
     setErrors([]);
@@ -449,7 +452,7 @@ export default function ShipForm(props: {
           <div className="row small" style={{ justifyContent: "space-between", marginBottom: 8, alignItems: "center" }}>
             <span className="muted">
               {t("{n} 个渠道可以送达", { n: quotes.filter((q) => q.ok).length })}
-              {quotes.some((q) => !q.ok) && t("，{n} 个渠道地址未覆盖或不可用（{list}）", { n: quotes.filter((q) => !q.ok).length, list: quotes.filter((q) => !q.ok).map((q) => q.channelName).join(t("、")) })}
+              {quotes.some((q) => !q.ok) && t("，{n} 个渠道地址未覆盖或不可用（{list}）", { n: quotes.filter((q) => !q.ok).length, list: quotes.filter((q) => !q.ok).map((q) => chName(q.channelCode, q.channelName).name).join(t("、")) })}
             </span>
             <label><input type="checkbox" checked={onlyAvailable} onChange={(e) => setOnlyAvailable(e.target.checked)} /> {t("只显示可下单渠道")}</label>
           </div>
@@ -469,7 +472,7 @@ export default function ShipForm(props: {
                 {quotes.filter((q) => q.ok || !onlyAvailable).map((q) =>
                   q.ok ? (
                     <tr key={q.channelCode} className={q.price === bestPrice ? "best" : ""}>
-                      <td>{q.channelName}{!portal && <div className="small muted">{q.channelCode}</div>}</td>
+                      <td><ChannelLabel code={q.channelCode} name={q.channelName} size="md" />{!portal && <div className="small muted">{q.channelCode}</div>}</td>
                       <td>{q.zone ?? "-"}</td>
                       {!portal && (
                         <>
@@ -490,7 +493,7 @@ export default function ShipForm(props: {
                     </tr>
                   ) : (
                     <tr key={q.channelCode}>
-                      <td>{q.channelName}</td>
+                      <td><ChannelLabel code={q.channelCode} name={q.channelName} /></td>
                       <td colSpan={portal ? 3 : 6} className="small" style={{ color: "var(--err)" }}>
                         <b>{/不通邮|派送范围|未覆盖/.test(q.error ?? "") ? t("地址未覆盖") : t("不可用")}</b>
                         {q.error && !/^地址未覆盖/.test(q.error) ? `${t("：")}${tm(q.error)}` : q.error ? `${t("：")}${tm(q.error.replace(/^地址未覆盖：/, ""))}` : ""}
