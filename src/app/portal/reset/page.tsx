@@ -10,7 +10,7 @@ export default async function ResetPage({ searchParams }: { searchParams: Promis
   const { token = "" } = await searchParams;
   const valid = token && checkToken(token);
   return (
-    <AuthShell brand={getSettings().brandName} headline="设置新密码" sub="设置后会自动登录。" points={[]}>
+    <AuthShell showLang brand={getSettings().brandName} headline="设置新密码" sub="设置后会自动登录。" points={[]}>
       <h1>设置新密码</h1>
       {valid ? <ResetForm token={token} /> : <div className="alert err">链接无效或已过期，请 <Link href="/portal/forgot">重新申请</Link>。</div>}
     </AuthShell>

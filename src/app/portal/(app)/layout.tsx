@@ -22,6 +22,7 @@ export default async function PortalLayout({ children }: { children: React.React
       <Sidebar
         brand={brandName}
         brandSub="客户中心"
+        showLang
         logout={portalLogoutAction}
         who={{ name: me.name, balance: usd(me.balance), negative: me.balance < 0 }}
         groups={[

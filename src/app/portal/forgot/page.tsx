@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 export default function ForgotPage() {
   const { brandName, supportContact } = getSettings();
   return (
-    <AuthShell brand={brandName} headline="忘记密码" sub="输入登录邮箱，我们会帮你重置。" points={[]}>
+    <AuthShell showLang brand={brandName} headline="忘记密码" sub="输入登录邮箱，我们会帮你重置。" points={[]}>
       <h1>忘记密码</h1>
       <p className="sub">输入你的登录邮箱</p>
       <ForgotForm />

@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import PrefToggles from "./PrefToggles";
+import { useT } from "./I18n";
 import {
   BarChart3, Globe2, Lock, Map as MapIcon, Menu, X, CreditCard, FileSpreadsheet, FileText, LayoutDashboard, LogOut, PackagePlus, Receipt, Scale, Settings,
   Truck, Upload, UserCog, Users, Wallet,
@@ -24,7 +26,10 @@ export default function Sidebar(props: {
   who?: { name: string; balance?: string; negative?: boolean };
   envTag?: string;
   logout: () => Promise<void>;
+  /** 显示中英文切换（目前只有客户端有英文版） */
+  showLang?: boolean;
 }) {
+  const t = useT();
   const path = usePathname();
   // 选中“最长匹配”的菜单，避免 /shipments 和 /shipments/new 同时高亮
   const all = props.groups.flatMap((g) => g.items);
@@ -42,19 +47,19 @@ export default function Sidebar(props: {
         <div className="brand-mark">{initials}</div>
         <div>
           <div className="brand-name">{props.brand}</div>
-          <div className="brand-sub">{props.brandSub}</div>
+          <div className="brand-sub">{t(props.brandSub)}</div>
         </div>
-        {current && <span className="mobile-current">{current.label}</span>}
-        <button type="button" className="menu-toggle" aria-label={open ? "收起菜单" : "展开菜单"} aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+        {current && <span className="mobile-current">{t(current.label)}</span>}
+        <button type="button" className="menu-toggle" aria-label={open ? t("收起菜单") : t("展开菜单")} aria-expanded={open} onClick={() => setOpen((o) => !o)}>
           {open ? <X size={18} /> : <Menu size={18} />}
           {!open && all.some((i) => i.count) && <span className="menu-dot" />}
         </button>
       </div>
       {props.groups.map((g, gi) => (
-        <nav key={gi} aria-label={g.title}>
+        <nav key={gi} aria-label={g.title && t(g.title)}>
           {g.title && (
             <div className={`nav-section${g.soon ? " soon" : ""}`}>
-              {g.title}
+              {t(g.title)}
               {g.tag && <span className="nav-tag">{g.tag}</span>}
             </div>
           )}
@@ -63,16 +68,16 @@ export default function Sidebar(props: {
             // 还没开放的功能：灰显，点不开
             if (i.soon || g.soon)
               return (
-                <span key={i.href} className="nav-item disabled" aria-disabled="true" title="敬请期待">
+                <span key={i.href} className="nav-item disabled" aria-disabled="true" title={t("敬请期待")}>
                   <Icon strokeWidth={1.9} />
-                  {i.label}
-                  <span className="nav-soon"><Lock size={10} strokeWidth={2.4} /> 敬请期待</span>
+                  {t(i.label)}
+                  <span className="nav-soon"><Lock size={10} strokeWidth={2.4} /> {t("敬请期待")}</span>
                 </span>
               );
             return (
               <Link key={i.href} href={i.href} className={`nav-item ${active === i.href ? "active" : ""}`} aria-current={active === i.href ? "page" : undefined}>
                 <Icon strokeWidth={1.9} />
-                {i.label}
+                {t(i.label)}
                 {!!i.count && <span className="nav-count">{i.count}</span>}
               </Link>
             );
@@ -80,15 +85,16 @@ export default function Sidebar(props: {
         </nav>
       ))}
       <div className="sidebar-foot">
+        <PrefToggles showLang={props.showLang} />
         {props.envTag && <div className="env-tag">{props.envTag}</div>}
         {props.who && (
           <div className="who-card">
             <div className="name">{props.who.name}</div>
-            {props.who.balance && <div className="bal">余额 <b className={props.who.negative ? "neg" : ""}>{props.who.balance}</b></div>}
+            {props.who.balance && <div className="bal">{t("余额")} <b className={props.who.negative ? "neg" : ""}>{props.who.balance}</b></div>}
           </div>
         )}
         <form action={props.logout}>
-          <button className="logout small"><LogOut size={14} strokeWidth={2} /> 退出登录</button>
+          <button className="logout small"><LogOut size={14} strokeWidth={2} /> {t("退出登录")}</button>
         </form>
       </div>
     </aside>

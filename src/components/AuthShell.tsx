@@ -1,7 +1,8 @@
 import { Check } from "lucide-react";
+import PrefToggles from "./PrefToggles";
 
 /** 登录页布局：左侧品牌区，右侧表单 */
-export default function AuthShell({ brand, headline, sub, points, children }: { brand: string; headline: string; sub: string; points: string[]; children: React.ReactNode }) {
+export default function AuthShell({ brand, headline, sub, points, children, showLang = false }: { brand: string; headline: string; sub: string; points: string[]; children: React.ReactNode; showLang?: boolean }) {
   const initials = brand.replace(/[^A-Za-z]/g, "").slice(0, 3).toUpperCase() || brand.slice(0, 2);
   return (
     <div className="auth">
@@ -20,6 +21,7 @@ export default function AuthShell({ brand, headline, sub, points, children }: { 
         <div style={{ fontSize: 12, opacity: 0.5 }}>© {new Date().getFullYear()} {brand}</div>
       </div>
       <div className="auth-main">
+        <div className="auth-prefs"><PrefToggles showLang={showLang} /></div>
         <div className="auth-card">{children}</div>
       </div>
     </div>
