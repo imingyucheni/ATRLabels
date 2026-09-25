@@ -91,7 +91,8 @@ npm run demo
 1. 买一台 Ubuntu 22.04 / 24.04 的云服务器（2 核 2G 足够，例如阿里云国际 / 腾讯云轻量香港），可选买一个域名并把 A 记录解析到服务器 IP。
 2. 以 root 登录服务器，把仓库里的 `scripts/install.sh` 上传后执行 `bash install.sh`，按提示填写域名、仓库地址（私有仓库需要带 GitHub 令牌）、ShipBest API ID / Token（不填则先用模拟模式）。
 3. 脚本会自动安装 Node.js、构建、注册系统服务（开机自启）、每天备份数据、有域名时自动配置 HTTPS，最后**打印管理员密码**。
-4. 以后更新系统：再次执行 `bash install.sh`（不会覆盖已有配置和数据）。
+4. 以后更新系统：在服务器上执行 `atr-update`（约 1 分钟，不会覆盖已有配置和数据）。
+5. 每次推送代码，GitHub Actions 会自动构建好发布包（`.github/workflows/release.yml`），服务器只下载运行，小内存服务器也不用自己构建。
 
 ### 方式 A：Render 一键部署（最简单，约 7 美元/月）
 
