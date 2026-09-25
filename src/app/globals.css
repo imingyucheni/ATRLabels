@@ -409,7 +409,7 @@ table.list td { white-space: nowrap; }
 table.list td.wrap, table.list .cell-wrap { white-space: normal; overflow-wrap: anywhere; }
 table.list td.wrap { min-width: 6.5em; }
 table.list td.wrap.wide { min-width: 13em; }
-table.list .cell-wrap { display: block; min-width: 6.5em; }
+table.list .cell-wrap:not(td) { display: block; min-width: 6.5em; }
 /* 英文表头较长：允许按单词折行（英文不会从单词中间断开） */
 html[lang="en"] table.list th { white-space: normal; }
 .sku-table { min-width: 860px; }
@@ -632,4 +632,4 @@ tr.row-disabled td:first-child { opacity: 0.55; }
 .restore-box { position: relative; }
 .restore-box > summary { list-style: none; cursor: pointer; }
 .restore-box > summary::-webkit-details-marker { display: none; }
-.restore-box[open] > form { margin-top: 8px; width: 240px; background: var(--sunken); border: 1px solid var(--line); border-radius: 10px; padding: 10px; white-space: normal; }
+.restore-box[open] > form { margin-top: 8px; width: 240px; max-width: 70vw; background: var(--sunken); border: 1px solid var(--line); border-radius: 10px; padding: 10px; white-space: normal; }

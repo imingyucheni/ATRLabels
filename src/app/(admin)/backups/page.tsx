@@ -37,12 +37,17 @@ export default async function BackupsPage() {
               <tr key={b.name}>
                 <td className="small">{fmtTime(b.time)}</td>
                 <td><span className={`badge ${b.kind === "daily" ? "ok" : b.kind === "manual" ? "test" : "pending"}`}>{t(BACKUP_KIND_LABEL[b.kind])}</span></td>
-                <td className="small muted cell-wrap">{b.name}</td>
+                <td className="small muted wrap">{b.name}</td>
                 <td className="num small">{size(b.size)}</td>
                 <td className="small">{b.hasFiles ? t("有") : t("仅数据库")}</td>
                 <td>
                   <div className="row" style={{ gap: 6, alignItems: "flex-start" }}>
                     <a className="btn small" href={`/api/backups/${encodeURIComponent(b.name)}`}>{t("下载")}</a>
+                    {b.kind !== "daily" && (
+                      <FlashForm action={deleteBackupAction} submitLabel="删除" submitClass="small" inline confirm="删除这个备份？删除后不能恢复。">
+                        <input type="hidden" name="name" value={b.name} />
+                      </FlashForm>
+                    )}
                     <details className="restore-box">
                       <summary className="btn small">{t("恢复")}</summary>
                       <FlashForm action={restoreBackupAction} submitLabel="恢复到这个备份" submitClass="danger small"
@@ -54,11 +59,6 @@ export default async function BackupsPage() {
                         </label>
                       </FlashForm>
                     </details>
-                    {b.kind !== "daily" && (
-                      <FlashForm action={deleteBackupAction} submitLabel="删除" submitClass="small" inline confirm="删除这个备份？删除后不能恢复。">
-                        <input type="hidden" name="name" value={b.name} />
-                      </FlashForm>
-                    )}
                   </div>
                 </td>
               </tr>

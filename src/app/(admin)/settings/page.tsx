@@ -200,7 +200,7 @@ export default async function SettingsPage() {
                         <td className="muted">{fmtTime(l.created_at)}</td>
                         <td>{l.customer_name}</td>
                         <td>{l.to_email}</td>
-                        <td className="cell-wrap">{l.subject}</td>
+                        <td className="wrap">{l.subject}</td>
                         <td><span className={`badge ${l.status === "sent" ? "ok" : "exception"}`}>{l.status === "sent" ? t("已发送") : t("失败")}</span>{l.error && <div className="small muted">{l.error}</div>}</td>
                       </tr>
                     ))}
