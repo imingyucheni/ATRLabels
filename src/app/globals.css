@@ -621,3 +621,9 @@ tr.row-disabled td:first-child { opacity: 0.55; }
 .addr-mini.info { color: var(--series-1); }
 .addr-mini.warn { color: var(--warn); }
 .addr-mini.err { color: var(--err); }
+
+/* 地址核对本月用量 */
+.usage-bar { display: grid; gap: 4px; margin: 4px 0 8px; max-width: 420px; }
+.usage-bar > div { height: 6px; border-radius: 999px; background: var(--sunken); overflow: hidden; }
+.usage-bar i { display: block; height: 100%; background: var(--accent); border-radius: 999px; }
+.usage-bar i.full { background: var(--err); }

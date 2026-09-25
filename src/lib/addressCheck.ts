@@ -1,7 +1,8 @@
 /**
- * 收件地址核对（USPS Addresses API v3）：下单前检查地址是否存在、是否缺公寓号，并给出标准写法。
- * - 在后台“设置 → 地址核对”填写 USPS 开发者账号的 Consumer Key / Secret 后启用。
- * - 结果永久保存，同一个地址只查一次（USPS 默认每小时 60 次额度）。
+ * 收件地址核对：下单前检查地址是否存在、是否缺公寓号，并给出标准写法。
+ * - 服务商：Google Address Validation（默认，每月前 5000 次免费）或 USPS Addresses API v3（需签约、按月收费）。
+ * - 每月查询上限（默认 5000）：到了上限本月就不再查，不会产生费用，下单不受影响。
+ * - 结果永久保存，同一个地址只查一次。
  * - 接口出错 / 超额度 / 没配置时返回 unavailable，不影响下单。
  * - 模拟模式下（没填密钥）用简单规则模拟，方便演示和测试。
  */
@@ -35,6 +36,46 @@ export interface AddressCheck {
 /** 这些结果下单前要客户确认 */
 export const NEEDS_ACK: AddressStatus[] = ["missing_unit", "bad_unit", "not_found"];
 export const needsAck = (c: AddressCheck | null | undefined) => !!c && NEEDS_ACK.includes(c.status);
+
+export type AddrProvider = "google" | "usps";
+
+/** 地址核对设置 */
+export function addrConfig() {
+  const a = getSettings().addrCheck ?? { enabled: true, provider: "google", googleKey: "", monthlyCap: 5000 };
+  const googleKey = a.googleKey || process.env.GOOGLE_ADDRESS_KEY || "";
+  const usps = uspsConfig();
+  const provider: AddrProvider = a.provider === "usps" ? "usps" : "google";
+  const configured = provider === "google" ? !!googleKey : usps.configured;
+  return {
+    provider,
+    googleKey,
+    usps,
+    monthlyCap: Math.max(0, Number(a.monthlyCap) || 0),
+    configured,
+    enabled: a.enabled !== false && configured,
+  };
+}
+
+/* ---------------- 每月用量（到上限就停） ---------------- */
+
+const month = () => new Date().toISOString().slice(0, 7);
+
+function usageConn() {
+  const c = db();
+  c.exec("CREATE TABLE IF NOT EXISTS address_usage (month TEXT NOT NULL, provider TEXT NOT NULL, count INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (month, provider))");
+  return c;
+}
+
+export function monthlyUsage(provider: AddrProvider = addrConfig().provider): number {
+  const r = usageConn().prepare("SELECT count FROM address_usage WHERE month = ? AND provider = ?").get(month(), provider) as { count: number } | undefined;
+  return r?.count ?? 0;
+}
+
+function addUsage(provider: AddrProvider) {
+  usageConn()
+    .prepare("INSERT INTO address_usage (month, provider, count) VALUES (?,?,1) ON CONFLICT(month, provider) DO UPDATE SET count = count + 1")
+    .run(month(), provider);
+}
 
 export function uspsConfig() {
   const u = getSettings().usps ?? { enabled: false, consumerKey: "", consumerSecret: "" };
@@ -112,20 +153,83 @@ export function interpretUsps(input: Partial<Address>, j: {
     up(suggestion.city) !== up(input.city) ||
     up(suggestion.province) !== up(input.province) ||
     zip5(suggestion.zipCode) !== zip5(input.zipCode);
-  if (dpv === "N" || !dpv) return { status: "not_found", message: "USPS 查不到这个地址，可能不存在或写错了" };
+  if (dpv === "N" || !dpv) return { status: "not_found", message: "地址库里查不到这个地址，可能不存在或写错了" };
   if (dpv === "D") return { status: "missing_unit", business, suggestion: differs ? suggestion : undefined, message: "这个地址需要公寓 / 单元号（Apt / Unit / Suite）" };
-  if (dpv === "S") return { status: "bad_unit", business, suggestion: differs ? suggestion : undefined, message: "USPS 查不到这个公寓 / 单元号，请检查" };
-  return differs ? { status: "corrected", business, suggestion, message: "地址存在，USPS 建议的标准写法如下" } : { status: "ok", business, message: "地址已验证" };
+  if (dpv === "S") return { status: "bad_unit", business, suggestion: differs ? suggestion : undefined, message: "查不到这个公寓 / 单元号，请检查" };
+  return differs ? { status: "corrected", business, suggestion, message: "地址存在，建议的标准写法如下" } : { status: "ok", business, message: "地址已验证" };
 }
 
-/** 模拟核对（没配置 USPS 时，在模拟模式下用于演示） */
+/** Google Address Validation 返回（开了 enableUspsCass，美国地址会带 USPS 的 DPV 结果） */
+interface GoogleResult {
+  verdict?: { validationGranularity?: string; addressComplete?: boolean; hasUnconfirmedComponents?: boolean; possibleNextAction?: string };
+  address?: { missingComponentTypes?: string[]; unconfirmedComponentTypes?: string[] };
+  uspsData?: {
+    standardizedAddress?: { firstAddressLine?: string; city?: string; state?: string; zipCode?: string; zipCodeExtension?: string };
+    dpvConfirmation?: string;
+  };
+  metadata?: { business?: boolean; residential?: boolean };
+}
+
+export function interpretGoogle(input: Partial<Address>, r: GoogleResult): AddressCheck {
+  const std = r.uspsData?.standardizedAddress;
+  const dpv = (r.uspsData?.dpvConfirmation ?? "").toUpperCase();
+  const business = r.metadata?.business === true ? true : r.metadata?.residential === true ? false : undefined;
+  const v = r.verdict ?? {};
+  const suggestion: Partial<Address> | undefined = std?.firstAddressLine
+    ? {
+        // USPS 标准写法里公寓号和街道在同一行
+        address1: std.firstAddressLine,
+        address2: "",
+        city: std.city || input.city,
+        province: std.state || input.province,
+        zipCode: std.zipCode ? (std.zipCodeExtension ? `${std.zipCode}-${std.zipCodeExtension}` : std.zipCode) : input.zipCode,
+      }
+    : undefined;
+  const differs =
+    !!suggestion &&
+    (up(suggestion.address1) !== up([input.address1, input.address2].filter(Boolean).join(" ")) ||
+      up(suggestion.city) !== up(input.city) ||
+      up(suggestion.province) !== up(input.province) ||
+      zip5(suggestion.zipCode) !== zip5(input.zipCode));
+  const withSug = differs ? { suggestion } : {};
+  if (dpv === "D" || v.possibleNextAction === "CONFIRM_ADD_SUBPREMISES")
+    return { status: "missing_unit", business, ...withSug, message: "这个地址需要公寓 / 单元号（Apt / Unit / Suite）" };
+  if (dpv === "S") return { status: "bad_unit", business, ...withSug, message: "查不到这个公寓 / 单元号，请检查" };
+  if (dpv === "N" || (!dpv && (v.possibleNextAction === "FIX" || !["PREMISE", "SUB_PREMISE"].includes(v.validationGranularity ?? ""))))
+    return { status: "not_found", message: "地址库里查不到这个地址，可能不存在或写错了" };
+  return differs ? { status: "corrected", business, suggestion, message: "地址存在，建议的标准写法如下" } : { status: "ok", business, message: "地址已验证" };
+}
+
+async function googleCheck(key: string, a: Partial<Address>): Promise<AddressCheck | { error: string }> {
+  const res = await fetch(`https://addressvalidation.googleapis.com/v1:validateAddress?key=${encodeURIComponent(key)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      address: {
+        regionCode: "US",
+        addressLines: [a.address1, a.address2].filter(Boolean),
+        locality: a.city || undefined,
+        administrativeArea: a.province || undefined,
+        postalCode: a.zipCode || undefined,
+      },
+      enableUspsCass: true,
+    }),
+    signal: AbortSignal.timeout(15_000),
+    cache: "no-store",
+  });
+  const j = (await res.json().catch(() => ({}))) as { result?: GoogleResult; error?: { message?: string; status?: string } };
+  if (!res.ok || !j.result) return { error: `${res.status}${j.error?.message ? `：${j.error.message.slice(0, 160)}` : ""}` };
+  return interpretGoogle(a, j.result);
+}
+
+/** 模拟核对（没配置密钥时，在模拟模式下用于演示） */
 function mockCheck(a: Partial<Address>): AddressCheck {
   const street = up(a.address1);
   if (!/^\d+\s+\S+/.test(street) || zip5(a.zipCode) === "00000" || /NOWHERE|FAKE|TEST ST/.test(street))
-    return { status: "not_found", message: "USPS 查不到这个地址，可能不存在或写错了" };
+    return { status: "not_found", message: "地址库里查不到这个地址，可能不存在或写错了" };
   if (/\b(APARTMENTS?|TOWER|CONDO)\b/.test(street) && !up(a.address2)) return { status: "missing_unit", message: "这个地址需要公寓 / 单元号（Apt / Unit / Suite）" };
   const std = street.replace(/\bSTREET\b/, "ST").replace(/\bAVENUE\b/, "AVE").replace(/\bROAD\b/, "RD").replace(/\bBOULEVARD\b/, "BLVD");
-  if (std !== street) return { status: "corrected", suggestion: { ...a, address1: std }, message: "地址存在，USPS 建议的标准写法如下" };
+  if (std !== street) return { status: "corrected", suggestion: { ...a, address1: std }, message: "地址存在，建议的标准写法如下" };
   return { status: "ok", message: "地址已验证" };
 }
 
@@ -133,14 +237,31 @@ export async function checkAddress(a: Partial<Address> | null | undefined, opts:
   if (!a) return { status: "unavailable" };
   if ((a.country || "US").toUpperCase() !== "US") return { status: "skipped" };
   if (!a.address1 || !zip5(a.zipCode)) return { status: "unavailable" };
-  const cfg = uspsConfig();
-  if (!cfg.enabled && !(opts.force && cfg.configured)) return isMockMode() && !cfg.configured ? mockCheck(a) : { status: "unavailable" };
+  const conf = addrConfig();
+  if (!conf.enabled && !(opts.force && conf.configured)) return isMockMode() && !conf.configured ? mockCheck(a) : { status: "unavailable" };
   const key = cacheKey(a);
   if (!opts.fresh) {
     const hit = cached(key);
     if (hit) return hit;
   }
+  // 每月上限：到了就不再查（不产生费用），下单不受影响
+  if (conf.monthlyCap > 0 && monthlyUsage(conf.provider) >= conf.monthlyCap) {
+    return { status: "unavailable", message: `本月地址核对次数已用完（${conf.monthlyCap} 次），下个月自动恢复` };
+  }
+  if (conf.provider === "google") {
+    try {
+      addUsage("google");
+      const r = await googleCheck(conf.googleKey, a);
+      if ("error" in r) return { status: "unavailable", message: `Google 暂时无法核对（${r.error}）` };
+      remember(key, r);
+      return { ...r, checkedAt: new Date().toISOString() };
+    } catch (e) {
+      return { status: "unavailable", message: `Google 暂时无法核对：${(e as Error).message}` };
+    }
+  }
+  const cfg = conf.usps;
   try {
+    addUsage("usps");
     const q = new URLSearchParams({ streetAddress: a.address1 ?? "", state: (a.province ?? "").toUpperCase(), ZIPCode: zip5(a.zipCode) });
     if (a.address2) q.set("secondaryAddress", a.address2);
     if (a.city) q.set("city", a.city);
@@ -156,7 +277,7 @@ export async function checkAddress(a: Partial<Address> | null | undefined, opts:
     const j = await res.json().catch(() => ({}));
     let result: AddressCheck;
     if (res.ok) result = interpretUsps(a, j);
-    else if (res.status === 400 || res.status === 404) result = { status: "not_found", message: "USPS 查不到这个地址，可能不存在或写错了" };
+    else if (res.status === 400 || res.status === 404) result = { status: "not_found", message: "地址库里查不到这个地址，可能不存在或写错了" };
     else {
       if (res.status === 429) return { status: "unavailable", message: "USPS 查询次数已达上限，稍后再试" };
       // 带上 USPS 返回的原因，方便排查（例如 403：App 没有地址接口的权限）
@@ -171,7 +292,18 @@ export async function checkAddress(a: Partial<Address> | null | undefined, opts:
   }
 }
 
-/** 设置页“测试连接”：查一个已知存在的地址 */
+/** 设置页“测试连接”：查一个已知存在的地址（算一次用量） */
+export async function testAddressService(): Promise<string> {
+  const conf = addrConfig();
+  if (conf.provider === "google") {
+    if (!conf.googleKey) throw new Error("请先填写 Google API Key");
+    const r = await checkAddress({ country: "US", address1: "1600 Amphitheatre Pkwy", city: "Mountain View", province: "CA", zipCode: "94043" }, { fresh: true, force: true });
+    if (r.status === "unavailable") throw new Error(r.message || "Google 暂时无法核对");
+    return "Google 地址核对连接成功";
+  }
+  return testUsps();
+}
+
 export async function testUsps(): Promise<string> {
   const cfg = uspsConfig();
   if (!cfg.configured) throw new Error("请先填写 USPS Consumer Key 和 Consumer Secret");

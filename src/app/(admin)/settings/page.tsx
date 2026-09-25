@@ -6,13 +6,13 @@ import { isSandboxSite, shipbestConfig, type ShipBestMode } from "@/lib/shipbest
 import StampSettings from "@/components/StampSettings";
 import FlashForm from "@/components/FlashForm";
 import RuleInputs from "@/components/RuleInputs";
-import { clearTestDataAction, saveUspsAction, testUspsAction, refreshFxAction, saveChannelsAction, savePaymentSettingsAction, saveSettingsAction, saveShipBestAction, syncChannelsAction, verifyAction } from "@/app/actions";
+import { clearTestDataAction, saveAddrCheckAction, testAddrAction, refreshFxAction, saveChannelsAction, savePaymentSettingsAction, saveSettingsAction, saveShipBestAction, syncChannelsAction, verifyAction } from "@/app/actions";
 import { cnyToPay, usdCnyQuote } from "@/lib/fx";
 import FilePick from "@/components/FilePick";
 import { CarrierMark } from "@/components/ChannelLabel";
 import { CARRIERS, carrierById, defaultPublicName, guessCarrier, publicChannel } from "@/lib/carriers";
 import { testDataStats } from "@/lib/cleanup";
-import { uspsConfig } from "@/lib/addressCheck";
+import { addrConfig, monthlyUsage } from "@/lib/addressCheck";
 import { getLang, getT } from "@/lib/prefs";
 import type { T } from "@/lib/i18n";
 
@@ -89,34 +89,61 @@ export default async function SettingsPage() {
       </div>
 
       {(() => {
-        const u = uspsConfig();
-        const saved = s.usps ?? { enabled: true, consumerKey: "", consumerSecret: "" };
+        const ac = addrConfig();
+        const saved = s.addrCheck ?? { enabled: true, provider: "google", googleKey: "", monthlyCap: 5000 };
+        const us = s.usps ?? { enabled: true, consumerKey: "", consumerSecret: "" };
+        const used = monthlyUsage(ac.provider);
         return (
-          <div className="card" id="usps">
+          <div className="card" id="addr">
             <div className="row" style={{ justifyContent: "space-between" }}>
-              <h2 style={{ margin: 0 }}>{t("收件地址核对（USPS）")}</h2>
-              <span className={`badge ${u.enabled ? "ok" : "pending"}`}>{u.enabled ? t("已启用") : u.configured ? t("已停用") : t("未配置")}</span>
+              <h2 style={{ margin: 0 }}>{t("收件地址核对")}</h2>
+              <span className={`badge ${ac.enabled ? "ok" : "pending"}`}>{ac.enabled ? t("已启用") : ac.configured ? t("已停用") : t("未配置")}</span>
             </div>
             <p className="small muted">
-              {t("客户查运费时自动用 USPS 核对收件地址：地址不存在或缺公寓号会提醒客户，必须确认后才能下单；写法不标准会给出建议地址。免费，需要在 developers.usps.com 注册并创建 App，拿到 Consumer Key 和 Consumer Secret。USPS 默认每小时 60 次，同一个地址只查一次，以后直接用上次的结果。")}
+              {t("客户查运费时自动核对收件地址：地址不存在或缺公寓号会提醒客户，必须确认后才能下单；写法不标准会给出建议地址。同一个地址只查一次，以后直接用上次的结果。")}
             </p>
-            <FlashForm action={saveUspsAction} submitLabel="保存并测试连接" locked="修改后所有客户下单都会用新的设置核对地址">
+            {ac.monthlyCap > 0 && (
+              <div className="usage-bar" title={t("本月已用 {a} / {b} 次", { a: used, b: ac.monthlyCap })}>
+                <span className="small">{t("本月已用 {a} / {b} 次", { a: used, b: ac.monthlyCap })}{used >= ac.monthlyCap ? ` · ${t("已到上限，本月暂停核对")}` : ""}</span>
+                <div><i style={{ width: `${Math.min(100, (used / ac.monthlyCap) * 100)}%` }} className={used >= ac.monthlyCap ? "full" : ""} /></div>
+              </div>
+            )}
+            <FlashForm action={saveAddrCheckAction} submitLabel="保存并测试连接" locked="修改后所有客户下单都会用新的设置核对地址">
               <div className="grid" style={{ margin: "12px 0" }}>
-                <label className="f">Consumer Key
-                  <input name="consumerKey" defaultValue={saved.consumerKey} autoComplete="off" placeholder={t("USPS 开发者平台 → Apps 里的 Consumer Key")} />
+                <label className="f">{t("服务商")}
+                  <select name="provider" defaultValue={saved.provider}>
+                    <option value="google">{t("Google（每月前 5000 次免费）")}</option>
+                    <option value="usps">{t("USPS（需签约，按月收费）")}</option>
+                  </select>
                 </label>
-                <label className="f">Consumer Secret
-                  <input name="consumerSecret" type="password" autoComplete="new-password"
-                    placeholder={u.consumerSecret ? t("已保存（尾号 {tail}），留空不修改", { tail: u.consumerSecret.slice(-4) }) : t("USPS 开发者平台 → Apps 里的 Consumer Secret")} />
+                <label className="f">Google API Key
+                  <input name="googleKey" type="password" autoComplete="new-password"
+                    placeholder={ac.googleKey ? t("已保存（尾号 {tail}），留空不修改", { tail: ac.googleKey.slice(-4) }) : t("Google Cloud → 凭据里的 API 密钥")} />
+                </label>
+                <label className="f">{t("每月最多查询次数")}
+                  <input name="monthlyCap" type="number" min={0} step={100} defaultValue={saved.monthlyCap} />
+                  <span className="field-hint muted">{t("到了上限本月就不再查，不会产生费用；0 = 不限制")}</span>
                 </label>
                 <label className="f" style={{ alignSelf: "end" }}>
                   <span><input type="checkbox" name="enabled" defaultChecked={saved.enabled !== false} /> {t("启用地址核对")}</span>
                 </label>
               </div>
+              <details className="small" style={{ marginBottom: 10 }}>
+                <summary>{t("USPS 账号（选 USPS 时才用）")}</summary>
+                <div className="grid" style={{ marginTop: 8 }}>
+                  <label className="f">Consumer Key
+                    <input name="consumerKey" defaultValue={us.consumerKey} autoComplete="off" />
+                  </label>
+                  <label className="f">Consumer Secret
+                    <input name="consumerSecret" type="password" autoComplete="new-password"
+                      placeholder={ac.usps.consumerSecret ? t("已保存（尾号 {tail}），留空不修改", { tail: ac.usps.consumerSecret.slice(-4) }) : ""} />
+                  </label>
+                </div>
+              </details>
             </FlashForm>
-            {u.configured && (
+            {ac.configured && (
               <div className="row" style={{ marginTop: 8 }}>
-                <FlashForm action={testUspsAction} submitLabel="测试连接" submitClass="" inline />
+                <FlashForm action={testAddrAction} submitLabel="测试连接" submitClass="" inline />
               </div>
             )}
           </div>

@@ -44,7 +44,7 @@ import { saveDimRule } from "@/lib/rates";
 import { CARRIERS } from "@/lib/carriers";
 import { clearChannelNameCache } from "@/lib/channelDisplay";
 import { clearTestData } from "@/lib/cleanup";
-import { testUsps } from "@/lib/addressCheck";
+import { testAddressService } from "@/lib/addressCheck";
 import { listSenders, saveSender } from "@/lib/senders";
 import { clearCredentials, readablePassword, rememberCredentials } from "@/lib/credentials";
 import { clearBlocks, importCoverage, lookupZip, parseCoverageWorkbook, removeCoverage, setPrefilter } from "@/lib/coverage";
@@ -375,27 +375,31 @@ export async function syncChannelsAction(_: FlashState): Promise<FlashState> {
   }
 }
 
-export async function saveUspsAction(_: FlashState, fd: FormData): Promise<FlashState> {
+export async function saveAddrCheckAction(_: FlashState, fd: FormData): Promise<FlashState> {
   await requireAdmin();
-  const cur = getSettings().usps ?? { enabled: true, consumerKey: "", consumerSecret: "" };
-  const consumerKey = str(fd.get("consumerKey"), 200) || cur.consumerKey;
-  const consumerSecret = str(fd.get("consumerSecret"), 200) || cur.consumerSecret; // 留空 = 不修改
-  saveSettings({ usps: { enabled: fd.get("enabled") === "on", consumerKey, consumerSecret } });
+  const st = getSettings();
+  const cur = st.addrCheck ?? { enabled: true, provider: "google", googleKey: "", monthlyCap: 5000 };
+  const us = st.usps ?? { enabled: true, consumerKey: "", consumerSecret: "" };
+  const provider = fd.get("provider") === "usps" ? "usps" : "google";
+  const cap = Math.max(0, Math.floor(Number(fd.get("monthlyCap")) || 0));
+  const enabled = fd.get("enabled") === "on";
+  saveSettings({
+    addrCheck: { enabled, provider, googleKey: str(fd.get("googleKey"), 200) || cur.googleKey, monthlyCap: cap }, // 密钥留空 = 不修改
+    usps: { ...us, consumerKey: str(fd.get("consumerKey"), 200) || us.consumerKey, consumerSecret: str(fd.get("consumerSecret"), 200) || us.consumerSecret },
+  });
   revalidatePath("/settings");
-  if (fd.get("enabled") === "on" && consumerKey && consumerSecret) {
-    try {
-      return { ok: await testUsps() };
-    } catch (e) {
-      return { error: `已保存，但连接测试失败：${(e as Error).message}` };
-    }
+  if (!enabled) return { ok: "已保存（地址核对已停用）" };
+  try {
+    return { ok: await testAddressService() };
+  } catch (e) {
+    return { error: `已保存，但连接测试失败：${(e as Error).message}` };
   }
-  return { ok: "已保存" };
 }
 
-export async function testUspsAction(_: FlashState): Promise<FlashState> {
+export async function testAddrAction(_: FlashState): Promise<FlashState> {
   await requireAdmin();
   try {
-    return { ok: await testUsps() };
+    return { ok: await testAddressService() };
   } catch (e) {
     return { error: (e as Error).message };
   }

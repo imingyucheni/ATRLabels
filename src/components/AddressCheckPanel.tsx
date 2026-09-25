@@ -29,7 +29,7 @@ export default function AddressCheckPanel({
     <div id="addr-check" className={`addr-check ${kind}`}>
       <div className="addr-check-head">
         <Icon size={16} strokeWidth={2.2} />
-        <b>{t("收件地址核对（USPS）")}</b>
+        <b>{t("收件地址核对")}</b>
         <span>{tm(check.message) || ""}</span>
         {check.business !== undefined && check.status !== "not_found" && (
           <span className="badge">{check.business ? t("商业地址") : t("住宅地址")}</span>

@@ -316,6 +316,8 @@ export interface Settings {
   shipbest: { mode: "env" | "mock" | "sandbox" | "live"; apiId: string; token: string; baseUrl?: string };
   /** USPS 地址核对（Addresses API v3） */
   usps: { enabled: boolean; consumerKey: string; consumerSecret: string };
+  /** 收件地址核对：服务商、Google 密钥、每月上限 */
+  addrCheck: { enabled: boolean; provider: "google" | "usps"; googleKey: string; monthlyCap: number };
 }
 
 /**
@@ -357,6 +359,7 @@ const DEFAULT_SETTINGS: Settings = {
   originGateway: "LAX",
   shipbest: { mode: "env", apiId: "", token: "" },
   usps: { enabled: true, consumerKey: "", consumerSecret: "" },
+  addrCheck: { enabled: true, provider: "google", googleKey: "", monthlyCap: 5000 },
 };
 
 export function getSettings(): Settings {
