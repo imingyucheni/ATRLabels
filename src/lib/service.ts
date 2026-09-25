@@ -18,7 +18,7 @@ import {
 import { precheck, rememberQuote } from "./coverage";
 import { downloadLabel } from "./labels";
 import { chargeLabel, refundCancelled, removeShipmentLedger } from "./ledger";
-import { computePrice, resolveRule, type MarkupRule } from "./pricing";
+import { computePrice, resolveRule, type MarkupRule, type PartialRule } from "./pricing";
 import { getShipBestClient, ShipBestError } from "./shipbest/client";
 import type { Address, ShipmentRequest } from "./shipbest/types";
 
@@ -124,17 +124,17 @@ export async function quoteChannel(customerId: number, channelCode: string, req:
   return quoteOne(customerId, channelCode, ch?.name ?? channelCode, req);
 }
 
-async function quoteOne(customerId: number, channelCode: string, channelName: string, req: ShipmentRequest) {
+async function quoteOne(customerId: number, channelCode: string, channelName: string, req: ShipmentRequest, rule?: MarkupRule) {
   // 最近查过“不通邮”的邮编（或打开了邮编表预筛）直接判定送不到，不再调接口
   const zip = req.recipient?.zipCode ?? "";
   const pre = precheck(channelCode, zip);
   if (pre) return { channelCode, channelName, ok: false, error: pre } satisfies ChannelQuote;
-  const res = await quoteRemote(customerId, channelCode, channelName, req);
+  const res = await quoteRemote(customerId, channelCode, channelName, req, rule);
   rememberQuote(channelCode, zip, res.ok, res.error);
   return res;
 }
 
-async function quoteRemote(customerId: number, channelCode: string, channelName: string, req: ShipmentRequest): Promise<ChannelQuote> {
+async function quoteRemote(customerId: number, channelCode: string, channelName: string, req: ShipmentRequest, ruleOverride?: MarkupRule): Promise<ChannelQuote> {
   const client = getShipBestClient();
   const { roundingStep } = getSettings();
   try {
@@ -142,7 +142,7 @@ async function quoteRemote(customerId: number, channelCode: string, channelName:
     if (!q) return { channelCode, channelName, ok: false, error: "该渠道无报价" } satisfies ChannelQuote;
     // 以“优惠后总运费”作为我们的成本
     const cost = q.totalDiscountShippingFee || q.totalShippingFee;
-    const rule = ruleFor(customerId, channelCode);
+    const rule = ruleOverride ?? ruleFor(customerId, channelCode);
     const price = computePrice(cost, rule, roundingStep);
     return {
       channelCode,
@@ -186,6 +186,26 @@ export class NoChannelsError extends Error {
   constructor() {
     super("该客户还没有开通任何物流渠道，请到客户详情里开通");
   }
+}
+
+/**
+ * 销售试算（后台用，不出单）：还没开户的新客户，用所有已启用的渠道、按临时填写的加价试算，
+ * 方便给新客户报价、比较渠道和加价幅度。
+ */
+export async function quoteForProspect(req: ShipmentRequest, markup: PartialRule): Promise<ChannelQuote[]> {
+  const channels = listChannels(true);
+  if (!channels.length) throw new Error("没有启用的物流渠道，请先到“设置”里同步渠道");
+  const g = getSettings().markup;
+  const results: ChannelQuote[] = [];
+  const queue = [...channels];
+  await Promise.all(
+    Array.from({ length: Math.min(3, queue.length) }, async () => {
+      for (let c = queue.shift(); c; c = queue.shift()) {
+        results.push(await quoteOne(0, c.code, c.name, req, resolveRule(g, c.markup, markup)));
+      }
+    }),
+  );
+  return results.sort((a, b) => Number(b.ok) - Number(a.ok) || (a.price ?? 0) - (b.price ?? 0));
 }
 
 /* ---------------- 下单出面单 ---------------- */

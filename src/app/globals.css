@@ -379,3 +379,8 @@ table.list td { white-space: nowrap; }
 .sku-table td input:not([type="checkbox"]) { min-width: 90px; }
 .review-box { padding: 8px 0; }
 .review-box.reject { border-top: 1px dashed var(--line); }
+
+/* 管理员进入客户 OMS 时的提示条 */
+.acting-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  margin: -4px 0 16px; padding: 10px 14px; border-radius: 10px; background: var(--warn-soft); color: var(--warn); font-size: 13px; }
+.acting-bar b { color: var(--text, inherit); }

@@ -17,7 +17,7 @@ export default async function CustomersPage() {
       {resets.length > 0 && (
         <div className="card" style={{ borderColor: "var(--warn)" }}>
           <div className="card-head"><h2>客户申请重置密码（{resets.length}）</h2><span className="small muted">没有配置邮件发送时，由这里生成新密码后告诉客户</span></div>
-          <table>
+          <table className="list">
             <tbody>
               {resets.map((r) => (
                 <tr key={r.id}>
@@ -58,7 +58,7 @@ export default async function CustomersPage() {
                 <td className="num">{c.creditLimit ? money(c.creditLimit) : "-"}</td>
                 <td>{show(c.markup.percent, "%")}</td><td>{show(c.markup.fixed)}</td><td>{show(c.markup.minProfit)}</td>
                 <td>
-                  <Link href={`/customers/${c.id}`}>管理</Link> · <Link href={`/shipments?customerId=${c.id}`}>面单</Link> · <Link href={`/customers/${c.id}/charges`}>扣款明细</Link> · <Link href={`/customers/${c.id}/statement`}>对账单</Link>
+                  <a href={`/api/customers/${c.id}/oms`} target="_blank" rel="noopener">进入 OMS ↗</a> · <Link href={`/customers/${c.id}`}>管理</Link> · <Link href={`/shipments?customerId=${c.id}`}>面单</Link> · <Link href={`/customers/${c.id}/charges`}>扣款明细</Link> · <Link href={`/customers/${c.id}/statement`}>对账单</Link>
                 </td>
               </tr>
             ))}

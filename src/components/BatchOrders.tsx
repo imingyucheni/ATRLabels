@@ -122,6 +122,7 @@ export default function BatchOrders(props: {
           <li>确认后勾选订单“提交订单”，完成后一键合并打印全部 4×6 面单。</li>
         </ol>
         <form action={onUpload} style={{ display: "grid", gap: 12 }}>
+          <input type="hidden" name="mode" value={props.mode} />
           <div className="grid" style={{ alignItems: "end" }}>
             {props.mode === "admin" && (
               <label className="f"><span className="req">客户</span>

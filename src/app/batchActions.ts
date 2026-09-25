@@ -1,6 +1,6 @@
 "use server";
 
-import { currentCustomerId, isLoggedIn } from "@/lib/auth";
+import { currentCustomerId, isLoggedIn, portalActor } from "@/lib/auth";
 import { readSheetRows } from "@/lib/adjustments";
 import {
   chooseAll,
@@ -38,7 +38,12 @@ async function ownJob(jobId: number) {
 
 export async function createBatchJobAction(fd: FormData): Promise<{ jobId?: number; error?: string }> {
   try {
-    const a = await actor();
+    // 从客户 OMS 提交（包括管理员进入客户 OMS 代操作）时按 OMS 的登录身份；从后台提交时按选择的客户
+    // 后台不出面单：批量导入只能在客户 OMS 里进行
+    if (fd.get("mode") !== "portal") return { error: "后台不能下单，请在客户列表点“进入 OMS”代客户操作" };
+    const fromPortal = true;
+    const a: Awaited<ReturnType<typeof actor>> = fromPortal ? { admin: false, customerId: (await currentCustomerId()) ?? 0 } : await actor();
+    if (!a.admin && !a.customerId) return { error: "请先登录" };
     const customerId = a.admin ? Number(fd.get("customerId")) : a.customerId;
     if (!getCustomer(customerId)) return { error: "请选择客户" };
     const file = fd.get("file");
@@ -50,7 +55,7 @@ export async function createBatchJobAction(fd: FormData): Promise<{ jobId?: numb
     if (error) return { error };
     const jobId = createJob({
       customerId,
-      createdBy: a.admin ? "admin" : "customer",
+      createdBy: a.admin ? "admin" : await portalActor(),
       filename: str(file.name, 200),
       channels,
       pickMode: fd.get("pickMode") === "file" ? "file" : "cheapest",

@@ -1,5 +1,7 @@
 import { fmtTime } from "@/lib/time";
 import Link from "next/link";
+import { headers } from "next/headers";
+import { omsLoginUrl } from "@/lib/sites";
 import { notFound } from "next/navigation";
 import { customerChannelCodes, getCustomer, getSettings, listChannels } from "@/lib/db";
 import FlashForm from "@/components/FlashForm";
@@ -14,6 +16,8 @@ export default async function CustomerEdit({ params }: { params: Promise<{ id: s
   const c = id === "new" ? null : getCustomer(Number(id));
   if (id !== "new" && !c) notFound();
   const { markup } = getSettings();
+  const h = await headers();
+  const omsLogin = omsLoginUrl(`${h.get("x-forwarded-proto") ?? "http"}://${h.get("x-forwarded-host") ?? h.get("host")}`);
   const ledger = c ? listLedger({ customerId: c.id, limit: 100 }) : [];
   const allChannels = listChannels();
   const opened = new Set(c ? customerChannelCodes(c.id) : []);
@@ -25,7 +29,10 @@ export default async function CustomerEdit({ params }: { params: Promise<{ id: s
     <>
       <div className="row" style={{ justifyContent: "space-between", marginBottom: 16 }}>
         <h1 style={{ margin: 0 }}>{c ? `编辑客户：${c.name}` : "新增客户"}</h1>
-        <Link href="/customers">← 返回</Link>
+        <div className="row">
+          {c && <a className="btn primary" href={`/api/customers/${c.id}/oms`} target="_blank" rel="noopener">进入客户 OMS ↗</a>}
+          <Link href="/customers">← 返回</Link>
+        </div>
       </div>
       <FlashForm action={saveCustomerAction} submitLabel="保存" className="card">
         <input type="hidden" name="id" value={c?.id ?? ""} />
@@ -107,7 +114,7 @@ export default async function CustomerEdit({ params }: { params: Promise<{ id: s
                 <input type="hidden" name="id" value={c.id} />
                 <label className="f" style={{ marginBottom: 8 }}>新密码（至少 8 位；留空自动生成）<input name="password" type="text" autoComplete="off" minLength={8} /></label>
               </FlashForm>
-              <p className="small muted">客户登录地址：<code>/portal</code></p>
+              <p className="small muted">把下面的地址和登录邮箱、密码发给客户，客户在自己的 OMS 里下单、充值、查看记录：<br /><code>{omsLogin}</code></p>
             </div>
           </div>
 

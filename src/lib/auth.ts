@@ -118,8 +118,59 @@ export async function destroyCustomerSession() {
   (await cookies()).delete(PORTAL_COOKIE);
 }
 
-/** 返回已登录客户的 id；未登录、会话过期、账号停用都返回 null */
+/* ---------------- 管理员进入客户 OMS（代客户操作） ---------------- */
+
+const AS_COOKIE = "atr_portal_as";
+const AS_MAX_AGE = 4 * 3600;
+
+/** 后台生成的一次性进入凭证（60 秒有效），放在跳转链接里，OMS 可以在另一个域名 */
+export function makeEnterToken(customerId: number) {
+  const exp = Math.floor(Date.now() / 1000) + 60;
+  return `${customerId}.${exp}.${mac(`enter.${customerId}.${exp}`)}`;
+}
+
+/** OMS 这边校验进入凭证，写入“管理员代操作”会话 */
+export async function enterAsCustomer(token: string): Promise<number | null> {
+  const [idStr, expStr, sig] = token.split(".");
+  const id = Number(idStr);
+  const exp = Number(expStr);
+  if (!id || !exp || !sig || exp < Date.now() / 1000 || !safeEqual(sig, mac(`enter.${id}.${exp}`))) return null;
+  if (!getCustomer(id)) return null;
+  const asExp = Math.floor(Date.now() / 1000) + AS_MAX_AGE;
+  (await cookies()).set(AS_COOKIE, `${id}.${asExp}.${mac(`as.${id}.${asExp}`)}`, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: await cookieSecure(),
+    path: "/",
+    maxAge: AS_MAX_AGE,
+  });
+  return id;
+}
+
+export async function leaveCustomer() {
+  (await cookies()).delete(AS_COOKIE);
+}
+
+/** 管理员代操作的客户 id（没有则 null） */
+export async function impersonatedCustomerId(): Promise<number | null> {
+  const token = (await cookies()).get(AS_COOKIE)?.value;
+  if (!token) return null;
+  const [idStr, expStr, sig] = token.split(".");
+  const id = Number(idStr);
+  const exp = Number(expStr);
+  if (!id || !exp || !sig || exp < Date.now() / 1000 || !safeEqual(sig, mac(`as.${id}.${exp}`))) return null;
+  return getCustomer(id) ? id : null;
+}
+
+/** 当前 OMS 操作人：管理员代操作记为 admin */
+export async function portalActor(): Promise<"admin" | "customer"> {
+  return (await impersonatedCustomerId()) ? "admin" : "customer";
+}
+
+/** 返回已登录客户的 id（管理员代操作时返回被代操作的客户）；未登录、会话过期、账号停用都返回 null */
 export async function currentCustomerId(): Promise<number | null> {
+  const as = await impersonatedCustomerId();
+  if (as) return as;
   const token = (await cookies()).get(PORTAL_COOKIE)?.value;
   if (!token) return null;
   const [idStr, expStr, sig] = token.split(".");

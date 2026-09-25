@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { createAction, quoteAction } from "@/app/actions";
+import { quoteAction } from "@/app/actions";
 import { portalCreateAction, portalQuoteAction } from "@/app/portal/actions";
 import type { PublicQuote } from "@/lib/portal";
 import AddressFields from "@/components/AddressFields";
@@ -50,6 +50,8 @@ export default function ShipForm(props: {
   // 后台默认不选客户，避免替错客户下单
   const [customerId, setCustomerId] = useState<number>(props.defaultCustomerId ?? 0);
   const [customerRef, setCustomerRef] = useState("");
+  // 后台试算新客户时临时填写的加价（留空 = 全局 / 渠道设置）
+  const [markup, setMarkup] = useState({ percent: "", fixed: "", minProfit: "" });
   const initialCustomer = customers.find((c) => c.id === props.defaultCustomerId);
   const [sender, setSender] = useState<Partial<Address>>(initialCustomer?.sender ?? props.defaultSender ?? {});
   const [editSender, setEditSender] = useState(!props.defaultSender);
@@ -118,26 +120,24 @@ export default function ShipForm(props: {
     setErrors([]);
     setNotice(null);
     startQuote(async () => {
-      const r = portal ? await portalQuoteAction(buildRequest()) : await quoteAction(customerId, buildRequest());
+      const optNum = (v: string) => (v.trim() === "" ? null : Number(v));
+      const r = portal
+        ? await portalQuoteAction(buildRequest())
+        : await quoteAction(customerId, buildRequest(), { percent: optNum(markup.percent), fixed: optNum(markup.fixed), minProfit: optNum(markup.minProfit) });
       setErrors(r.errors ?? []);
       setQuotes(r.quotes ?? null);
     });
   }
 
   async function onCreate(q: Quote) {
-    const customer = customers.find((c) => c.id === customerId)?.name;
-    const msg = portal
-      ? `确认用 ${q.channelName} 出单？\n运费：${money(q.price, q.currency)}（从账户余额扣除）`
-      : `确认用 ${q.channelName} 出单？\n客户：${customer}\n客户价：${money(q.price, q.currency)}（从客户余额扣除）`;
+    const msg = `确认用 ${q.channelName} 出单？\n运费：${money(q.price, q.currency)}（从账户余额扣除）`;
     if (!window.confirm(msg)) return;
     setCreating(q.channelCode);
     setErrors([]);
     try {
-      const r = portal
-        ? await portalCreateAction({ channelCode: q.channelCode, req: buildRequest(), expectedPrice: q.price!, remark, customerRef })
-        : await createAction({ customerId, channelCode: q.channelCode, req: buildRequest(), expectedPrice: q.price!, remark, customerRef });
+      const r = await portalCreateAction({ channelCode: q.channelCode, req: buildRequest(), expectedPrice: q.price!, remark, customerRef });
       if (r.id) {
-        router.push(portal ? `/portal/shipments/${r.id}` : `/shipments/${r.id}`);
+        router.push(`/portal/shipments/${r.id}`);
         return;
       }
       if (r.quote) {
@@ -161,7 +161,7 @@ export default function ShipForm(props: {
         <div className="row">
           {!portal && (
             <label className="f" style={{ minWidth: 240 }}>
-              <span className="req">客户</span>
+              <span>按哪个客户的价格试算</span>
               <select
                 value={customerId}
                 onChange={(e) => {
@@ -172,18 +172,15 @@ export default function ShipForm(props: {
                   setSender(c?.sender ?? props.defaultSender ?? {});
                 }}
               >
-                <option value={0} disabled>请选择客户</option>
+                <option value={0}>新客户 / 自定义加价</option>
                 {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
               {(() => {
                 const c = customers.find((x) => x.id === customerId);
                 return (
                   <>
-                    {c?.balance !== undefined && (
-                      <span className={`small ${c.available! <= 0 ? "profit-neg" : "muted"}`}>
-                        余额 {money(c.balance)} · 可用 {money(c.available)}{c.available! <= 0 ? " · 余额不足，需先充值才能出单" : ""}
-                      </span>
-                    )}
+                    {!c && <span className="small muted">用所有已启用的渠道，按右边填写的加价试算</span>}
+                    {c && <span className="small muted">按这个客户已开通的渠道和他的加价试算</span>}
                     {c?.channelCount === 0 && (
                       <span className="small" style={{ color: "var(--warn)" }}>未开通任何渠道，请先到 <a href={`/customers/${c.id}#channels`}>客户详情</a> 开通</span>
                     )}
@@ -192,14 +189,24 @@ export default function ShipForm(props: {
               })()}
             </label>
           )}
-          <label className="f" style={{ minWidth: 200 }}>
-            {portal ? "我的订单号（可选）" : "客户订单号（可选）"}
-            <input value={customerRef} maxLength={50} onChange={(e) => setCustomerRef(e.target.value)} />
-          </label>
-          <label className="f" style={{ flex: 1 }}>
-            备注（可选）
-            <input value={remark} maxLength={200} onChange={(e) => setRemark(e.target.value)} />
-          </label>
+          {portal ? (
+            <>
+              <label className="f" style={{ minWidth: 200 }}>
+                我的订单号（可选）
+                <input value={customerRef} maxLength={50} onChange={(e) => setCustomerRef(e.target.value)} />
+              </label>
+              <label className="f" style={{ flex: 1 }}>
+                备注（可选）
+                <input value={remark} maxLength={200} onChange={(e) => setRemark(e.target.value)} />
+              </label>
+            </>
+          ) : customerId === 0 ? (
+            <>
+              <label className="f" style={{ width: 120 }}>加价 %<input type="number" min="0" step="0.01" value={markup.percent} placeholder="全局设置" onChange={(e) => setMarkup({ ...markup, percent: e.target.value })} /></label>
+              <label className="f" style={{ width: 120 }}>每单固定加价<input type="number" min="0" step="0.01" value={markup.fixed} placeholder="全局设置" onChange={(e) => setMarkup({ ...markup, fixed: e.target.value })} /></label>
+              <label className="f" style={{ width: 120 }}>每单最低利润<input type="number" min="0" step="0.01" value={markup.minProfit} placeholder="全局设置" onChange={(e) => setMarkup({ ...markup, minProfit: e.target.value })} /></label>
+            </>
+          ) : null}
         </div>
       </div>
 
@@ -317,7 +324,7 @@ export default function ShipForm(props: {
       <div className="card">
         <div className="row" style={{ justifyContent: "space-between", marginBottom: quotes ? 12 : 0 }}>
           <h2 style={{ margin: 0 }}>报价</h2>
-          <button className="primary" onClick={onQuote} disabled={quoting || (!portal && !customerId)}>
+          <button className="primary" onClick={onQuote} disabled={quoting}>
             {quoting ? "查询中…" : quotes ? "重新查询运费" : "查询运费"}
           </button>
         </div>
@@ -339,7 +346,7 @@ export default function ShipForm(props: {
                 {portal ? (
                   <tr><th>渠道</th><th>分区</th><th className="num">运费</th><th></th></tr>
                 ) : (
-                  <tr><th>渠道</th><th>分区</th><th className="num">原价</th><th className="num">我们的成本</th><th>加价规则</th><th className="num">客户价</th><th className="num">利润</th><th></th></tr>
+                  <tr><th>渠道</th><th>分区</th><th className="num">原价</th><th className="num">我们的成本</th><th>加价规则</th><th className="num">客户价</th><th className="num">利润</th></tr>
                 )}
               </thead>
               <tbody>
@@ -357,16 +364,18 @@ export default function ShipForm(props: {
                       )}
                       <td className="num"><b>{money(q.price, q.currency)}</b></td>
                       {!portal && <td className="num profit-pos">{money(q.profit)}</td>}
-                      <td>
-                        <button className="primary small" disabled={!!creating} onClick={() => onCreate(q)}>
-                          {creating === q.channelCode ? "出单中…" : "用此渠道出单"}
-                        </button>
-                      </td>
+                      {portal && (
+                        <td>
+                          <button className="primary small" disabled={!!creating} onClick={() => onCreate(q)}>
+                            {creating === q.channelCode ? "出单中…" : "用此渠道出单"}
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   ) : (
                     <tr key={q.channelCode}>
                       <td>{q.channelName}</td>
-                      <td colSpan={portal ? 3 : 7} className="small" style={{ color: "var(--err)" }}>{q.error}</td>
+                      <td colSpan={portal ? 3 : 6} className="small" style={{ color: "var(--err)" }}>{q.error}</td>
                     </tr>
                   ),
                 )}

@@ -1,9 +1,9 @@
-import { requireCustomer } from "@/lib/auth";
+import { impersonatedCustomerId, requireCustomer } from "@/lib/auth";
 import { getSettings } from "@/lib/db";
 import { money, usd } from "@/lib/pricing";
 import Sidebar from "@/components/Sidebar";
 import { listDraftRows } from "@/lib/batch";
-import { portalLogoutAction } from "../actions";
+import { leaveCustomerAction, portalLogoutAction } from "../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +15,7 @@ export default async function PortalLayout({ children }: { children: React.React
   const me = await requireCustomer();
   const { brandName } = getSettings();
   const drafts = listDraftRows(me.id).length;
+  const acting = !!(await impersonatedCustomerId());
   return (
     <div className="shell">
       <Sidebar
@@ -44,7 +45,15 @@ export default async function PortalLayout({ children }: { children: React.React
           },
         ]}
       />
-      <main className="main">{children}</main>
+      <main className="main">
+        {acting && (
+          <form action={leaveCustomerAction} className="acting-bar">
+            <span>管理员正在以 <b>{me.name}</b> 的身份操作这个客户的 OMS，下单、充值等记录会标记为管理员代操作。</span>
+            <button className="small">退出代操作，返回后台</button>
+          </form>
+        )}
+        {children}
+      </main>
     </div>
   );
 }

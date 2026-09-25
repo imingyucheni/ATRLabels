@@ -52,6 +52,7 @@ import {
   createLabel,
   PriceChangedError,
   quoteAll,
+  quoteForProspect,
   withdrawCancel,
   refreshShipment,
   requestCancel,
@@ -82,48 +83,31 @@ export async function logoutAction() {
 
 /* ---------------- 报价 / 出单 ---------------- */
 
+/** 后台运费试算（不出单）：选已有客户按他的渠道和加价；不选客户则按临时加价试算所有渠道 */
 export async function quoteAction(
   customerId: number,
   raw: ShipmentRequest,
+  markup?: PartialRule,
 ): Promise<{ errors?: string[]; quotes?: ChannelQuote[] }> {
   await requireAdmin();
   const req = cleanRequest(raw);
-  if (!customerId) return { errors: ["请选择客户"] };
   const errors = validateRequest(req);
   if (errors.length) return { errors };
+  const m: PartialRule = {
+    percent: markup?.percent ?? null,
+    fixed: markup?.fixed ?? null,
+    minProfit: markup?.minProfit ?? null,
+  };
+  const neg = negativeRule(m);
+  if (neg) return { errors: [neg] };
   try {
-    return { quotes: await quoteAll(customerId, req) };
+    return { quotes: customerId ? await quoteAll(customerId, req) : await quoteForProspect(req, m) };
   } catch (e) {
     return { errors: [(e as Error).message] };
   }
 }
 
-export async function createAction(input: {
-  customerId: number;
-  channelCode: string;
-  req: ShipmentRequest;
-  expectedPrice: number;
-  remark?: string;
-  customerRef?: string;
-}): Promise<{ id?: number; error?: string; quote?: ChannelQuote }> {
-  await requireAdmin();
-  try {
-    const id = await createLabel({
-      customerId: Number(input.customerId),
-      channelCode: str(input.channelCode),
-      req: cleanRequest(input.req),
-      expectedPrice: n(input.expectedPrice),
-      remark: str(input.remark, 200) || undefined,
-      customerRef: str(input.customerRef, 50) || undefined,
-      createdBy: "admin",
-    });
-    revalidatePath("/shipments");
-    return { id };
-  } catch (e) {
-    if (e instanceof PriceChangedError) return { error: e.message, quote: e.quote };
-    return { error: (e as Error).message };
-  }
-}
+// 后台不出面单：出单都在客户 OMS 里进行（后台可以“进入客户 OMS”代客户操作）
 
 /* ---------------- 订单操作 ---------------- */
 

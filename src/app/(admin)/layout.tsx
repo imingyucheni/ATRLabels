@@ -23,19 +23,18 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         groups={[
           { items: [{ href: "/", label: "概览", icon: "dashboard", exact: true }, { href: "/reports", label: "报表", icon: "reports" }] },
           {
-            title: "订单",
+            title: "客户",
             items: [
-              { href: "/shipments/new", label: "新建面单", icon: "ship" },
-              { href: "/shipments/batch", label: "批量下单", icon: "batch" },
-              { href: "/shipments", label: "面单记录", icon: "list" },
-              { href: "/adjustments", label: "补差导入", icon: "adjust" },
+              { href: "/customers", label: "客户管理", icon: "customers", count: resets },
+              { href: "/quote", label: "运费试算", icon: "ship" },
+              { href: "/finance", label: "财务 · 充值审核", icon: "finance", count: pendingTopups },
             ],
           },
           {
-            title: "客户与财务",
+            title: "订单",
             items: [
-              { href: "/customers", label: "客户", icon: "customers", count: resets },
-              { href: "/finance", label: "财务 · 充值审核", icon: "finance", count: pendingTopups },
+              { href: "/shipments", label: "面单记录", icon: "list" },
+              { href: "/adjustments", label: "补差导入", icon: "adjust" },
             ],
           },
           { title: "系统", items: [{ href: "/coverage", label: "派送范围", icon: "map" }, { href: "/settings", label: "设置", icon: "settings" }] },

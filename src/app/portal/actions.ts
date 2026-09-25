@@ -12,7 +12,11 @@ import {
   recordFailure,
   requireCustomer,
   verifyPassword,
+  portalActor,
+  impersonatedCustomerId,
+  leaveCustomer,
 } from "@/lib/auth";
+import { adminOrigin } from "@/lib/sites";
 import { getCustomerLogin, getPasswordHash, getSettings, setCustomerPassword, setCustomerSender, setLabelNote } from "@/lib/db";
 import { InsufficientBalanceError } from "@/lib/ledger";
 import { ownsShipment, publicError, toPublicQuote, type PublicQuote } from "@/lib/portal";
@@ -48,8 +52,17 @@ export async function portalLoginAction(_: unknown, fd: FormData) {
 }
 
 export async function portalLogoutAction() {
+  // 管理员代操作时“退出”= 结束代操作，回到后台这个客户的页面
+  const as = await impersonatedCustomerId();
+  if (as) return leaveCustomerAction();
   await destroyCustomerSession();
   redirect("/portal/login");
+}
+
+export async function leaveCustomerAction() {
+  const as = await impersonatedCustomerId();
+  await leaveCustomer();
+  redirect(`${adminOrigin()}${as ? `/customers/${as}` : "/customers"}`);
 }
 
 /* ---------------- 报价 / 下单 ---------------- */
@@ -82,7 +95,7 @@ export async function portalCreateAction(input: {
       expectedPrice: n(input.expectedPrice),
       customerRef: str(input.customerRef, 50) || undefined,
       remark: str(input.remark, 200) || undefined,
-      createdBy: "customer",
+      createdBy: await portalActor(),
     });
     revalidatePath("/portal");
     return { id };

@@ -64,7 +64,7 @@ export default async function Dashboard() {
       <div className="card">
         <div className="row" style={{ justifyContent: "space-between", marginBottom: 8 }}>
           <h2 style={{ margin: 0 }}>最近面单</h2>
-          <Link className="btn primary" href="/shipments/new">＋ 新建面单</Link>
+          <Link className="btn primary" href="/quote">运费试算</Link>
         </div>
         <div className="table-wrap">
           <table>

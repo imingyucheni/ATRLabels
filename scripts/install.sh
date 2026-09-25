@@ -29,17 +29,22 @@ ask() { local q="$1" def="${2:-}" v; read -r -p "$q${def:+ [$def]}: " v; echo "$
 [ "$(id -u)" = 0 ] || { echo "请用 root 执行（先输入 sudo -i）"; exit 1; }
 
 # ---------- 基本信息（只在第一次问，之后保存在 /etc/atrlabels.conf） ----------
+DOMAIN=""; OMS_DOMAIN=""
 if [ -f "$CONF" ] && [ "${1:-}" != "--reconfigure" ]; then
   # shellcheck disable=SC1090
   . "$CONF"
   echo "使用已保存的设置（$CONF）。要重新填写域名 / 仓库地址，请执行：bash install.sh --reconfigure"
 else
+  # shellcheck disable=SC1090
+  [ -f "$CONF" ] && . "$CONF"
   say "基本信息"
-  DOMAIN=$(ask "系统要使用的域名（先把域名 A 记录解析到这台服务器 IP；没有域名直接回车，用 http://IP:3000 访问）" "")
-  REPO=$(ask "代码仓库地址（私有仓库请用 https://<GitHub令牌>@github.com/... 的格式）" "$REPO_DEFAULT")
-  BRANCH=$(ask "代码分支" "$BRANCH_DEFAULT")
+  echo "域名要先在域名服务商添加 A 记录解析到这台服务器的 IP；还没有域名就直接回车，用 http://IP:3000 访问。"
+  DOMAIN=$(ask "管理后台域名（例如 admin.你的域名.com）" "${DOMAIN:-}")
+  OMS_DOMAIN=$(ask "客户 OMS 域名（客户登录下单用，例如 oms.你的域名.com；没有就回车）" "${OMS_DOMAIN:-}")
+  REPO=$(ask "代码仓库地址（私有仓库请用 https://<GitHub令牌>@github.com/... 的格式）" "${REPO:-$REPO_DEFAULT}")
+  BRANCH=$(ask "代码分支" "${BRANCH:-$BRANCH_DEFAULT}")
   umask 077
-  printf 'DOMAIN=%q\nREPO=%q\nBRANCH=%q\n' "$DOMAIN" "$REPO" "$BRANCH" > "$CONF"
+  printf 'DOMAIN=%q\nOMS_DOMAIN=%q\nREPO=%q\nBRANCH=%q\n' "$DOMAIN" "$OMS_DOMAIN" "$REPO" "$BRANCH" > "$CONF"
   umask 022
 fi
 
@@ -107,6 +112,15 @@ SMTP_FROM=
 EOF
   chmod 600 "$ENV_FILE"
 fi
+
+# 网址设置每次按 /etc/atrlabels.conf 更新（改域名后执行 bash install.sh --reconfigure 即可）
+set_env() { # 设置 .env.local 里的某一项（没有就追加）
+  if grep -q "^$1=" "$ENV_FILE"; then sed -i "s#^$1=.*#$1=$2#" "$ENV_FILE"; else echo "$1=$2" >> "$ENV_FILE"; fi
+}
+set_env ADMIN_URL "${DOMAIN:+https://$DOMAIN}"
+set_env OMS_URL "${OMS_DOMAIN:+https://$OMS_DOMAIN}"
+set_env APP_URL "${OMS_DOMAIN:+https://$OMS_DOMAIN}"
+set_env ALLOWED_ORIGINS "$(printf '%s' "$DOMAIN,$OMS_DOMAIN" | sed 's/^,//; s/,$//')"
 
 # ---------- 程序：优先下载 GitHub 上构建好的发布包 ----------
 TOKEN=$(printf '%s' "$REPO" | sed -n 's#^https://\([^@]*\)@github.com/.*#\1#p')
@@ -240,7 +254,7 @@ cat > /etc/cron.d/atrlabels-backup <<EOF
 0 3 * * * root sqlite3 $DATA_DIR/atrlabels.db ".backup '$DATA_DIR/backups/atrlabels-\$(date +\%F).db'" && tar -czf $DATA_DIR/backups/files-\$(date +\%F).tgz -C $DATA_DIR labels topup samples assets 2>/dev/null; find $DATA_DIR/backups -mtime +30 -delete
 EOF
 
-if [ -n "$DOMAIN" ]; then
+if [ -n "$DOMAIN" ] || [ -n "$OMS_DOMAIN" ]; then
   say "配置 HTTPS（Caddy）"
   if ! command -v caddy >/dev/null; then
     apt-get install -y debian-keyring debian-archive-keyring apt-transport-https gnupg
@@ -248,17 +262,16 @@ if [ -n "$DOMAIN" ]; then
     curl -1sLf https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt > /etc/apt/sources.list.d/caddy-stable.list
     apt-get update -y && apt-get install -y caddy
   fi
-  cat > /etc/caddy/Caddyfile <<EOF
-$DOMAIN {
-  encode gzip
-  reverse_proxy 127.0.0.1:3000
-}
-EOF
+  {
+    for d in $DOMAIN $OMS_DOMAIN; do
+      printf '%s {\n  encode gzip\n  reverse_proxy 127.0.0.1:3000\n}\n\n' "$d"
+    done
+  } > /etc/caddy/Caddyfile
   systemctl reload caddy || systemctl restart caddy
-  URL="https://$DOMAIN"
-else
-  URL="http://$(curl -fsS -m 5 ifconfig.me 2>/dev/null || hostname -I | awk '{print $1}'):3000"
 fi
+IP_URL="http://$(curl -fsS -m 5 ifconfig.me 2>/dev/null || hostname -I | awk '{print $1}'):3000"
+URL="${DOMAIN:+https://$DOMAIN}"; URL="${URL:-$IP_URL}"
+if [ -n "$OMS_DOMAIN" ]; then OMS="https://$OMS_DOMAIN/portal/login"; else OMS="$URL/portal/login"; fi
 
 # 等服务启动
 ok=0
@@ -273,8 +286,8 @@ if [ "$ok" = 1 ]; then
 
 ==============================================================
   安装完成（版本 ${SHA:0:7}）
-  后台地址：   $URL
-  客户端地址： $URL/portal
+  管理后台：   $URL
+  客户 OMS：   $OMS   （发给客户的登录地址）
   管理员密码： $ADMIN_PW
   配置文件：   $ENV_FILE（修改后执行 systemctl restart atrlabels）
   数据目录：   $DATA_DIR（每天自动备份到 $DATA_DIR/backups）
@@ -282,7 +295,7 @@ if [ "$ok" = 1 ]; then
   更新系统：   atr-update
 ==============================================================
 EOF
-  [ -z "$DOMAIN" ] && echo "提示：没有配置域名，请在云服务器防火墙放行 TCP 3000 端口。"
+  if [ -z "$DOMAIN" ]; then echo "提示：没有配置域名，请在云服务器防火墙放行 TCP 3000 端口。"; else echo "提示：请在云服务器防火墙放行 TCP 80 和 443 端口（HTTPS 证书需要）。"; fi
 else
   warn "服务没有正常启动，下面是最近的日志，请截图发给技术支持："
   journalctl -u atrlabels -n 30 --no-pager || true
