@@ -23,6 +23,15 @@ export const common: Record<string, string> = {
   "深色": "Dark",
   "跟随系统": "System",
   "外观": "Appearance",
+  // 上线前清空测试数据
+  "上线前清空测试数据": "Clear test data before go-live",
+  "删除所有订单、余额流水（客户余额归零）、充值申请、补差记录、批量导入记录和面单文件；客户、登录账号、渠道、价格设置、派送范围、报价表和寄件地址都会保留。清空前会自动备份数据库。": "Deletes all orders, balance history (every customer's balance goes to 0), top-up requests, adjustments, bulk imports and label files. Customers, logins, services, pricing, coverage, rate cards and sender addresses are kept. The database is backed up first.",
+  "现有：订单 {a}（其中正式单 {b}）、流水 {c}、充值申请 {d}、补差 {e}、批量导入 {f}": "Now: {a} orders ({b} live), {c} balance entries, {d} top-up requests, {e} adjustments, {f} bulk imports",
+  "已经有正式订单，不能再清空。": "Live orders already exist — test data can no longer be cleared.",
+  "清空测试数据": "Clear test data",
+  "确定清空所有测试数据吗？所有客户余额会归零，这一步不能撤销（会自动备份）。": "Clear all test data? Every customer's balance goes to 0. This can't be undone (a backup is made).",
+  "输入“清空测试数据”确认": "Type \"CLEAR\" to confirm",
+  "请在输入框里输入“清空测试数据”确认": "Type \"CLEAR\" in the box to confirm",
   // 接口模式 / 沙盒
   "当前：模拟模式": "Current: Demo mode",
   "当前：沙盒模式": "Current: Sandbox mode",

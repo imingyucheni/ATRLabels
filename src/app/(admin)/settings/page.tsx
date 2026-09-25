@@ -6,10 +6,11 @@ import { isSandboxSite, shipbestConfig, type ShipBestMode } from "@/lib/shipbest
 import StampSettings from "@/components/StampSettings";
 import FlashForm from "@/components/FlashForm";
 import RuleInputs from "@/components/RuleInputs";
-import { refreshFxAction, saveChannelsAction, savePaymentSettingsAction, saveSettingsAction, saveShipBestAction, syncChannelsAction, verifyAction } from "@/app/actions";
+import { clearTestDataAction, refreshFxAction, saveChannelsAction, savePaymentSettingsAction, saveSettingsAction, saveShipBestAction, syncChannelsAction, verifyAction } from "@/app/actions";
 import { cnyToPay, usdCnyQuote } from "@/lib/fx";
 import FilePick from "@/components/FilePick";
-import { getT } from "@/lib/prefs";
+import { testDataStats } from "@/lib/cleanup";
+import { getLang, getT } from "@/lib/prefs";
 import type { T } from "@/lib/i18n";
 
 const MODE_BADGE: Record<ShipBestMode, string> = { mock: "当前：模拟模式", sandbox: "当前：沙盒模式", live: "当前：正式模式" };
@@ -29,6 +30,7 @@ export default async function SettingsPage() {
   const sbSaved = s.shipbest ?? { mode: "env", apiId: "", token: "" };
   const example = [5, 10, 20];
   const t = await getT();
+  const lang = await getLang();
   const fxSource = t(fx.source).replace(/ · (\S+) 今日汇率$/, (_, d) => t(" · {d} 今日汇率", { d })).replace(/（最近一次）$/, t("（最近一次）"));
 
   return (
@@ -228,6 +230,32 @@ export default async function SettingsPage() {
         </div>
         <div style={{ height: 12 }} />
       </FlashForm>
+
+      {(() => {
+        const st = testDataStats();
+        return (
+          <div className="card danger-card" id="cleanup">
+            <h2>{t("上线前清空测试数据")}</h2>
+            <p className="small muted">
+              {t("删除所有订单、余额流水（客户余额归零）、充值申请、补差记录、批量导入记录和面单文件；客户、登录账号、渠道、价格设置、派送范围、报价表和寄件地址都会保留。清空前会自动备份数据库。")}
+            </p>
+            <p className="small">
+              {t("现有：订单 {a}（其中正式单 {b}）、流水 {c}、充值申请 {d}、补差 {e}、批量导入 {f}", {
+                a: st.shipments, b: st.liveShipments, c: st.ledger, d: st.topups, e: st.adjustments, f: st.batches,
+              })}
+            </p>
+            {st.liveShipments > 0 ? (
+              <div className="alert warn">{t("已经有正式订单，不能再清空。")}</div>
+            ) : (
+              <FlashForm action={clearTestDataAction} submitLabel="清空测试数据" submitClass="danger" confirm="确定清空所有测试数据吗？所有客户余额会归零，这一步不能撤销（会自动备份）。">
+                <label className="f" style={{ maxWidth: 320, marginBottom: 10 }}>{t("输入“清空测试数据”确认")}
+                  <input name="confirm" autoComplete="off" placeholder={lang === "en" ? "CLEAR" : "清空测试数据"} />
+                </label>
+              </FlashForm>
+            )}
+          </div>
+        );
+      })()}
     </>
   );
 }

@@ -86,3 +86,22 @@ describe("接口模式 / 沙盒", () => {
     expect(calls).toEqual(["products", "trial", "trial", "trial"]);
   });
 });
+
+describe("上线前清空测试数据", () => {
+  it("清空订单和流水，保留客户；有正式单时拒绝", async () => {
+    const db = await import("@/lib/db");
+    const ledger = await import("@/lib/ledger");
+    const { clearTestData, testDataStats } = await import("@/lib/cleanup");
+    const id = db.saveCustomer(null, { name: "清空测试客户", contact: null, phone: null, email: null, note: null, markup: {} });
+    ledger.addLedger({ customerId: id, type: "topup", amount: 50, createdBy: "admin" });
+    expect(ledger.balanceOf(id)).toBe(50);
+    const r = clearTestData();
+    expect(r.backup).toMatch(/^before-clear-.*\.db$/);
+    expect(ledger.balanceOf(id)).toBe(0);
+    expect(db.getCustomer(id)?.name).toBe("清空测试客户");
+    expect(testDataStats().ledger).toBe(0);
+
+    db.db().prepare("INSERT INTO shipments (custom_no, customer_id, channel_code, sender_json, recipient_json, package_json, sku_json, quoted_cost, currency, price, rule_json, status, env) VALUES ('L1', ?, 'X', '{}', '{}', '{}', '[]', 1, 'USD', 1, '{}', 'labeled', 'live')").run(id);
+    expect(() => clearTestData()).toThrow(/正式订单/);
+  });
+});

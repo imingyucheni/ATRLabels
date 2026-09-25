@@ -40,6 +40,7 @@ import {
 import type { PartialRule } from "@/lib/pricing";
 import { getShipBestClient, shipbestMode } from "@/lib/shipbest/client";
 import { saveDimRule } from "@/lib/rates";
+import { clearTestData } from "@/lib/cleanup";
 import { listSenders, saveSender } from "@/lib/senders";
 import { clearCredentials, readablePassword, rememberCredentials } from "@/lib/credentials";
 import { clearBlocks, importCoverage, lookupZip, parseCoverageWorkbook, removeCoverage, setPrefilter } from "@/lib/coverage";
@@ -342,6 +343,19 @@ export async function syncChannelsAction(_: FlashState): Promise<FlashState> {
     const count = await syncChannels();
     revalidatePath("/settings");
     return { ok: `已同步 ${count} 个渠道` };
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+}
+
+export async function clearTestDataAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  await requireAdmin();
+  const typed = str(fd.get("confirm"), 50);
+  if (typed !== "清空测试数据" && typed.toUpperCase() !== "CLEAR") return { error: "请在输入框里输入“清空测试数据”确认" };
+  try {
+    const { backup } = clearTestData();
+    revalidatePath("/", "layout");
+    return { ok: `已清空测试数据，所有客户余额归零。清空前的数据已备份为 ${backup}` };
   } catch (e) {
     return { error: (e as Error).message };
   }
