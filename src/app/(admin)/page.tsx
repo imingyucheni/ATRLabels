@@ -55,7 +55,7 @@ export default async function Dashboard() {
                 <tr key={s.id}>
                   <td><Link href={`/shipments/${s.id}`}>{s.customNo}</Link></td>
                   <td>{s.customerName}</td>
-                  <td><StatusBadge status={s.status} /></td>
+                  <td><StatusBadge status={s.status} test={s.isTest} /></td>
                   <td className="small muted">{errs[i]}</td>
                 </tr>
               ))}
@@ -81,7 +81,7 @@ export default async function Dashboard() {
                   <td>{s.customerName}</td>
                   <td>{s.channelName}</td>
                   <td>{s.trackingNo ?? "-"}</td>
-                  <td><StatusBadge status={s.status} /></td>
+                  <td><StatusBadge status={s.status} test={s.isTest} /></td>
                   <td className="num">{money(s.price, s.currency)}</td>
                   <td className="num"><Profit value={shipmentProfit(s)} /></td>
                 </tr>

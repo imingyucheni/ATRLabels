@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import PrefToggles from "./PrefToggles";
 import { useLang, useT } from "./I18n";
 import {
-  BarChart3, Globe2, Lock, Map as MapIcon, Menu, PanelLeftClose, PanelLeftOpen, X, CreditCard, FileSpreadsheet, FileText, LayoutDashboard, LogOut, PackagePlus, Receipt, Scale, Settings,
+  ArrowLeftRight, BarChart3, Globe2, Lock, Map as MapIcon, Menu, PanelLeftClose, PanelLeftOpen, X, CreditCard, FileSpreadsheet, FileText, LayoutDashboard, LogOut, PackagePlus, Receipt, Scale, Settings,
   Truck, Upload, UserCog, Users, Wallet,
 } from "lucide-react";
 
@@ -26,7 +26,9 @@ export default function Sidebar(props: {
   who?: { name: string; balance?: string; negative?: boolean };
   envTag?: string;
   logout: () => Promise<void>;
-  /** 显示中英文切换（目前只有客户端有英文版） */
+  /** 切换到另一个站点（正式站 ↔ 沙盒站） */
+  siteLink?: { href: string; label: string };
+  /** 显示中英文切换 */
   showLang?: boolean;
 }) {
   const t = useT();
@@ -102,6 +104,11 @@ export default function Sidebar(props: {
         </button>
         <PrefToggles showLang={props.showLang} />
         {props.envTag && <div className="env-tag">{props.envTag}</div>}
+        {props.siteLink && (
+          <a className="site-link" href={props.siteLink.href} title={props.siteLink.label}>
+            <ArrowLeftRight size={14} strokeWidth={2} /> <span className="nav-collapse-text">{props.siteLink.label}</span>
+          </a>
+        )}
         {props.who && (
           <div className="who-card">
             <div className="name">{props.who.name}</div>

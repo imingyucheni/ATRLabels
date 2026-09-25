@@ -1,4 +1,4 @@
-import { getSettings } from "../db";
+import { db, getSettings } from "../db";
 import { coverageFor } from "../coverage";
 import { rateQuote } from "../rates";
 import { buildHeaders } from "./sign";
@@ -159,9 +159,32 @@ export class HttpShipBestClient implements ShipBestClient {
   }
 }
 
+type MockOrder = OrderDetail & { createdAt: number; to?: string };
+
+/** 模拟 / 沙盒订单存在数据库里，服务器重启后还能查到、取消 */
+const mockOrders = {
+  conn() {
+    const c = db();
+    c.exec("CREATE TABLE IF NOT EXISTS mock_orders (order_no TEXT PRIMARY KEY, custom_no TEXT NOT NULL UNIQUE, json TEXT NOT NULL)");
+    return c;
+  },
+  get(orderNo: string): MockOrder | undefined {
+    const r = this.conn().prepare("SELECT json FROM mock_orders WHERE order_no = ?").get(orderNo) as { json: string } | undefined;
+    return r ? JSON.parse(r.json) : undefined;
+  },
+  byCustomNo(customNo: string): MockOrder | undefined {
+    const r = this.conn().prepare("SELECT json FROM mock_orders WHERE custom_no = ?").get(customNo) as { json: string } | undefined;
+    return r ? JSON.parse(r.json) : undefined;
+  },
+  save(o: MockOrder) {
+    this.conn()
+      .prepare("INSERT INTO mock_orders (order_no, custom_no, json) VALUES (?,?,?) ON CONFLICT(order_no) DO UPDATE SET json = excluded.json")
+      .run(o.orderNo, o.customNo, JSON.stringify(o));
+  },
+};
+
 /** 离线模拟：不调用真实接口，用于本地试用和测试。 */
 export class MockShipBestClient implements ShipBestClient {
-  private orders = new Map<string, OrderDetail & { createdAt: number; to?: string }>();
   private seq = 0;
   // 与真实账号的渠道名一致，方便演示和导入 ShipBest 导单表
   private products: Product[] = [
@@ -182,7 +205,7 @@ export class MockShipBestClient implements ShipBestClient {
     return this.products;
   }
 
-  async trialPrice(productCode: string, req: ShipmentRequest) {
+  async trialPrice(productCode: string, req: ShipmentRequest): Promise<FeeQuote | null> {
     const idx = this.products.findIndex((p) => p.code === productCode);
     if (idx < 0) throw new ShipBestError(10022, "Logistics product not exist!");
     const { weight, displayUnitSystem: u } = req.pkg;
@@ -233,12 +256,13 @@ export class MockShipBestClient implements ShipBestClient {
   }
 
   async createOrder(customNo: string, productCode: string, req: ShipmentRequest) {
-    if ([...this.orders.values()].some((o) => o.customNo === customNo)) {
+    if (mockOrders.byCustomNo(customNo)) {
       throw new ShipBestError(10063, "custom no is repeat!");
     }
     const q = await this.trialPrice(productCode, req);
+    if (!q) throw new ShipBestError(10061, "trial price failed");
     const orderNo = "SB" + Date.now() + String(++this.seq).padStart(4, "0");
-    this.orders.set(orderNo, {
+    mockOrders.save({
       orderNo,
       customNo,
       logisticsProductCode: productCode,
@@ -253,9 +277,7 @@ export class MockShipBestClient implements ShipBestClient {
   }
 
   private find(key: { orderNo?: string; customNo?: string }) {
-    const o = key.orderNo
-      ? this.orders.get(key.orderNo)
-      : [...this.orders.values()].find((x) => x.customNo === key.customNo);
+    const o = key.orderNo ? mockOrders.get(key.orderNo) : key.customNo ? mockOrders.byCustomNo(key.customNo) : undefined;
     if (!o) throw new ShipBestError(11202, "The order was not found in the system!");
     return o;
   }
@@ -267,6 +289,7 @@ export class MockShipBestClient implements ShipBestClient {
       o.status = 4;
       o.trackingNo = "9400" + String(Date.now()).slice(-10) + String(++this.seq).padStart(6, "0");
       o.labelUrl = `mock://label/${o.customNo}?ch=${encodeURIComponent(o.logisticsProductName)}&t=${o.trackingNo}&to=${encodeURIComponent(o.to ?? "")}`;
+      mockOrders.save(o);
     }
     const { createdAt: _, to: __, ...detail } = o;
     return { ...detail };
@@ -278,34 +301,79 @@ export class MockShipBestClient implements ShipBestClient {
     // 真实情况：已打单的订单需联系 ShipBest 人工取消
     if (o.status === 4) throw new ShipBestError(11203, "The order was nonsupport cancelled!");
     o.status = 6;
+    mockOrders.save(o);
+  }
+}
+
+/**
+ * 沙盒：渠道、报价、派送范围都调用 ShipBest 真实接口（不花钱），
+ * 下单 / 面单 / 取消是模拟的，不会真实出单扣费。用来在上线前或测试新功能时核对真实价格。
+ */
+export class SandboxShipBestClient extends MockShipBestClient {
+  constructor(private real: HttpShipBestClient) {
+    super();
+  }
+  async verify() {
+    await this.real.verify();
+  }
+  async getProducts() {
+    return this.real.getProducts();
+  }
+  async trialPrice(productCode: string, req: ShipmentRequest): Promise<FeeQuote | null> {
+    const q = await this.real.trialPrice(productCode, req);
+    if (!q) throw new ShipBestError(10061, "trial price failed");
+    return q;
   }
 }
 
 const g = globalThis as unknown as { __shipbestMock?: MockShipBestClient };
+
+export type ShipBestMode = "mock" | "sandbox" | "live";
+
+/** 这个站点是不是“沙盒站”（和正式站分开部署、数据分开）：沙盒站永远不会真实出单 */
+export function isSandboxSite() {
+  return process.env.APP_ENV === "sandbox";
+}
 
 /** 接口账号：后台“设置”里填写的优先，没填时用服务器环境变量 */
 export function shipbestConfig() {
   const sb = getSettings().shipbest ?? { mode: "env", apiId: "", token: "" };
   const apiId = sb.apiId || process.env.SHIPBEST_API_ID || "";
   const token = sb.token || process.env.SHIPBEST_ACCESS_TOKEN || "";
-  const mock = sb.mode === "mock" ? true : sb.mode === "live" ? false : process.env.SHIPBEST_MOCK === "1";
-  return { apiId, token, mock, source: sb.apiId ? "settings" : process.env.SHIPBEST_API_ID ? "env" : "none" };
+  let mode: ShipBestMode =
+    sb.mode === "mock" || sb.mode === "sandbox" || sb.mode === "live" ? sb.mode : process.env.SHIPBEST_MOCK === "1" ? "mock" : "live";
+  // 沙盒站不允许真实出单：设置里是“正式”也按沙盒处理
+  if (mode === "live" && isSandboxSite()) mode = "sandbox";
+  const baseUrl = (sb.baseUrl || process.env.SHIPBEST_BASE_URL || "https://oms.shipbest.com").trim();
+  return { apiId, token, mode, mock: mode === "mock", baseUrl, source: sb.apiId ? "settings" : process.env.SHIPBEST_API_ID ? "env" : "none" };
 }
 
+/** 模拟模式：完全不连 ShipBest，价格按导入的报价表估算 */
 export function isMockMode() {
-  return shipbestConfig().mock;
+  return shipbestConfig().mode === "mock";
 }
 
-let live: { key: string; client: HttpShipBestClient } | null = null;
+/** 不是正式模式（模拟或沙盒）：面单都是模拟的，不会真实扣费 */
+export function isTestMode() {
+  return shipbestConfig().mode !== "live";
+}
+
+export function shipbestMode(): ShipBestMode {
+  return shipbestConfig().mode;
+}
+
+let live: { key: string; client: ShipBestClient } | null = null;
 
 export function getShipBestClient(): ShipBestClient {
   const c = shipbestConfig();
-  if (c.mock) return (g.__shipbestMock ??= new MockShipBestClient());
+  if (c.mode === "mock") return (g.__shipbestMock ??= new MockShipBestClient());
   if (!c.apiId || !c.token) {
     throw new Error("还没有填写 ShipBest API ID / Token，请到后台“设置 → ShipBest 连接”填写");
   }
-  const base = process.env.SHIPBEST_BASE_URL || "https://oms.shipbest.com";
-  const key = `${base}|${c.apiId}|${c.token}`;
-  if (live?.key !== key) live = { key, client: new HttpShipBestClient(base, c.apiId, c.token) };
+  const key = `${c.mode}|${c.baseUrl}|${c.apiId}|${c.token}`;
+  if (live?.key !== key) {
+    const http = new HttpShipBestClient(c.baseUrl, c.apiId, c.token);
+    live = { key, client: c.mode === "sandbox" ? new SandboxShipBestClient(http) : http };
+  }
   return live.client;
 }

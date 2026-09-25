@@ -44,7 +44,7 @@ export default async function PortalShipments({ searchParams }: { searchParams: 
             <span key="r">{s.recipient.nameFirst} {s.recipient.nameLast}<div className="small muted">{s.recipient.city}, {s.recipient.province ?? s.recipient.country} {s.recipient.zipCode}</div></span>,
             s.channelName,
             s.trackingNo ?? "-",
-            <StatusBadge key="s" status={s.status} />,
+            <StatusBadge key="s" status={s.status} test={s.isTest} />,
             <span key="p">{money(s.price, s.currency)}{s.adjustment ? <div className="small muted">{t("补差")} {money(s.adjustment)}</div> : null}</span>,
           ],
         }))}

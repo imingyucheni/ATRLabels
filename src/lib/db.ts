@@ -203,6 +203,8 @@ function migrate(conn: Database.Database) {
   const chcols = (conn.prepare("PRAGMA table_info(channels)").all() as { name: string }[]).map((c) => c.name);
   if (!chcols.includes("stamp_json")) conn.exec("ALTER TABLE channels ADD COLUMN stamp_json TEXT");
   if (!cols.includes("label_note")) conn.exec("ALTER TABLE shipments ADD COLUMN label_note TEXT");
+  // 下单时的接口模式：mock / sandbox / live（老数据为空：面单地址是 mock:// 的就是模拟单）
+  if (!cols.includes("env")) conn.exec("ALTER TABLE shipments ADD COLUMN env TEXT");
   conn.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_customers_email ON customers(portal_email) WHERE portal_email IS NOT NULL");
   // 客户可用渠道：新客户默认一个都不开，由管理员逐个开通。
   // 第一次建表时，给已有客户开通当前已启用的全部渠道，避免升级后老客户突然无法下单。
@@ -304,7 +306,7 @@ export interface Settings {
   /** 发货口岸（邮编覆盖表按这个口岸取邮编），91710 Chino 对应 LAX */
   originGateway: string;
   /** ShipBest 接口：在后台“设置”里填写；mode = env 时按服务器环境变量 */
-  shipbest: { mode: "env" | "mock" | "live"; apiId: string; token: string };
+  shipbest: { mode: "env" | "mock" | "sandbox" | "live"; apiId: string; token: string; baseUrl?: string };
 }
 
 /**
@@ -686,6 +688,8 @@ export interface Shipment {
   createdBy: string | null;
   /** 面单上加印的文字（为空时用 SKU） */
   labelNote: string | null;
+  /** 测试单（模拟 / 沙盒模式下的单，面单不是真的） */
+  isTest: boolean;
   /** 官方账单补差合计：正数 = ShipBest 向我们补扣，负数 = 退给我们 */
   costAdj: number;
   /** 向客户补收（正）/ 退客户（负）的合计 */
@@ -726,6 +730,7 @@ interface ShipmentRow {
   customer_ref: string | null;
   created_by: string | null;
   label_note: string | null;
+  env: string | null;
   cost_adj: number | null;
   customer_adj: number | null;
   created_at: string;
@@ -765,6 +770,7 @@ function toShipment(r: ShipmentRow): Shipment {
     customerRef: r.customer_ref,
     createdBy: r.created_by,
     labelNote: r.label_note,
+    isTest: r.env ? r.env !== "live" : !!r.label_url?.startsWith("mock://"),
     costAdj: r.cost_adj ?? 0,
     customerAdj: r.customer_adj ?? 0,
     createdAt: r.created_at,
@@ -789,14 +795,15 @@ export interface NewShipment {
   remark: string | null;
   customerRef?: string | null;
   createdBy?: string | null;
+  env?: string | null;
 }
 
 export function insertShipment(s: NewShipment): number {
   const r = db()
     .prepare(
       `INSERT INTO shipments (custom_no, customer_id, channel_code, channel_name, sender_json, recipient_json,
-        package_json, sku_json, quoted_cost, currency, zone, price, rule_json, status, remark, customer_ref, created_by)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?, 'pending', ?, ?, ?)`,
+        package_json, sku_json, quoted_cost, currency, zone, price, rule_json, status, remark, customer_ref, created_by, env)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?, 'pending', ?, ?, ?, ?)`,
     )
     .run(
       s.customNo,
@@ -815,6 +822,7 @@ export function insertShipment(s: NewShipment): number {
       s.remark,
       s.customerRef ?? null,
       s.createdBy ?? null,
+      s.env ?? null,
     );
   return Number(r.lastInsertRowid);
 }

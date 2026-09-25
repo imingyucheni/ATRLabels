@@ -46,7 +46,7 @@ export default async function PortalShipmentDetail({ params }: { params: Promise
   return (
     <>
       <div className="row" style={{ justifyContent: "space-between", marginBottom: 12 }}>
-        <h1 style={{ margin: 0 }}>{s.customerRef || s.customNo} <StatusBadge status={s.status} /></h1>
+        <h1 style={{ margin: 0 }}>{s.customerRef || s.customNo} <StatusBadge status={s.status} test={s.isTest} /></h1>
         <Link href="/portal/shipments">{t("← 返回列表")}</Link>
       </div>
       {s.problem && <div className="alert err">{t("订单异常：{problem}。请联系客服处理{contact}，未出面单的订单运费会全额退回。", { problem: tm(s.problem), contact: contact ? t("（{contact}）", { contact }) : "" })}</div>}

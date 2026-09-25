@@ -71,6 +71,8 @@ export interface PortalShipment {
   stampOn: boolean;
   stampText: string;
   labelNote: string | null;
+  /** 模拟 / 沙盒模式下的测试单 */
+  isTest: boolean;
 }
 
 export function toPortalShipment(s: Shipment): PortalShipment {
@@ -100,6 +102,7 @@ export function toPortalShipment(s: Shipment): PortalShipment {
     stampOn: !!stampCfg,
     stampText: stampText(s, stampCfg ?? getSettings().stamp),
     labelNote: s.labelNote,
+    isTest: s.isTest,
   };
 }
 

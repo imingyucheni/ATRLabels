@@ -1,5 +1,5 @@
 import { impersonatedCustomerId, requireCustomer } from "@/lib/auth";
-import { isMockMode } from "@/lib/shipbest/client";
+import { isSandboxSite, shipbestMode } from "@/lib/shipbest/client";
 import { getSettings } from "@/lib/db";
 import { money, usd } from "@/lib/pricing";
 import Sidebar from "@/components/Sidebar";
@@ -52,7 +52,9 @@ export default async function PortalLayout({ children }: { children: React.React
         ]}
       />
       <main className="main">
-        {isMockMode() && <div className="acting-bar">{t("演示模式：运费是按报价表模拟的，面单也是模拟的，不会真实出单。")}</div>}
+        {isSandboxSite() && <div className="site-ribbon">{t("沙盒站 · 测试专用，数据和正式站分开，不会真实出单")}</div>}
+        {shipbestMode() === "mock" && <div className="acting-bar">{t("演示模式：运费是按报价表模拟的，面单也是模拟的，不会真实出单。")}</div>}
+        {shipbestMode() === "sandbox" && <div className="acting-bar">{t("测试模式：运费是实时报价，面单是模拟的，不会真实出单扣费。")}</div>}
         {acting && (
           <form action={leaveCustomerAction} className="acting-bar">
             <span>{t("管理员正在以")} <b>{me.name}</b> {t("的身份操作这个客户的 OMS，下单、充值等记录会标记为管理员代操作。")}</span>

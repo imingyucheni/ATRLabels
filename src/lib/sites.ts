@@ -13,3 +13,13 @@ export const adminOrigin = () => trim(process.env.ADMIN_URL);
 export function omsLoginUrl(currentOrigin: string) {
   return `${omsOrigin() || currentOrigin}/portal/login`;
 }
+
+/**
+ * 正式站 / 沙盒站：沙盒站是单独部署的一套（数据和正式站完全分开），用来测试新功能。
+ * 安装脚本会把两边的后台网址写进 PRODUCTION_URL / SANDBOX_URL，后台侧边栏可以一键切过去。
+ */
+export function siteSwitch(): { toSandbox: boolean; url: string } | null {
+  const sandbox = process.env.APP_ENV === "sandbox";
+  const url = trim(sandbox ? process.env.PRODUCTION_URL : process.env.SANDBOX_URL);
+  return url ? { toSandbox: !sandbox, url } : null;
+}

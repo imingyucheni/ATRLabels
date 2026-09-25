@@ -38,7 +38,7 @@ import {
   getCustomer,
 } from "@/lib/db";
 import type { PartialRule } from "@/lib/pricing";
-import { getShipBestClient } from "@/lib/shipbest/client";
+import { getShipBestClient, shipbestMode } from "@/lib/shipbest/client";
 import { saveDimRule } from "@/lib/rates";
 import { listSenders, saveSender } from "@/lib/senders";
 import { clearCredentials, readablePassword, rememberCredentials } from "@/lib/credentials";
@@ -686,19 +686,24 @@ export async function lookupZipAction(zip: string) {
 export async function saveShipBestAction(_: FlashState, fd: FormData): Promise<FlashState> {
   await requireAdmin();
   const cur = getSettings().shipbest ?? { mode: "env", apiId: "", token: "" };
-  const mode = fd.get("mode") === "live" ? "live" : fd.get("mode") === "mock" ? "mock" : "env";
+  const raw = fd.get("mode");
+  const mode = raw === "live" || raw === "mock" || raw === "sandbox" ? raw : "env";
   const apiId = str(fd.get("apiId"), 100) || cur.apiId;
   const token = str(fd.get("token"), 200) || cur.token; // 留空 = 不修改
-  const next = { mode, apiId, token } as const;
+  const baseUrl = str(fd.get("baseUrl"), 200);
+  if (baseUrl && !/^https:\/\/[^\s/]+/i.test(baseUrl)) return { error: "接口地址要以 https:// 开头" };
+  const next = { mode, apiId, token, baseUrl } as const;
   saveSettings({ shipbest: next });
   revalidatePath("/", "layout");
-  if (mode === "live") {
-    if (!apiId || !token) return { error: "正式模式需要填写 API ID 和 Token" };
+  if (mode === "live" || mode === "sandbox") {
+    if (!apiId || !token) return { error: "沙盒和正式模式都需要填写 API ID 和 Token" };
     try {
       await getShipBestClient().verify();
     } catch (e) {
       return { error: `已保存，但连接测试失败：${(e as Error).message}` };
     }
+    if (shipbestMode() === "sandbox")
+      return { ok: "已切换到沙盒模式，连接成功。请点“同步渠道”获取真实渠道；之后的报价是真实的，下单和面单是模拟的，不会扣费。" };
     return { ok: "已切换到正式模式，连接成功。请点“同步渠道”获取真实渠道，之后的报价和出单都是真实的。" };
   }
   return { ok: mode === "mock" ? "已切换到模拟模式（价格是模拟的，不会真实出单）" : "已保存" };

@@ -161,7 +161,7 @@ export default async function PortalHome() {
                 <tr key={s.id}>
                   <td><Link href={`/portal/shipments/${s.id}`}>{s.customerRef || s.customNo}</Link></td>
                   <td>{s.recipient.nameFirst} {s.recipient.nameLast}</td>
-                  <td><StatusBadge status={s.status} /></td>
+                  <td><StatusBadge status={s.status} test={s.isTest} /></td>
                   <td className="small muted">{s.problem}</td>
                 </tr>
               ))}
@@ -182,7 +182,7 @@ export default async function PortalHome() {
                 <td>{s.recipient.nameFirst} {s.recipient.nameLast}<div className="small muted">{s.recipient.city}, {s.recipient.province ?? ""} {s.recipient.zipCode}</div></td>
                 <td>{s.channelName}</td>
                 <td>{s.trackingNo ?? "-"}</td>
-                <td><StatusBadge status={s.status} /></td>
+                <td><StatusBadge status={s.status} test={s.isTest} /></td>
                 <td className="num">{money(s.price, s.currency)}</td>
                 <td>{s.hasLabel ? <a href={`/api/labels/${s.id}`} target="_blank">{tr("打印")}</a> : "-"}</td>
               </tr>

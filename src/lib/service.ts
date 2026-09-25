@@ -19,7 +19,7 @@ import { precheck, rememberQuote } from "./coverage";
 import { downloadLabel } from "./labels";
 import { chargeLabel, refundCancelled, removeShipmentLedger } from "./ledger";
 import { computePrice, resolveRule, type MarkupRule, type PartialRule } from "./pricing";
-import { getShipBestClient, ShipBestError } from "./shipbest/client";
+import { getShipBestClient, shipbestMode, ShipBestError } from "./shipbest/client";
 import type { Address, ShipmentRequest } from "./shipbest/types";
 import { isCountryCode, isUsZip, usStateCode } from "./geo";
 
@@ -280,6 +280,7 @@ export async function createLabel(input: CreateInput): Promise<number> {
     remark: input.remark || null,
     customerRef: input.customerRef || null,
     createdBy,
+    env: shipbestMode(),
     });
     chargeLabel(customerId, newId, quote.price!, createdBy, `运费 · ${quote.channelName}${quote.zone ? ` · ${quote.zone}` : ""}`);
     return newId;

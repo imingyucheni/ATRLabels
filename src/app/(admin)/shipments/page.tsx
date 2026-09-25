@@ -79,7 +79,7 @@ export default async function ShipmentsPage({ searchParams }: { searchParams: Pr
                 <td>{s.recipient.nameFirst} {s.recipient.nameLast}<div className="small muted">{s.recipient.city}, {s.recipient.province ?? s.recipient.country} {s.recipient.zipCode}</div></td>
                 <td>{s.channelName}</td>
                 <td>{s.trackingNo ?? "-"}</td>
-                <td><StatusBadge status={s.status} /></td>
+                <td><StatusBadge status={s.status} test={s.isTest} /></td>
                 <td className="num">{money(s.actualCost ?? s.quotedCost)}{s.actualCost === null && <div className="small muted">{t("试算")}</div>}</td>
                 <td className="num">{money(s.price, s.currency)}</td>
                 <td className="num">{s.costAdj || s.customerAdj ? <>{money(s.customerAdj)}<div className="small muted">{t("成本")} {money(s.costAdj)}</div></> : "-"}</td>

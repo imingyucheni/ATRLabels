@@ -2,7 +2,7 @@ import { fmtTime } from "@/lib/time";
 import { ADJUSTMENT_POLICY_LABEL, channelCustomerCounts, getSettings, listChannels } from "@/lib/db";
 import { BALANCE_RULE_LABEL } from "@/lib/ledger";
 import { computePrice, money, resolveRule, type MarkupRule } from "@/lib/pricing";
-import { isMockMode, shipbestConfig } from "@/lib/shipbest/client";
+import { isSandboxSite, shipbestConfig, type ShipBestMode } from "@/lib/shipbest/client";
 import StampSettings from "@/components/StampSettings";
 import FlashForm from "@/components/FlashForm";
 import RuleInputs from "@/components/RuleInputs";
@@ -11,6 +11,14 @@ import { cnyToPay, usdCnyQuote } from "@/lib/fx";
 import FilePick from "@/components/FilePick";
 import { getT } from "@/lib/prefs";
 import type { T } from "@/lib/i18n";
+
+const MODE_BADGE: Record<ShipBestMode, string> = { mock: "当前：模拟模式", sandbox: "当前：沙盒模式", live: "当前：正式模式" };
+const MODE_NAME: Record<ShipBestMode, string> = { mock: "模拟", sandbox: "沙盒", live: "正式" };
+const MODE_DESC: Record<ShipBestMode, string> = {
+  mock: "不连 ShipBest。价格按导入的报价表估算，面单是模拟的。适合演示、培训。",
+  sandbox: "渠道和运费是 ShipBest 实时报价（不花钱），下单和面单是模拟的，不扣 ShipBest 余额。适合上线前核对价格、测试新功能。",
+  live: "真实报价、真实出单，ShipBest 会扣费，面单可以直接贴。正式营业用这个。",
+};
 
 export default async function SettingsPage() {
   const s = getSettings();
@@ -30,20 +38,26 @@ export default async function SettingsPage() {
       <div className="card" id="shipbest">
         <div className="row" style={{ justifyContent: "space-between" }}>
           <h2 style={{ margin: 0 }}>{t("ShipBest 连接")}</h2>
-          <span className={`badge ${isMockMode() ? "pending" : "ok"}`}>{isMockMode() ? t("当前：模拟模式（价格是模拟的）") : t("当前：正式模式")}</span>
+          <span className={`badge ${sb.mode === "live" ? "ok" : sb.mode === "sandbox" ? "test" : "pending"}`}>{t(MODE_BADGE[sb.mode])}</span>
         </div>
-        {isMockMode() && (
-          <div className="alert warn" style={{ marginTop: 12 }}>
-            {t("现在是")}<b>{t("模拟模式")}</b>{t("：报价和面单都是系统模拟的，不会调用 ShipBest，价格和 OMS 里的真实价格对不上。")}
-            {t("填好 API ID 和 Token、选“正式”后保存，再点“同步渠道”，就会用真实价格和真实出单。")}
-          </div>
+        {isSandboxSite() && (
+          <div className="alert warn" style={{ marginTop: 12 }}>{t("这里是沙盒站：数据和正式站分开，永远不会真实出单。选“正式”也会按沙盒处理。")}</div>
         )}
-        <FlashForm action={saveShipBestAction} submitLabel="保存并测试连接" locked="切换模式或更换账号会影响所有客户的报价和出单" confirm="确定修改 ShipBest 连接吗？切到“正式”后所有客户下单都会真实出单扣费。">
+        <div className="mode-cards">
+          {(["mock", "sandbox", "live"] as const).map((m) => (
+            <div key={m} className={`mode-card${sb.mode === m ? " on" : ""}`}>
+              <b>{t(MODE_NAME[m])}</b>
+              <span>{t(MODE_DESC[m])}</span>
+            </div>
+          ))}
+        </div>
+        <FlashForm action={saveShipBestAction} submitLabel="保存并测试连接" locked="切换模式或更换账号会影响所有客户的报价和出单" confirm="确定修改 ShipBest 连接吗？切到“正式”后所有客户下单都会真实出单扣费；切到“模拟 / 沙盒”后客户下的单都是测试单，面单不能用。">
           <div className="grid" style={{ margin: "12px 0" }}>
             <label className="f">{t("模式")}
-              <select name="mode" defaultValue={sbSaved.mode === "env" ? (sb.mock ? "mock" : "live") : sbSaved.mode}>
-                <option value="live">{t("正式（真实报价、真实出单扣费）")}</option>
-                <option value="mock">{t("模拟（测试用，不会真实出单）")}</option>
+              <select name="mode" defaultValue={sbSaved.mode === "env" ? sb.mode : sbSaved.mode}>
+                <option value="mock">{t("模拟（不连 ShipBest，按报价表估算）")}</option>
+                <option value="sandbox">{t("沙盒（真实报价，模拟出单，不扣费）")}</option>
+                <option value="live" disabled={isSandboxSite()}>{t("正式（真实报价、真实出单扣费）")}{isSandboxSite() ? t("（沙盒站不可用）") : ""}</option>
               </select>
             </label>
             <label className="f">API ID
@@ -52,6 +66,9 @@ export default async function SettingsPage() {
             <label className="f">API Token
               <input name="token" type="password" autoComplete="new-password"
                 placeholder={sb.token ? t("已保存（尾号 {tail}），留空不修改", { tail: sb.token.slice(-4) }) : t("OMS 后台 → API 配置里的 Token")} />
+            </label>
+            <label className="f">{t("接口地址（一般不用改）")}
+              <input name="baseUrl" defaultValue={sbSaved.baseUrl ?? ""} placeholder="https://oms.shipbest.com" autoComplete="off" />
             </label>
           </div>
         </FlashForm>

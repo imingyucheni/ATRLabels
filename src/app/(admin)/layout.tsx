@@ -1,5 +1,6 @@
 import { requireAdmin } from "@/lib/auth";
-import { isMockMode } from "@/lib/shipbest/client";
+import { isSandboxSite, shipbestMode } from "@/lib/shipbest/client";
+import { siteSwitch } from "@/lib/sites";
 import { pendingTopupCount } from "@/lib/topup";
 import { pendingResets } from "@/lib/passwordReset";
 import Sidebar from "@/components/Sidebar";
@@ -35,8 +36,14 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       <Sidebar
         brand="ATR Labels"
         brandSub={version() ? t("管理后台 · 版本 {v}", { v: version() }) : "管理后台"}
+        siteLink={(() => {
+          const sw = siteSwitch();
+          return sw ? { href: sw.url, label: sw.toSandbox ? t("切换到沙盒站") : t("切换到正式站") } : undefined;
+        })()}
         envTag={
-          isMockMode()
+          shipbestMode() === "sandbox"
+            ? t("沙盒模式 · 真实报价，模拟出单（不扣费）")
+            : shipbestMode() === "mock"
             ? Object.keys(rateStats()).length
               ? t("模拟模式 · 按报价表计算（{n} 个渠道）", { n: Object.keys(rateStats()).length })
               : t("模拟模式 · 还没导入报价表，运费是粗略估算")
@@ -66,7 +73,10 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           { title: "系统", items: [{ href: "/settings", label: "设置", icon: "settings" }] },
         ]}
       />
-      <main className="main">{children}</main>
+      <main className="main">
+        {isSandboxSite() && <div className="site-ribbon">{t("沙盒站 · 测试专用，数据和正式站分开，不会真实出单")}</div>}
+        {children}
+      </main>
     </div>
   );
 }

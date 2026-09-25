@@ -60,6 +60,7 @@ describe("模拟模式完整流程", () => {
     const id = await svc.createLabel({ customerId: custId, channelCode: q.channelCode, req, expectedPrice: q.price! });
     const s = db.getShipment(id)!;
     expect(s.status).toBe("labeled");
+    expect(s.isTest).toBe(true); // 模拟模式下的单是测试单
     expect(s.trackingNo).toBeTruthy();
     expect(s.labelMime).toBe("application/pdf");
     expect(fs.readFileSync(path.join(dir, s.labelPath!)).subarray(0, 4).toString()).toBe("%PDF");

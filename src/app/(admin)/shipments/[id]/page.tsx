@@ -47,7 +47,7 @@ export default async function ShipmentDetail({ params }: { params: Promise<{ id:
   return (
     <>
       <div className="row" style={{ justifyContent: "space-between", marginBottom: 12 }}>
-        <h1 style={{ margin: 0 }}>{t("面单 {no}", { no: s.customNo })} <StatusBadge status={s.status} /></h1>
+        <h1 style={{ margin: 0 }}>{t("面单 {no}", { no: s.customNo })} <StatusBadge status={s.status} test={s.isTest} /></h1>
         <Link href="/shipments">{t("← 返回列表")}</Link>
       </div>
 
