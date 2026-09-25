@@ -10,6 +10,8 @@ import FlashForm from "@/components/FlashForm";
 import StatusBadge from "@/components/StatusBadge";
 import { portalRefreshAction, portalSaveLabelNoteAction } from "@/app/portal/actions";
 import { getSettings } from "@/lib/db";
+import { makeT, translateMessage, type T } from "@/lib/i18n";
+import { getLang } from "@/lib/prefs";
 
 const UNITS = { 1: ["g", "cm"], 2: ["kg", "cm"], 3: ["lb", "in"] } as const;
 const SIGN = ["不需要签名", "直接签名", "间接签名", "成人签名"];
@@ -35,53 +37,56 @@ export default async function PortalShipmentDetail({ params }: { params: Promise
   const feePct = portalCancelFeePercent();
   const contact = getSettings().supportContact;
   const charges = listLedger({ shipmentId: s.id }).filter((l) => l.customerId === me.id).reverse();
+  const lang = await getLang();
+  const t: T = makeT(lang);
+  const tm = (m: string | null) => translateMessage(lang, m);
 
   return (
     <>
       <div className="row" style={{ justifyContent: "space-between", marginBottom: 12 }}>
         <h1 style={{ margin: 0 }}>{s.customerRef || s.customNo} <StatusBadge status={s.status} /></h1>
-        <Link href="/portal/shipments">← 返回列表</Link>
+        <Link href="/portal/shipments">{t("← 返回列表")}</Link>
       </div>
-      {s.problem && <div className="alert err">订单异常：{s.problem}。请联系客服处理{contact ? `（${contact}）` : ""}，未出面单的订单运费会全额退回。</div>}
+      {s.problem && <div className="alert err">{t("订单异常：{problem}。请联系客服处理{contact}，未出面单的订单运费会全额退回。", { problem: tm(s.problem), contact: contact ? t("（{contact}）", { contact }) : "" })}</div>}
       {canCancel && (
         <div className="alert warn">
-          这张订单已付款出单，如需取消请联系客服{contact ? `：${contact}` : ""}。取消后运费退回账户余额（已出面单的收取 {feePct}% 手续费）。
+          {t("这张订单已付款出单，如需取消请联系客服{contact}。取消后运费退回账户余额（已出面单的收取 {pct}% 手续费）。", { contact: contact ? `${t("：")}${contact}` : "", pct: feePct })}
         </div>
       )}
-      {s.status === "cancel_requested" && <div className="alert warn">取消申请处理中，完成后费用会退回账户余额。</div>}
+      {s.status === "cancel_requested" && <div className="alert warn">{t("取消申请处理中，完成后费用会退回账户余额。")}</div>}
 
       <div className="grid2">
         <div className="card">
-          <h2>面单</h2>
+          <h2>{t("面单")}</h2>
           {s.hasLabel ? (
             <>
               <div className="row" style={{ marginBottom: 12 }}>
-                <a className="btn primary" href={`/api/labels/${s.id}`} target="_blank">打开 / 打印 4×6 面单</a>
-                <a className="btn" href={`/api/labels/${s.id}?download=1`}>下载</a>
+                <a className="btn primary" href={`/api/labels/${s.id}`} target="_blank">{t("打开 / 打印 4×6 面单")}</a>
+                <a className="btn" href={`/api/labels/${s.id}?download=1`}>{t("下载")}</a>
               </div>
               {s.labelMime === "application/pdf" && (
                 <iframe src={`/api/labels/${s.id}`} style={{ width: "100%", height: 480, border: "1px solid var(--line)", borderRadius: 8 }} />
               )}
             </>
           ) : s.status === "cancelled" ? (
-            <p className="muted">这张面单已取消作废，不能再打印使用。</p>
+            <p className="muted">{t("这张面单已取消作废，不能再打印使用。")}</p>
           ) : s.status === "pending" ? (
-            <p className="muted">面单生成中，一般几秒到一分钟。可以点“刷新”。</p>
+            <p className="muted">{t("面单生成中，一般几秒到一分钟。可以点“刷新”。")}</p>
           ) : (
-            <p className="muted">没有面单。</p>
+            <p className="muted">{t("没有面单。")}</p>
           )}
           {s.stampOn && s.status !== "cancelled" && (
-            <FlashForm action={portalSaveLabelNoteAction} submitLabel="保存" submitClass="small" className="row">
+            <FlashForm action={portalSaveLabelNoteAction} submitLabel={t("保存")} submitClass="small" className="row">
               <input type="hidden" name="id" value={s.id} />
               <label className="f" style={{ flex: 1, minWidth: 220 }}>
-                面单上加印的文字（留空则印 SKU）
+                {t("面单上加印的文字（留空则印 SKU）")}
                 <input name="labelNote" maxLength={200} defaultValue={s.labelNote ?? ""} placeholder={s.stampText} />
               </label>
             </FlashForm>
           )}
           <div className="row" style={{ marginTop: 12 }}>
             {s.status === "pending" && (
-              <FlashForm action={portalRefreshAction} submitLabel="刷新" submitClass="" inline>
+              <FlashForm action={portalRefreshAction} submitLabel={t("刷新")} submitClass="" inline>
                 <input type="hidden" name="id" value={s.id} />
               </FlashForm>
             )}
@@ -90,26 +95,26 @@ export default async function PortalShipmentDetail({ params }: { params: Promise
         </div>
 
         <div className="card">
-          <h2>费用</h2>
+          <h2>{t("费用")}</h2>
           <dl className="kv">
-            <dt>渠道</dt><dd>{s.channelName}</dd>
-            <dt>分区</dt><dd>{s.zone ?? "-"}</dd>
-            <dt>运单号</dt><dd>{s.trackingNo ?? "-"}</dd>
-            <dt>运费</dt><dd><b>{money(s.price, s.currency)}</b></dd>
+            <dt>{t("渠道")}</dt><dd>{s.channelName}</dd>
+            <dt>{t("分区")}</dt><dd>{s.zone ?? "-"}</dd>
+            <dt>{t("运单号")}</dt><dd>{s.trackingNo ?? "-"}</dd>
+            <dt>{t("运费")}</dt><dd><b>{money(s.price, s.currency)}</b></dd>
             {s.status === "cancelled" && (
               <>
-                <dt>取消手续费</dt><dd>{money(s.cancelFee, s.currency)}</dd>
-                <dt>已退回</dt><dd>{money(s.refundAmount, s.currency)}</dd>
+                <dt>{t("取消手续费")}</dt><dd>{money(s.cancelFee, s.currency)}</dd>
+                <dt>{t("已退回")}</dt><dd>{money(s.refundAmount, s.currency)}</dd>
               </>
             )}
-            {s.adjustment !== 0 && (<><dt>账单补差</dt><dd>{money(s.adjustment, s.currency)}</dd></>)}
-            <dt>系统单号</dt><dd>{s.customNo}</dd>
-            <dt>下单时间</dt><dd>{fmtTime(s.createdAt)}</dd>
-            {s.remark && (<><dt>备注</dt><dd>{s.remark}</dd></>)}
+            {s.adjustment !== 0 && (<><dt>{t("账单补差")}</dt><dd>{money(s.adjustment, s.currency)}</dd></>)}
+            <dt>{t("系统单号")}</dt><dd>{s.customNo}</dd>
+            <dt>{t("下单时间")}</dt><dd>{fmtTime(s.createdAt)}</dd>
+            {s.remark && (<><dt>{t("备注")}</dt><dd>{s.remark}</dd></>)}
           </dl>
           {adjustments.length > 0 && (
             <>
-              <h3>账单补差</h3>
+              <h3>{t("账单补差")}</h3>
               <table>
                 <tbody>
                   {adjustments.map((a) => (
@@ -124,34 +129,34 @@ export default async function PortalShipmentDetail({ params }: { params: Promise
 
       {charges.length > 0 && (
         <div className="card">
-          <h2>这一单的扣款记录</h2>
+          <h2>{t("这一单的扣款记录")}</h2>
           <table>
-            <thead><tr><th>时间</th><th>类型</th><th>说明</th><th className="num">金额</th></tr></thead>
+            <thead><tr><th>{t("时间")}</th><th>{t("类型")}</th><th>{t("说明")}</th><th className="num">{t("金额")}</th></tr></thead>
             <tbody>
               {charges.map((l) => (
                 <tr key={l.id}>
                   <td className="small muted">{fmtTime(l.createdAt)}</td>
-                  <td>{LEDGER_TYPE_LABEL[l.type]}</td>
-                  <td className="small">{l.note}</td>
+                  <td>{t(LEDGER_TYPE_LABEL[l.type])}</td>
+                  <td className="small">{tm(l.note)}</td>
                   <td className={`num ${l.amount >= 0 ? "profit-pos" : ""}`}>{l.amount >= 0 ? "+" : ""}{money(l.amount)}</td>
                 </tr>
               ))}
             </tbody>
-            <tfoot><tr><td colSpan={3}><b>合计扣款</b></td><td className="num"><b>{money(-charges.reduce((a, l) => a + l.amount, 0))}</b></td></tr></tfoot>
+            <tfoot><tr><td colSpan={3}><b>{t("合计扣款")}</b></td><td className="num"><b>{money(-charges.reduce((a, l) => a + l.amount, 0))}</b></td></tr></tfoot>
           </table>
         </div>
       )}
 
       <div className="grid2">
-        <div className="card"><h2>寄件人</h2><Addr a={s.sender} /></div>
-        <div className="card"><h2>收件人</h2><Addr a={s.recipient} /></div>
+        <div className="card"><h2>{t("寄件人")}</h2><Addr a={s.sender} /></div>
+        <div className="card"><h2>{t("收件人")}</h2><Addr a={s.recipient} /></div>
       </div>
       <div className="card">
-        <h2>包裹</h2>
-        <p>{s.pkg.length} × {s.pkg.width} × {s.pkg.height} {lu}，{s.pkg.weight} {wu} · {SIGN[s.pkg.signServiceType] ?? ""}</p>
+        <h2>{t("包裹")}</h2>
+        <p>{s.pkg.length} × {s.pkg.width} × {s.pkg.height} {lu}{t("，")}{s.pkg.weight} {wu} · {SIGN[s.pkg.signServiceType] ? t(SIGN[s.pkg.signServiceType]) : ""}</p>
         <div className="table-wrap">
           <table>
-            <thead><tr><th>SKU</th><th>品名</th><th>海关编码</th><th className="num">数量</th><th className="num">申报单价</th></tr></thead>
+            <thead><tr><th>SKU</th><th>{t("品名")}</th><th>{t("海关编码")}</th><th className="num">{t("数量")}</th><th className="num">{t("申报单价")}</th></tr></thead>
             <tbody>
               {s.skuList.map((k, i) => (
                 <tr key={i}><td>{k.sku}</td><td>{k.productNameCn} / {k.productNameEn}</td><td>{k.hsCode}</td><td className="num">{k.quantity}</td><td className="num">{money(k.declaredUnitPrice, k.declaredCurrency)}</td></tr>

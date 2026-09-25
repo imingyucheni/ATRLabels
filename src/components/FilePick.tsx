@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useT } from "@/components/I18n";
 
 /** 中文的文件选择控件（浏览器自带的是英文 “Choose File / No file chosen”） */
 export default function FilePick({ name, accept, required, placeholder = "未选择文件" }: { name: string; accept?: string; required?: boolean; placeholder?: string }) {
+  const t = useT();
   const ref = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState("");
   useEffect(() => {
@@ -23,8 +25,8 @@ export default function FilePick({ name, accept, required, placeholder = "未选
         required={required}
         onChange={(e) => setFile(e.target.files?.[0]?.name ?? "")}
       />
-      <button type="button" onClick={() => ref.current?.click()}>选择文件</button>
-      <span className={file ? "" : "muted"}>{file || placeholder}</span>
+      <button type="button" onClick={() => ref.current?.click()}>{t("选择文件")}</button>
+      <span className={file ? "" : "muted"}>{file || t(placeholder)}</span>
     </span>
   );
 }

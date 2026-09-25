@@ -3,11 +3,15 @@ import Link from "next/link";
 import { requireCustomer } from "@/lib/auth";
 import { listOwnAdjustments } from "@/lib/portal";
 import { money } from "@/lib/pricing";
-import { getT } from "@/lib/prefs";
+import { getLang, getT } from "@/lib/prefs";
+import { translateMessage } from "@/lib/i18n";
 
 export default async function PortalAdjustments() {
   const me = await requireCustomer();
   const t = await getT();
+  const lang = await getLang();
+  // 补差原因是用“ · ”拼起来的几段，逐段翻译
+  const reason = (s: string | null) => (s ? s.split(" · ").map((x) => translateMessage(lang, x)).join(" · ") : s);
   const rows = listOwnAdjustments(me.id);
   const batches = [...new Set(rows.map((r) => r.batchId))];
   const total = rows.reduce((a, r) => a + r.amount, 0);
@@ -39,7 +43,7 @@ export default async function PortalAdjustments() {
                 <td className="small muted">{fmtTime(r.createdAt)}</td>
                 <td><Link href={`/portal/shipments/${r.shipmentId}`}>{r.customNo}</Link></td>
                 <td>{r.trackingNo}</td>
-                <td className="small">{r.reason}</td>
+                <td className="small">{reason(r.reason)}</td>
                 <td className="num">{money(r.amount)}</td>
               </tr>
             ))}

@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect, useRef, startTransition } from "react";
 import type { FlashState } from "@/app/actions";
+import { useT, useTMsg } from "@/components/I18n";
 
 /**
  * 通用表单：提交 Server Action 并显示成功/失败提示。
@@ -29,6 +30,8 @@ export default function FlashForm({
   resetOnSuccess?: boolean;
   id?: string;
 }) {
+  const t = useT();
+  const tMsg = useTMsg();
   const [state, formAction, pending] = useActionState(action, null);
   const ref = useRef<HTMLFormElement>(null);
 
@@ -44,16 +47,16 @@ export default function FlashForm({
       style={inline ? { display: "inline-block" } : undefined}
       onSubmit={(e) => {
         e.preventDefault();
-        if (confirm && !window.confirm(confirm)) return;
+        if (confirm && !window.confirm(t(confirm))) return;
         const fd = new FormData(e.currentTarget);
         startTransition(() => formAction(fd));
       }}
     >
-      {state?.ok && <div className="alert ok">{state.ok}</div>}
-      {state?.error && <div className="alert err">{state.error}</div>}
+      {state?.ok && <div className="alert ok">{tMsg(state.ok)}</div>}
+      {state?.error && <div className="alert err">{tMsg(state.error)}</div>}
       {children}
       <button className={submitClass} disabled={pending}>
-        {pending ? "处理中…" : submitLabel}
+        {pending ? t("处理中…") : t(submitLabel)}
       </button>
     </form>
   );

@@ -6,7 +6,8 @@ import { LEDGER_TYPE_LABEL, listLedger, listOrderCharges } from "@/lib/ledger";
 import OrderCharges from "@/components/OrderCharges";
 import { money, usd } from "@/lib/pricing";
 import { buildStatement } from "@/lib/statement";
-import { getT } from "@/lib/prefs";
+import { getLang, getT } from "@/lib/prefs";
+import { translateMessage } from "@/lib/i18n";
 
 function monthRange(offset = 0) {
   const d = new Date();
@@ -17,6 +18,9 @@ function monthRange(offset = 0) {
 export default async function PortalBilling({ searchParams }: { searchParams: Promise<{ from?: string; to?: string }> }) {
   const me = await requireCustomer();
   const t = await getT();
+  const lang = await getLang();
+  // 流水说明是用“ · ”拼起来的几段，逐段翻译
+  const note = (s: string | null) => (s ? s.split(" · ").map((x) => translateMessage(lang, x)).join(" · ") : s);
   const sp = await searchParams;
   const def = monthRange();
   const last = monthRange(-1);
@@ -64,7 +68,7 @@ export default async function PortalBilling({ searchParams }: { searchParams: Pr
                 <td className="small muted">{fmtTime(l.createdAt)}</td>
                 <td>{t(LEDGER_TYPE_LABEL[l.type])}</td>
                 <td>{l.shipmentId ? <Link href={`/portal/shipments/${l.shipmentId}`}>{l.customNo}</Link> : "-"}</td>
-                <td className="small">{l.note ? t(l.note) : l.note}</td>
+                <td className="small">{note(l.note)}</td>
                 <td className={`num ${l.amount >= 0 ? "profit-pos" : ""}`}>{l.amount >= 0 ? "+" : ""}{money(l.amount)}</td>
                 <td className="num">{usd(l.balanceAfter)}</td>
               </tr>

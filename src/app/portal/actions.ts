@@ -29,6 +29,7 @@ import { createTopup, getTopup } from "@/lib/topup";
 import { requestReset, resetWithToken } from "@/lib/passwordReset";
 import type { Address, ShipmentRequest } from "@/lib/shipbest/types";
 import type { FlashState } from "@/app/actions";
+import { getT, tMsg } from "@/lib/prefs";
 
 async function clientIp() {
   const h = await headers();
@@ -42,11 +43,11 @@ export async function portalLoginAction(_: unknown, fd: FormData) {
   const password = String(fd.get("password") ?? "");
   const key = `portal:${email}:${await clientIp()}`;
   const limited = checkRateLimit(key);
-  if (limited) return { error: limited, email };
+  if (limited) return { error: await tMsg(limited), email };
   const c = email ? getCustomerLogin(email) : null;
   if (!c || !c.enabled || !verifyPassword(password, c.passwordHash)) {
     recordFailure(key);
-    return { error: "邮箱或密码错误，或账号未开通", email };
+    return { error: await tMsg("邮箱或密码错误，或账号未开通"), email };
   }
   clearFailures(key);
   await createCustomerSession(c.id, c.passwordHash!);
@@ -73,11 +74,14 @@ export async function portalQuoteAction(raw: ShipmentRequest): Promise<{ errors?
   const me = await requireCustomer();
   const req = cleanRequest(raw);
   const errors = validateRequest(req);
-  if (errors.length) return { errors };
+  if (errors.length) return { errors: await Promise.all(errors.map((m) => tMsg(m))) };
   try {
-    return { quotes: (await quoteAll(me.id, req)).map(toPublicQuote) };
+    const quotes = (await quoteAll(me.id, req)).map(toPublicQuote);
+    // 渠道不可用的原因按界面语言显示
+    for (const q of quotes) if (q.error) q.error = await tMsg(q.error);
+    return { quotes };
   } catch (e) {
-    return { errors: [publicError((e as Error).message)] };
+    return { errors: [await tMsg(publicError((e as Error).message))] };
   }
 }
 
@@ -102,10 +106,10 @@ export async function portalCreateAction(input: {
     revalidatePath("/portal");
     return { id };
   } catch (e) {
-    if (e instanceof PriceChangedError) return { error: e.message, quote: toPublicQuote(e.quote) };
-    if (e instanceof InsufficientBalanceError) return { error: e.message };
-    if (e instanceof ShipBestError) return { error: `下单失败：${publicError(e.message)}` };
-    return { error: publicError((e as Error).message) };
+    if (e instanceof PriceChangedError) return { error: await tMsg(e.message), quote: toPublicQuote(e.quote) };
+    if (e instanceof InsufficientBalanceError) return { error: await tMsg(e.message) };
+    if (e instanceof ShipBestError) return { error: (await getT())("下单失败：{reason}", { reason: await tMsg(publicError(e.message)) }) };
+    return { error: await tMsg(publicError((e as Error).message)) };
   }
 }
 
@@ -114,13 +118,13 @@ export async function portalCreateAction(input: {
 export async function portalRefreshAction(_: FlashState, fd: FormData): Promise<FlashState> {
   const me = await requireCustomer();
   const id = Number(fd.get("id"));
-  if (!ownsShipment(me.id, id)) return { error: "面单不存在" };
+  if (!ownsShipment(me.id, id)) return { error: await tMsg("面单不存在") };
   try {
     const s = await refreshShipment(id);
     revalidatePath(`/portal/shipments/${id}`);
-    return { ok: s.labelPath ? "面单已生成" : "状态已更新，面单还在生成中" };
+    return { ok: await tMsg(s.labelPath ? "面单已生成" : "状态已更新，面单还在生成中") };
   } catch {
-    return { error: "刷新失败，请稍后再试" };
+    return { error: await tMsg("刷新失败，请稍后再试") };
   }
 }
 
@@ -138,14 +142,17 @@ export async function saveSenderBookAction(input: { id?: number; label?: string;
   if (!address.address1) errs.push("地址1");
   if (!address.city) errs.push("城市");
   if (!address.zipCode) errs.push("邮编");
-  if (errs.length) return { error: `请填写：${errs.join("、")}` };
+  if (errs.length) {
+    const t = await getT();
+    return { error: t("请填写：{fields}", { fields: errs.map((x) => t(x)).join(t("、")) }) };
+  }
   try {
     const id = saveSender(me.id, { id: input.id ? Number(input.id) : undefined, label: str(input.label, 50), address, makeDefault: !!input.makeDefault });
     revalidatePath("/portal/account");
     revalidatePath("/portal/ship");
     return { id, senders: listSenders(me.id) };
   } catch (e) {
-    return { error: (e as Error).message };
+    return { error: await tMsg((e as Error).message) };
   }
 }
 
@@ -167,24 +174,24 @@ export async function portalChangePasswordAction(_: FlashState, fd: FormData): P
   const me = await requireCustomer();
   const current = String(fd.get("current") ?? "");
   const next = String(fd.get("next") ?? "");
-  if (!verifyPassword(current, getPasswordHash(me.id))) return { error: "当前密码不正确" };
-  if (next.length < 8) return { error: "新密码至少 8 位" };
-  if (next !== String(fd.get("confirm") ?? "")) return { error: "两次输入的新密码不一致" };
+  if (!verifyPassword(current, getPasswordHash(me.id))) return { error: await tMsg("当前密码不正确") };
+  if (next.length < 8) return { error: await tMsg("新密码至少 8 位") };
+  if (next !== String(fd.get("confirm") ?? "")) return { error: await tMsg("两次输入的新密码不一致") };
   const hash = hashPassword(next);
   setCustomerPassword(me.id, hash);
   // 改密码后旧会话失效，用新密码重新签发
   await createCustomerSession(me.id, hash);
-  return { ok: "密码已修改" };
+  return { ok: await tMsg("密码已修改") };
 }
 
 /** 客户修改自己面单上加印的文字 */
 export async function portalSaveLabelNoteAction(_: FlashState, fd: FormData): Promise<FlashState> {
   const me = await requireCustomer();
   const id = Number(fd.get("id"));
-  if (!ownsShipment(me.id, id)) return { error: "面单不存在" };
+  if (!ownsShipment(me.id, id)) return { error: await tMsg("面单不存在") };
   setLabelNote(id, str(fd.get("labelNote"), 200) || null);
   revalidatePath(`/portal/shipments/${id}`);
-  return { ok: "已保存，重新打开面单即可看到" };
+  return { ok: await tMsg("已保存，重新打开面单即可看到") };
 }
 
 /** 客户提交充值申请 */
@@ -192,7 +199,7 @@ export async function portalTopupAction(_: FlashState, fd: FormData): Promise<Fl
   const me = await requireCustomer();
   const method = fd.get("method") === "alipay" ? "alipay" : "zelle";
   const file = fd.get("proof");
-  if (file instanceof File && file.size > 5 * 1024 * 1024) return { error: "凭证文件不能超过 5MB" };
+  if (file instanceof File && file.size > 5 * 1024 * 1024) return { error: await tMsg("凭证文件不能超过 5MB") };
   try {
     const id = await createTopup({
       customerId: me.id,
@@ -205,10 +212,11 @@ export async function portalTopupAction(_: FlashState, fd: FormData): Promise<Fl
     });
     revalidatePath("/portal/topup");
     const t = getTopup(id);
-    const paid = t && t.payCurrency === "CNY" ? `（¥${t.payAmount.toFixed(2)}，汇率 ${t.fxRate}）` : "";
-    return { ok: `充值申请 #${id} 已提交${paid}，我们确认到账后会加到账户余额。` };
+    const tr = await getT();
+    const paid = t && t.payCurrency === "CNY" ? tr("（¥{amount}，汇率 {rate}）", { amount: t.payAmount.toFixed(2), rate: t.fxRate }) : "";
+    return { ok: tr("充值申请 #{id} 已提交{paid}，我们确认到账后会加到账户余额。", { id, paid }) };
   } catch (e) {
-    return { error: (e as Error).message };
+    return { error: await tMsg((e as Error).message) };
   }
 }
 
@@ -218,17 +226,18 @@ export async function portalForgotAction(_: unknown, fd: FormData) {
   const email = str(fd.get("email"), 100).toLowerCase();
   const key = `forgot:${await clientIp()}`;
   const limited = checkRateLimit(key);
-  if (limited) return { error: limited };
+  if (limited) return { error: await tMsg(limited) };
   recordFailure(key); // 每次申请都计数，防止被刷
-  if (!email) return { error: "请填写登录邮箱" };
+  if (!email) return { error: await tMsg("请填写登录邮箱") };
   const h = await headers();
   const base = `${h.get("x-forwarded-proto") ?? "http"}://${h.get("x-forwarded-host") ?? h.get("host")}`;
   const r = await requestReset(email, base);
+  const t = await getT();
   return {
     ok: r.emailed
-      ? "如果这个邮箱已开通账号，我们已发送重置密码的链接，请在 1 小时内查收邮件。"
-      : `已收到你的申请。客服会在工作时间内（一般 1 个工作日内）为你重置密码，并通过你登记的联系方式告知新密码。${
-          getSettings().supportContact ? `着急的话可以直接联系：${getSettings().supportContact}` : ""
+      ? t("如果这个邮箱已开通账号，我们已发送重置密码的链接，请在 1 小时内查收邮件。")
+      : `${t("已收到你的申请。客服会在工作时间内（一般 1 个工作日内）为你重置密码，并通过你登记的联系方式告知新密码。")}${
+          getSettings().supportContact ? t("着急的话可以直接联系：{contact}", { contact: getSettings().supportContact }) : ""
         }`,
   };
 }
@@ -236,12 +245,12 @@ export async function portalForgotAction(_: unknown, fd: FormData) {
 export async function portalResetAction(_: unknown, fd: FormData) {
   const token = str(fd.get("token"), 100);
   const pw = String(fd.get("password") ?? "");
-  if (pw !== String(fd.get("confirm") ?? "")) return { error: "两次输入的密码不一致" };
+  if (pw !== String(fd.get("confirm") ?? "")) return { error: await tMsg("两次输入的密码不一致") };
   try {
     const id = resetWithToken(token, pw);
     await createCustomerSession(id, getPasswordHash(id)!);
   } catch (e) {
-    return { error: (e as Error).message };
+    return { error: await tMsg((e as Error).message) };
   }
   redirect("/portal");
 }
@@ -249,8 +258,9 @@ export async function portalResetAction(_: unknown, fd: FormData) {
 export async function portalSaveLabelPaperAction(_: FlashState, fd: FormData): Promise<FlashState> {
   const me = await requireCustomer();
   const v = fd.get("labelPaper");
-  if (!isPaperSize(v)) return { error: "请选择纸张" };
+  if (!isPaperSize(v)) return { error: await tMsg("请选择纸张") };
   setCustomerLabelPaper(me.id, v);
   revalidatePath("/portal", "layout");
-  return { ok: `已保存：之后打印 / 下载面单使用 ${PAPER_LABEL[v]}` };
+  const t = await getT();
+  return { ok: t("已保存：之后打印 / 下载面单使用 {paper}", { paper: t(PAPER_LABEL[v]) }) };
 }

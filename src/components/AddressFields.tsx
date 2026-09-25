@@ -141,8 +141,8 @@ function SmartPaste({ onParsed }: { onParsed: (a: Partial<Address>) => void }) {
   const t = useT();
   const [text, setText] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
-  const run = (t: string) => {
-    const p = parseAddress(t);
+  const run = (raw: string) => {
+    const p = parseAddress(raw);
     const n = Object.keys(p).length;
     if (!n) return setMsg(t("没有识别出地址，请检查粘贴的内容"));
     onParsed(p);
@@ -158,8 +158,8 @@ function SmartPaste({ onParsed }: { onParsed: (a: Partial<Address>) => void }) {
         onChange={(e) => setText(e.target.value)}
         onPaste={(e) => {
           // 粘贴后自动识别
-          const t = e.clipboardData.getData("text");
-          if (t) setTimeout(() => run(t), 0);
+          const pasted = e.clipboardData.getData("text");
+          if (pasted) setTimeout(() => run(pasted), 0);
         }}
       />
       <div className="row" style={{ justifyContent: "space-between" }}>
