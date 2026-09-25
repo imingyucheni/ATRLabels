@@ -13,6 +13,7 @@ import { LEDGER_TYPE_LABEL, listLedger } from "@/lib/ledger";
 import { money } from "@/lib/pricing";
 import { getT, getLang } from "@/lib/prefs";
 import { translateMessage } from "@/lib/i18n";
+import PinField from "@/components/PinField";
 import { ledgerEntryAction, hideCredentialsAction, saveCustomerAction, saveCustomerChannelsAction, saveCustomerPortalAction, saveCustomerSenderAction, saveCustomerStampAction, setCustomerPasswordAction } from "@/app/actions";
 
 export default async function CustomerEdit({ params }: { params: Promise<{ id: string }> }) {
@@ -104,6 +105,7 @@ export default async function CustomerEdit({ params }: { params: Promise<{ id: s
                 </label>
                 <label className="f"><span className="req">{t("金额")}</span><input name="amount" type="number" step="0.01" required /></label>
                 <label className="f" style={{ gridColumn: "span 2" }}>{t("说明")}<input name="note" maxLength={200} placeholder={t("例如：9月转账 / 赔偿 / 月结账单")} /></label>
+                <PinField />
               </div>
             </FlashForm>
 

@@ -6,6 +6,7 @@ import { money } from "@/lib/pricing";
 import { getTopup, listTopups, TOPUP_METHOD_LABEL, TOPUP_STATUS_LABEL } from "@/lib/topup";
 import FlashForm from "@/components/FlashForm";
 import { approveTopupAction, rejectTopupAction } from "@/app/actions";
+import PinField from "@/components/PinField";
 import { getLang } from "@/lib/prefs";
 import { makeT, translateMessage } from "@/lib/i18n";
 
@@ -63,6 +64,7 @@ export default async function FinancePage({ searchParams }: { searchParams: Prom
                         <div className="row" style={{ gap: 6, marginBottom: 6 }}>
                           <label className="f" style={{ width: 110 }}>{tr("入账美元")}<input name="creditedUsd" type="number" step="0.01" min="0.01" defaultValue={t.amountUsd} /></label>
                           <label className="f" style={{ flex: 1 }}>{tr("入账备注（写进流水）")}<input name="adminNote" maxLength={200} /></label>
+                          <PinField compact />
                         </div>
                       </FlashForm>
                     </div>

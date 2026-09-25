@@ -318,6 +318,8 @@ export interface Settings {
   usps: { enabled: boolean; consumerKey: string; consumerSecret: string };
   /** 收件地址核对：服务商、Google 密钥、每月上限 */
   addrCheck: { enabled: boolean; provider: "google" | "usps"; googleKey: string; monthlyCap: number };
+  /** 财务确认密码（4 位数字）的哈希 */
+  financePin: string | null;
 }
 
 /**
@@ -360,6 +362,7 @@ const DEFAULT_SETTINGS: Settings = {
   shipbest: { mode: "env", apiId: "", token: "" },
   usps: { enabled: true, consumerKey: "", consumerSecret: "" },
   addrCheck: { enabled: true, provider: "google", googleKey: "", monthlyCap: 5000 },
+  financePin: null,
 };
 
 export function getSettings(): Settings {

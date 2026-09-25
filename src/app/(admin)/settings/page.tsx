@@ -6,13 +6,14 @@ import { isSandboxSite, shipbestConfig, type ShipBestMode } from "@/lib/shipbest
 import StampSettings from "@/components/StampSettings";
 import FlashForm from "@/components/FlashForm";
 import RuleInputs from "@/components/RuleInputs";
-import { clearTestDataAction, saveAddrCheckAction, testAddrAction, refreshFxAction, saveChannelsAction, savePaymentSettingsAction, saveSettingsAction, saveShipBestAction, syncChannelsAction, verifyAction } from "@/app/actions";
+import { setFinancePinAction, clearTestDataAction, saveAddrCheckAction, testAddrAction, refreshFxAction, saveChannelsAction, savePaymentSettingsAction, saveSettingsAction, saveShipBestAction, syncChannelsAction, verifyAction } from "@/app/actions";
 import { cnyToPay, usdCnyQuote } from "@/lib/fx";
 import FilePick from "@/components/FilePick";
 import { CarrierMark } from "@/components/ChannelLabel";
 import { CARRIERS, carrierById, defaultPublicName, guessCarrier, publicChannel } from "@/lib/carriers";
 import { testDataStats } from "@/lib/cleanup";
 import { addrConfig, monthlyUsage } from "@/lib/addressCheck";
+import { hasFinancePin } from "@/lib/financePin";
 import { getLang, getT } from "@/lib/prefs";
 import type { T } from "@/lib/i18n";
 
@@ -149,6 +150,21 @@ export default async function SettingsPage() {
           </div>
         );
       })()}
+
+      <div className="card" id="finance-pin">
+        <div className="row" style={{ justifyContent: "space-between" }}>
+          <h2 style={{ margin: 0 }}>{t("财务确认密码")}</h2>
+          <span className={`badge ${hasFinancePin() ? "ok" : "pending"}`}>{hasFinancePin() ? t("已设置") : t("未设置")}</span>
+        </div>
+        <p className="small muted">{t("确认客户充值到账、手动充值 / 调账时，要再输入这个 4 位数字密码。设置和修改都需要管理员登录密码；连续输错 5 次锁定 30 分钟。")}</p>
+        <FlashForm action={setFinancePinAction} submitLabel={hasFinancePin() ? "修改财务确认密码" : "设置财务确认密码"} resetOnSuccess>
+          <div className="grid" style={{ margin: "12px 0" }}>
+            <label className="f"><span className="req">{t("管理员登录密码")}</span><input name="adminPassword" type="password" required autoComplete="current-password" /></label>
+            <label className="f"><span className="req">{t("新的 4 位数字密码")}</span><input name="pin" type="password" inputMode="numeric" pattern="\d{4}" maxLength={4} required autoComplete="new-password" /></label>
+            <label className="f"><span className="req">{t("再输一次")}</span><input name="pin2" type="password" inputMode="numeric" pattern="\d{4}" maxLength={4} required autoComplete="new-password" /></label>
+          </div>
+        </FlashForm>
+      </div>
 
       <FlashForm action={saveSettingsAction} submitLabel="保存设置" className="card" locked="修改会影响所有客户的价格和余额规则" confirm="加价、取消费、补差和余额规则会对所有客户生效，确定保存吗？">
         <h2>{t("全局加价规则")}</h2>

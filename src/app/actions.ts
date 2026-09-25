@@ -44,6 +44,7 @@ import { saveDimRule } from "@/lib/rates";
 import { CARRIERS } from "@/lib/carriers";
 import { clearChannelNameCache } from "@/lib/channelDisplay";
 import { clearTestData } from "@/lib/cleanup";
+import { checkFinancePin, setFinancePin } from "@/lib/financePin";
 import { testAddressService } from "@/lib/addressCheck";
 import { listSenders, saveSender } from "@/lib/senders";
 import { clearCredentials, readablePassword, rememberCredentials } from "@/lib/credentials";
@@ -302,6 +303,8 @@ export async function saveCustomerSenderAction(_: FlashState, fd: FormData): Pro
 
 export async function ledgerEntryAction(_: FlashState, fd: FormData): Promise<FlashState> {
   await requireAdmin();
+  const pinErr = checkFinancePin(str(fd.get("financePin"), 10));
+  if (pinErr) return { error: pinErr };
   const id = Number(fd.get("id"));
   const type = fd.get("type") === "manual" ? "manual" : "topup";
   const amount = optNum(fd.get("amount"));
@@ -403,6 +406,21 @@ export async function testAddrAction(_: FlashState): Promise<FlashState> {
   } catch (e) {
     return { error: (e as Error).message };
   }
+}
+
+export async function setFinancePinAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  await requireAdmin();
+  // 设置 / 修改都要管理员登录密码
+  if (!checkPassword(String(fd.get("adminPassword") ?? ""))) return { error: "管理员登录密码不正确" };
+  const pin = str(fd.get("pin"), 10);
+  if (pin !== str(fd.get("pin2"), 10)) return { error: "两次输入的财务确认密码不一致" };
+  try {
+    setFinancePin(pin);
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+  revalidatePath("/settings");
+  return { ok: "财务确认密码已设置" };
 }
 
 export async function clearTestDataAction(_: FlashState, fd: FormData): Promise<FlashState> {
@@ -626,6 +644,8 @@ export async function uploadChannelSampleAction(fd: FormData): Promise<FlashStat
 
 export async function approveTopupAction(_: FlashState, fd: FormData): Promise<FlashState> {
   await requireAdmin();
+  const pinErr = checkFinancePin(str(fd.get("financePin"), 10));
+  if (pinErr) return { error: pinErr };
   let id = 0;
   try {
     id = Number(fd.get("id"));
