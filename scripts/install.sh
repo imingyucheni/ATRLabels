@@ -186,7 +186,7 @@ say "注册系统服务"
 if [ "$MODE" = prebuilt ]; then
   ln -sfn "$REL" "$RUN_DIR/current"
   # 只保留最近 3 个版本
-  ls -1dt "$RUN_DIR"/releases/*/ 2>/dev/null | grep -v "/$SHA/\?$" | tail -n +3 | xargs -r rm -rf
+  { ls -1dt "$RUN_DIR"/releases/*/ 2>/dev/null | grep -v "/$SHA/\?$" | tail -n +3 | xargs -r rm -rf; } || true
   WORKDIR="$RUN_DIR/current"
   EXEC="/usr/bin/node $RUN_DIR/current/server.js"
 else
