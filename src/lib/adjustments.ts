@@ -230,6 +230,8 @@ export function buildPreview(rows: string[][], m: Mapping): Preview {
       possibleDuplicate: false,
     };
     if (!matchKey) row.error = "单号为空";
+    // Excel 把长数字单号存成了数字，显示成 9.4001E+21，后几位已经丢了，没法匹配
+    else if (/^\d+(\.\d+)?e\+?\d+$/i.test(matchKey)) row.error = "单号被 Excel 改成了科学计数法（例如 9.4E+21），请把单号列设为“文本”后重新导出";
     else if (amt === null) row.error = "金额无法识别";
     if (!row.error && amt !== null) {
       row.costAmount = m.positiveMeans === "charge" ? amt : -amt;

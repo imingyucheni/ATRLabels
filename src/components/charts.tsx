@@ -69,7 +69,7 @@ export function DailyBars({ data, revenueLabel = "客户消费" }: { data: { dat
   const [ref, width] = useWidth<HTMLDivElement>();
   const [tip, setTip] = useState<Tip | null>(null);
   const [hover, setHover] = useState(-1);
-  const h = 220;
+  const h = 240;
   const max = Math.max(1, ...data.map((d) => d.orders));
   const t = ticks(max);
   const top = t[t.length - 1];
@@ -82,6 +82,10 @@ export function DailyBars({ data, revenueLabel = "客户消费" }: { data: { dat
 
   return (
     <div ref={ref} className="chart" onPointerLeave={() => { setTip(null); setHover(-1); }}>
+      {/* 和旁边的折线图一样留一行图例，两张图的绘图区等高对齐 */}
+      <div className="chart-legend">
+        <span><span className="chart-key-line" style={{ background: "var(--series-1)" }} />{tr("订单数")}</span>
+      </div>
       <svg width={width} height={h} role="img" aria-label={tr("每日订单数柱状图")}>
         {t.map((v) => (
           <g key={v}>

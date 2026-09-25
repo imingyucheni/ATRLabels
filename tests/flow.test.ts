@@ -147,6 +147,16 @@ describe("模拟模式完整流程", () => {
     db.deleteAdjustmentBatch(batchId);
     expect(db.getShipment(id)!.costAdj).toBe(0);
     expect(ledger.balanceOf(custId)).toBeCloseTo(50 - s.price, 2); // 撤销批次，扣款一起撤回
+
+    // 账单里的单号写法不同（小写、空格、USPS 420+邮编前缀）也能对上；科学计数法的单号报错
+    const t = s.trackingNo!;
+    const spaced = t.toLowerCase().replace(/(.{4})/g, "$1 ").trim();
+    const withZip = /^9\d{21}$/.test(t) ? "42091710" + t : spaced;
+    const rows2 = [["跟踪号", "补差金额"], [spaced, "0.50"], [withZip, "0.30"], ["9.4001E+21", "0.20"]];
+    const p2 = adj.buildPreview(rows2, { headerRow: 0, keyCol: 0, altKeyCol: -1, amountCol: 1, reasonCol: -1, positiveMeans: "charge" });
+    expect(p2.rows[0].shipmentId).toBe(id);
+    expect(p2.rows[1].shipmentId).toBe(id);
+    expect(p2.rows[2].error).toMatch(/科学计数法/);
   }, 30_000);
 
   it("批量下单：ShipBest 导单模板 → 多渠道试算 → 逐单选渠道 → 提交勾选 → 面单 → 合并打印", async () => {

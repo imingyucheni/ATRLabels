@@ -91,3 +91,13 @@ describe("客户端报错过滤", async () => {
     expect(publicError("收件人邮编必填")).toBe("收件人邮编必填");
   });
 });
+
+describe("补差单号匹配", () => {
+  it("统一单号写法（空格、横杠、大小写、USPS 420+邮编前缀）", async () => {
+    const { normalizeTrackingKey } = await import("@/lib/db");
+    expect(normalizeTrackingKey(" gf-us 0123 ")).toBe("GFUS0123");
+    expect(normalizeTrackingKey("42091710" + "9400111899223344556677")).toBe("9400111899223344556677");
+    expect(normalizeTrackingKey("420917101234" + "9400111899223344556677")).toBe("9400111899223344556677");
+    expect(normalizeTrackingKey("9400 1118 9922 3344 5566 77")).toBe("9400111899223344556677");
+  });
+});

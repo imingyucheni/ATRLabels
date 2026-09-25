@@ -227,6 +227,7 @@ export const admin2: Record<string, string> = {
   "这个文件已经导入过了（内容完全相同）": "This file was already imported (identical content)",
   "没有可导入的有效行": "No valid rows to import",
   "单号为空": "Number is empty",
+  "单号被 Excel 改成了科学计数法（例如 9.4E+21），请把单号列设为“文本”后重新导出": "The number was turned into scientific notation by Excel (e.g. 9.4E+21). Format the column as Text and export again.",
   "金额无法识别": "Amount not recognized",
   "申请不存在": "Request not found",
   "这笔申请已经处理过了": "This request was already handled",

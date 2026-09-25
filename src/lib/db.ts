@@ -1104,17 +1104,30 @@ export function shipmentCost(s: Shipment): number {
 /* ---------------- 官方账单补差 ---------------- */
 
 /** 按运单号 / ShipBest 单号 / 自定义单号查找面单 */
+/** 单号统一写法：去空格 / 横杠、转大写；USPS 条码“420 + 5 或 9 位邮编 + 运单号”只取后面的运单号 */
+export function normalizeTrackingKey(key: string): string {
+  const k = key.replace(/[\s-]/g, "").toUpperCase();
+  const m = /^420(?:\d{5}|\d{9})(9\d{21})$/.exec(k);
+  return m ? m[1] : k;
+}
+
 export function findShipmentByKey(key: string): {
   id: number; customerId: number; rule: MarkupRule; customNo: string; trackingNo: string | null; customerName: string;
   status: ShipmentStatus; channelName: string | null;
 } | null {
-  const r = db()
-    .prepare(
-      `SELECT s.id, s.customer_id, s.rule_json, s.custom_no, s.tracking_no, s.status, s.channel_name, c.name AS customer_name
-       FROM shipments s JOIN customers c ON c.id = s.customer_id
-       WHERE s.tracking_no = @k OR s.order_no = @k OR s.custom_no = @k ORDER BY s.id DESC LIMIT 1`,
-    )
-    .get({ k: key }) as
+  const cols = `SELECT s.id, s.customer_id, s.rule_json, s.custom_no, s.tracking_no, s.status, s.channel_name, c.name AS customer_name
+       FROM shipments s JOIN customers c ON c.id = s.customer_id`;
+  const exact = db().prepare(`${cols} WHERE s.tracking_no = @k OR s.order_no = @k OR s.custom_no = @k ORDER BY s.id DESC LIMIT 1`);
+  // 账单里的单号写法常和系统里不完全一样：多了空格 / 横杠、大小写不同、USPS 条码带“420+邮编”前缀
+  const norm = (col: string) => `REPLACE(REPLACE(UPPER(${col}), ' ', ''), '-', '')`;
+  const loose = db().prepare(
+    `${cols} WHERE ${norm("s.tracking_no")} = @k OR ${norm("s.order_no")} = @k OR ${norm("s.custom_no")} = @k
+       OR (length(@k) >= 20 AND ${norm("s.tracking_no")} LIKE '420%' AND substr(${norm("s.tracking_no")}, -length(@k)) = @k)
+     ORDER BY s.id DESC LIMIT 1`,
+  );
+  const k = key.trim();
+  const n = normalizeTrackingKey(k);
+  const r = (exact.get({ k }) ?? (n ? loose.get({ k: n }) : undefined)) as
     | { id: number; customer_id: number; rule_json: string; custom_no: string; tracking_no: string | null; customer_name: string; status: ShipmentStatus; channel_name: string | null }
     | undefined;
   return r
