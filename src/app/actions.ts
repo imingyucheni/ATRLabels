@@ -241,13 +241,22 @@ export async function setCustomerPasswordAction(_: FlashState, fd: FormData): Pr
   const id = Number(fd.get("id"));
   const c = getCustomer(id);
   if (!c) return { error: "客户不存在" };
-  if (!c.portalEmail) return { error: "请先在上面填写登录邮箱并保存" };
+  // 还没填登录邮箱时用客户资料里的邮箱；生成密码时顺便开通登录
+  const email = c.portalEmail ?? c.email?.toLowerCase() ?? null;
+  if (!email) return { error: "请先在上面填写登录邮箱" };
   let pw = String(fd.get("password") ?? "").trim();
   const generated = !pw;
   if (generated) pw = readablePassword();
   if (pw.length < 8 && !generated) return { error: "密码至少 8 位（留空则自动生成）" };
+  if (!c.portalEnabled || !c.portalEmail) {
+    try {
+      updateCustomerPortal(id, { email, enabled: true, creditLimit: c.creditLimit });
+    } catch (e) {
+      return { error: (e as Error).message };
+    }
+  }
   setCustomerPassword(id, hashPassword(pw));
-  rememberCredentials(id, c.portalEmail, pw);
+  rememberCredentials(id, email, pw);
   revalidatePath(`/customers/${id}`);
   return { ok: "密码已更新，页面上方的“开户信息”可以直接复制发给客户。客户原来的登录会失效。" };
 }
