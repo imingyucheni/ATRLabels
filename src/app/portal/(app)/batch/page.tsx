@@ -10,7 +10,7 @@ export default async function PortalBatchPage({ searchParams }: { searchParams: 
   return (
     <>
       <h1>批量下单</h1>
-      {!me.sender && <div className="alert warn">还没有设置默认寄件地址，批量下单会使用系统默认寄件地址。可以在“账户设置”里修改。</div>}
+      {!me.sender && <p className="small muted">表格里没填寄件人的订单，会使用系统默认寄件地址；也可以在“账户设置”里设置自己的默认寄件地址。</p>}
       <BatchOrders
         mode="portal"
         basePath="/portal/batch"

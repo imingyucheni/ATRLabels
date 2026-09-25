@@ -47,7 +47,7 @@ describe("模拟模式完整流程", () => {
     await expect(svc.createLabel({ customerId: custId, channelCode: quotes[0].channelCode, req, expectedPrice: quotes[0].price! })).rejects.toThrow(/余额不足/);
     expect(db.listShipments().length).toBe(before);
     ledger.addLedger({ customerId: custId, type: "topup", amount: 100, createdBy: "admin" });
-    expect(quotes.length).toBe(3);
+    expect(quotes.length).toBe(5);
     const q = quotes[0];
     expect(q.ok).toBe(true);
     expect(q.rule!.percent).toBe(10); // 客户专属加价
@@ -140,13 +140,14 @@ describe("模拟模式完整流程", () => {
     expect(ledger.balanceOf(custId)).toBeCloseTo(50 - s.price, 2); // 撤销批次，扣款一起撤回
   }, 30_000);
 
-  it("批量下单：模板 → 解析合并 → 报价 → 确认 → 面单 → 合并打印", async () => {
+  it("批量下单：ShipBest 导单模板 → 多渠道试算 → 逐单选渠道 → 提交勾选 → 面单 → 合并打印", async () => {
     const batch = await import("@/lib/batch");
     const { readSheetRows } = await import("@/lib/adjustments");
     const { mergeLabels } = await import("@/lib/mergeLabels");
     const { PDFDocument } = await import("pdf-lib");
+    const ExcelJS = (await import("exceljs")).default;
     const wait = async (id: number, st: string[]) => {
-      for (let i = 0; i < 100; i++) {
+      for (let i = 0; i < 150; i++) {
         const j = batch.getJob(id)!;
         if (st.includes(j.status)) return j;
         await new Promise((r) => setTimeout(r, 200));
@@ -154,49 +155,119 @@ describe("模拟模式完整流程", () => {
       throw new Error("timeout " + batch.getJob(id)!.status);
     };
     const custId = db.saveCustomer(null, { name: "批量客户", contact: null, phone: null, email: null, note: null, markup: {} });
-    db.saveSettings({ sender: req.sender });
 
-    // 模板本身就能直接上传：3 行示例 = 2 单（A1001 有 2 个 SKU）
-    const rows = await readSheetRows("t.xlsx", await batch.buildTemplate(), "first");
-    const parsed = batch.parseOrders(rows, batch.senderFor(custId));
+    // 1) 系统模板本身可以直接上传：3 行示例 = 2 单（A1001 两个 SKU）
+    const tplRows = await readSheetRows("t.xlsx", await batch.buildTemplate(req.sender), "first");
+    const t = batch.parseOrders(tplRows, null);
+    expect(t.error).toBeUndefined();
+    expect(t.orders.map((o) => o.customerRef)).toEqual(["A1001", "A1002"]);
+    expect(t.orders[0].req.skuList.map((s) => s.sku)).toEqual(["TS-001", "CAP-02"]);
+    expect(t.orders[1].req.pkg.displayUnitSystem).toBe(3);
+    expect(t.orders.every((o) => o.errors.length === 0)).toBe(true);
+
+    // 2) 和客户实际导单表同样结构的数据（空 HS CODE、电话带空格、ZIP+4、数字邮编、cm/g、表格里有寄件人）
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet("导入模板");
+    ws.addRow(batch.SHIPBEST_HEADERS);
+    const senderCols = ["Warehouse", "Test", 6265550100, "US", "CA", "Chino", null, 91710, null, "1 Warehouse Way", null, null, null, null, null];
+    const order = (ref: string, l: number, w: number, h: number, g: number, last: string, first: string, st: string, city: string, zip: string | number, a1: string) =>
+      [ref, "UniUni-（91710）", "不需要", null, "不需要", l, w, h, g, "cm/g", null, `SKU-${ref}`, "面条", "Noodles", 1, 15, g, "cm/g", null, null, null, null, null,
+        last, first, " 346-555-0143 ", "US", st, city, null, zip, null, a1, null, null, null, null, null, ...senderCols, null, 15];
+    ws.addRow(order("114-0000001-0000001", 21, 14, 14, 450, "Doe", "Jane", "DC", "WASHINGTON", "20001-0001", "1 TEST ST"));
+    ws.addRow(order("114-0000002-0000002", 22, 8, 8, 700, "Roe", "Richard", "OR", "SALEM", "97301-0001", "2 TEST AVE"));
+    ws.addRow(order("111-0000003-0000003", 26, 7, 7, 450, "Smith", "Alex", "FL", "Miami", 33101, "3 TEST RD"));
+    ws.addRow([...Array(11).fill(null), "EXTRA-SKU", "筷子", "Chopsticks", 2, 3, 50, "cm/g"]); // 第 3 单的第二个 SKU
+    ws.addRow(order("111-0000004-0000004", 22, 8, 8, 600, "Lee", "Sam", "MN", "MINNEAPOLIS", "", "4 TEST LN")); // 缺邮编
+    const rows = await readSheetRows("24-0924.xlsx", Buffer.from(await wb.xlsx.writeBuffer()), "first");
+    const parsed = batch.parseOrders(rows, null);
     expect(parsed.error).toBeUndefined();
-    expect(parsed.orders.length).toBe(2);
-    expect(parsed.orders[0].req.skuList.length).toBe(2);
-    expect(parsed.orders.every((o) => o.errors.length === 0)).toBe(true);
+    expect(parsed.orders.length).toBe(4);
+    const [o1, , o3, o4] = parsed.orders;
+    expect(o1.req.recipient).toMatchObject({ nameLast: "Doe", nameFirst: "Jane", phone: "346-555-0143", zipCode: "20001-0001", province: "DC" });
+    expect(o1.req.sender).toMatchObject({ nameFirst: "Test", city: "Chino", zipCode: "91710" });
+    expect(o1.req.pkg).toMatchObject({ length: 21, width: 14, height: 14, weight: 450, displayUnitSystem: 1, signServiceType: 0, insuranceService: 0 });
+    expect(o1.fileChannel).toBe("UniUni-（91710）");
+    expect(o1.errors).toEqual([]);
+    expect(o3.req.recipient.zipCode).toBe("33101");
+    expect(o3.req.skuList.map((s) => s.sku)).toEqual(["SKU-111-0000003-0000003", "EXTRA-SKU"]);
+    expect(o4.errors).toContain("收件人邮编必填");
 
-    // 再加一行缺邮编的坏数据
-    const bad = [...rows, ["B9", "X", "Y", "", "", "", "US", "TX", "Austin", "", "1 St", "", "5", "5", "5", "1", "", "", "S", "品", "Item", "1", "3", "123456", "", ""]];
-    const p2 = batch.parseOrders(bad, batch.senderFor(custId));
-    expect(p2.orders.length).toBe(3);
-    expect(p2.orders[2].errors).toContain("收件人邮编必填");
-
-    const jobId = batch.createJob({ customerId: custId, createdBy: "customer", filename: "t.xlsx", channelMode: "cheapest", orders: p2.orders });
+    // 3) 3 个渠道逐单试算，默认选最便宜
+    const jobId = batch.createJob({ customerId: custId, createdBy: "customer", filename: "24-0924.xlsx", channels: ["LP10210030", "LP10210028", "LP10210029"], pickMode: "cheapest", orders: parsed.orders });
     batch.ensureRunning(jobId);
     let job = await wait(jobId, ["ready"]);
-    expect(job.rows.filter((r) => r.status === "quoted").length).toBe(2);
+    const q = job.rows.filter((r) => r.status === "quoted");
+    expect(q.length).toBe(3);
     expect(job.rows.find((r) => r.status === "error")!.error).toContain("邮编");
+    for (const r of q) {
+      expect(r.quotes.length).toBe(3);
+      expect(r.price).toBe(Math.min(...r.quotes.map((x) => x.price!)));
+    }
 
-    // 余额只够 1 单：下 1 单后自动暂停
-    const first = job.rows.find((r) => r.status === "quoted")!;
-    ledger.addLedger({ customerId: custId, type: "topup", amount: first.price! + 0.01, createdBy: "admin" });
-    batch.confirmJob(jobId);
-    job = await wait(jobId, ["ready", "done"]);
-    expect(job.status).toBe("ready");
-    expect(job.error).toContain("余额不足");
-    expect(job.rows.filter((r) => r.status === "created").length).toBe(1);
+    // 4) 单独改第一单的渠道；批量改第三单的渠道；取消勾选第二单
+    batch.chooseRowChannel(jobId, q[0].id, "LP10210028");
+    expect(batch.getJob(jobId)!.rows.find((r) => r.id === q[0].id)!.channelCode).toBe("LP10210028");
+    expect(batch.chooseAll(jobId, "LP10210029", [q[2].id])).toEqual({ changed: 1, skipped: 0 });
+    batch.setSelected(jobId, [q[0].id, q[2].id]);
+    expect(() => batch.chooseRowChannel(jobId, q[0].id, "NOPE")).toThrow(/没有报价/);
 
-    // 充值后继续
+    // 5) 只用 2 个渠道重新试算：第一单已选的渠道保留；第三单选的渠道不在试算范围 → 改为最便宜
+    batch.requote(jobId, ["LP10210030", "LP10210028"]);
+    job = await wait(jobId, ["ready"]);
+    const rq = (id: number) => job.rows.find((r) => r.id === id)!;
+    expect(rq(q[0].id).quotes.length).toBe(2);
+    expect(rq(q[0].id).channelCode).toBe("LP10210028");
+    const r3 = rq(q[2].id);
+    expect(r3.price).toBe(Math.min(...r3.quotes.filter((x) => x.ok).map((x) => x.price!)));
+
+    // 6) 提交勾选的 2 单
     ledger.addLedger({ customerId: custId, type: "topup", amount: 100, createdBy: "admin" });
     batch.confirmJob(jobId);
-    job = await wait(jobId, ["done"]);
+    job = await wait(jobId, ["ready", "done"]);
     const created = job.rows.filter((r) => r.status === "created");
-    expect(created.length).toBe(2);
+    expect(created.map((r) => r.id).sort()).toEqual([q[0].id, q[2].id].sort());
+    expect(job.status).toBe("ready"); // 第二单还没提交，可以继续
     expect(created.every((r) => r.hasLabel && r.trackingNo)).toBe(true);
     const shipment = db.getShipment(created[0].shipmentId!)!;
     expect(shipment.customerRef).toBe(created[0].customerRef);
+    expect(shipment.channelCode).toBe(rq(created[0].id).channelCode);
     expect(shipment.createdBy).toBe("customer");
+    expect(ledger.balanceOf(custId)).toBeCloseTo(100 - created.reduce((a, r) => a + r.price!, 0), 2);
 
-    const pdf = await mergeLabels(created.map((r) => db.getShipment(r.shipmentId!)!));
-    expect((await PDFDocument.load(pdf)).getPageCount()).toBe(2);
+    // 7) 再提交剩下的一单
+    batch.setSelected(jobId, "all");
+    batch.confirmJob(jobId);
+    job = await wait(jobId, ["done"]);
+    expect(job.rows.filter((r) => r.status === "created").length).toBe(3);
+
+    const pdf = await mergeLabels(job.rows.filter((r) => r.shipmentId).map((r) => db.getShipment(r.shipmentId!)!));
+    expect((await PDFDocument.load(pdf)).getPageCount()).toBe(3);
+  }, 90_000);
+
+  it("批量下单：余额不足自动暂停，充值后继续", async () => {
+    const batch = await import("@/lib/batch");
+    const { readSheetRows } = await import("@/lib/adjustments");
+    const wait = async (id: number, st: string[]) => {
+      for (let i = 0; i < 150; i++) {
+        const j = batch.getJob(id)!;
+        if (st.includes(j.status)) return j;
+        await new Promise((r) => setTimeout(r, 200));
+      }
+      throw new Error("timeout");
+    };
+    const custId = db.saveCustomer(null, { name: "余额客户", contact: null, phone: null, email: null, note: null, markup: {} });
+    const rows = await readSheetRows("t.xlsx", await batch.buildTemplate(req.sender), "first");
+    const jobId = batch.createJob({ customerId: custId, createdBy: "admin", filename: "t.xlsx", channels: ["LP10210030"], pickMode: "cheapest", orders: batch.parseOrders(rows, null).orders });
+    batch.ensureRunning(jobId);
+    let job = await wait(jobId, ["ready"]);
+    ledger.addLedger({ customerId: custId, type: "topup", amount: job.rows[0].price! + 0.01, createdBy: "admin" });
+    batch.confirmJob(jobId);
+    job = await wait(jobId, ["ready", "done"]);
+    expect(job.error).toContain("余额不足");
+    expect(job.rows.filter((r) => r.status === "created").length).toBe(1);
+    ledger.addLedger({ customerId: custId, type: "topup", amount: 100, createdBy: "admin" });
+    batch.confirmJob(jobId);
+    job = await wait(jobId, ["done"]);
+    expect(job.rows.every((r) => r.status === "created")).toBe(true);
   }, 60_000);
 });

@@ -35,7 +35,10 @@ export function seedDemo(conn: Database.Database) {
   // 模拟模式下直接放入渠道（真实模式请在“设置”里同步）
   if (process.env.SHIPBEST_MOCK === "1") {
     const ch = conn.prepare("INSERT OR IGNORE INTO channels (code, name, synced_at) VALUES (?, ?, datetime('now'))");
-    for (const [code, name] of [["USPS-GA", "USPS Ground Advantage"], ["UPS-GND", "UPS Ground"], ["FEDEX-HD", "FedEx Home Delivery"]]) ch.run(code, name);
+    for (const [code, name] of [
+      ["LP10210028", "UniUni-（91710）"], ["LP10210029", "GOFO-（91710）"], ["LP10210030", "USPS-（91710）"],
+      ["LP10210433", "SwiftX-91710"], ["LP10210434", "YWE-91710"],
+    ]) ch.run(code, name);
   }
   void b;
 }

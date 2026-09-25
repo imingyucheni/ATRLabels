@@ -40,7 +40,7 @@ describe("补差表格解析", () => {
   it("识别 ShipBest GOFO 补差表的列（补收金额，而不是“运费退还”等费用列）", () => {
     expect(guessColumns(GOFO_HEADER)).toEqual({ keyCol: 1, altKeyCol: 3, amountCol: 51, reasonCol: 48 });
     const row = GOFO_HEADER.map(() => "0");
-    Object.assign(row, { 1: "GFUS01065401415681", 13: "2.046", 15: "25", 44: "", 45: "zone4", 46: "4", 48: "重量调整", 51: "0.06" });
+    Object.assign(row, { 1: "GFUS00000000000001", 13: "2.046", 15: "25", 44: "", 45: "zone4", 46: "4", 48: "重量调整", 51: "0.06" });
     Object.assign(row, { 14: "32.736", 16: "1.036" });
     // 用同单位（oz）对比预报和结算重量
     expect(describeRow(GOFO_HEADER, row, 48)).toBe("重量调整：预报 25 oz → 结算 32.74 oz（超出 7.74 oz） · 实重 1.036 lb · zone4");

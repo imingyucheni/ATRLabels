@@ -160,11 +160,16 @@ export class HttpShipBestClient implements ShipBestClient {
 export class MockShipBestClient implements ShipBestClient {
   private orders = new Map<string, OrderDetail & { createdAt: number }>();
   private seq = 0;
+  // 与真实账号的渠道名一致，方便演示和导入 ShipBest 导单表
   private products: Product[] = [
-    { code: "USPS-GA", name: "USPS Ground Advantage" },
-    { code: "UPS-GND", name: "UPS Ground" },
-    { code: "FEDEX-HD", name: "FedEx Home Delivery" },
+    { code: "LP10210028", name: "UniUni-（91710）" },
+    { code: "LP10210029", name: "GOFO-（91710）" },
+    { code: "LP10210030", name: "USPS-（91710）" },
+    { code: "LP10210433", name: "SwiftX-91710" },
+    { code: "LP10210434", name: "YWE-91710" },
   ];
+  /** [基础价, 每磅] —— 不同重量下最便宜的渠道不同 */
+  private rates: [number, number][] = [[3.0, 0.55], [3.2, 0.45], [4.6, 0.8], [2.9, 0.75], [3.1, 0.62]];
 
   async verify() {}
 
@@ -177,7 +182,12 @@ export class MockShipBestClient implements ShipBestClient {
     if (idx < 0) throw new ShipBestError(10022, "Logistics product not exist!");
     const { weight, displayUnitSystem: u } = req.pkg;
     const lb = u === 1 ? weight / 453.6 : u === 2 ? weight * 2.2046 : weight;
-    const base = Math.round((4.5 + idx * 1.8 + lb * (0.9 + idx * 0.25)) * 100) / 100;
+    // 模拟部分渠道不覆盖某些地区（真实情况会返回“不通邮”）
+    if ((idx === 3 || idx === 4) && req.recipient.zipCode.startsWith("2")) {
+      throw new ShipBestError(1, `国家[${req.recipient.country}],邮编[${req.recipient.zipCode}]不通邮`);
+    }
+    const [b, per] = this.rates[idx];
+    const base = Math.round((b + lb * per) * 100) / 100;
     const extra = req.pkg.signServiceType ? 3 : 0;
     const discount = Math.round(base * 0.92 * 100) / 100;
     return {

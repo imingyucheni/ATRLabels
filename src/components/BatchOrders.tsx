@@ -2,13 +2,23 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState, useTransition } from "react";
-import { confirmBatchJobAction, createBatchJobAction, deleteBatchJobAction, getBatchJobAction, type BatchJobView } from "@/app/batchActions";
+import {
+  chooseAllAction,
+  chooseRowAction,
+  confirmBatchJobAction,
+  createBatchJobAction,
+  deleteBatchJobAction,
+  getBatchJobAction,
+  requoteAction,
+  setSelectedAction,
+  type BatchJobView,
+} from "@/app/batchActions";
 import { JOB_STATUS_LABEL } from "@/lib/batchLabels";
 import { money } from "@/lib/pricing";
 
 const ROW_STATUS: Record<string, [string, string]> = {
-  pending: ["待报价", "pending"],
-  quoted: ["已报价", ""],
+  pending: ["试算中", "pending"],
+  quoted: ["待提交", ""],
   error: ["有错误", "exception"],
   created: ["已下单", "labeled"],
   failed: ["下单失败", "exception"],
@@ -24,13 +34,19 @@ export default function BatchOrders(props: {
   const router = useRouter();
   const [job, setJob] = useState<BatchJobView | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [busy, start] = useTransition();
   const [onlyProblems, setOnlyProblems] = useState(false);
+  const [requoteSet, setRequoteSet] = useState<Set<string>>(new Set());
+  const [bulkChannel, setBulkChannel] = useState("");
 
   const load = useCallback(async (id: number) => {
     const r = await getBatchJobAction(id);
     if (r.error) setError(r.error);
-    else setJob(r.job!);
+    else {
+      setJob(r.job!);
+      setRequoteSet((s) => (s.size ? s : new Set(r.job!.channels.map((c) => c.code))));
+    }
   }, []);
 
   useEffect(() => {
@@ -38,18 +54,34 @@ export default function BatchOrders(props: {
     else setJob(null);
   }, [props.jobId, load]);
 
-  // 任务状态变化时刷新页面其余部分（侧栏余额、最近批次）
-  const status = job?.status;
-  useEffect(() => {
-    if (status === "ready" || status === "done") router.refresh();
-  }, [status, router]);
-
   // 后台处理中时每 2 秒刷新进度
   useEffect(() => {
     if (!job || !["quoting", "creating", "labeling"].includes(job.status)) return;
     const t = setTimeout(() => load(job.id), 2000);
     return () => clearTimeout(t);
   }, [job, load]);
+
+  // 任务状态变化时刷新页面其余部分（侧栏余额、最近批次）
+  const status = job?.status;
+  useEffect(() => {
+    if (status === "ready" || status === "done") router.refresh();
+  }, [status, router]);
+
+  function act(fn: () => Promise<{ error?: string; message?: string }>) {
+    setError(null);
+    setNotice(null);
+    start(async () => {
+      const r = await fn();
+      if (r.error) setError(r.error);
+      if (r.message) setNotice(r.message);
+      if (job) await load(job.id);
+    });
+  }
+
+  /** 先在页面上立即更新（选渠道、勾选），再等服务器保存，避免点了没反应的感觉 */
+  function patchRows(fn: (r: BatchJobView["rows"][number]) => Partial<BatchJobView["rows"][number]> | null) {
+    setJob((j) => (j ? { ...j, rows: j.rows.map((r) => ({ ...r, ...(fn(r) ?? {}) })) } : j));
+  }
 
   function onUpload(fd: FormData) {
     setError(null);
@@ -60,55 +92,44 @@ export default function BatchOrders(props: {
     });
   }
 
-  function onConfirm() {
-    if (!job) return;
-    const quoted = job.rows.filter((r) => r.status === "quoted");
-    const total = quoted.reduce((a, r) => a + (r.price ?? 0), 0);
-    const warn = total > job.available ? `\n\n⚠ 可用余额 ${money(job.available)} 不够全部下单，余额用完会自动暂停。` : "";
-    if (!window.confirm(`确认下单 ${quoted.length} 单，合计 ${money(total)}（从${props.mode === "portal" ? "账户" : "客户"}余额扣除）？${warn}`)) return;
-    start(async () => {
-      const r = await confirmBatchJobAction(job.id);
-      if (r.error) setError(r.error);
-      await load(job.id);
-    });
-  }
-
-  function onDelete() {
-    if (!job || !window.confirm("放弃这个批次？")) return;
-    start(async () => {
-      const r = await deleteBatchJobAction(job.id);
-      if (r.error) return setError(r.error);
-      router.push(props.basePath);
-    });
-  }
-
+  /* ---------- 上传 ---------- */
   if (!props.jobId) {
     return (
       <div className="card">
-        <h2>上传订单表格</h2>
+        <h2>导入订单</h2>
         <ol className="small muted" style={{ paddingLeft: 18, marginTop: 0 }}>
-          <li>下载 <a href="/api/batch/template">批量下单模板（Excel）</a>，按说明填写。同一个订单号的多行会合并成一单（多个 SKU）。</li>
-          <li>上传后系统会逐单查询运费，确认合计金额后再下单。</li>
-          <li>下单完成后可以一键合并打印全部 4×6 面单。</li>
+          <li>使用 <b>ShipBest 导单模板</b>（原来在 ShipBest 后台用的表格可以直接上传），或 <a href="/api/batch/template">下载模板</a>。</li>
+          <li>系统用下面勾选的渠道逐单试算，每单列出各渠道价格，默认选最便宜的，可以逐单修改。</li>
+          <li>确认后勾选订单“提交订单”，完成后一键合并打印全部 4×6 面单。</li>
         </ol>
-        <form action={onUpload} className="grid" style={{ alignItems: "end" }}>
-          {props.mode === "admin" && (
-            <label className="f"><span className="req">客户</span>
-              <select name="customerId" required>
-                {props.customers?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+        <form action={onUpload} style={{ display: "grid", gap: 12 }}>
+          <div className="grid" style={{ alignItems: "end" }}>
+            {props.mode === "admin" && (
+              <label className="f"><span className="req">客户</span>
+                <select name="customerId" required>
+                  {props.customers?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </label>
+            )}
+            <label className="f">默认选择
+              <select name="pickMode" defaultValue="cheapest">
+                <option value="cheapest">每单选最便宜的渠道</option>
+                <option value="file">按表格里的物流产品（没有报价时选最便宜）</option>
               </select>
             </label>
-          )}
-          <label className="f">渠道
-            <select name="channelMode" defaultValue="cheapest">
-              <option value="cheapest">每单自动选最便宜</option>
-              {props.channels.map((c) => <option key={c.code} value={c.code}>{c.name}</option>)}
-            </select>
-          </label>
-          <label className="f" style={{ gridColumn: "span 2" }}><span className="req">文件（.xlsx / .csv）</span>
-            <input type="file" name="file" accept=".xlsx,.csv" required />
-          </label>
-          <button className="primary" disabled={busy}>{busy ? "上传中…" : "上传并报价"}</button>
+            <label className="f" style={{ gridColumn: "span 2" }}><span className="req">文件（.xlsx / .csv）</span>
+              <input type="file" name="file" accept=".xlsx,.csv" required />
+            </label>
+          </div>
+          <div>
+            <div className="small muted" style={{ marginBottom: 4 }}>试算渠道（渠道越多试算越慢）</div>
+            <div className="row" style={{ gap: 14 }}>
+              {props.channels.map((c) => (
+                <label key={c.code} className="small"><input type="checkbox" name="channels" value={c.code} defaultChecked /> {c.name}</label>
+              ))}
+            </div>
+          </div>
+          <div><button className="primary" disabled={busy}>{busy ? "导入中…" : "导入并试算"}</button></div>
         </form>
         {error && <div className="alert err" style={{ marginTop: 12 }}>{error}</div>}
       </div>
@@ -117,15 +138,26 @@ export default function BatchOrders(props: {
 
   if (!job) return <div className="card">{error ? <div className="alert err">{error}</div> : "加载中…"}</div>;
 
-  const count = (st: string) => job.rows.filter((r) => r.status === st).length;
+  /* ---------- 任务 ---------- */
+  const editable = job.status === "ready";
+  const working = ["quoting", "creating", "labeling"].includes(job.status);
   const quoted = job.rows.filter((r) => r.status === "quoted");
-  const quotedTotal = quoted.reduce((a, r) => a + (r.price ?? 0), 0);
+  const chosen = quoted.filter((r) => r.selected && r.channelCode);
+  const total = chosen.reduce((a, r) => a + (r.price ?? 0), 0);
   const created = job.rows.filter((r) => r.status === "created");
   const createdTotal = created.reduce((a, r) => a + (r.price ?? 0), 0);
   const labeled = created.filter((r) => r.hasLabel);
-  const working = ["quoting", "creating", "labeling"].includes(job.status);
-  const done = job.rows.filter((r) => r.status !== "pending" && !(job.status === "creating" && r.status === "quoted")).length;
+  const problems = job.rows.filter((r) => r.status === "error" || r.status === "failed").length;
+  const processed = job.rows.filter((r) => r.status !== "pending").length;
+  const allSelected = quoted.length > 0 && quoted.every((r) => r.selected);
   const rows = job.rows.filter((r) => !onlyProblems || r.status === "error" || r.status === "failed" || r.error);
+  const cheapestTotal = chosen.reduce((a, r) => a + Math.min(...r.quotes.filter((q) => q.ok).map((q) => q.price!)), 0);
+
+  function onSubmit() {
+    const warn = total > job!.available ? `\n\n⚠ 可用余额 ${money(job!.available)} 不够全部提交，余额用完会自动暂停。` : "";
+    if (!window.confirm(`提交 ${chosen.length} 单，预计应付 ${money(total)}（从${props.mode === "portal" ? "账户" : "客户"}余额扣除）？${warn}`)) return;
+    act(() => confirmBatchJobAction(job!.id));
+  }
 
   return (
     <>
@@ -135,27 +167,64 @@ export default function BatchOrders(props: {
             批次 #{job.id} · {job.filename}{props.mode === "admin" ? ` · ${job.customerName}` : ""} ·{" "}
             <span className={`badge ${job.status === "done" ? "labeled" : working ? "pending" : ""}`}>{JOB_STATUS_LABEL[job.status]}</span>
           </h2>
-          <a href={props.basePath}>＋ 新的批量下单</a>
+          <a href={props.basePath}>＋ 导入新的订单</a>
         </div>
         {working && (
           <p className="muted">
-            {job.status === "quoting" ? "正在逐单查询运费" : job.status === "creating" ? "正在逐单下单" : "正在等待面单生成"}… {done}/{job.rows.length}
-            （可以离开这个页面，稍后回来查看）
+            {job.status === "quoting" ? `正在用 ${job.channels.length} 个渠道逐单试算` : job.status === "creating" ? "正在逐单提交" : "正在等待面单生成"}…
+            {job.status === "quoting" ? ` ${processed}/${job.rows.length}` : ""}（可以离开这个页面，稍后回来查看）
           </p>
         )}
         {job.error && <div className="alert warn">{job.error}</div>}
         {error && <div className="alert err">{error}</div>}
+        {notice && <div className="alert ok">{notice}</div>}
+
         <div className="stats" style={{ marginTop: 12 }}>
           <div className="stat"><div className="muted">订单数</div><div className="v">{job.rows.length}</div></div>
-          <div className="stat"><div className="muted">待下单</div><div className="v">{quoted.length}</div><div className="small muted">合计 {money(quotedTotal)}</div></div>
+          <div className="stat"><div className="muted">已勾选待提交</div><div className="v">{chosen.length}</div><div className="small muted">预计应付 {money(total)}</div></div>
           <div className="stat"><div className="muted">已下单</div><div className="v">{created.length}</div><div className="small muted">合计 {money(createdTotal)}</div></div>
-          <div className="stat"><div className="muted">有问题</div><div className={`v ${count("error") + count("failed") ? "profit-neg" : ""}`}>{count("error") + count("failed")}</div></div>
-          <div className="stat"><div className="muted">{props.mode === "portal" ? "账户可用余额" : "客户可用余额"}</div><div className={`v ${job.available < quotedTotal ? "profit-neg" : ""}`}>{money(job.available)}</div></div>
+          <div className="stat"><div className="muted">有问题</div><div className={`v ${problems ? "profit-neg" : ""}`}>{problems}</div></div>
+          <div className="stat"><div className="muted">{props.mode === "portal" ? "账户可用余额" : "客户可用余额"}</div><div className={`v ${job.available < total ? "profit-neg" : ""}`}>{money(job.available)}</div></div>
         </div>
-        <div className="row">
-          {job.status === "ready" && quoted.length > 0 && (
-            <button className="primary" onClick={onConfirm} disabled={busy}>
-              {created.length ? "继续下单" : "确认下单"} {quoted.length} 单（{money(quotedTotal)}）
+
+        {editable && quoted.length > 0 && (
+          <div style={{ display: "grid", gap: 10, borderTop: "1px solid var(--line)", paddingTop: 12 }}>
+            <div className="row" style={{ gap: 8 }}>
+              <span className="small muted">勾选的订单：</span>
+              <button className="small" disabled={busy} onClick={() => act(() => chooseAllAction(job.id, "cheapest", chosen.map((r) => r.id)))}>全部选最便宜</button>
+              <button className="small" disabled={busy} onClick={() => act(() => chooseAllAction(job.id, "file", chosen.map((r) => r.id)))}>按表格物流产品</button>
+              <select className="small" style={{ width: "auto" }} value={bulkChannel} onChange={(e) => setBulkChannel(e.target.value)}>
+                <option value="">统一改为某个渠道…</option>
+                {job.channels.map((c) => <option key={c.code} value={c.code}>{c.name}</option>)}
+              </select>
+              <button className="small" disabled={busy || !bulkChannel} onClick={() => act(() => chooseAllAction(job.id, bulkChannel, chosen.map((r) => r.id)))}>应用</button>
+              {total - cheapestTotal > 0.005 && <span className="small" style={{ color: "var(--warn)" }}>比全部选最便宜多 {money(total - cheapestTotal)}</span>}
+            </div>
+            <div className="row" style={{ gap: 12 }}>
+              <span className="small muted">试算渠道：</span>
+              {props.channels.map((c) => (
+                <label key={c.code} className="small">
+                  <input
+                    type="checkbox"
+                    checked={requoteSet.has(c.code)}
+                    onChange={(e) => setRequoteSet((s) => {
+                      const n = new Set(s);
+                      if (e.target.checked) n.add(c.code);
+                      else n.delete(c.code);
+                      return n;
+                    })}
+                  /> {c.name}
+                </label>
+              ))}
+              <button className="small" disabled={busy || !requoteSet.size} onClick={() => act(() => requoteAction(job.id, [...requoteSet]))}>重新试算</button>
+            </div>
+          </div>
+        )}
+
+        <div className="row" style={{ marginTop: 12 }}>
+          {editable && quoted.length > 0 && (
+            <button className="primary" onClick={onSubmit} disabled={busy || !chosen.length}>
+              提交订单（{chosen.length} 单 · 预计应付 {money(total)}）
             </button>
           )}
           {labeled.length > 0 && (
@@ -163,41 +232,110 @@ export default function BatchOrders(props: {
               合并打印 {labeled.length} 张面单
             </a>
           )}
-          {job.status === "ready" && created.length === 0 && <button className="danger" onClick={onDelete} disabled={busy}>放弃这个批次</button>}
+          {editable && created.length === 0 && (
+            <button className="danger" disabled={busy} onClick={() => {
+              if (!window.confirm("放弃这个批次？")) return;
+              start(async () => {
+                const r = await deleteBatchJobAction(job.id);
+                if (r.error) return setError(r.error);
+                router.push(props.basePath);
+              });
+            }}>放弃这个批次</button>
+          )}
           <label className="small" style={{ marginLeft: "auto" }}>
             <input type="checkbox" checked={onlyProblems} onChange={(e) => setOnlyProblems(e.target.checked)} /> 只看有问题的
           </label>
         </div>
-        {count("error") > 0 && job.status === "ready" && (
-          <p className="small muted">有错误的订单不会下单。请在表格里改好后，把这些订单重新上传一个新批次。</p>
-        )}
+        {problems > 0 && editable && <p className="small muted">有错误的订单不会提交。请在表格里改好后，把这些订单重新导入。</p>}
       </div>
 
       <div className="card table-wrap">
         <table>
           <thead>
-            <tr><th>行</th><th>订单号</th><th>收件人</th><th>渠道</th><th className="num">运费</th><th>状态</th><th>运单号 / 说明</th></tr>
+            <tr>
+              <th style={{ width: 32 }}>
+                {editable && quoted.length > 0 && (
+                  <input
+                    type="checkbox"
+                    aria-label="全选"
+                    checked={allSelected}
+                    disabled={busy}
+                    onChange={() => {
+                      patchRows((x) => (x.status === "quoted" ? { selected: !allSelected } : null));
+                      act(() => setSelectedAction(job.id, allSelected ? "none" : "all"));
+                    }}
+                  />
+                )}
+              </th>
+              <th>行</th><th>自定义单号</th><th>收件人</th><th>包裹</th><th style={{ minWidth: 300 }}>物流产品 / 价格</th><th>状态</th>
+            </tr>
           </thead>
           <tbody>
             {rows.map((r) => {
               const [label, cls] = ROW_STATUS[r.status];
+              const rowEditable = editable && r.status === "quoted";
               return (
                 <tr key={r.id}>
+                  <td>
+                    {rowEditable && (
+                      <input
+                        type="checkbox"
+                        aria-label="选择"
+                        checked={r.selected}
+                        disabled={busy}
+                        onChange={() => {
+                          patchRows((x) => (x.id === r.id ? { selected: !r.selected } : null));
+                          act(() => setSelectedAction(job.id, quoted.filter((x) => (x.id === r.id ? !x.selected : x.selected)).map((x) => x.id)));
+                        }}
+                      />
+                    )}
+                  </td>
                   <td className="muted">{r.rowNo}</td>
-                  <td>{r.customerRef ?? "-"}</td>
+                  <td>{r.customerRef ?? "-"}{r.fileChannel && <div className="small muted">表格：{r.fileChannel}</div>}</td>
                   <td className="small">{r.recipient}</td>
-                  <td>{r.channelName ?? "-"}</td>
-                  <td className="num">{r.price !== null ? money(r.price, r.currency ?? "") : "-"}</td>
-                  <td><span className={`badge ${cls}`}>{label}</span></td>
+                  <td className="small">{r.pkg}</td>
+                  <td>
+                    {r.status === "created" || r.status === "failed" ? (
+                      <span>{r.channelName} <b>{r.price !== null ? money(r.price, r.currency ?? "") : ""}</b></span>
+                    ) : r.quotes.length ? (
+                      <div style={{ display: "grid", gap: 2 }}>
+                        {r.quotes.map((q) => (
+                          <label
+                            key={q.code}
+                            className="small"
+                            title={q.ok ? "" : q.error}
+                            style={{ display: "flex", justifyContent: "space-between", gap: 12, opacity: q.ok ? 1 : 0.5, cursor: rowEditable && q.ok ? "pointer" : "default" }}
+                          >
+                            <span>
+                              <input
+                                type="radio"
+                                name={`ch-${r.id}`}
+                                checked={r.channelCode === q.code}
+                                disabled={!rowEditable || !q.ok || busy}
+                                onChange={() => {
+                                  patchRows((x) => (x.id === r.id ? { channelCode: q.code, channelName: q.name, price: q.price ?? null, currency: q.currency ?? null } : null));
+                                  act(() => chooseRowAction(job.id, r.id, q.code));
+                                }}
+                              />{" "}
+                              {q.name}{q.zone ? <span className="muted"> · {q.zone}</span> : null}
+                            </span>
+                            <b>{q.ok ? money(q.price, q.currency ?? "") : "不可用"}</b>
+                          </label>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="muted small">{r.status === "pending" ? "试算中…" : "-"}</span>
+                    )}
+                  </td>
                   <td className="small">
+                    <span className={`badge ${cls}`}>{label}</span>
                     {r.shipmentId ? (
-                      <>
+                      <div>
                         <a href={`${props.mode === "portal" ? "/portal" : ""}/shipments/${r.shipmentId}`}>{r.trackingNo ?? "查看"}</a>
-                        {r.hasLabel ? " · " : ""}
-                        {r.hasLabel && <a href={`/api/labels/${r.shipmentId}`} target="_blank">面单</a>}
-                      </>
+                        {r.hasLabel && <> · <a href={`/api/labels/${r.shipmentId}`} target="_blank">面单</a></>}
+                      </div>
                     ) : null}
-                    {r.error && <div style={{ color: r.status === "quoted" ? "var(--warn)" : "var(--err)" }}>{r.error}</div>}
+                    {r.error && <div style={{ color: r.status === "quoted" ? "var(--warn)" : "var(--err)", maxWidth: 260 }}>{r.error}</div>}
                   </td>
                 </tr>
               );

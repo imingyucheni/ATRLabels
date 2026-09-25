@@ -75,7 +75,6 @@ export function validateRequest(req: ShipmentRequest): string[] {
     if (!s.sku) errors.push(n + "SKU 必填");
     if (!s.productNameCn) errors.push(n + "中文品名必填");
     if (!s.productNameEn) errors.push(n + "英文品名必填");
-    if (!s.hsCode) errors.push(n + "海关编码必填");
     if (!s.productNature) errors.push(n + "商品性质必填");
     if (!(s.quantity > 0)) errors.push(n + "数量必须大于 0");
     if (!(s.declaredUnitPrice > 0)) errors.push(n + "申报单价必须大于 0");

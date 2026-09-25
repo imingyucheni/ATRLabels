@@ -256,7 +256,7 @@ export default function ShipForm(props: {
         <div className="table-wrap">
           <table>
             <thead>
-              <tr><th>SKU *</th><th>中文品名 *</th><th>英文品名 *</th><th>数量 *</th><th>申报单价 *</th><th>海关编码 *</th><th>商品性质 *</th><th></th></tr>
+              <tr><th>SKU *</th><th>中文品名 *</th><th>英文品名 *</th><th>数量 *</th><th>申报单价 *</th><th>海关编码</th><th>商品性质 *</th><th></th></tr>
             </thead>
             <tbody>
               {skus.map((s, i) => (

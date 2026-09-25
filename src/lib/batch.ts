@@ -1,79 +1,60 @@
 /**
- * 批量下单：上传 Excel/CSV → 解析分组 → 后台逐单报价 → 确认 → 后台逐单下单 → 刷新面单 → 合并打印。
+ * 批量下单（和 ShipBest 后台的“导入订单 → 运费试算 → 提交订单”一致）：
+ * 上传 ShipBest 标准导单模板 → 每单按所选渠道逐个试算 → 每单默认选最便宜（可改）→ 勾选订单提交 → 刷新面单 → 合并打印。
  * 任务在服务进程里后台执行，页面轮询进度；服务重启后打开任务页会自动继续。
  */
 import ExcelJS from "exceljs";
 import { db, getChannel, getCustomer, getSettings, getShipment, listChannels } from "./db";
 import { InsufficientBalanceError } from "./ledger";
-import { createLabel, PriceChangedError, quoteAll, quoteChannel, refreshShipment, validateRequest } from "./service";
+import { createLabel, PriceChangedError, quoteChannel, refreshShipment, validateRequest } from "./service";
 import type { Address, ShipmentRequest, SkuItem, UnitSystem } from "./shipbest/types";
 import { JOB_STATUS_LABEL, type JobStatus } from "./batchLabels";
 
 export { JOB_STATUS_LABEL, type JobStatus };
 
-/* ---------------- 模板 ---------------- */
+/* ---------------- 模板（ShipBest 标准导单模板，55 列） ---------------- */
 
-type Field =
-  | "customerRef" | "nameFirst" | "nameLast" | "phone" | "email" | "corporateName" | "country" | "province" | "city"
-  | "zipCode" | "address1" | "address2" | "length" | "width" | "height" | "weight" | "unit" | "sign" | "sku"
-  | "productNameCn" | "productNameEn" | "quantity" | "declaredUnitPrice" | "hsCode" | "productNature" | "channel";
-
-/** [字段, 模板表头, 其他可识别的表头写法, 是否必填] */
-const COLUMNS: [Field, string, RegExp, boolean][] = [
-  ["customerRef", "订单号", /^(订单号|客户单号|order.?(no|number|id)|reference|ref)$/i, false],
-  ["nameFirst", "收件人名", /^(收件人名|名|first.?name)$/i, true],
-  ["nameLast", "收件人姓", /^(收件人姓|姓|last.?name)$/i, true],
-  ["phone", "电话", /^(电话|收件人电话|phone|tel)$/i, false],
-  ["email", "邮箱", /^(邮箱|email)$/i, false],
-  ["corporateName", "公司", /^(公司|company)$/i, false],
-  ["country", "国家", /^(国家|国家代码|country)$/i, false],
-  ["province", "州", /^(州|州\/省|省|state|province)$/i, false],
-  ["city", "城市", /^(城市|city)$/i, true],
-  ["zipCode", "邮编", /^(邮编|zip|zip.?code|postal.?code|postcode)$/i, true],
-  ["address1", "地址1", /^(地址1|地址|address.?1|address|street)$/i, true],
-  ["address2", "地址2", /^(地址2|address.?2)$/i, false],
-  ["length", "长", /^(长|length)$/i, true],
-  ["width", "宽", /^(宽|width)$/i, true],
-  ["height", "高", /^(高|height)$/i, true],
-  ["weight", "重量", /^(重量|weight)$/i, true],
-  ["unit", "单位", /^(单位|unit)$/i, false],
-  ["sign", "签名服务", /^(签名|签名服务|signature)$/i, false],
-  ["sku", "SKU", /^(sku)$/i, true],
-  ["productNameCn", "中文品名", /^(中文品名|品名|name.?cn)$/i, true],
-  ["productNameEn", "英文品名", /^(英文品名|name.?en|description)$/i, true],
-  ["quantity", "数量", /^(数量|qty|quantity)$/i, true],
-  ["declaredUnitPrice", "申报单价", /^(申报单价|申报价值|单价|declared.?(value|price)|unit.?price|value)$/i, true],
-  ["hsCode", "海关编码", /^(海关编码|hs.?code|hs)$/i, true],
-  ["productNature", "商品性质", /^(商品性质|nature)$/i, false],
-  ["channel", "渠道代码", /^(渠道|渠道代码|channel)$/i, false],
+/** 表头顺序与 ShipBest 后台“导入订单”模板完全一致，客户可以直接用原来的表 */
+export const SHIPBEST_HEADERS = [
+  "*自定义单号", "*物流产品", "*保险服务", "保险金额", "*签名服务", "*包裹长", "*包裹宽", "*包裹高", "*包裹重量", "*包裹单位", "备注",
+  "*SKU", "*品名(中文)", "*品名(英文)", "*数量", "*申报单价", "*单件重量", "*SKU单位", "SKU长", "SKU宽", "SKU高", "HS CODE", "商品性质",
+  "*收件联系人姓", "*收件联系人名", "*收件人联系电话", "*收件国家", "*收件省州", "*收件市府", "收件地区", "*收件邮编", "收件邮箱", "*收件地址1", "收件地址2", "公司名称", "街道", "门牌号", "税号",
+  "*寄件联系人姓", "*寄件联系人名", "*寄件人联系电话", "*寄件国家", "*寄件省州", "*寄件市府", "寄件地区", "*寄件邮编", "寄件邮箱", "*寄件地址1", "寄件地址2", "公司名称", "街道", "门牌号", "税号",
+  "申报总金额", "申报总数量",
 ];
 
-const TEMPLATE_NOTES: Record<Field, string> = {
-  customerRef: "可选。同一个订单号的多行合并成一单（多个 SKU）",
-  nameFirst: "必填", nameLast: "必填", phone: "", email: "", corporateName: "",
-  country: "二字码，默认 US", province: "例如 CA", city: "必填", zipCode: "必填", address1: "必填", address2: "",
-  length: "必填", width: "必填", height: "必填", weight: "必填（整个包裹）",
-  unit: "lb/in（默认）、kg/cm 或 g/cm", sign: "0 不需要（默认）1 直接 2 间接 3 成人",
-  sku: "必填", productNameCn: "必填", productNameEn: "必填", quantity: "必填", declaredUnitPrice: "必填，USD",
-  hsCode: "必填", productNature: "1带磁 2不带磁 3带电 4不带电 5液体，默认 2,4", channel: "可选，留空按页面选择",
-};
-
-export async function buildTemplate(): Promise<Buffer> {
+export async function buildTemplate(sender?: Address | null): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
-  const ws = wb.addWorksheet("订单");
-  ws.addRow(COLUMNS.map((c) => (c[3] ? `${c[1]}*` : c[1])));
-  ws.addRow(["A1001", "John", "Doe", "5125550100", "", "", "US", "TX", "Austin", "78701", "500 Congress Ave", "", 10, 8, 4, 2, "lb/in", 0, "TS-001", "T恤", "Cotton T-shirt", 2, 8, "610910", "2,4", ""]);
-  ws.addRow(["A1001", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "CAP-02", "帽子", "Baseball cap", 1, 5, "650500", "2,4", ""]);
-  ws.addRow(["A1002", "Mary", "Smith", "", "", "", "US", "CA", "Los Angeles", "90001", "123 Main St", "Apt 4", 12, 9, 5, 3.5, "lb/in", 0, "BAG-01", "背包", "Backpack", 1, 20, "420292", "2,4", ""]);
+  const ws = wb.addWorksheet("导入模板");
+  ws.addRow(SHIPBEST_HEADERS);
+  const s = sender;
+  const senderCols = s
+    ? [s.nameLast, s.nameFirst, s.phone ?? "", s.country, s.province ?? "", s.city, s.area ?? "", s.zipCode, s.email ?? "", s.address1, s.address2 ?? "", s.corporateName ?? "", "", "", ""]
+    : Array(15).fill("");
+  const recip = (last: string, first: string, phone: string, st: string, city: string, zip: string, a1: string, a2 = "") =>
+    [last, first, phone, "US", st, city, "", zip, "", a1, a2, "", "", "", ""];
+  // 示例：A1001 两个 SKU（第二行自定义单号留空），A1002 一个 SKU
+  ws.addRow(["A1001", "", "不需要", "", "不需要", 25, 20, 10, 900, "cm/g", "", "TS-001", "T恤", "T-shirt", 2, 8, 300, "cm/g", "", "", "", "610910", "", ...recip("Doe", "John", "512-555-0100", "TX", "Austin", "78701", "500 Congress Ave"), ...senderCols]);
+  ws.addRow(["", "", "", "", "", "", "", "", "", "", "", "CAP-02", "帽子", "Cap", 1, 5, 150, "cm/g"]);
+  ws.addRow(["A1002", "", "不需要", "", "不需要", 12, 9, 5, 3.5, "in/lb", "", "BAG-01", "背包", "Backpack", 1, 20, 3.5, "in/lb", "", "", "", "", "", ...recip("Smith", "Mary", "213-555-0199", "CA", "Los Angeles", "90001", "123 Main St", "Apt 4"), ...senderCols]);
   ws.getRow(1).font = { bold: true };
-  ws.columns.forEach((col, i) => (col.width = Math.max(10, COLUMNS[i][1].length * 2 + 4)));
+  ws.columns.forEach((c) => (c.width = 14));
+
   const help = wb.addWorksheet("说明");
-  help.addRow(["列", "说明"]).font = { bold: true };
-  COLUMNS.forEach(([f, h]) => help.addRow([h, TEMPLATE_NOTES[f]]));
-  help.addRow([]);
-  help.addRow(["提示", "带 * 为必填。同一订单号的第 2 行起只需填写 SKU 相关列。示例数据请删除后再填写。"]);
+  const notes: [string, string][] = [
+    ["格式", "与 ShipBest 后台“导入订单”模板相同，原来的表格可以直接上传。带 * 为必填。"],
+    ["多个 SKU", "同一个订单有多个 SKU 时，第 2 行起“自定义单号”留空，只填 SKU 相关列。"],
+    ["物流产品", "可以留空。上传后系统会用多个渠道试算，每单默认选最便宜的，也可以按表格里的物流产品。"],
+    ["包裹单位", "cm/g、cm/kg 或 in/lb。SKU 单位同理。"],
+    ["保险 / 签名", "保险服务：需要 / 不需要；签名服务：不需要 / 直接签名 / 间接签名 / 成人签名。"],
+    ["寄件人", "寄件人各列可以留空，留空时使用账户里的默认寄件地址。"],
+    ["商品性质", "1 带磁 2 不带磁 3 带电 4 不带电 5 液体，多个用逗号分隔；留空默认 2,4。"],
+    ["示例", "“导入模板”里的 3 行是示例（2 个订单），请删除后填写自己的订单。"],
+  ];
+  help.addRow(["项目", "说明"]).font = { bold: true };
+  notes.forEach((n) => help.addRow(n));
   help.getColumn(1).width = 14;
-  help.getColumn(2).width = 60;
+  help.getColumn(2).width = 90;
   return Buffer.from(await wb.xlsx.writeBuffer());
 }
 
@@ -83,147 +64,199 @@ export interface ParsedOrder {
   rowNo: number;
   customerRef: string;
   req: ShipmentRequest;
-  channel: string;
+  /** 表格里填写的物流产品（渠道名称或代码） */
+  fileChannel: string;
   errors: string[];
 }
 
-function norm(h: string) {
-  return (h ?? "").replace(/[*＊\s]/g, "").replace(/（.*?）|\(.*?\)/g, "");
-}
-
-function mapHeader(header: string[]): Partial<Record<Field, number>> {
-  const map: Partial<Record<Field, number>> = {};
-  header.forEach((h, i) => {
-    const n = norm(h);
-    const col = COLUMNS.find(([f, label, re]) => map[f] === undefined && (n === label || re.test(n)));
-    if (col) map[col[0]] = i;
-  });
-  return map;
-}
-
-function parseUnit(v: string, def: UnitSystem): UnitSystem {
-  const s = v.toLowerCase();
-  if (!s) return def;
-  if (/kg/.test(s)) return 2;
-  if (/^g|g\/cm|克/.test(s)) return 1;
-  if (/lb|in|英/.test(s)) return 3;
-  return def;
-}
-
-function parseSign(v: string): 0 | 1 | 2 | 3 {
-  if (/成人|adult|3/i.test(v)) return 3;
-  if (/间接|indirect|2/i.test(v)) return 2;
-  if (/直接|direct|1/i.test(v)) return 1;
-  return 0;
-}
+const norm = (h: string) => (h ?? "").replace(/[*＊\s]/g, "").replace(/（/g, "(").replace(/）/g, ")").toLowerCase();
 
 const num = (v: string | undefined) => {
   const n = parseFloat((v ?? "").replace(/[,，\s]/g, ""));
   return Number.isFinite(n) ? n : 0;
 };
 
-export function parseOrders(rows: string[][], sender: Address | null): { orders: ParsedOrder[]; error?: string } {
+function parseUnit(v: string, def: UnitSystem): UnitSystem {
+  const s = (v ?? "").toLowerCase().replace(/\s/g, "");
+  if (!s) return def;
+  if (/in|lb|英/.test(s)) return 3;
+  if (/kg/.test(s)) return 2;
+  if (/g/.test(s)) return 1;
+  return def;
+}
+
+function parseSign(v: string): 0 | 1 | 2 | 3 {
+  if (/成人|adult|^3$/i.test(v)) return 3;
+  if (/间接|indirect|^2$/i.test(v)) return 2;
+  if (/直接|direct|^1$/i.test(v)) return 1;
+  return 0;
+}
+
+/** 表头 → 列号。同名列（公司名称、街道…）按收件 / 寄件区块区分 */
+function headerIndex(header: string[]) {
+  const h = header.map(norm);
+  const senderStart = h.findIndex((x) => x.startsWith("寄件联系人姓"));
+  const recipStart = h.findIndex((x) => x.startsWith("收件联系人姓"));
+  const find = (name: string, from = 0, to = h.length) => {
+    const n = norm(name);
+    for (let i = Math.max(0, from); i < to; i++) if (h[i] === n) return i;
+    return -1;
+  };
+  const inRecip = (name: string) => find(name, recipStart, senderStart > recipStart ? senderStart : h.length);
+  const inSender = (name: string) => (senderStart >= 0 ? find(name, senderStart) : -1);
+  return { find, inRecip, inSender, senderStart };
+}
+
+export function isShipBestTemplate(header: string[]) {
+  const h = header.map(norm);
+  return h.includes("自定义单号") && h.some((x) => x.startsWith("收件联系人姓"));
+}
+
+export function parseOrders(rows: string[][], defaultSender: Address | null): { orders: ParsedOrder[]; error?: string } {
   const st = getSettings();
-  let headerIdx = -1;
-  let map: Partial<Record<Field, number>> = {};
-  for (let i = 0; i < Math.min(rows.length, 10); i++) {
-    const m = mapHeader(rows[i]);
-    if (Object.keys(m).length >= 6) {
-      headerIdx = i;
-      map = m;
-      break;
-    }
-  }
-  if (headerIdx < 0) return { orders: [], error: "没有找到表头，请使用系统提供的模板" };
-  const missing = COLUMNS.filter(([f, , , req]) => req && map[f] === undefined).map(([, h]) => h);
+  const headerIdx = rows.slice(0, 10).findIndex(isShipBestTemplate);
+  if (headerIdx < 0) return { orders: [], error: "没有找到表头，请使用 ShipBest 导单模板（或在本页下载模板）" };
+  const { find, inRecip, inSender, senderStart } = headerIndex(rows[headerIdx]);
+  const col = {
+    ref: find("自定义单号"), channel: find("物流产品"), ins: find("保险服务"), insFee: find("保险金额"), sign: find("签名服务"),
+    len: find("包裹长"), wid: find("包裹宽"), hei: find("包裹高"), wt: find("包裹重量"), unit: find("包裹单位"),
+    sku: find("SKU"), cn: find("品名(中文)"), en: find("品名(英文)"), qty: find("数量"), price: find("申报单价"),
+    skuWt: find("单件重量"), skuUnit: find("SKU单位"), skuLen: find("SKU长"), skuWid: find("SKU宽"), skuHei: find("SKU高"),
+    hs: find("HS CODE"), nature: find("商品性质"),
+  };
+  const missing = Object.entries({ 自定义单号: col.ref, 包裹重量: col.wt, SKU: col.sku }).filter(([, i]) => i < 0).map(([k]) => k);
   if (missing.length) return { orders: [], error: `表格缺少必填列：${missing.join("、")}` };
 
-  const get = (r: string[], f: Field) => (map[f] === undefined ? "" : (r[map[f]!] ?? "").trim());
+  const addr = (r: string[], pick: (n: string) => number, prefix: "收件" | "寄件"): Address => {
+    const g = (n: string) => {
+      const i = pick(n);
+      return i >= 0 ? (r[i] ?? "").trim() : "";
+    };
+    const a: Address = {
+      nameLast: g(`${prefix}联系人姓`),
+      nameFirst: g(`${prefix}联系人名`),
+      country: (g(`${prefix}国家`) || "US").toUpperCase(),
+      city: g(`${prefix}市府`),
+      address1: g(`${prefix}地址1`),
+      zipCode: g(`${prefix}邮编`),
+    };
+    const opt: [keyof Address, string][] = [
+      ["phone", prefix === "收件" ? "收件人联系电话" : "寄件人联系电话"], ["province", `${prefix}省州`], ["area", `${prefix}地区`],
+      ["email", `${prefix}邮箱`], ["address2", `${prefix}地址2`], ["corporateName", "公司名称"], ["street", "街道"],
+      ["houseNumber", "门牌号"], ["taxIdValue", "税号"],
+    ];
+    for (const [k, n] of opt) {
+      const v = g(n);
+      if (v) a[k] = v as never;
+    }
+    return a;
+  };
+
+  const get = (r: string[], i: number) => (i >= 0 ? (r[i] ?? "").trim() : "");
   const orders: ParsedOrder[] = [];
-  const byRef = new Map<string, ParsedOrder>();
+  let current: ParsedOrder | null = null;
 
   for (let i = headerIdx + 1; i < rows.length; i++) {
     const r = rows[i];
     if (!r.some((c) => c && c.trim())) continue;
-    const ref = get(r, "customerRef");
-    const unit = parseUnit(get(r, "unit"), st.defaultUnit);
+    const ref = get(r, col.ref);
+    const skuCode = get(r, col.sku);
+    const skuUnit = parseUnit(get(r, col.skuUnit) || get(r, col.unit), st.defaultUnit);
     const sku: SkuItem = {
-      sku: get(r, "sku"),
-      productNameCn: get(r, "productNameCn"),
-      productNameEn: get(r, "productNameEn"),
-      quantity: Math.round(num(get(r, "quantity"))),
-      declaredUnitPrice: num(get(r, "declaredUnitPrice")),
+      sku: skuCode,
+      productNameCn: get(r, col.cn),
+      productNameEn: get(r, col.en),
+      quantity: Math.round(num(get(r, col.qty))),
+      declaredUnitPrice: num(get(r, col.price)),
       declaredCurrency: st.defaultCurrency,
-      hsCode: get(r, "hsCode"),
-      productNature: get(r, "productNature") || "2,4",
-      length: 0, width: 0, height: 0, weight: 0, unit,
+      hsCode: get(r, col.hs),
+      productNature: get(r, col.nature) || "2,4",
+      length: num(get(r, col.skuLen)),
+      width: num(get(r, col.skuWid)),
+      height: num(get(r, col.skuHei)),
+      weight: num(get(r, col.skuWt)),
+      unit: skuUnit,
     };
-    const existing = ref ? byRef.get(ref) : undefined;
-    if (existing) {
-      existing.req.skuList.push({ ...sku, unit: existing.req.pkg.displayUnitSystem });
+    // 自定义单号为空、只有 SKU 的行：属于上一单
+    if (!ref) {
+      if (current && skuCode) current.req.skuList.push(sku);
       continue;
     }
-    const recipient: Address = {
-      nameFirst: get(r, "nameFirst"),
-      nameLast: get(r, "nameLast"),
-      country: (get(r, "country") || "US").toUpperCase(),
-      city: get(r, "city"),
-      address1: get(r, "address1"),
-      zipCode: get(r, "zipCode"),
-    };
-    for (const k of ["phone", "email", "corporateName", "province", "address2"] as const) {
-      const v = get(r, k);
-      if (v) recipient[k] = v;
-    }
-    const order: ParsedOrder = {
+    const fileSender = senderStart >= 0 ? addr(r, inSender, "寄件") : null;
+    const sender = fileSender && fileSender.nameFirst && fileSender.address1 && fileSender.zipCode ? fileSender : defaultSender;
+    const insurance = /^需要|^是|yes|^1$/i.test(get(r, col.ins)) ? 1 : 0;
+    current = {
       rowNo: i + 1,
       customerRef: ref,
-      channel: get(r, "channel"),
+      fileChannel: get(r, col.channel),
       errors: [],
       req: {
         sender: sender ?? ({} as Address),
-        recipient,
+        recipient: addr(r, inRecip, "收件"),
         pkg: {
-          length: num(get(r, "length")),
-          width: num(get(r, "width")),
-          height: num(get(r, "height")),
-          weight: num(get(r, "weight")),
-          displayUnitSystem: unit,
-          signServiceType: parseSign(get(r, "sign")),
-          insuranceService: 0,
+          length: num(get(r, col.len)),
+          width: num(get(r, col.wid)),
+          height: num(get(r, col.hei)),
+          weight: num(get(r, col.wt)),
+          displayUnitSystem: parseUnit(get(r, col.unit), st.defaultUnit),
+          signServiceType: parseSign(get(r, col.sign)),
+          insuranceService: insurance as 0 | 1,
+          insuranceFee: insurance ? num(get(r, col.insFee)) : undefined,
           currency: st.defaultCurrency,
         },
-        skuList: [sku],
+        skuList: skuCode ? [sku] : [],
       },
     };
-    orders.push(order);
-    if (ref) byRef.set(ref, order);
+    if (!sender) current.errors.push("没有寄件地址：表格里没填，账户里也没有默认寄件地址");
+    orders.push(current);
   }
 
   for (const o of orders) {
-    // SKU 尺寸/重量用包裹数据按数量均摊（接口要求必填）
     const { pkg } = o.req;
+    // SKU 尺寸没填时用包裹尺寸（接口要求必填）；单件重量没填时按包裹重量均摊
     const totalQty = o.req.skuList.reduce((a, s) => a + (s.quantity || 1), 0) || 1;
     o.req.skuList = o.req.skuList.map((s) => ({
       ...s,
-      length: pkg.length,
-      width: pkg.width,
-      height: pkg.height,
-      weight: Math.round((pkg.weight / totalQty) * 1000) / 1000,
-      unit: pkg.displayUnitSystem,
+      length: s.length || pkg.length,
+      width: s.width || pkg.width,
+      height: s.height || pkg.height,
+      ...(s.weight ? {} : { weight: Math.round((pkg.weight / totalQty) * 1000) / 1000, unit: pkg.displayUnitSystem }),
     }));
-    if (!sender) o.errors.push("没有默认寄件地址，请先在账户设置里填写");
-    o.errors.push(...validateRequest(o.req).filter((e) => !e.startsWith("寄件人") || sender));
+    o.errors.push(...validateRequest(o.req).filter((e) => o.req.sender.nameFirst || !e.startsWith("寄件人")));
   }
+  const refs = new Map<string, number>();
+  for (const o of orders) refs.set(o.customerRef, (refs.get(o.customerRef) ?? 0) + 1);
+  for (const o of orders) if (refs.get(o.customerRef)! > 1) o.errors.push("表格里自定义单号重复");
   if (!orders.length) return { orders, error: "表格里没有订单数据" };
   if (orders.length > 500) return { orders: [], error: "一次最多 500 单，请分批上传" };
   return { orders };
+}
+
+/** 表格里的物流产品名称 → 渠道代码（按名称或代码匹配，忽略空格和全半角括号） */
+export function matchChannel(name: string): string | null {
+  if (!name) return null;
+  const n = norm(name);
+  const c = listChannels(true).find((ch) => norm(ch.name) === n || norm(ch.code) === n);
+  return c?.code ?? null;
 }
 
 /* ---------------- 任务 ---------------- */
 
 export type RowStatus = "pending" | "quoted" | "error" | "created" | "failed";
 
+/** 某一单在某个渠道的试算结果（只有客户价，没有成本） */
+export interface RowQuote {
+  code: string;
+  name: string;
+  ok: boolean;
+  price?: number;
+  currency?: string;
+  zone?: string | null;
+  error?: string;
+}
+
+/** cheapest = 每单选最便宜；file = 优先用表格里的物流产品 */
+export type PickMode = "cheapest" | "file";
 
 export interface BatchJob {
   id: number;
@@ -231,10 +264,12 @@ export interface BatchJob {
   customerName: string;
   createdBy: string;
   filename: string | null;
-  channelMode: string;
   status: JobStatus;
   error: string | null;
   createdAt: string;
+  /** 本次试算的渠道 */
+  channels: { code: string; name: string }[];
+  pickMode: PickMode;
   rows: BatchRow[];
 }
 
@@ -243,10 +278,14 @@ export interface BatchRow {
   rowNo: number;
   customerRef: string | null;
   recipient: string;
+  pkg: string;
+  fileChannel: string | null;
+  quotes: RowQuote[];
   channelCode: string | null;
   channelName: string | null;
   price: number | null;
   currency: string | null;
+  selected: boolean;
   status: RowStatus;
   error: string | null;
   shipmentId: number | null;
@@ -258,19 +297,22 @@ export function createJob(input: {
   customerId: number;
   createdBy: "admin" | "customer";
   filename: string;
-  channelMode: string;
+  channels: string[];
+  pickMode: PickMode;
   orders: ParsedOrder[];
 }): number {
+  const enabled = listChannels(true).map((c) => c.code);
+  const channels = input.channels.filter((c) => enabled.includes(c));
   return db().transaction(() => {
     const r = db()
-      .prepare("INSERT INTO batch_jobs (customer_id, created_by, filename, channel_mode, status) VALUES (?,?,?,?, 'quoting')")
-      .run(input.customerId, input.createdBy, input.filename, input.channelMode);
+      .prepare("INSERT INTO batch_jobs (customer_id, created_by, filename, channel_mode, channels_json, pick_mode, status) VALUES (?,?,?,?,?,?, 'quoting')")
+      .run(input.customerId, input.createdBy, input.filename, input.pickMode, JSON.stringify(channels.length ? channels : enabled), input.pickMode);
     const jobId = Number(r.lastInsertRowid);
     const stmt = db().prepare(
-      "INSERT INTO batch_job_rows (job_id, row_no, customer_ref, req_json, channel_code, status, error) VALUES (?,?,?,?,?,?,?)",
+      "INSERT INTO batch_job_rows (job_id, row_no, customer_ref, req_json, file_channel, status, error) VALUES (?,?,?,?,?,?,?)",
     );
     for (const o of input.orders) {
-      stmt.run(jobId, o.rowNo, o.customerRef || null, JSON.stringify(o.req), o.channel || null, o.errors.length ? "error" : "pending", o.errors.join("；") || null);
+      stmt.run(jobId, o.rowNo, o.customerRef || null, JSON.stringify(o.req), o.fileChannel || null, o.errors.length ? "error" : "pending", o.errors.join("；") || null);
     }
     return jobId;
   })();
@@ -282,14 +324,19 @@ interface JobRowDb {
   row_no: number;
   customer_ref: string | null;
   req_json: string;
+  file_channel: string | null;
+  quotes_json: string | null;
   channel_code: string | null;
   channel_name: string | null;
   price: number | null;
   currency: string | null;
+  selected: number;
   status: RowStatus;
   error: string | null;
   shipment_id: number | null;
 }
+
+type RowPatch = Partial<Pick<JobRowDb, "channel_code" | "channel_name" | "price" | "currency" | "status" | "error" | "shipment_id" | "quotes_json" | "selected">>;
 
 function jobRows(jobId: number): JobRowDb[] {
   return db().prepare("SELECT * FROM batch_job_rows WHERE job_id = ? ORDER BY row_no").all(jobId) as JobRowDb[];
@@ -299,7 +346,7 @@ function setJob(jobId: number, status: JobStatus, error: string | null = null) {
   db().prepare("UPDATE batch_jobs SET status = ?, error = ?, updated_at = datetime('now') WHERE id = ?").run(status, error, jobId);
 }
 
-function setRow(id: number, p: Partial<Pick<JobRowDb, "channel_code" | "channel_name" | "price" | "currency" | "status" | "error" | "shipment_id">>) {
+function setRow(id: number, p: RowPatch) {
   const keys = Object.keys(p);
   if (!keys.length) return;
   db()
@@ -307,35 +354,44 @@ function setRow(id: number, p: Partial<Pick<JobRowDb, "channel_code" | "channel_
     .run(...keys.map((k) => (p as Record<string, unknown>)[k] as string | number | null), id);
 }
 
+const UNIT_TXT: Record<UnitSystem, [string, string]> = { 1: ["cm", "g"], 2: ["cm", "kg"], 3: ["in", "lb"] };
+
 export function getJob(jobId: number): BatchJob | null {
   const j = db()
     .prepare("SELECT j.*, c.name AS customer_name FROM batch_jobs j JOIN customers c ON c.id = j.customer_id WHERE j.id = ?")
     .get(jobId) as
-    | { id: number; customer_id: number; customer_name: string; created_by: string; filename: string | null; channel_mode: string; status: JobStatus; error: string | null; created_at: string }
+    | { id: number; customer_id: number; customer_name: string; created_by: string; filename: string | null; channels_json: string | null; pick_mode: PickMode; status: JobStatus; error: string | null; created_at: string }
     | undefined;
   if (!j) return null;
+  const codes: string[] = j.channels_json ? JSON.parse(j.channels_json) : listChannels(true).map((c) => c.code);
   return {
     id: j.id,
     customerId: j.customer_id,
     customerName: j.customer_name,
     createdBy: j.created_by,
     filename: j.filename,
-    channelMode: j.channel_mode,
     status: j.status,
     error: j.error,
     createdAt: j.created_at,
+    pickMode: j.pick_mode ?? "cheapest",
+    channels: codes.map((code) => ({ code, name: getChannel(code)?.name ?? code })),
     rows: jobRows(jobId).map((r) => {
       const req = JSON.parse(r.req_json) as ShipmentRequest;
       const s = r.shipment_id ? getShipment(r.shipment_id) : null;
+      const [lu, wu] = UNIT_TXT[req.pkg.displayUnitSystem] ?? UNIT_TXT[3];
       return {
         id: r.id,
         rowNo: r.row_no,
         customerRef: r.customer_ref,
         recipient: `${req.recipient.nameFirst} ${req.recipient.nameLast}, ${req.recipient.city} ${req.recipient.province ?? ""} ${req.recipient.zipCode}`,
+        pkg: `${req.pkg.length}×${req.pkg.width}×${req.pkg.height} ${lu} · ${req.pkg.weight} ${wu}`,
+        fileChannel: r.file_channel,
+        quotes: r.quotes_json ? JSON.parse(r.quotes_json) : [],
         channelCode: r.channel_code,
         channelName: r.channel_name,
         price: r.price,
         currency: r.currency,
+        selected: !!r.selected,
         status: r.status,
         error: r.error,
         shipmentId: r.shipment_id,
@@ -368,6 +424,81 @@ export function deleteJob(jobId: number) {
   db().prepare("DELETE FROM batch_jobs WHERE id = ?").run(jobId);
 }
 
+/* ---------------- 选择渠道 / 勾选（任务处于“待确认”时） ---------------- */
+
+function assertEditable(jobId: number) {
+  const j = getJob(jobId);
+  if (!j) throw new Error("任务不存在");
+  if (j.status !== "ready") throw new Error("任务正在处理中，请稍后再改");
+  return j;
+}
+
+function applyQuote(rowId: number, q: RowQuote) {
+  setRow(rowId, { channel_code: q.code, channel_name: q.name, price: q.price!, currency: q.currency ?? null, error: null });
+}
+
+/** 按规则选渠道：cheapest 最便宜 / file 表格指定（没有则最便宜）/ 具体渠道代码 */
+function pickFor(quotes: RowQuote[], rule: string, fileChannel: string | null): RowQuote | undefined {
+  const ok = quotes.filter((q) => q.ok).sort((a, b) => a.price! - b.price!);
+  if (rule === "cheapest") return ok[0];
+  if (rule === "file") {
+    const code = fileChannel ? matchChannel(fileChannel) : null;
+    return ok.find((q) => q.code === code) ?? ok[0];
+  }
+  return ok.find((q) => q.code === rule);
+}
+
+/** 单独改某一单的渠道 */
+export function chooseRowChannel(jobId: number, rowId: number, code: string) {
+  assertEditable(jobId);
+  const r = jobRows(jobId).find((x) => x.id === rowId);
+  if (!r || r.status !== "quoted") throw new Error("这一单不能修改");
+  const q = (JSON.parse(r.quotes_json ?? "[]") as RowQuote[]).find((x) => x.code === code && x.ok);
+  if (!q) throw new Error("该渠道没有报价");
+  applyQuote(r.id, q);
+}
+
+/** 批量改渠道，返回改成功和无法改（该渠道没报价）的数量 */
+export function chooseAll(jobId: number, rule: string, rowIds?: number[]) {
+  assertEditable(jobId);
+  let changed = 0;
+  let skipped = 0;
+  for (const r of jobRows(jobId)) {
+    if (r.status !== "quoted" || (rowIds && !rowIds.includes(r.id))) continue;
+    const q = pickFor(JSON.parse(r.quotes_json ?? "[]"), rule, r.file_channel);
+    if (q) {
+      applyQuote(r.id, q);
+      changed++;
+    } else skipped++;
+  }
+  return { changed, skipped };
+}
+
+export function setSelected(jobId: number, rowIds: number[] | "all" | "none") {
+  assertEditable(jobId);
+  for (const r of jobRows(jobId)) {
+    if (r.status !== "quoted") continue;
+    const sel = rowIds === "all" ? 1 : rowIds === "none" ? 0 : rowIds.includes(r.id) ? 1 : 0;
+    setRow(r.id, { selected: sel });
+  }
+}
+
+/** 换一组渠道重新试算（未下单的订单） */
+export function requote(jobId: number, channels: string[]) {
+  assertEditable(jobId);
+  const enabled = listChannels(true).map((c) => c.code);
+  const list = channels.filter((c) => enabled.includes(c));
+  if (!list.length) throw new Error("请至少选择一个渠道");
+  db().prepare("UPDATE batch_jobs SET channels_json = ? WHERE id = ?").run(JSON.stringify(list), jobId);
+  for (const r of jobRows(jobId)) {
+    if (r.status === "quoted" || (r.status === "error" && r.quotes_json) || r.status === "failed") {
+      setRow(r.id, { status: "pending", error: null });
+    }
+  }
+  setJob(jobId, "quoting");
+  ensureRunning(jobId);
+}
+
 /* ---------------- 后台执行 ---------------- */
 
 const g = globalThis as unknown as { __batchRunning?: Set<number> };
@@ -398,46 +529,48 @@ async function pool<T>(items: T[], size: number, fn: (t: T) => Promise<void>) {
 
 async function quoteJob(jobId: number) {
   const job = getJob(jobId)!;
-  const enabled = listChannels(true);
+  const codes = job.channels.map((c) => c.code);
   const pending = jobRows(jobId).filter((r) => r.status === "pending");
+  // 每单在每个渠道试算一次；同时最多 3 个请求，避免触发频率限制
   await pool(pending, 3, async (r) => {
     const req = JSON.parse(r.req_json) as ShipmentRequest;
-    const code = r.channel_code || (job.channelMode !== "cheapest" ? job.channelMode : "");
-    try {
-      if (code) {
-        if (!enabled.some((c) => c.code === code)) {
-          setRow(r.id, { status: "error", error: `渠道 ${code} 不存在或未开放` });
-          return;
-        }
+    const quotes: RowQuote[] = [];
+    for (const code of codes) {
+      try {
         const q = await quoteChannel(job.customerId, code, req);
-        if (q.ok) setRow(r.id, { status: "quoted", channel_code: q.channelCode, channel_name: q.channelName, price: q.price!, currency: q.currency!, error: null });
-        else setRow(r.id, { status: "error", error: `无法报价：${q.error}` });
-        return;
+        quotes.push(q.ok
+          ? { code, name: q.channelName, ok: true, price: q.price!, currency: q.currency, zone: q.zone ?? null }
+          : { code, name: q.channelName, ok: false, error: q.error });
+      } catch (e) {
+        quotes.push({ code, name: getChannel(code)?.name ?? code, ok: false, error: (e as Error).message });
       }
-      const all = await quoteAll(job.customerId, req);
-      const best = all.filter((q) => q.ok).sort((a, b) => a.price! - b.price!)[0];
-      if (best) setRow(r.id, { status: "quoted", channel_code: best.channelCode, channel_name: best.channelName, price: best.price!, currency: best.currency!, error: null });
-      else setRow(r.id, { status: "error", error: `无法报价：${all[0]?.error ?? "没有可用渠道"}` });
-    } catch (e) {
-      setRow(r.id, { status: "error", error: (e as Error).message });
+    }
+    quotes.sort((a, b) => Number(b.ok) - Number(a.ok) || (a.price ?? 0) - (b.price ?? 0));
+    // 重新试算时尽量保留之前选的渠道
+    const keep = r.channel_code ? quotes.find((q) => q.ok && q.code === r.channel_code) : undefined;
+    const pick = keep ?? pickFor(quotes, job.pickMode, r.file_channel);
+    if (pick) {
+      setRow(r.id, { status: "quoted", quotes_json: JSON.stringify(quotes), channel_code: pick.code, channel_name: pick.name, price: pick.price!, currency: pick.currency ?? null, error: null });
+    } else {
+      setRow(r.id, { status: "error", quotes_json: JSON.stringify(quotes), channel_code: null, channel_name: null, price: null, error: `所有渠道都无法报价：${quotes[0]?.error ?? "没有可用渠道"}` });
     }
   });
   setJob(jobId, "ready");
 }
 
-/** 确认下单 */
+/** 提交勾选的订单 */
 export function confirmJob(jobId: number) {
   const j = getJob(jobId);
   if (!j) throw new Error("任务不存在");
   if (j.status !== "ready") throw new Error("任务当前不能下单");
-  if (!j.rows.some((r) => r.status === "quoted")) throw new Error("没有可以下单的订单");
+  if (!j.rows.some((r) => r.status === "quoted" && r.selected && r.channelCode)) throw new Error("请勾选要提交的订单");
   setJob(jobId, "creating");
   ensureRunning(jobId);
 }
 
 async function createJobLabels(jobId: number) {
   const job = getJob(jobId)!;
-  const rows = jobRows(jobId).filter((r) => r.status === "quoted");
+  const rows = jobRows(jobId).filter((r) => r.status === "quoted" && r.selected && r.channel_code);
   let stopped: string | null = null;
   let priceChanged = 0;
   // 逐单下单：钱包扣款要按顺序，不并发
@@ -462,17 +595,17 @@ async function createJobLabels(jobId: number) {
       setRow(r.id, { status: "created", shipment_id: id, error: null });
     } catch (e) {
       if (e instanceof InsufficientBalanceError) {
-        stopped = `余额不足，已暂停。充值后点“继续下单”。（${e.message}）`;
+        stopped = `余额不足，已暂停。充值后点“提交订单”继续。（${e.message}）`;
       } else if (e instanceof PriceChangedError) {
         priceChanged++;
-        setRow(r.id, { price: e.quote.price!, error: `运费已更新为 ${e.quote.price!.toFixed(2)}，请确认后继续` });
+        setRow(r.id, { price: e.quote.price!, error: `运费已更新为 ${e.quote.price!.toFixed(2)}，请确认后再提交` });
       } else {
         setRow(r.id, { status: "failed", error: (e as Error).message });
       }
     }
   }
   if (stopped || priceChanged) {
-    setJob(jobId, "ready", stopped ?? `${priceChanged} 单运费有变化，请确认后点“继续下单”`);
+    setJob(jobId, "ready", stopped ?? `${priceChanged} 单运费有变化，请确认后再点“提交订单”`);
     return;
   }
   setJob(jobId, "labeling");
@@ -492,7 +625,9 @@ async function waitLabels(jobId: number) {
     });
     await new Promise((r) => setTimeout(r, 2000));
   }
-  setJob(jobId, "done");
+  // 还有没提交的订单时回到“待确认”，可以继续提交
+  const left = jobRows(jobId).some((r) => r.status === "quoted");
+  setJob(jobId, left ? "ready" : "done");
 }
 
 /** 任务所属客户的默认寄件地址 */

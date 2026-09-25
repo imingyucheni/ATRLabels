@@ -145,6 +145,13 @@ function migrate(conn: Database.Database) {
   if (!cols.includes("customer_ref")) conn.exec("ALTER TABLE shipments ADD COLUMN customer_ref TEXT");
   if (!cols.includes("created_by")) conn.exec("ALTER TABLE shipments ADD COLUMN created_by TEXT");
   const ccols = (conn.prepare("PRAGMA table_info(customers)").all() as { name: string }[]).map((c) => c.name);
+  const jcols = (conn.prepare("PRAGMA table_info(batch_jobs)").all() as { name: string }[]).map((c) => c.name);
+  if (!jcols.includes("channels_json")) conn.exec("ALTER TABLE batch_jobs ADD COLUMN channels_json TEXT");
+  if (!jcols.includes("pick_mode")) conn.exec("ALTER TABLE batch_jobs ADD COLUMN pick_mode TEXT NOT NULL DEFAULT 'cheapest'");
+  const rcols = (conn.prepare("PRAGMA table_info(batch_job_rows)").all() as { name: string }[]).map((c) => c.name);
+  if (!rcols.includes("quotes_json")) conn.exec("ALTER TABLE batch_job_rows ADD COLUMN quotes_json TEXT");
+  if (!rcols.includes("selected")) conn.exec("ALTER TABLE batch_job_rows ADD COLUMN selected INTEGER NOT NULL DEFAULT 1");
+  if (!rcols.includes("file_channel")) conn.exec("ALTER TABLE batch_job_rows ADD COLUMN file_channel TEXT");
   const addCust: [string, string][] = [
     ["portal_email", "TEXT"],
     ["password_hash", "TEXT"],
