@@ -88,7 +88,7 @@ export default function AddressFields({
           name={controlled || custom ? undefined : namePrefix + "country"}
           onChange={(e) => onPick(e.target.value)}
         >
-          {COMMON_COUNTRIES.map(([c, n]) => <option key={c} value={c}>{c} · {n}</option>)}
+          {COMMON_COUNTRIES.map(([c, n]) => <option key={c} value={c}>{c} · {t(n)}</option>)}
           <option value="__other">{t("其他国家（输入二字码）…")}</option>
         </select>
         {custom && (

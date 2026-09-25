@@ -23,5 +23,22 @@ export const common: Record<string, string> = {
   "深色": "Dark",
   "跟随系统": "System",
   "外观": "Appearance",
+  // 保存前确认改动 / 锁定的设置
+  "已锁定，防止误改": "Locked to prevent accidental changes",
+  "取消修改": "Discard changes",
+  "确认修改": "Confirm changes",
+  "确认修改以下 {n} 项？": "Save these {n} changes?",
+  "项目": "Field",
+  "原来": "Before",
+  "改成": "After",
+  "（空）": "(empty)",
+  "返回修改": "Back to edit",
+  "确认保存": "Confirm & save",
+  "没有改动，不需要保存": "Nothing changed — nothing to save",
+  "这些设置会影响所有客户，确定保存修改吗？": "These settings apply to all customers. Save the changes?",
+  // 常用国家
+  "美国": "United States", "加拿大": "Canada", "墨西哥": "Mexico", "波多黎各": "Puerto Rico", "中国": "China",
+  "中国香港": "Hong Kong", "中国台湾": "Taiwan", "日本": "Japan", "韩国": "South Korea", "英国": "United Kingdom",
+  "德国": "Germany", "法国": "France", "澳大利亚": "Australia",
   "语言": "Language",
 };

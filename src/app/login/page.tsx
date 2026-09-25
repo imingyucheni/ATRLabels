@@ -10,7 +10,7 @@ export async function generateMetadata() {
 export default async function LoginPage() {
   const t = await getT();
   return (
-    <AuthShell
+    <AuthShell showLang
       brand="ATR Labels"
       headline={t("尾程面单，一处管理")}
       sub={t("报价、出单、补差、客户钱包与报表。")}

@@ -219,6 +219,7 @@ export const admin1: Record<string, string> = {
   "{n} 个": "{n}",
   "进入 OMS ↗": "Open OMS ↗",
   "管理": "Manage",
+  "扣款明细": "Charges",
   "还没有客户，先新增一个": "No customers yet. Add one first",
   "“默认”表示沿用渠道或全局设置（当前全局：+{p}%，固定 {f}，最低利润 {m}）。":
     "“Default” means the service or global setting applies (current global: +{p}%, fixed {f}, min. profit {m}).",
