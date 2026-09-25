@@ -1,4 +1,10 @@
 export const fixC: Record<string, string> = {
+  "请填写 Zelle 转账参考号或付款人姓名，方便核对到账": "Please enter the Zelle reference or payer name so we can match your payment",
+  "请填写支付宝订单号或付款人姓名，方便核对到账": "Please enter the Alipay order no. or payer name so we can match your payment",
+  "例如：付款人 John Smith，或 Zelle 确认号": "e.g. payer John Smith, or the Zelle confirmation no.",
+  "例如：付款人 张三，或支付宝订单号": "e.g. payer name, or the Alipay order no.",
+  "我们靠这一项核对到账，请务必填写": "We use this to match your payment — required",
+  "付款截图（可选，PNG / JPG / PDF，5MB 以内）": "Payment screenshot (optional, PNG / JPG / PDF, up to 5 MB)",
   "收件联系人姓": "Recipient last name",
   "收件联系人名": "Recipient first name",
   "收件人联系电话": "Recipient phone",

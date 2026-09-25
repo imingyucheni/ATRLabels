@@ -72,6 +72,10 @@ export async function createTopup(input: {
   if (!getCustomer(input.customerId)) throw new Error("客户不存在");
   const amount = Math.round(input.amountUsd * 100) / 100;
   if (!(amount >= 1) || amount > 100000) throw new Error("充值金额请填写 1 到 100000 美元");
+  // 对账靠参考号 / 付款人姓名，必须填写（截图可选）
+  if (!(input.reference ?? "").trim()) {
+    throw new Error(input.method === "zelle" ? "请填写 Zelle 转账参考号或付款人姓名，方便核对到账" : "请填写支付宝订单号或付款人姓名，方便核对到账");
+  }
   let payAmount = amount;
   let payCurrency = "USD";
   let fxLive: number | null = null;

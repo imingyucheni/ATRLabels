@@ -73,10 +73,11 @@ export default function TopupForm(props: {
             <div className="alert warn">{usd ? <>{t("请通过 Zelle 转账")} <b>${usd.toFixed(2)}</b>{t("，到账后按美元金额加到余额。")}</> : t("填写充值金额后，通过 Zelle 转账相同的美元金额。")}</div>
           )}
           <label className="f" style={{ marginBottom: 10 }}>
-            {t(method === "zelle" ? "Zelle 转账参考号 / 付款人姓名" : "支付宝订单号 / 付款人姓名")}
-            <input name="reference" maxLength={100} />
+            <span className="req">{t(method === "zelle" ? "Zelle 转账参考号 / 付款人姓名" : "支付宝订单号 / 付款人姓名")}</span>
+            <input name="reference" maxLength={100} required placeholder={t(method === "zelle" ? "例如：付款人 John Smith，或 Zelle 确认号" : "例如：付款人 张三，或支付宝订单号")} />
+            <span className="field-hint muted">{t("我们靠这一项核对到账，请务必填写")}</span>
           </label>
-          <label className="f" style={{ marginBottom: 10 }}>{t("付款截图（建议上传，PNG / JPG / PDF，5MB 以内）")}<FilePick name="proof" accept=".png,.jpg,.jpeg,.pdf" /></label>
+          <label className="f" style={{ marginBottom: 10 }}>{t("付款截图（可选，PNG / JPG / PDF，5MB 以内）")}<FilePick name="proof" accept=".png,.jpg,.jpeg,.pdf" /></label>
           <label className="f" style={{ marginBottom: 12 }}>{t("备注")}<input name="note" maxLength={300} /></label>
           <button className="primary" disabled={pending}>{t(pending ? "提交中…" : "我已付款，提交充值申请")}</button>
         </div>

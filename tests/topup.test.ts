@@ -34,15 +34,17 @@ describe("充值与按订单扣款", () => {
     db.setCustomerChannels(c, db.listChannels().map((c) => c.code));
     const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==", "base64");
     const z = await topup.createTopup({ customerId: c, method: "zelle", amountUsd: 200, reference: "ZL123", proof: png });
-    const a = await topup.createTopup({ customerId: c, method: "alipay", amountUsd: 100 });
+    const a = await topup.createTopup({ customerId: c, method: "alipay", amountUsd: 100, reference: "张三" });
     const za = topup.getTopup(z)!;
     const al = topup.getTopup(a)!;
     expect(za).toMatchObject({ payCurrency: "USD", payAmount: 200, status: "pending", hasProof: true });
     expect(al).toMatchObject({ payCurrency: "CNY", payAmount: 713, fxRate: 7.13, fxLive: 7.1 });
     expect(topup.pendingTopupCount()).toBe(2);
     expect(topup.readTopupProof(z)!.mime).toBe("image/png");
-    await expect(topup.createTopup({ customerId: c, method: "zelle", amountUsd: 0 })).rejects.toThrow(/1 到 100000/);
-    await expect(topup.createTopup({ customerId: c, method: "zelle", amountUsd: 5, proof: Buffer.from("x") })).rejects.toThrow(/PNG/);
+    await expect(topup.createTopup({ customerId: c, method: "zelle", amountUsd: 0, reference: "x" })).rejects.toThrow(/1 到 100000/);
+    await expect(topup.createTopup({ customerId: c, method: "zelle", amountUsd: 50 })).rejects.toThrow(/参考号或付款人姓名/);
+    await expect(topup.createTopup({ customerId: c, method: "alipay", amountUsd: 50, reference: "  " })).rejects.toThrow(/付款人姓名/);
+    await expect(topup.createTopup({ customerId: c, method: "zelle", amountUsd: 5, reference: "x", proof: Buffer.from("x") })).rejects.toThrow(/PNG/);
 
     topup.approveTopup(z, 200, null);
     expect(ledger.balanceOf(c)).toBe(200);
