@@ -3,7 +3,6 @@ import { ADJUSTMENT_POLICY_LABEL, channelCustomerCounts, getSettings, listChanne
 import { BALANCE_RULE_LABEL } from "@/lib/ledger";
 import { computePrice, money, resolveRule, type MarkupRule } from "@/lib/pricing";
 import { isMockMode, shipbestConfig } from "@/lib/shipbest/client";
-import AddressFields from "@/components/AddressFields";
 import StampSettings from "@/components/StampSettings";
 import FlashForm from "@/components/FlashForm";
 import RuleInputs from "@/components/RuleInputs";
@@ -35,7 +34,7 @@ export default async function SettingsPage() {
             填好 API ID 和 Token、选“正式”后保存，再点“同步渠道”，就会用真实价格和真实出单。
           </div>
         )}
-        <FlashForm action={saveShipBestAction} submitLabel="保存并测试连接">
+        <FlashForm action={saveShipBestAction} submitLabel="保存并测试连接" locked="切换模式或更换账号会影响所有客户的报价和出单" confirm="确定修改 ShipBest 连接吗？切到“正式”后所有客户下单都会真实出单扣费。">
           <div className="grid" style={{ margin: "12px 0" }}>
             <label className="f">模式
               <select name="mode" defaultValue={sbSaved.mode === "env" ? (sb.mock ? "mock" : "live") : sbSaved.mode}>
@@ -58,7 +57,7 @@ export default async function SettingsPage() {
         </div>
       </div>
 
-      <FlashForm action={saveSettingsAction} submitLabel="保存设置" className="card">
+      <FlashForm action={saveSettingsAction} submitLabel="保存设置" className="card" locked="修改会影响所有客户的价格和余额规则" confirm="加价、取消费、补差和余额规则会对所有客户生效，确定保存吗？">
         <h2>全局加价规则</h2>
         <p className="small muted">
           客户价 = max(成本 × (1 + 加价%) + 固定加价, 成本 + 最低利润)，再按取整步长向上取整。
@@ -126,12 +125,10 @@ export default async function SettingsPage() {
           <label className="f">默认币种<input name="defaultCurrency" defaultValue={s.defaultCurrency} maxLength={3} /></label>
         </div>
 
-        <h3>默认寄件地址（发货仓）</h3>
-        <AddressFields value={s.sender} namePrefix="sender." />
         <div style={{ height: 12 }} />
       </FlashForm>
 
-      <FlashForm action={savePaymentSettingsAction} submitLabel="保存收款设置" className="card">
+      <FlashForm action={savePaymentSettingsAction} submitLabel="保存收款设置" className="card" locked="客户充值页会显示这里的收款账号" confirm="客户会按这里的信息付款，请再核对一遍收款账号。确定保存吗？">
         <h2>收款方式（客户充值）</h2>
         <p className="small muted">客户在客户端“充值”页选择 Zelle（美元）或支付宝（人民币）付款，上传凭证后提交申请；你们在“财务”页确认到账后自动加到客户余额。余额以美元记账。</p>
         <div className="grid2">
@@ -186,7 +183,7 @@ export default async function SettingsPage() {
 
       <StampSettings global={s.stamp} channels={channels.filter((c) => c.enabled).map((c) => ({ code: c.code, name: c.name, stamp: c.stamp }))} />
 
-      <FlashForm action={saveChannelsAction} submitLabel="保存渠道设置" className="card">
+      <FlashForm action={saveChannelsAction} submitLabel="保存渠道设置" className="card" locked="开关渠道、改渠道加价会影响所有客户" confirm="渠道设置会对所有客户生效，确定保存吗？">
         <h2>物流渠道</h2>
         <p className="small muted">这里是总开关：取消勾选的渠道所有客户都不能用。每个客户具体能用哪些渠道，在“客户”详情里单独开通（新客户默认不开通）。加价留空 = 沿用全局设置。</p>
         <div className="table-wrap">

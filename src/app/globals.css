@@ -458,3 +458,11 @@ a.todo:hover { border-color: var(--accent); text-decoration: none; }
 .seg button:hover { color: var(--text); background: transparent; }
 .seg button.on { background: var(--surface); color: var(--text); box-shadow: var(--shadow-xs); }
 .auth-prefs { position: absolute; top: 16px; right: 16px; }
+
+/* 锁定的全局设置表单 */
+fieldset.bare { border: 0; padding: 0; margin: 0; min-width: 0; }
+.locked-form fieldset:disabled input, .locked-form fieldset:disabled select, .locked-form fieldset:disabled textarea { opacity: 0.75; cursor: not-allowed; }
+.locked-form.editing { box-shadow: 0 0 0 2px var(--warn); }
+.lock-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 12px; }
+.lock-bar .small { display: inline-flex; align-items: center; gap: 4px; }
+.warn-text { color: var(--warn); }

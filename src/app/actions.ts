@@ -316,7 +316,8 @@ export async function saveSettingsAction(_: FlashState, fd: FormData): Promise<F
     supportContact: str(fd.get("supportContact"), 200),
   };
   const sender = cleanAddress(Object.fromEntries([...fd.entries()].filter(([k]) => k.startsWith("sender.")).map(([k, v]) => [k.slice(7), v])) as Partial<Address>);
-  patch.sender = sender.nameFirst || sender.address1 ? sender : null;
+  // 设置页已不再编辑发货仓地址：表单里没有这些字段时保留原值
+  if ([...fd.keys()].some((k) => k.startsWith("sender."))) patch.sender = sender.nameFirst || sender.address1 ? sender : null;
   saveSettings(patch);
   revalidatePath("/settings");
   return { ok: "设置已保存" };
