@@ -1,0 +1,16 @@
+# 用法：
+#   1. cp .env.example .env，填写 ShipBest API、后台密码、SESSION_SECRET
+#   2. docker compose up -d --build
+#   3. 打开 http://服务器IP:3000 （后台）和 http://服务器IP:3000/portal （客户端）
+# 数据保存在 ./data 目录（SQLite 数据库和面单文件），请定期备份。
+services:
+  atrlabels:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file: .env
+    environment:
+      DATA_DIR: /app/data
+    volumes:
+      - ./data:/app/data

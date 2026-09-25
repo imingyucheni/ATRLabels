@@ -159,6 +159,7 @@ export class HttpShipBestClient implements ShipBestClient {
 /** 离线模拟：不调用真实接口，用于本地试用和测试。 */
 export class MockShipBestClient implements ShipBestClient {
   private orders = new Map<string, OrderDetail & { createdAt: number }>();
+  private seq = 0;
   private products: Product[] = [
     { code: "USPS-GA", name: "USPS Ground Advantage" },
     { code: "UPS-GND", name: "UPS Ground" },
@@ -198,7 +199,7 @@ export class MockShipBestClient implements ShipBestClient {
       throw new ShipBestError(10063, "custom no is repeat!");
     }
     const q = await this.trialPrice(productCode, req);
-    const orderNo = "SB" + Date.now();
+    const orderNo = "SB" + Date.now() + String(++this.seq).padStart(4, "0");
     this.orders.set(orderNo, {
       orderNo,
       customNo,
@@ -225,7 +226,7 @@ export class MockShipBestClient implements ShipBestClient {
     // 模拟异步出单：创建 1 秒后变成已打单
     if (o.status === 2 && Date.now() - o.createdAt > 1000) {
       o.status = 4;
-      o.trackingNo = "9400" + String(Date.now()).slice(-16);
+      o.trackingNo = "9400" + String(Date.now()).slice(-10) + String(++this.seq).padStart(6, "0");
       o.labelUrl = `mock://label/${o.customNo}`;
     }
     const { createdAt: _, ...detail } = o;

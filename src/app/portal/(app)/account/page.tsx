@@ -20,7 +20,7 @@ export default async function PortalAccount() {
         <AddressFields value={me.sender} namePrefix="sender." />
         <div style={{ height: 12 }} />
       </FlashForm>
-      <FlashForm action={portalChangePasswordAction} submitLabel="修改密码" className="card">
+      <FlashForm action={portalChangePasswordAction} submitLabel="修改密码" className="card" resetOnSuccess>
         <h2>修改密码</h2>
         <div className="grid" style={{ marginBottom: 12 }}>
           <label className="f">当前密码<input type="password" name="current" required autoComplete="current-password" /></label>

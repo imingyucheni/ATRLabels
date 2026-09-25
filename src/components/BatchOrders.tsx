@@ -38,6 +38,12 @@ export default function BatchOrders(props: {
     else setJob(null);
   }, [props.jobId, load]);
 
+  // 任务状态变化时刷新页面其余部分（侧栏余额、最近批次）
+  const status = job?.status;
+  useEffect(() => {
+    if (status === "ready" || status === "done") router.refresh();
+  }, [status, router]);
+
   // 后台处理中时每 2 秒刷新进度
   useEffect(() => {
     if (!job || !["quoting", "creating", "labeling"].includes(job.status)) return;

@@ -3,6 +3,10 @@ import PortalLoginForm from "./PortalLoginForm";
 
 export const dynamic = "force-dynamic";
 
+export function generateMetadata() {
+  return { title: getSettings().brandName };
+}
+
 export default function PortalLoginPage() {
   const { brandName, supportContact } = getSettings();
   return (

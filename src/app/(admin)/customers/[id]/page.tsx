@@ -44,7 +44,7 @@ export default async function CustomerEdit({ params }: { params: Promise<{ id: s
           </div>
 
           <div className="grid2">
-            <FlashForm action={ledgerEntryAction} submitLabel="确认" className="card">
+            <FlashForm action={ledgerEntryAction} submitLabel="确认" className="card" resetOnSuccess>
               <h2>充值 / 调账</h2>
               <input type="hidden" name="id" value={c.id} />
               <div className="grid" style={{ marginBottom: 12 }}>

@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import "./globals.css";
 
+// 客户端也用这个根布局，这里不要写任何内部信息（服务商名称、成本等）
 export const metadata: Metadata = {
-  title: "ATR 面单系统",
-  description: "尾程面单：对接 ShipBest，按成本加价出单",
+  title: "Shipping Labels",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

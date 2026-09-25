@@ -5,6 +5,8 @@ import { logoutAction } from "../actions";
 
 export const dynamic = "force-dynamic";
 
+export const metadata = { title: "ATR 面单系统 · 后台" };
+
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   await requireAdmin();
   return (

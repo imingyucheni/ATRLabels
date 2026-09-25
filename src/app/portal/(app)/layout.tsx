@@ -6,6 +6,10 @@ import { portalLogoutAction } from "../actions";
 
 export const dynamic = "force-dynamic";
 
+export function generateMetadata() {
+  return { title: getSettings().brandName };
+}
+
 export default async function PortalLayout({ children }: { children: React.ReactNode }) {
   const me = await requireCustomer();
   const { brandName } = getSettings();

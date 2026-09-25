@@ -1,6 +1,7 @@
 import Database from "better-sqlite3";
 import fs from "node:fs";
 import path from "node:path";
+import { seedDemo } from "./demo";
 import type { MarkupRule, PartialRule } from "./pricing";
 import type { Address, PackageInfo, SkuItem, UnitSystem } from "./shipbest/types";
 
@@ -166,6 +167,7 @@ export function db(): Database.Database {
     conn.pragma("foreign_keys = ON");
     conn.exec(SCHEMA);
     migrate(conn);
+    if (process.env.DEMO_SEED === "1") seedDemo(conn);
     g.__db = conn;
   }
   return g.__db;

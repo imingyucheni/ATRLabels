@@ -34,11 +34,11 @@ export async function portalLoginAction(_: unknown, fd: FormData) {
   const password = String(fd.get("password") ?? "");
   const key = `portal:${email}:${await clientIp()}`;
   const limited = checkRateLimit(key);
-  if (limited) return { error: limited };
+  if (limited) return { error: limited, email };
   const c = email ? getCustomerLogin(email) : null;
   if (!c || !c.enabled || !verifyPassword(password, c.passwordHash)) {
     recordFailure(key);
-    return { error: "邮箱或密码错误，或账号未开通" };
+    return { error: "邮箱或密码错误，或账号未开通", email };
   }
   clearFailures(key);
   await createCustomerSession(c.id, c.passwordHash!);

@@ -1,10 +1,22 @@
-import { createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
-import { cookies } from "next/headers";
+import { createHmac, timingSafeEqual } from "node:crypto";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getCustomer, getPasswordHash, type Customer } from "./db";
 
 const COOKIE = "atr_session";
 const MAX_AGE = 60 * 60 * 24 * 7; // 7 天
+
+/**
+ * Cookie 是否只走 HTTPS：COOKIE_SECURE=1 强制开启、=0 关闭；
+ * 不设置时按请求是否 HTTPS 自动判断（反向代理需传 X-Forwarded-Proto）。
+ * 这样用 http://服务器IP 测试时也能正常登录。
+ */
+async function cookieSecure() {
+  if (process.env.COOKIE_SECURE === "1") return true;
+  if (process.env.COOKIE_SECURE === "0") return false;
+  const h = await headers();
+  return (h.get("x-forwarded-proto") ?? "").split(",")[0].trim() === "https";
+}
 
 function secret() {
   const s = process.env.SESSION_SECRET;
@@ -35,7 +47,7 @@ export async function createSession() {
   (await cookies()).set(COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: await cookieSecure(),
     path: "/",
     maxAge: MAX_AGE,
   });
@@ -84,19 +96,7 @@ export function clearFailures(key: string) {
 
 const PORTAL_COOKIE = "atr_portal";
 
-export function hashPassword(pw: string): string {
-  const salt = randomBytes(16).toString("hex");
-  const hash = scryptSync(pw, salt, 32).toString("hex");
-  return `scrypt$${salt}$${hash}`;
-}
-
-export function verifyPassword(pw: string, stored: string | null): boolean {
-  if (!stored) return false;
-  const [algo, salt, hash] = stored.split("$");
-  if (algo !== "scrypt" || !salt || !hash) return false;
-  const test = scryptSync(pw, salt, 32).toString("hex");
-  return safeEqual(test, hash);
-}
+export { hashPassword, verifyPassword } from "./password";
 
 /** 会话里带上密码哈希的一部分：客户改密码或被重置后，旧会话自动失效 */
 function portalMac(id: number, exp: number, pwHash: string) {
@@ -108,7 +108,7 @@ export async function createCustomerSession(id: number, pwHash: string) {
   (await cookies()).set(PORTAL_COOKIE, `${id}.${exp}.${portalMac(id, exp, pwHash)}`, {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: await cookieSecure(),
     path: "/",
     maxAge: MAX_AGE,
   });

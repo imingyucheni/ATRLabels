@@ -4,6 +4,7 @@ import { currentCustomerId, isLoggedIn } from "@/lib/auth";
 import { readSheetRows } from "@/lib/adjustments";
 import { confirmJob, createJob, deleteJob, ensureRunning, getJob, parseOrders, senderFor, type BatchJob } from "@/lib/batch";
 import { getCustomer } from "@/lib/db";
+import { publicError } from "@/lib/portal";
 import { str } from "@/lib/sanitize";
 
 /** 后台可以操作任意客户；客户只能操作自己的任务 */
@@ -53,11 +54,19 @@ export interface BatchJobView extends BatchJob {
 
 export async function getBatchJobAction(jobId: number): Promise<{ job?: BatchJobView; error?: string }> {
   try {
-    const { job } = await ownJob(jobId);
+    const { a, job } = await ownJob(jobId);
     // 服务重启后自动继续未完成的任务
     ensureRunning(jobId);
     const c = getCustomer(job.customerId)!;
-    return { job: { ...job, balance: c.balance, available: c.balance + c.creditLimit } };
+    // 客户看到的报错去掉内部信息（钱包余额不足是客户自己的，保留）
+    const view = a.admin
+      ? job
+      : {
+          ...job,
+          error: job.error && !job.error.startsWith("余额不足") ? publicError(job.error) : job.error,
+          rows: job.rows.map((r) => ({ ...r, error: r.error ? publicError(r.error) : null })),
+        };
+    return { job: { ...view, balance: c.balance, available: c.balance + c.creditLimit } };
   } catch (e) {
     return { error: (e as Error).message };
   }

@@ -29,12 +29,14 @@ export function toPublicQuote(q: ChannelQuote): PublicQuote {
 }
 
 /** ShipBest 的报错里可能带内部信息，客户端只保留对客户有用的部分 */
-export function publicError(msg?: string): string {
+export function publicError(msg?: string | null): string {
   if (!msg) return "该渠道暂不可用";
-  // 去掉错误码和我们加的中文提示前缀，只保留原因
-  const m = /（(.+)）$/.exec(msg);
-  const raw = (m ? m[1] : msg).replace(/^\[\-?\d+\]\s*/, "");
-  if (/授权|签名|余额不足|OMS|TIMESTAMP|SIGN|token/i.test(raw)) return "系统繁忙，请稍后再试或联系客服";
+  // 去掉错误码前缀，例如 “[10024] ”（只去开头或冒号后的，不动“邮编[78701]”这类内容）
+  const raw = msg.replace(/(^|[：:]\s*)\[-?\d+\]\s*/g, "$1");
+  // 涉及我们和 ShipBest 之间的账户、授权、余额等问题，不给客户看原因
+  if (/授权|签名|OMS|TIMESTAMP|SIGN|token|服务商|ShipBest|账户余额不足|balance sufficient|api auth/i.test(raw)) {
+    return "系统繁忙，请稍后再试或联系客服";
+  }
   return raw;
 }
 
