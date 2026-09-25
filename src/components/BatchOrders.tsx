@@ -26,6 +26,9 @@ const ROW_STATUS: Record<string, [string, string]> = {
   failed: ["下单失败", "exception"],
 };
 
+/** 渠道送不到这个地址（不通邮 / 不在派送范围） */
+const uncovered = (e?: string | null) => /不通邮|派送范围|未覆盖/.test(e ?? "");
+
 export default function BatchOrders(props: {
   mode: "admin" | "portal";
   /** 后台：客户列表，每个客户带自己已开通的渠道 */
@@ -369,13 +372,13 @@ export default function BatchOrders(props: {
                               {q.ok && props.mode === "admin" && q.cost !== undefined && (
                                 <span className="muted" title="成本 / 利润">{money(q.cost)} · <span className={q.price! - q.cost < 0 ? "profit-neg" : ""}>+{(q.price! - q.cost).toFixed(2)}</span>{" "}</span>
                               )}
-                              <b>{q.ok ? money(q.price, q.currency ?? "") : "不可用"}</b>
+                              <b style={q.ok ? undefined : { color: "var(--muted)", fontWeight: 500 }}>{q.ok ? money(q.price, q.currency ?? "") : uncovered(q.error) ? "地址未覆盖" : "不可用"}</b>
                             </span>
                           </label>
                         ))}
                         {onlyAvailable && r.quotes.some((q) => !q.ok) && (
                           <span className="small muted" title={r.quotes.filter((q) => !q.ok).map((q) => `${q.name}：${q.error ?? "不可用"}`).join("\n")}>
-                            另有 {r.quotes.filter((q) => !q.ok).length} 个渠道不支持此地址
+                            另有 {r.quotes.filter((q) => !q.ok).length} 个渠道地址未覆盖或不可用（{r.quotes.filter((q) => !q.ok).map((q) => q.name).join("、")}）
                           </span>
                         )}
                       </div>

@@ -430,7 +430,7 @@ export default function ShipForm(props: {
           <div className="row small" style={{ justifyContent: "space-between", marginBottom: 8, alignItems: "center" }}>
             <span className="muted">
               {quotes.filter((q) => q.ok).length} 个渠道可以送达
-              {quotes.some((q) => !q.ok) && `，${quotes.filter((q) => !q.ok).length} 个渠道不支持这个地址`}
+              {quotes.some((q) => !q.ok) && `，${quotes.filter((q) => !q.ok).length} 个渠道地址未覆盖或不可用（${quotes.filter((q) => !q.ok).map((q) => q.channelName).join("、")}）`}
             </span>
             <label><input type="checkbox" checked={onlyAvailable} onChange={(e) => setOnlyAvailable(e.target.checked)} /> 只显示可下单渠道</label>
           </div>
@@ -472,7 +472,10 @@ export default function ShipForm(props: {
                   ) : (
                     <tr key={q.channelCode}>
                       <td>{q.channelName}</td>
-                      <td colSpan={portal ? 3 : 6} className="small" style={{ color: "var(--err)" }}>{q.error}</td>
+                      <td colSpan={portal ? 3 : 6} className="small" style={{ color: "var(--err)" }}>
+                        <b>{/不通邮|派送范围|未覆盖/.test(q.error ?? "") ? "地址未覆盖" : "不可用"}</b>
+                        {q.error && !/^地址未覆盖/.test(q.error) ? `：${q.error}` : q.error ? `：${q.error.replace(/^地址未覆盖：/, "")}` : ""}
+                      </td>
                     </tr>
                   ),
                 )}

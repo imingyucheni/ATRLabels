@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { currentCustomerId, isLoggedIn, portalActor } from "@/lib/auth";
 import { readSheetRows } from "@/lib/adjustments";
 import {
@@ -27,6 +28,12 @@ async function actor(): Promise<{ admin: true } | { admin: false; customerId: nu
   const id = await currentCustomerId();
   if (!id) throw new Error("请先登录");
   return { admin: false, customerId: id };
+}
+
+/** 批量订单有变化：刷新菜单栏上的“待出单”数量等（布局不会随页面自动重新计算） */
+function refreshCounts() {
+  revalidatePath("/portal", "layout");
+  revalidatePath("/", "layout");
 }
 
 async function ownJob(jobId: number) {
@@ -62,6 +69,7 @@ export async function createBatchJobAction(fd: FormData): Promise<{ jobId?: numb
       orders,
     });
     ensureRunning(jobId);
+    refreshCounts();
     return { jobId };
   } catch (e) {
     const msg = (e as Error).message;
@@ -103,6 +111,7 @@ export async function confirmBatchJobAction(jobId: number): Promise<{ error?: st
   try {
     await ownJob(jobId);
     confirmJob(jobId);
+    refreshCounts();
     return {};
   } catch (e) {
     return { error: (e as Error).message };
@@ -113,6 +122,7 @@ export async function deleteBatchJobAction(jobId: number): Promise<{ error?: str
   try {
     await ownJob(jobId);
     deleteJob(jobId);
+    refreshCounts();
     return {};
   } catch (e) {
     return { error: (e as Error).message };
@@ -123,6 +133,7 @@ async function edit(jobId: number, fn: () => unknown): Promise<{ error?: string;
   try {
     await ownJob(jobId);
     const r = fn();
+    refreshCounts();
     return typeof r === "string" ? { message: r } : {};
   } catch (e) {
     return { error: (e as Error).message };

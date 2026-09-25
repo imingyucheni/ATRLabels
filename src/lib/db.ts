@@ -296,6 +296,10 @@ export interface Settings {
   fxManualRate: number;
   /** 最近一次成功获取的实时汇率 */
   fxLast: { live: number; source: string; at: string } | null;
+  /** 实时汇率多久更新：daily = 每天一次（美西时间当天第一次用到时更新，全天固定）；hourly = 每小时 */
+  fxRefresh: "daily" | "hourly";
+  /** 当天锁定的汇率 */
+  fxDaily: { date: string; live: number; source: string; at: string } | null;
   /** 发货口岸（邮编覆盖表按这个口岸取邮编），91710 Chino 对应 LAX */
   originGateway: string;
   /** ShipBest 接口：在后台“设置”里填写；mode = env 时按服务器环境变量 */
@@ -336,6 +340,8 @@ const DEFAULT_SETTINGS: Settings = {
   fxMarkup: 0.03,
   fxManualRate: 7.2,
   fxLast: null,
+  fxRefresh: "daily",
+  fxDaily: null,
   originGateway: "LAX",
   shipbest: { mode: "env", apiId: "", token: "" },
 };

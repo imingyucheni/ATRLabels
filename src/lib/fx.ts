@@ -1,8 +1,10 @@
 /**
  * 人民币充值汇率：当天实时汇率（美元兑人民币）+ 加点（例如 0.03）。
- * 实时汇率每小时更新一次；获取失败时使用设置里的备用汇率。
+ * 默认每天更新一次：美西时间每天第一次用到时取当天实时汇率，全天固定（客户当天看到的都一样）；
+ * 也可以在设置里改成每小时更新。获取失败时用最近一次的汇率，再不行用备用汇率。
  */
 import { getSettings, saveSettings } from "./db";
+import { fmtDate } from "./time";
 
 export interface FxQuote {
   /** 实时汇率（1 USD = ? CNY） */
@@ -48,14 +50,22 @@ export async function usdCnyQuote(force = false): Promise<FxQuote> {
   const manual = (live: number, source: string, at: string): FxQuote => ({ live, markup, rate: r4(live + markup), source, fetchedAt: at, manual: true });
   if (st.fxMode === "manual") return manual(st.fxManualRate, "手动设置", "");
 
-  if (!force && g.__fx && Date.now() - g.__fx.at < TTL) {
+  // 每天一次：今天已经取过就用今天的
+  const today = fmtDate(new Date().toISOString());
+  if (st.fxRefresh !== "hourly" && !force && st.fxDaily?.date === today) {
+    const d = st.fxDaily;
+    return { live: d.live, markup, rate: r4(d.live + markup), source: `${d.source} · ${d.date} 今日汇率`, fetchedAt: d.at, manual: false };
+  }
+
+  if (st.fxRefresh === "hourly" && !force && g.__fx && Date.now() - g.__fx.at < TTL) {
     return { live: g.__fx.live, markup, rate: r4(g.__fx.live + markup), source: g.__fx.source, fetchedAt: new Date(g.__fx.at).toISOString(), manual: false };
   }
   const got = await fetchLive();
   if (got) {
     g.__fx = { ...got, at: Date.now() };
     // 记住最近一次成功的汇率，服务重启或接口暂时不可用时使用
-    saveSettings({ fxLast: { live: got.live, source: got.source, at: new Date().toISOString() } });
+    const at = new Date().toISOString();
+    saveSettings({ fxLast: { live: got.live, source: got.source, at }, fxDaily: { date: today, live: got.live, source: got.source, at } });
     return { live: got.live, markup, rate: r4(got.live + markup), source: got.source, fetchedAt: new Date().toISOString(), manual: false };
   }
   if (st.fxLast && Date.now() - Date.parse(st.fxLast.at) < 3 * 24 * TTL) {

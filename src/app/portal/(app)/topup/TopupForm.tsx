@@ -59,7 +59,7 @@ export default function TopupForm(props: {
               ) : (
                 <>填写充值金额后显示需要支付的人民币金额</>
               )}
-              <div className="small">请按这里显示的金额付款，付款后提交申请即按这个汇率入账。页面打开超过 1 小时请先刷新再付款。</div>
+              <div className="small">请按这里显示的金额付款，付款后提交申请即按这个汇率入账。汇率当天有效，隔天付款请先刷新页面。</div>
             </div>
           ) : (
             <div className="alert warn">{usd ? <>请通过 Zelle 转账 <b>${usd.toFixed(2)}</b>，到账后按美元金额加到余额。</> : "填写充值金额后，通过 Zelle 转账相同的美元金额。"}</div>

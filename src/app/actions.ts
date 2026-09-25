@@ -588,6 +588,7 @@ export async function savePaymentSettingsAction(_: FlashState, fd: FormData): Pr
     alipayInfo: String(fd.get("alipayInfo") ?? "").slice(0, 500),
     topupInstructions: String(fd.get("topupInstructions") ?? "").slice(0, 2000),
     fxMode: fd.get("fxMode") === "manual" ? "manual" : "auto",
+    fxRefresh: fd.get("fxRefresh") === "hourly" ? "hourly" : "daily",
     fxMarkup: markup ?? cur.fxMarkup,
     fxManualRate: manual ?? cur.fxManualRate,
   });

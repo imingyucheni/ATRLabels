@@ -84,7 +84,7 @@ describe("客户端报错过滤", async () => {
   it("去掉内部信息，保留对客户有用的原因", () => {
     expect(publicError("[11200] OMS 账户余额不足，请先充值（customer account balance sufficient in order!）")).toBe("系统繁忙，请稍后再试或联系客服");
     expect(publicError("[11012] 签名错误（SIGN error）")).toBe("系统繁忙，请稍后再试或联系客服");
-    expect(publicError("[1] 国家[US],邮编[78701]不通邮")).toBe("国家[US],邮编[78701]不通邮");
+    expect(publicError("[1] 国家[US],邮编[78701]不通邮")).toBe("地址未覆盖：这个渠道送不到该邮编");
     expect(publicError("无法报价：[10024] 包裹重量不在该渠道的下单重量范围内（Logistics product weight out range!）")).toBe(
       "无法报价：包裹重量不在该渠道的下单重量范围内（Logistics product weight out range!）",
     );

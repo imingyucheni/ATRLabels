@@ -1,3 +1,4 @@
+import { fmtTime } from "@/lib/time";
 import { ADJUSTMENT_POLICY_LABEL, channelCustomerCounts, getSettings, listChannels } from "@/lib/db";
 import { BALANCE_RULE_LABEL } from "@/lib/ledger";
 import { computePrice, money, resolveRule, type MarkupRule } from "@/lib/pricing";
@@ -158,14 +159,23 @@ export default async function SettingsPage() {
               <option value="manual">固定汇率 + 加点</option>
             </select>
           </label>
+          <label className="f">实时汇率更新频率
+            <select name="fxRefresh" defaultValue={s.fxRefresh ?? "daily"}>
+              <option value="daily">每天一次（全天固定，推荐）</option>
+              <option value="hourly">每小时</option>
+            </select>
+          </label>
           <label className="f">加点（加在汇率上，例如 0.03）<input name="fxMarkup" type="number" step="0.001" min="0" max="1" defaultValue={s.fxMarkup} /></label>
           <label className="f">固定 / 备用汇率<input name="fxManualRate" type="number" step="0.0001" defaultValue={s.fxManualRate} /></label>
         </div>
         <p className="small">
-          当前：{fx.manual ? `${fx.source} ${fx.live}` : `实时汇率 ${fx.live}（${fx.source}${fx.fetchedAt ? "，" + fx.fetchedAt.slice(0, 16).replace("T", " ") + " UTC" : ""}）`}
+          当前：{fx.manual ? `${fx.source} ${fx.live}` : `实时汇率 ${fx.live}（${fx.source}${fx.fetchedAt ? "，取于 " + fmtTime(fx.fetchedAt) : ""}）`}
           {" "}+ 加点 {fx.markup} = <b>充值汇率 {fx.rate}</b>（充 100 美元需付 ¥{cnyToPay(100, fx.rate).toFixed(2)}）
         </p>
-        <p className="small muted">实时汇率每小时自动更新（来源：ExchangeRate-API，备用欧洲央行数据）；获取失败时使用最近一次的实时汇率，再不行用备用汇率。</p>
+        <p className="small muted">
+          自动更新，不需要手动操作：选“每天一次”时，每天（美西时间）第一次有人打开充值页时取当天的实时汇率，当天之内固定不变；选“每小时”则每小时更新一次。
+          来源 ExchangeRate-API，备用欧洲央行数据；获取失败时用最近一次的汇率，再不行用上面的备用汇率。点“立即更新汇率”可以马上重新获取今天的汇率。
+        </p>
         <label className="f" style={{ margin: "8px 0 12px" }}>充值页其他说明（可选）
           <textarea name="topupInstructions" rows={2} defaultValue={s.topupInstructions} placeholder="例如：转账备注请写公司名；工作日 2 小时内确认到账" />
         </label>
