@@ -95,6 +95,15 @@ describe("上线前清空测试数据", () => {
     const id = db.saveCustomer(null, { name: "清空测试客户", contact: null, phone: null, email: null, note: null, markup: {} });
     ledger.addLedger({ customerId: id, type: "topup", amount: 50, createdBy: "admin" });
     expect(ledger.balanceOf(id)).toBe(50);
+    // 充值申请（引用流水）、订单 + 扣款、补差，覆盖所有外键关系
+    const topup = await import("@/lib/topup");
+    const tid = await topup.createTopup({ customerId: id, method: "zelle", amountUsd: 20, reference: "T1" });
+    topup.approveTopup(tid, 20, null);
+    const sid = Number(db.db().prepare("INSERT INTO shipments (custom_no, customer_id, channel_code, sender_json, recipient_json, package_json, sku_json, quoted_cost, currency, price, rule_json, status, env) VALUES ('M1', ?, 'X', '{}', '{}', '{}', '[]', 1, 'USD', 2, '{}', 'labeled', 'mock')").run(id).lastInsertRowid);
+    ledger.addLedger({ customerId: id, type: "label", amount: -2, shipmentId: sid, createdBy: "admin" });
+    const bid = Number(db.db().prepare("INSERT INTO adjustment_batches (filename, file_hash, policy) VALUES ('a.csv', 'h1', 'at_cost')").run().lastInsertRowid);
+    const aid = Number(db.db().prepare("INSERT INTO adjustments (batch_id, row_no, match_key, shipment_id, customer_id, cost_amount, customer_amount) VALUES (?, 2, 'M1', ?, ?, 0.5, 0.5)").run(bid, sid, id).lastInsertRowid);
+    ledger.postAdjustment(aid, id, sid, 0.5, "重量调整");
     const r = clearTestData();
     expect(r.backup).toMatch(/^before-clear-.*\.db$/);
     expect(ledger.balanceOf(id)).toBe(0);

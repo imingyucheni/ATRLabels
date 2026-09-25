@@ -34,7 +34,8 @@ export function clearTestData(): { backup: string } {
   conn.exec(`VACUUM INTO '${backup.replace(/'/g, "''")}'`);
 
   conn.transaction(() => {
-    for (const t of ["adjustments", "adjustment_batches", "ledger", "topup_requests", "batch_job_rows", "batch_jobs", "shipments"]) {
+    // 按外键依赖顺序删：充值申请 → 流水 → 补差 → 批量导入 → 订单
+    for (const t of ["topup_requests", "ledger", "adjustments", "adjustment_batches", "batch_job_rows", "batch_jobs", "shipments"]) {
       conn.exec(`DELETE FROM ${t}`);
     }
     const hasMock = conn.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'mock_orders'").get();

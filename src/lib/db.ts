@@ -338,7 +338,8 @@ function testDb(): Database.Database {
       liveDb().exec(`VACUUM INTO '${file.replace(/'/g, "''")}'`);
       const conn = open(file);
       conn.transaction(() => {
-        for (const t of ["adjustments", "adjustment_batches", "ledger", "topup_requests", "batch_job_rows", "batch_jobs", "shipments", "password_resets"]) conn.exec(`DELETE FROM ${t}`);
+        // 按外键依赖顺序删
+        for (const t of ["topup_requests", "ledger", "adjustments", "adjustment_batches", "batch_job_rows", "batch_jobs", "shipments", "password_resets"]) conn.exec(`DELETE FROM ${t}`);
         for (const t of ["mock_orders", "email_log"]) {
           if (conn.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(t)) conn.exec(`DELETE FROM ${t}`);
         }
