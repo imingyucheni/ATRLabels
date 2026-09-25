@@ -272,8 +272,7 @@ export const orders: Record<string, string> = {
   "最近的批次": "Recent Batches",
   "已下单 / 总数": "Created / Total",
   "（客户自助）": " (self-service)",
-  "表格里没填寄件人的订单，会使用系统默认寄件地址；也可以在“账户设置”里设置自己的默认寄件地址。":
-    "Orders without a sender in the spreadsheet use the system default sender address. You can set your own default sender address in Settings.",
+  "表格里每一单都要填寄件人；也可以先在“账户设置 → 寄件地址簿”里设置默认寄件地址，下载的模版会自动填好。": "Each row needs a sender. Set a default sender in Settings → Sender address book and the downloaded template will be pre-filled.",
   "所有渠道都无法报价": "No service could quote",
   "处理出错": "Processing error",
 
