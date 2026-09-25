@@ -535,3 +535,10 @@ html[data-nav="mini"] .site-link { justify-content: center; padding: 6px 0; }
 
 .danger-card { border-color: color-mix(in srgb, var(--err) 35%, var(--line)); }
 .danger-card h2 { color: var(--err); }
+
+/* 上线检查清单 */
+.golive ul { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 8px; }
+.golive li { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.golive li svg { color: var(--muted); flex-shrink: 0; }
+.golive li.done svg { color: var(--ok); }
+.golive li.done a { color: var(--muted); text-decoration: line-through; }

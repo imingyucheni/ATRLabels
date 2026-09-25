@@ -1,4 +1,5 @@
 import Link from "next/link";
+import GoLiveChecklist from "@/components/GoLiveChecklist";
 import { listChannels, listShipments, shipmentProfit } from "@/lib/db";
 import { buildReport, localDate } from "@/lib/reports";
 import { money } from "@/lib/pricing";
@@ -30,6 +31,7 @@ export default async function Dashboard() {
   return (
     <>
       <h1>{t("概览")}</h1>
+      <GoLiveChecklist />
       {pendingTopups > 0 && (
         <div className="alert warn">{t("有 {n} 笔客户充值待确认，", { n: pendingTopups })}<Link href="/finance#topups">{t("去处理")}</Link>{t("。")}</div>
       )}

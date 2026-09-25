@@ -28,12 +28,18 @@ export async function downloadLabel(url: string, customNo: string): Promise<{ pa
     const q = new URL(url.replace("mock://", "http://mock/")).searchParams;
     buf = mockLabelPdf(customNo, { channel: q.get("ch") ?? undefined, tracking: q.get("t") ?? undefined, to: q.get("to")?.split("|") });
   } else {
-    const res = await fetch(url, { signal: AbortSignal.timeout(30_000), cache: "no-store" });
+    // 相对地址 / 省略协议的地址补全
+    const full = url.startsWith("//") ? "https:" + url : url.startsWith("/") ? (process.env.SHIPBEST_BASE_URL || "https://oms.shipbest.com").replace(/\/$/, "") + url : url;
+    const res = await fetch(full, { signal: AbortSignal.timeout(30_000), cache: "no-store" });
     if (!res.ok) throw new Error(`下载面单失败：HTTP ${res.status}`);
     headerType = res.headers.get("content-type");
     buf = Buffer.from(await res.arrayBuffer());
   }
   const { mime, ext } = sniffMime(buf, headerType);
+  // 返回的是网页或报错信息而不是面单文件时，不保存（下次刷新再试）
+  if (ext === "bin" && /html|json|text\/plain|xml/i.test(mime)) {
+    throw new Error(`下载面单失败：返回的不是面单文件（${mime}）`);
+  }
   const safe = customNo.replace(/[^A-Za-z0-9_-]/g, "_");
   const file = path.join(labelsDir(), `${safe}.${ext}`);
   fs.writeFileSync(file, buf);
