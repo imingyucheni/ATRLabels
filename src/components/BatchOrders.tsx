@@ -364,7 +364,7 @@ export default function BatchOrders(props: {
                     )}
                   </td>
                   <td className="muted">{r.rowNo}</td>
-                  <td>{r.customerRef ?? "-"}{r.fileChannel && <div className="small muted">{t("表格：")}{r.fileChannel}</div>}</td>
+                  <td>{r.customerRef ?? "-"}</td>
                   <td className="small">{r.recipient}</td>
                   <td className="small">{r.pkg}</td>
                   <td>
