@@ -92,6 +92,7 @@ describe("模拟模式完整流程", () => {
     expect(sheet.headerRow).toBe(1);
     const cols = adj.guessColumns(sheet.rows[sheet.headerRow]);
     const mapping = { headerRow: sheet.headerRow, ...cols, positiveMeans: "charge" as const };
+    expect(cols.amountCol).toBe(3);
     const preview = adj.buildPreview(sheet.rows, mapping);
     expect(preview.rows.length).toBe(2); // 合计行被跳过
     expect(preview.unmatched).toBe(1);

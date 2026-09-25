@@ -5,16 +5,7 @@ import { useMemo, useState, useTransition } from "react";
 import { importAdjustmentAction, parseAdjustmentFileAction, previewAdjustmentAction } from "@/app/actions";
 import type { Mapping, ParsedSheet, Preview } from "@/lib/adjustments";
 import { money } from "@/lib/pricing";
-
-function guess(header: string[]) {
-  const find = (re: RegExp, exclude = -1) => header.findIndex((h, i) => i !== exclude && re.test(h));
-  let keyCol = find(/运单号|跟踪号|追踪号|tracking/i);
-  if (keyCol < 0) keyCol = find(/运单|单号|order|waybill/i);
-  let amountCol = find(/补差|差额|多退少补|调整金额|补扣|adjust|diff/i, keyCol);
-  if (amountCol < 0) amountCol = find(/补|差|退|金额|费用|amount|charge/i, keyCol);
-  const reasonCol = find(/原因|备注|说明|reason|remark|note/i);
-  return { keyCol, amountCol, reasonCol };
-}
+import { guessColumns as guess } from "@/lib/sheetGuess";
 
 export default function ImportAdjustments() {
   const router = useRouter();
@@ -104,6 +95,12 @@ export default function ImportAdjustments() {
                 {colOptions.map((c) => <option key={c.i} value={c.i}>{c.label}</option>)}
               </select>
             </label>
+            <label className="f">备用单号列（可选，例如“客户单号”）
+              <select value={mapping.altKeyCol} onChange={(e) => update({ altKeyCol: Number(e.target.value) })}>
+                <option value={-1}>无</option>
+                {colOptions.map((c) => <option key={c.i} value={c.i}>{c.label}</option>)}
+              </select>
+            </label>
             <label className="f"><span className="req">补差金额列</span>
               <select value={mapping.amountCol} onChange={(e) => update({ amountCol: Number(e.target.value) })}>
                 <option value={-1}>请选择</option>
@@ -159,7 +156,7 @@ export default function ImportAdjustments() {
           </div>
           <div className="table-wrap" style={{ maxHeight: 420, overflowY: "auto" }}>
             <table>
-              <thead><tr><th>行</th><th>单号</th><th>原始金额</th><th className="num">ShipBest 补差</th><th>面单 / 客户</th><th className="num">向客户</th><th>原因</th></tr></thead>
+              <thead><tr><th>行</th><th>单号</th><th>原始金额</th><th className="num">ShipBest 补差</th><th>面单 / 客户</th><th className="num">向客户</th><th>说明</th></tr></thead>
               <tbody>
                 {rows.map((r) => (
                   <tr key={r.rowNo}>

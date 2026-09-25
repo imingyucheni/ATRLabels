@@ -309,6 +309,7 @@ function cleanMapping(m: Mapping): Mapping {
   return {
     headerRow: Math.max(0, Math.floor(n(m.headerRow))),
     keyCol: Math.floor(n(m.keyCol)),
+    altKeyCol: Number.isInteger(m.altKeyCol) && m.altKeyCol !== m.keyCol ? m.altKeyCol : -1,
     amountCol: Math.floor(n(m.amountCol)),
     reasonCol: Number.isInteger(m.reasonCol) ? m.reasonCol : -1,
     positiveMeans: m.positiveMeans === "refund" ? "refund" : "charge",

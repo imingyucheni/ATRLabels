@@ -10,6 +10,7 @@ import {
   type NewAdjustment,
 } from "./db";
 import type { MarkupRule } from "./pricing";
+import { describeRow, guessHeaderRow } from "./sheetGuess";
 
 /* ---------------- 读取表格 ---------------- */
 
@@ -32,6 +33,8 @@ function cellText(v: ExcelJS.CellValue): string {
     if ("error" in v) return "";
     return "";
   }
+  // Excel 里的小数常带浮点误差，例如 0.06000000000000005
+  if (typeof v === "number") return String(Math.round(v * 1e6) / 1e6);
   return String(v).trim();
 }
 
@@ -91,17 +94,6 @@ export function parseCsv(buf: Buffer): string[][] {
   return rows;
 }
 
-const KEY_WORDS = /运单|跟踪|追踪|tracking|单号|order|waybill|面单/i;
-const AMOUNT_WORDS = /补|差|退|调整|金额|费用|amount|adjust|diff|charge/i;
-
-function guessHeaderRow(rows: string[][]): number {
-  for (let i = 0; i < Math.min(rows.length, 15); i++) {
-    const r = rows[i];
-    if (r.filter(Boolean).length >= 2 && r.some((c) => KEY_WORDS.test(c)) && r.some((c) => AMOUNT_WORDS.test(c))) return i;
-  }
-  return 0;
-}
-
 export async function parseSheet(filename: string, buf: Buffer): Promise<ParsedSheet> {
   const lower = filename.toLowerCase();
   let rows: string[][];
@@ -127,16 +119,7 @@ export function contentHash(rows: string[][]): string {
   return createHash("sha256").update(norm).digest("hex");
 }
 
-/** 根据表头猜测列 */
-export function guessColumns(header: string[]) {
-  const find = (re: RegExp, exclude?: number) => header.findIndex((h, i) => i !== exclude && re.test(h));
-  let keyCol = find(/运单号|跟踪号|追踪号|tracking/i);
-  if (keyCol < 0) keyCol = find(KEY_WORDS);
-  let amountCol = find(/补差|差额|多退少补|调整金额|补扣|adjust|diff/i, keyCol);
-  if (amountCol < 0) amountCol = find(AMOUNT_WORDS, keyCol);
-  const reasonCol = find(/原因|备注|说明|reason|remark|note/i);
-  return { keyCol, amountCol, reasonCol };
-}
+export { guessColumns } from "./sheetGuess";
 
 /* ---------------- 金额 ---------------- */
 
@@ -166,6 +149,8 @@ export function customerAmountFor(costAmount: number, policy: AdjustmentPolicy, 
 export interface Mapping {
   headerRow: number;
   keyCol: number;
+  /** 备用单号列（-1 表示没有）：主单号匹配不到时再用 */
+  altKeyCol: number;
   amountCol: number;
   reasonCol: number; // -1 表示没有
   /** charge：正数 = ShipBest 向我们补扣；refund：正数 = 退给我们 */
@@ -209,8 +194,10 @@ export function buildPreview(rows: string[][], m: Mapping): Preview {
     if (!matchKey && !rawAmount.trim()) continue;
     // 合计 / 小计行
     if (/^(合计|总计|小计|total|sum)/i.test(matchKey) || (!matchKey && /合计|总计|total/i.test(r.join(" ")))) continue;
-    const reason = m.reasonCol >= 0 ? r[m.reasonCol] ?? "" : "";
+    const reason = describeRow(rows[m.headerRow] ?? [], r, m.reasonCol);
     const amt = parseAmount(rawAmount);
+    // 金额为 0 的行没有影响，跳过
+    if (amt === 0) continue;
     const row: PreviewRow = {
       rowNo: i + 1,
       matchKey,
@@ -228,8 +215,12 @@ export function buildPreview(rows: string[][], m: Mapping): Preview {
     else if (amt === null) row.error = "金额无法识别";
     if (!row.error && amt !== null) {
       row.costAmount = m.positiveMeans === "charge" ? amt : -amt;
-      if (!cache.has(matchKey)) cache.set(matchKey, findShipmentByKey(matchKey));
-      const s = cache.get(matchKey);
+      const altKey = m.altKeyCol >= 0 ? (r[m.altKeyCol] ?? "").trim() : "";
+      const lookup = (k: string) => {
+        if (!cache.has(k)) cache.set(k, findShipmentByKey(k));
+        return cache.get(k);
+      };
+      const s = lookup(matchKey) ?? (altKey ? lookup(altKey) : null);
       if (s) {
         row.shipmentId = s.id;
         row.customNo = s.customNo;
