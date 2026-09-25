@@ -4,18 +4,18 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
-  BarChart3, Map as MapIcon, Menu, X, CreditCard, FileSpreadsheet, FileText, LayoutDashboard, LogOut, PackagePlus, Receipt, Scale, Settings,
+  BarChart3, Globe2, Lock, Map as MapIcon, Menu, X, CreditCard, FileSpreadsheet, FileText, LayoutDashboard, LogOut, PackagePlus, Receipt, Scale, Settings,
   Truck, Upload, UserCog, Users, Wallet,
 } from "lucide-react";
 
 const ICONS = {
   dashboard: LayoutDashboard, ship: PackagePlus, batch: Upload, list: Truck, reports: BarChart3, adjust: Scale,
   customers: Users, finance: Wallet, settings: Settings, topup: CreditCard, billing: Receipt, sheet: FileSpreadsheet,
-  account: UserCog, doc: FileText, map: MapIcon,
+  account: UserCog, doc: FileText, map: MapIcon, globe: Globe2,
 };
 
-export type NavItem = { href: string; label: string; icon: keyof typeof ICONS; count?: number; exact?: boolean };
-export type NavGroup = { title?: string; items: NavItem[] };
+export type NavItem = { href: string; label: string; icon: keyof typeof ICONS; count?: number; exact?: boolean; soon?: boolean };
+export type NavGroup = { title?: string; tag?: string; soon?: boolean; items: NavItem[] };
 
 export default function Sidebar(props: {
   brand: string;
@@ -52,9 +52,23 @@ export default function Sidebar(props: {
       </div>
       {props.groups.map((g, gi) => (
         <nav key={gi} aria-label={g.title}>
-          {g.title && <div className="nav-section">{g.title}</div>}
+          {g.title && (
+            <div className={`nav-section${g.soon ? " soon" : ""}`}>
+              {g.title}
+              {g.tag && <span className="nav-tag">{g.tag}</span>}
+            </div>
+          )}
           {g.items.map((i) => {
             const Icon = ICONS[i.icon];
+            // 还没开放的功能：灰显，点不开
+            if (i.soon || g.soon)
+              return (
+                <span key={i.href} className="nav-item disabled" aria-disabled="true" title="敬请期待">
+                  <Icon strokeWidth={1.9} />
+                  {i.label}
+                  <span className="nav-soon"><Lock size={10} strokeWidth={2.4} /> 敬请期待</span>
+                </span>
+              );
             return (
               <Link key={i.href} href={i.href} className={`nav-item ${active === i.href ? "active" : ""}`} aria-current={active === i.href ? "page" : undefined}>
                 <Icon strokeWidth={1.9} />

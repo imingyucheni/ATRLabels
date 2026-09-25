@@ -63,7 +63,7 @@ const PAD = { l: 44, r: 12, t: 12, b: 26 };
 
 /* ---------------- 每日订单：柱状图（单系列） ---------------- */
 
-export function DailyBars({ data }: { data: { date: string; orders: number; revenue: number; profit: number }[] }) {
+export function DailyBars({ data, revenueLabel = "客户消费" }: { data: { date: string; orders: number; revenue: number; profit?: number }[]; revenueLabel?: string }) {
   const [ref, width] = useWidth<HTMLDivElement>();
   const [tip, setTip] = useState<Tip | null>(null);
   const [hover, setHover] = useState(-1);
@@ -116,8 +116,8 @@ export function DailyBars({ data }: { data: { date: string; orders: number; reve
                     title: d.date,
                     rows: [
                       { label: "订单", value: String(d.orders) },
-                      { label: "客户消费", value: `$${d.revenue.toFixed(2)}` },
-                      { label: "利润", value: `$${d.profit.toFixed(2)}` },
+                      { label: revenueLabel, value: `$${d.revenue.toFixed(2)}` },
+                      ...(d.profit !== undefined ? [{ label: "利润", value: `$${d.profit.toFixed(2)}` }] : []),
                     ],
                   });
                 }}
@@ -226,7 +226,7 @@ export function RevenueLines({ data }: { data: { date: string; revenue: number; 
 
 /* ---------------- 渠道单量：横向柱状图（单系列，按单量排序） ---------------- */
 
-export function ChannelBars({ data }: { data: { name: string; orders: number; share: number; revenue: number; profit: number }[] }) {
+export function ChannelBars({ data, revenueLabel = "客户消费" }: { data: { name: string; orders: number; share: number; revenue: number; profit?: number }[]; revenueLabel?: string }) {
   const [tip, setTip] = useState<{ i: number } | null>(null);
   const max = Math.max(1, ...data.map((d) => d.orders));
   return (
@@ -249,8 +249,8 @@ export function ChannelBars({ data }: { data: { name: string; orders: number; sh
             <div className="chart-tip hbar-tip">
               <div className="chart-tip-title">{d.name}</div>
               <div className="chart-tip-row"><b>{d.orders}</b><span>订单（{(d.share * 100).toFixed(1)}%）</span></div>
-              <div className="chart-tip-row"><b>${d.revenue.toFixed(2)}</b><span>客户消费</span></div>
-              <div className="chart-tip-row"><b>${d.profit.toFixed(2)}</b><span>利润</span></div>
+              <div className="chart-tip-row"><b>${d.revenue.toFixed(2)}</b><span>{revenueLabel}</span></div>
+              {d.profit !== undefined && <div className="chart-tip-row"><b>${d.profit.toFixed(2)}</b><span>利润</span></div>}
             </div>
           )}
         </div>

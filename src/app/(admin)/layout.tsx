@@ -49,13 +49,16 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             ],
           },
           {
-            title: "订单",
+            title: "美国本地面单",
+            tag: "US",
             items: [
               { href: "/shipments", label: "面单记录", icon: "list" },
               { href: "/adjustments", label: "补差导入", icon: "adjust" },
+              { href: "/coverage", label: "派送范围与价格", icon: "map" },
             ],
           },
-          { title: "系统", items: [{ href: "/coverage", label: "派送范围", icon: "map" }, { href: "/settings", label: "设置", icon: "settings" }] },
+          { title: "国际面单", soon: true, items: [{ href: "#intl", label: "国际下单", icon: "globe" }] },
+          { title: "系统", items: [{ href: "/settings", label: "设置", icon: "settings" }] },
         ]}
       />
       <main className="main">{children}</main>

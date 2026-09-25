@@ -27,7 +27,8 @@ export default async function PortalLayout({ children }: { children: React.React
         groups={[
           { items: [{ href: "/portal", label: "首页", icon: "dashboard", exact: true }] },
           {
-            title: "下单",
+            title: "美国本地面单",
+            tag: "US",
             items: [
               { href: "/portal/ship", label: "单个下单", icon: "ship" },
               { href: "/portal/batch", label: "批量导入", icon: "batch" },
@@ -35,6 +36,7 @@ export default async function PortalLayout({ children }: { children: React.React
               { href: "/portal/shipments", label: "我的面单", icon: "list" },
             ],
           },
+          { title: "国际面单", soon: true, items: [{ href: "#intl", label: "国际下单", icon: "globe" }] },
           {
             title: "账户",
             items: [
