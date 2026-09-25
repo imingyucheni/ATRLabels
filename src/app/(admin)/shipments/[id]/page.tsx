@@ -1,3 +1,4 @@
+import { fmtTime } from "@/lib/time";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getSettings, getShipment, listAdjustments, shipmentProfit } from "@/lib/db";
@@ -24,6 +25,9 @@ function Addr({ a }: { a: Address }) {
     </div>
   );
 }
+
+const NATURE_LABEL: Record<string, string> = { "1": "带磁", "2": "不带磁", "3": "带电", "4": "不带电", "5": "液体" };
+const natureLabel = (v?: string | null) => (v ?? "").split(",").filter(Boolean).map((c) => NATURE_LABEL[c.trim()] ?? c).join("、");
 
 export default async function ShipmentDetail({ params }: { params: Promise<{ id: string }> }) {
   const s = getShipment(Number((await params).id));
@@ -137,7 +141,7 @@ export default async function ShipmentDetail({ params }: { params: Promise<{ id:
             <dt>ShipBest 单号</dt><dd>{s.orderNo ?? "-"}</dd>
             <dt>运单号</dt><dd>{s.trackingNo ?? "-"}</dd>
             <dt>ShipBest 状态</dt><dd>{s.sbStatus ? SB_STATUS[s.sbStatus] ?? s.sbStatus : "-"}</dd>
-            <dt>创建时间</dt><dd>{s.createdAt} UTC</dd>
+            <dt>创建时间</dt><dd>{fmtTime(s.createdAt)}</dd>
             {s.remark && (<><dt>备注</dt><dd>{s.remark}</dd></>)}
           </dl>
         </div>
@@ -151,7 +155,7 @@ export default async function ShipmentDetail({ params }: { params: Promise<{ id:
             <tbody>
               {adjustments.map((a) => (
                 <tr key={a.id}>
-                  <td className="small muted">{a.createdAt}</td>
+                  <td className="small muted">{fmtTime(a.createdAt)}</td>
                   <td><Link href={`/adjustments/${a.batchId}`}>{a.batchFilename}</Link></td>
                   <td className="num">{money(a.costAmount)}</td>
                   <td className="num">{money(a.customerAmount)}</td>
@@ -171,7 +175,7 @@ export default async function ShipmentDetail({ params }: { params: Promise<{ id:
             <tbody>
               {charges.map((l) => (
                 <tr key={l.id}>
-                  <td className="small muted">{l.createdAt}</td>
+                  <td className="small muted">{fmtTime(l.createdAt)}</td>
                   <td>{LEDGER_TYPE_LABEL[l.type]}</td>
                   <td className="small">{l.note}</td>
                   <td className={`num ${l.amount >= 0 ? "profit-pos" : ""}`}>{l.amount >= 0 ? "+" : ""}{money(l.amount)}</td>
@@ -200,7 +204,7 @@ export default async function ShipmentDetail({ params }: { params: Promise<{ id:
             <tbody>
               {s.skuList.map((k, i) => (
                 <tr key={i}>
-                  <td>{k.sku}</td><td>{k.productNameCn} / {k.productNameEn}</td><td>{k.hsCode}</td><td>{k.productNature}</td>
+                  <td>{k.sku}</td><td>{k.productNameCn} / {k.productNameEn}</td><td>{k.hsCode}</td><td>{natureLabel(k.productNature)}</td>
                   <td className="num">{k.quantity}</td><td className="num">{money(k.declaredUnitPrice, k.declaredCurrency)}</td>
                 </tr>
               ))}

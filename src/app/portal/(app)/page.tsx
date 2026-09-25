@@ -1,8 +1,9 @@
+import { fmtTime } from "@/lib/time";
 import Link from "next/link";
 import { requireCustomer } from "@/lib/auth";
 import { getSettings } from "@/lib/db";
 import { listOwnShipments } from "@/lib/portal";
-import { money } from "@/lib/pricing";
+import { money, usd } from "@/lib/pricing";
 import StatusBadge from "@/components/StatusBadge";
 
 function localDate() {
@@ -22,10 +23,10 @@ export default async function PortalHome() {
   return (
     <>
       <h1>你好，{me.name}</h1>
-      {available <= 0 && <div className="alert err">账户余额不足（{money(me.balance)}），需要先 <Link href="/portal/topup">充值</Link> 才能继续下单。</div>}
+      {available <= 0 && <div className="alert err">账户余额不足（{usd(me.balance)}），需要先 <Link href="/portal/topup">充值</Link> 才能继续下单。</div>}
       <div className="stats">
-        <div className="stat"><div className="muted">账户余额</div><div className="v">{money(me.balance)}</div></div>
-        {me.creditLimit > 0 && <div className="stat"><div className="muted">可用额度（含信用额度 {money(me.creditLimit)}）</div><div className="v">{money(available)}</div></div>}
+        <div className="stat"><div className="muted">账户余额</div><div className="v">{usd(me.balance)}</div></div>
+        {me.creditLimit > 0 && <div className="stat"><div className="muted">可用额度（含信用额度 {usd(me.creditLimit)}）</div><div className="v">{usd(available)}</div></div>}
         <div className="stat"><div className="muted">本月面单</div><div className="v">{month.filter((s) => s.status === "labeled").length}</div></div>
         <div className="stat"><div className="muted">本月运费</div><div className="v">{money(monthSpend)}</div></div>
       </div>
@@ -39,7 +40,7 @@ export default async function PortalHome() {
       {attention.length > 0 && (
         <div className="card">
           <h2>处理中 / 需要注意</h2>
-          <table>
+          <table className="list">
             <tbody>
               {attention.map((s) => (
                 <tr key={s.id}>
@@ -56,14 +57,14 @@ export default async function PortalHome() {
 
       <div className="card table-wrap">
         <h2>最近面单</h2>
-        <table>
+        <table className="list">
           <thead><tr><th>时间</th><th>单号</th><th>收件人</th><th>渠道</th><th>运单号</th><th>状态</th><th className="num">运费</th><th>面单</th></tr></thead>
           <tbody>
             {recent.map((s) => (
               <tr key={s.id}>
-                <td className="small muted">{s.createdAt}</td>
+                <td className="small muted">{fmtTime(s.createdAt)}</td>
                 <td><Link href={`/portal/shipments/${s.id}`}>{s.customerRef || s.customNo}</Link></td>
-                <td>{s.recipient.nameFirst} {s.recipient.nameLast}<div className="small muted">{s.recipient.city} {s.recipient.zipCode}</div></td>
+                <td>{s.recipient.nameFirst} {s.recipient.nameLast}<div className="small muted">{s.recipient.city}, {s.recipient.province ?? ""} {s.recipient.zipCode}</div></td>
                 <td>{s.channelName}</td>
                 <td>{s.trackingNo ?? "-"}</td>
                 <td><StatusBadge status={s.status} /></td>

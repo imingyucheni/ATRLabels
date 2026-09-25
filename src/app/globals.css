@@ -338,16 +338,23 @@ tr.best td { background: var(--accent-soft); }
 .login { max-width: 380px; margin: 12vh auto; } /* 兼容旧页面 */
 
 /* ---------------- 响应式 ---------------- */
+.menu-toggle, .mobile-current { display: none; }
 @media (max-width: 1080px) {
   .grid2 { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 900px) {
   .shell { grid-template-columns: minmax(0, 1fr); }
-  .sidebar { position: static; height: auto; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 4px; padding: 10px 12px; border-right: 0; border-bottom: 1px solid var(--line); }
-  .brand { padding: 0 8px 0 0; }
-  .nav-section { display: none; }
-  .nav-item { padding: 6px 9px; }
-  .sidebar-foot { margin: 0; padding: 0; display: flex; gap: 8px; width: 100%; }
+  .sidebar { position: sticky; top: 0; z-index: 20; height: auto; padding: 10px 14px; border-right: 0; border-bottom: 1px solid var(--line); gap: 0; }
+  .brand { padding: 0; margin: 0; display: flex; align-items: center; gap: 10px; }
+  .brand .brand-sub { display: none; }
+  .mobile-current { margin-left: auto; font-size: 13px; color: var(--muted); white-space: nowrap; }
+  .menu-toggle { display: inline-flex; position: relative; align-items: center; justify-content: center; width: 38px; height: 38px; padding: 0; margin-left: 8px; }
+  .menu-dot { position: absolute; top: 7px; right: 7px; width: 7px; height: 7px; border-radius: 50%; background: var(--err); }
+  .sidebar nav, .sidebar .sidebar-foot { display: none; }
+  .sidebar.open nav { display: block; margin-top: 8px; }
+  .sidebar.open .nav-section { display: block; }
+  .sidebar.open .sidebar-foot { display: flex; flex-direction: column; gap: 8px; margin: 10px 0 4px; padding: 0; }
+  .nav-item { padding: 9px 10px; }
   .who-card { flex: 1; }
   .logout { width: auto; }
   .main { padding: 18px 16px 48px; }
@@ -358,3 +365,17 @@ tr.best td { background: var(--accent-soft); }
 }
 
 tr.row-warn > td { background: var(--warn-soft); }
+.nowrap { white-space: nowrap; }
+
+/* 中文文件选择 */
+.file-pick { position: relative; display: inline-flex; align-items: center; gap: 10px; min-width: 0; max-width: 100%; }
+.file-pick input[type="file"] { position: absolute; inset: 0; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
+.file-pick > span { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.file-pick button { flex: none; }
+
+/* 列表表格：单元格不折行（避免中文客户名、按钮被挤成竖排），放不下时横向滚动 */
+table.list td { white-space: nowrap; }
+.sku-table { min-width: 860px; }
+.sku-table td input:not([type="checkbox"]) { min-width: 90px; }
+.review-box { padding: 8px 0; }
+.review-box.reject { border-top: 1px dashed var(--line); }

@@ -1,3 +1,4 @@
+import { fmtTime } from "@/lib/time";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { customerChannelCodes, getCustomer, getSettings, listChannels } from "@/lib/db";
@@ -16,6 +17,9 @@ export default async function CustomerEdit({ params }: { params: Promise<{ id: s
   const ledger = c ? listLedger({ customerId: c.id, limit: 100 }) : [];
   const allChannels = listChannels();
   const opened = new Set(c ? customerChannelCodes(c.id) : []);
+  const g = getSettings().stamp;
+  const onChannels = allChannels.filter((ch) => (ch.stamp?.enabled ?? g.enabled)).map((ch) => ch.name.split(/[-（(]/)[0]);
+  const stampSummary = onChannels.length ? `当前加印：${onChannels.join("、")}` : "当前都不加印";
   const usable = allChannels.filter((ch) => ch.enabled && opened.has(ch.code)).length;
   return (
     <>
@@ -68,7 +72,7 @@ export default async function CustomerEdit({ params }: { params: Promise<{ id: s
           </FlashForm>
 
           <div className="grid2">
-            <FlashForm action={ledgerEntryAction} submitLabel="确认" className="card" resetOnSuccess>
+            <FlashForm action={ledgerEntryAction} submitLabel="确认" className="card" resetOnSuccess confirm="确认提交这笔充值 / 调账？提交后会立即计入客户余额。">
               <h2>充值 / 调账</h2>
               <input type="hidden" name="id" value={c.id} />
               <div className="grid" style={{ marginBottom: 12 }}>
@@ -88,7 +92,7 @@ export default async function CustomerEdit({ params }: { params: Promise<{ id: s
               <FlashForm action={saveCustomerPortalAction} submitLabel="保存登录设置">
                 <input type="hidden" name="id" value={c.id} />
                 <div className="grid" style={{ marginBottom: 12 }}>
-                  <label className="f" style={{ gridColumn: "span 2" }}>登录邮箱<input name="portalEmail" type="email" defaultValue={c.portalEmail ?? ""} /></label>
+                  <label className="f" style={{ gridColumn: "span 2" }}>登录邮箱<input name="portalEmail" type="email" defaultValue={c.portalEmail ?? c.email ?? ""} /></label>
                   <label className="f">信用额度
                     <input name="creditLimit" type="number" step="0.01" min="0" defaultValue={c.creditLimit} />
                   </label>
@@ -98,9 +102,10 @@ export default async function CustomerEdit({ params }: { params: Promise<{ id: s
                 </div>
                 <p className="small muted">信用额度：余额可以透支到负多少。预付客户填 0；月结客户填一个额度。后台代客户下单也按这个额度检查。</p>
               </FlashForm>
+              <div style={{ height: 16 }} />
               <FlashForm action={setCustomerPasswordAction} submitLabel={c.hasPassword ? "重置密码" : "设置密码"} submitClass="">
                 <input type="hidden" name="id" value={c.id} />
-                <label className="f" style={{ marginBottom: 8 }}>新密码（留空自动生成）<input name="password" type="text" autoComplete="off" minLength={8} /></label>
+                <label className="f" style={{ marginBottom: 8 }}>新密码（至少 8 位；留空自动生成）<input name="password" type="text" autoComplete="off" minLength={8} /></label>
               </FlashForm>
               <p className="small muted">客户登录地址：<code>/portal</code></p>
             </div>
@@ -112,7 +117,7 @@ export default async function CustomerEdit({ params }: { params: Promise<{ id: s
             <div className="row" style={{ marginBottom: 12 }}>
               <label className="f" style={{ minWidth: 260 }}>这个客户的面单
                 <select name="stampMode" defaultValue={c.stampMode}>
-                  <option value="inherit">跟随全局设置（{getSettings().stamp.enabled ? "当前：加印" : "当前：不加印"}）</option>
+                  <option value="inherit">跟随系统设置（{stampSummary}）</option>
                   <option value="on">加印 SKU</option>
                   <option value="off">不加印</option>
                 </select>
@@ -139,7 +144,7 @@ export default async function CustomerEdit({ params }: { params: Promise<{ id: s
               <tbody>
                 {ledger.map((l) => (
                   <tr key={l.id}>
-                    <td className="small muted">{l.createdAt}</td>
+                    <td className="small muted">{fmtTime(l.createdAt)}</td>
                     <td>{LEDGER_TYPE_LABEL[l.type]}</td>
                     <td>{l.shipmentId ? <Link href={`/shipments/${l.shipmentId}`}>{l.customNo}</Link> : "-"}</td>
                     <td className="small">{l.note}</td>

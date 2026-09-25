@@ -1,3 +1,4 @@
+import { fmtTime, TZ_LABEL } from "@/lib/time";
 import { currentCustomerId, isLoggedIn } from "@/lib/auth";
 import { csvResponse } from "@/lib/csv";
 import { getCustomer, STATUS_LABEL, type ShipmentStatus } from "@/lib/db";
@@ -20,9 +21,9 @@ export async function GET(req: Request) {
   const t = (k: "freight" | "adjustment" | "refund" | "net") => rows.reduce((a, r) => a + r[k], 0).toFixed(2);
   return csvResponse(
     `扣款明细-${c.name}-${from ?? "开始"}_${to ?? "至今"}.csv`,
-    ["下单时间(UTC)", "我的订单号", "系统单号", "运单号", "渠道", "状态", "运费", "补差", "取消退款", "实际扣款"],
+    [`下单时间(${TZ_LABEL})`, "我的订单号", "系统单号", "运单号", "渠道", "状态", "运费", "补差", "取消退款", "实际扣款"],
     [
-      ...rows.map((r) => [r.createdAt, r.customerRef, r.customNo, r.trackingNo, r.channelName, STATUS_LABEL[r.status as ShipmentStatus] ?? r.status,
+      ...rows.map((r) => [fmtTime(r.createdAt), r.customerRef, r.customNo, r.trackingNo, r.channelName, STATUS_LABEL[r.status as ShipmentStatus] ?? r.status,
         r.freight.toFixed(2), r.adjustment.toFixed(2), r.refund.toFixed(2), r.net.toFixed(2)]),
       [],
       ["合计", `${rows.length} 单`, "", "", "", "", t("freight"), t("adjustment"), t("refund"), t("net")],

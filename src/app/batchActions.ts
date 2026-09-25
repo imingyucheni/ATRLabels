@@ -85,7 +85,7 @@ export async function getBatchJobAction(jobId: number): Promise<{ job?: BatchJob
           rows: job.rows.map((r) => ({
             ...r,
             error: r.error ? publicError(r.error) : null,
-            quotes: r.quotes.map((q) => (q.error ? { ...q, error: publicError(q.error) } : q)),
+            quotes: r.quotes.map(({ cost: _cost, ...q }) => (q.error ? { ...q, error: publicError(q.error) } : q)),
           })),
         };
     return { job: { ...view, balance: c.balance, available: c.balance + c.creditLimit, balanceRule: getSettings().balanceRule } };

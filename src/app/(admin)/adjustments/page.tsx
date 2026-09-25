@@ -1,3 +1,4 @@
+import { fmtTime } from "@/lib/time";
 import Link from "next/link";
 import { ADJUSTMENT_POLICY_LABEL, getSettings, listAdjustmentBatches } from "@/lib/db";
 import { money } from "@/lib/pricing";
@@ -25,7 +26,7 @@ export default async function AdjustmentsPage() {
           <tbody>
             {batches.map((b) => (
               <tr key={b.id}>
-                <td className="small muted">{b.createdAt}</td>
+                <td className="small muted">{fmtTime(b.createdAt)}</td>
                 <td>{b.filename}{b.note && <div className="small muted">{b.note}</div>}</td>
                 <td className="num">{b.rowCount}</td>
                 <td className="num">{b.matchedCount === b.rowCount ? b.matchedCount : <span className="profit-neg">{b.matchedCount}</span>}</td>

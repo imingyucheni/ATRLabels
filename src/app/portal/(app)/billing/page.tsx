@@ -1,9 +1,10 @@
+import { fmtTime } from "@/lib/time";
 import Link from "next/link";
 import { requireCustomer } from "@/lib/auth";
 import { getSettings } from "@/lib/db";
 import { LEDGER_TYPE_LABEL, listLedger, listOrderCharges } from "@/lib/ledger";
 import OrderCharges from "@/components/OrderCharges";
-import { money } from "@/lib/pricing";
+import { money, usd } from "@/lib/pricing";
 import { buildStatement } from "@/lib/statement";
 
 function monthRange(offset = 0) {
@@ -26,10 +27,10 @@ export default async function PortalBilling({ searchParams }: { searchParams: Pr
 
   return (
     <>
-      <h1>账户与账单</h1>
+      <h1>账单与扣款</h1>
       <div className="stats">
-        <div className="stat"><div className="muted">当前余额</div><div className="v">{money(me.balance)}</div></div>
-        {me.creditLimit > 0 && <div className="stat"><div className="muted">信用额度</div><div className="v">{money(me.creditLimit)}</div></div>}
+        <div className="stat"><div className="muted">当前余额</div><div className="v">{usd(me.balance)}</div></div>
+        {me.creditLimit > 0 && <div className="stat"><div className="muted">信用额度</div><div className="v">{usd(me.creditLimit)}</div></div>}
       </div>
       <p className="small muted">通过 <Link href="/portal/topup">充值</Link> 页面用 Zelle 或支付宝付款并提交申请，确认到账后会显示在下方流水中。{supportContact ? `有问题请联系：${supportContact}` : ""}</p>
 
@@ -58,12 +59,12 @@ export default async function PortalBilling({ searchParams }: { searchParams: Pr
           <tbody>
             {ledger.map((l) => (
               <tr key={l.id}>
-                <td className="small muted">{l.createdAt}</td>
+                <td className="small muted">{fmtTime(l.createdAt)}</td>
                 <td>{LEDGER_TYPE_LABEL[l.type]}</td>
                 <td>{l.shipmentId ? <Link href={`/portal/shipments/${l.shipmentId}`}>{l.customNo}</Link> : "-"}</td>
                 <td className="small">{l.note}</td>
                 <td className={`num ${l.amount >= 0 ? "profit-pos" : ""}`}>{l.amount >= 0 ? "+" : ""}{money(l.amount)}</td>
-                <td className="num">{money(l.balanceAfter)}</td>
+                <td className="num">{usd(l.balanceAfter)}</td>
               </tr>
             ))}
             {!ledger.length && <tr><td colSpan={6} className="muted">这个期间没有流水</td></tr>}

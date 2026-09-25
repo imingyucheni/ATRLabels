@@ -12,5 +12,6 @@ services:
     env_file: .env
     environment:
       DATA_DIR: /app/data
+      TZ: America/Los_Angeles
     volumes:
       - ./data:/app/data

@@ -6,6 +6,7 @@ import { importAdjustmentAction, parseAdjustmentFileAction, previewAdjustmentAct
 import type { Mapping, ParsedSheet, Preview } from "@/lib/adjustments";
 import { money } from "@/lib/pricing";
 import { guessColumns as guess } from "@/lib/sheetGuess";
+import FilePick from "@/components/FilePick";
 
 /** 0 -> A, 25 -> Z, 26 -> AA, 51 -> AZ（和 Excel 一致） */
 function colLetter(i: number): string {
@@ -79,7 +80,7 @@ export default function ImportAdjustments() {
     <div className="card">
       <h2>上传补差表格</h2>
       <form action={onFile} className="row">
-        <input type="file" name="file" accept=".xlsx,.csv" required style={{ maxWidth: 360 }} />
+        <FilePick name="file" accept=".xlsx,.csv" required />
         <button disabled={busy}>{busy && !sheet ? "读取中…" : "读取表格"}</button>
         <span className="small muted">支持 .xlsx / .csv（旧版 .xls 请先另存为 .xlsx）</span>
       </form>

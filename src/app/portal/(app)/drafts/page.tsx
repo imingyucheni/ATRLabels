@@ -34,7 +34,7 @@ export default async function DraftsPage() {
         return (
           <section className="card table-wrap" key={j.job_id}>
             <div className="card-head">
-              <h2>批次 #{j.job_id} · {j.filename}</h2>
+              <h2>{j.filename || "批量导入"}</h2>
               <Link className="btn small primary" href={`/portal/batch?job=${j.job_id}`}>选渠道 / 提交 / 删除 →</Link>
             </div>
             <table>

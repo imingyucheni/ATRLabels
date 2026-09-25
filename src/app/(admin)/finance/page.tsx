@@ -1,3 +1,4 @@
+import { fmtTime } from "@/lib/time";
 import Link from "next/link";
 import { listCustomers } from "@/lib/db";
 import { LEDGER_TYPE_LABEL, listLedger } from "@/lib/ledger";
@@ -35,25 +36,29 @@ export default async function FinancePage({ searchParams }: { searchParams: Prom
             <tbody>
               {pending.map((t) => (
                 <tr key={t.id}>
-                  <td className="muted">{t.id}<div className="small">{t.createdAt}</div></td>
+                  <td className="muted">{t.id}<div className="small">{fmtTime(t.createdAt)}</div></td>
                   <td><Link href={`/customers/${t.customerId}`}>{t.customerName}</Link></td>
                   <td>{TOPUP_METHOD_LABEL[t.method]}</td>
                   <td className="num">{money(t.amountUsd)}</td>
-                  <td className="num"><b>{t.payCurrency === "CNY" ? `¥${t.payAmount.toFixed(2)}` : `$${t.payAmount.toFixed(2)}`}</b>{t.fxRate && <div className="small muted">实时 {t.fxLive} + 加点 = {t.fxRate}</div>}</td>
+                  <td className="num"><b>{t.payCurrency === "CNY" ? `¥${t.payAmount.toFixed(2)}` : `$${t.payAmount.toFixed(2)}`}</b>{t.fxRate && <div className="small muted">实时 {t.fxLive} + 加点 {t.fxLive ? (t.fxRate - t.fxLive).toFixed(4).replace(/0+$/, "") : "-"} = {t.fxRate}</div>}</td>
                   <td className="small">{t.reference}{t.note && <div className="muted">{t.note}</div>}</td>
                   <td>{t.hasProof ? <a href={`/api/topup/${t.id}/proof`} target="_blank">查看</a> : <span className="muted small">无</span>}</td>
-                  <td style={{ minWidth: 260 }}>
-                    <FlashForm action={approveTopupAction} submitLabel="确认到账" submitClass="primary small" confirm="确认已收到这笔款项并入账？">
-                      <input type="hidden" name="id" value={t.id} />
-                      <div className="row" style={{ gap: 6, marginBottom: 6 }}>
-                        <label className="f" style={{ width: 110 }}>入账美元<input name="creditedUsd" type="number" step="0.01" defaultValue={t.amountUsd} /></label>
-                        <label className="f" style={{ flex: 1 }}>备注<input name="adminNote" maxLength={200} /></label>
-                      </div>
-                    </FlashForm>
-                    <FlashForm action={rejectTopupAction} submitLabel="不通过" submitClass="danger small" className="row">
-                      <input type="hidden" name="id" value={t.id} />
-                      <input name="adminNote" placeholder="原因（客户可见）" maxLength={200} style={{ flex: 1 }} />
-                    </FlashForm>
+                  <td style={{ minWidth: 300 }}>
+                    <div className="review-box">
+                      <FlashForm action={approveTopupAction} submitLabel="确认到账" submitClass="primary small" confirm="确认已收到这笔款项并入账？">
+                        <input type="hidden" name="id" value={t.id} />
+                        <div className="row" style={{ gap: 6, marginBottom: 6 }}>
+                          <label className="f" style={{ width: 110 }}>入账美元<input name="creditedUsd" type="number" step="0.01" min="0.01" defaultValue={t.amountUsd} /></label>
+                          <label className="f" style={{ flex: 1 }}>入账备注（写进流水）<input name="adminNote" maxLength={200} /></label>
+                        </div>
+                      </FlashForm>
+                    </div>
+                    <div className="review-box reject">
+                      <FlashForm action={rejectTopupAction} submitLabel="不通过" submitClass="danger small" confirm="确认不通过这笔充值申请？客户会看到原因。">
+                        <input type="hidden" name="id" value={t.id} />
+                        <label className="f" style={{ marginBottom: 6 }}>不通过原因（客户可见）<input name="adminNote" maxLength={200} required /></label>
+                      </FlashForm>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -69,7 +74,7 @@ export default async function FinancePage({ searchParams }: { searchParams: Prom
                 {handled.map((t) => (
                   <tr key={t.id}>
                     <td className="muted">{t.id}</td>
-                    <td className="small muted">{t.handledAt}</td>
+                    <td className="small muted">{fmtTime(t.handledAt)}</td>
                     <td>{t.customerName}</td>
                     <td className="small">{TOPUP_METHOD_LABEL[t.method]}</td>
                     <td className="num">{t.payCurrency === "CNY" ? `¥${t.payAmount.toFixed(2)}` : `$${t.payAmount.toFixed(2)}`}</td>
@@ -120,7 +125,7 @@ export default async function FinancePage({ searchParams }: { searchParams: Prom
           <tbody>
             {ledger.map((l) => (
               <tr key={l.id}>
-                <td className="small muted">{l.createdAt}</td>
+                <td className="small muted">{fmtTime(l.createdAt)}</td>
                 <td><Link href={`/customers/${l.customerId}`}>{l.customerName}</Link></td>
                 <td>{LEDGER_TYPE_LABEL[l.type]}</td>
                 <td>{l.shipmentId ? <Link href={`/shipments/${l.shipmentId}`}>{l.customNo}</Link> : "-"}</td>

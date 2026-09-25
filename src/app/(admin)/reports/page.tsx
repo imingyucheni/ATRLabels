@@ -34,8 +34,10 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const sp = await searchParams;
   const presets = presetRanges();
   const preset = presets.find((p) => p.key === (sp.range ?? (sp.from ? "" : "30d")));
-  const from = preset?.from ?? sp.from ?? presets[2].from;
-  const to = preset?.to ?? sp.to ?? localDate();
+  let from = preset?.from ?? sp.from ?? presets[2].from;
+  let to = preset?.to ?? sp.to ?? localDate();
+  // 开始日期晚于结束日期时自动对调
+  if (from > to) [from, to] = [to, from];
   const customerId = Number(sp.customerId) || undefined;
   const customer = customerId ? getCustomer(customerId) : null;
   const r = buildReport(from, to, customerId);
@@ -82,12 +84,12 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       </div>
 
       <div className="kpis">
-        <Kpi label="订单" value={String(t.orders)} now={t.orders} prev={r.previous.orders} />
+        <Kpi label={t.cancelled ? `订单（另取消 ${t.cancelled} 单）` : "订单"} value={String(t.orders)} now={t.orders} prev={r.previous.orders} />
         <Kpi label="客户消费" value={money(t.revenue)} now={t.revenue} prev={r.previous.revenue} isMoney />
         <Kpi label="成本（ShipBest）" value={money(t.cost)} now={t.cost} prev={r.previous.cost} isMoney />
         <Kpi label="利润" value={money(t.profit)} now={t.profit} prev={r.previous.profit} isMoney />
         <Kpi label="利润率" value={`${(margin * 100).toFixed(1)}%`} now={margin} prev={prevMargin} />
-        <Kpi label="充值到账" value={money(r.topups)} now={r.topups} hint={t.cancelled ? `取消 ${t.cancelled} 单` : "期间内确认的充值"} />
+        <Kpi label="充值到账" value={money(r.topups)} now={r.topups} hint="期间内确认到账的充值" />
       </div>
 
       <div className="grid2">

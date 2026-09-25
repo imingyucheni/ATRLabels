@@ -96,6 +96,8 @@ User=atr
 WorkingDirectory=$APP_DIR
 EnvironmentFile=$ENV_FILE
 Environment=NODE_ENV=production
+# 报表按美西日期统计，和页面显示的时间一致
+Environment=TZ=America/Los_Angeles
 Environment=PORT=3000
 ExecStart=/usr/bin/npx next start -p 3000
 Restart=always

@@ -13,13 +13,13 @@ import {
   requireCustomer,
   verifyPassword,
 } from "@/lib/auth";
-import { getCustomerLogin, getPasswordHash, setCustomerPassword, setCustomerSender, setLabelNote } from "@/lib/db";
+import { getCustomerLogin, getPasswordHash, getSettings, setCustomerPassword, setCustomerSender, setLabelNote } from "@/lib/db";
 import { InsufficientBalanceError } from "@/lib/ledger";
 import { ownsShipment, publicError, toPublicQuote, type PublicQuote } from "@/lib/portal";
 import { cleanAddress, cleanRequest, n, str } from "@/lib/sanitize";
 import { createLabel, PriceChangedError, quoteAll, refreshShipment, validateRequest } from "@/lib/service";
 import { ShipBestError } from "@/lib/shipbest/client";
-import { createTopup } from "@/lib/topup";
+import { createTopup, getTopup } from "@/lib/topup";
 import { requestReset, resetWithToken } from "@/lib/passwordReset";
 import type { Address, ShipmentRequest } from "@/lib/shipbest/types";
 import type { FlashState } from "@/app/actions";
@@ -161,9 +161,12 @@ export async function portalTopupAction(_: FlashState, fd: FormData): Promise<Fl
       reference: str(fd.get("reference"), 100),
       note: str(fd.get("note"), 300),
       proof: file instanceof File && file.size ? Buffer.from(await file.arrayBuffer()) : null,
+      quotedRate: n(fd.get("quotedRate")) || null,
     });
     revalidatePath("/portal/topup");
-    return { ok: `充值申请 #${id} 已提交，我们确认到账后会自动加到账户余额。` };
+    const t = getTopup(id);
+    const paid = t && t.payCurrency === "CNY" ? `（¥${t.payAmount.toFixed(2)}，汇率 ${t.fxRate}）` : "";
+    return { ok: `充值申请 #${id} 已提交${paid}，我们确认到账后会加到账户余额。` };
   } catch (e) {
     return { error: (e as Error).message };
   }
@@ -184,7 +187,9 @@ export async function portalForgotAction(_: unknown, fd: FormData) {
   return {
     ok: r.emailed
       ? "如果这个邮箱已开通账号，我们已发送重置密码的链接，请在 1 小时内查收邮件。"
-      : "已收到你的申请，客服会尽快为你重置密码并联系你。",
+      : `已收到你的申请。客服会在工作时间内（一般 1 个工作日内）为你重置密码，并通过你登记的联系方式告知新密码。${
+          getSettings().supportContact ? `着急的话可以直接联系：${getSettings().supportContact}` : ""
+        }`,
   };
 }
 

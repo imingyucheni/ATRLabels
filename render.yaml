@@ -15,6 +15,8 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "22"
+      - key: TZ
+        value: America/Los_Angeles
       - key: DATA_DIR
         value: /var/data
       - key: SESSION_SECRET

@@ -1,3 +1,4 @@
+import { fmtDate, fmtTime } from "@/lib/time";
 import Link from "next/link";
 import { requireCustomer } from "@/lib/auth";
 import { listOwnAdjustments } from "@/lib/portal";
@@ -23,7 +24,7 @@ export default async function PortalAdjustments() {
           <span className="muted">下载明细（含尺寸、结算重量、预报重量、重量差、分区）：</span>
           {batches.map((b) => {
             const first = rows.find((r) => r.batchId === b)!;
-            return <a key={b} className="btn small" href={`/api/adjustments/${b}/export`}>{first.createdAt.slice(0, 10)} 批次</a>;
+            return <a key={b} className="btn small" href={`/api/adjustments/${b}/export`}>{fmtDate(first.createdAt)} 批次</a>;
           })}
         </div>
       )}
@@ -33,7 +34,7 @@ export default async function PortalAdjustments() {
           <tbody>
             {rows.map((r) => (
               <tr key={r.id}>
-                <td className="small muted">{r.createdAt}</td>
+                <td className="small muted">{fmtTime(r.createdAt)}</td>
                 <td><Link href={`/portal/shipments/${r.shipmentId}`}>{r.customNo}</Link></td>
                 <td>{r.trackingNo}</td>
                 <td className="small">{r.reason}</td>

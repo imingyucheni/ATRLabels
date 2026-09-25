@@ -1,3 +1,4 @@
+import { fmtTime } from "@/lib/time";
 import Link from "next/link";
 import type { OrderCharge } from "@/lib/ledger";
 import { STATUS_LABEL, type ShipmentStatus } from "@/lib/db";
@@ -23,7 +24,7 @@ export default function OrderCharges({ rows, linkBase, exportHref }: { rows: Ord
         <tbody>
           {rows.map((r) => (
             <tr key={r.shipmentId}>
-              <td className="small muted">{r.createdAt}</td>
+              <td className="small muted">{fmtTime(r.createdAt)}</td>
               <td><Link href={`${linkBase}/${r.shipmentId}`}>{r.customerRef || r.customNo}</Link>{r.customerRef && <div className="small muted">{r.customNo}</div>}</td>
               <td>{r.trackingNo ?? "-"}</td>
               <td>{r.channelName}</td>

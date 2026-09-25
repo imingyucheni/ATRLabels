@@ -159,8 +159,12 @@ describe("模拟模式完整流程", () => {
     const custId = db.saveCustomer(null, { name: "批量客户", contact: null, phone: null, email: null, note: null, markup: {} });
     db.setCustomerChannels(custId, db.listChannels().map((c) => c.code));
 
-    // 1) 系统模板本身可以直接上传：3 行示例 = 2 单（A1001 两个 SKU）
-    const tplRows = await readSheetRows("t.xlsx", await batch.buildTemplate(req.sender), "first");
+    // 0) 下载的模板第一个工作表只有表头，原样上传不会下单
+    const blank = batch.parseOrders(await readSheetRows("t.xlsx", await batch.buildTemplate(req.sender), "first"), null);
+    expect(blank.error).toContain("没有订单数据");
+
+    // 1) 示例格式可以直接上传：3 行示例 = 2 单（A1001 两个 SKU）
+    const tplRows = await readSheetRows("t.xlsx", await batch.buildTemplate(req.sender, { examplesInFirstSheet: true }), "first");
     const t = batch.parseOrders(tplRows, null);
     expect(t.error).toBeUndefined();
     expect(t.orders.map((o) => o.customerRef)).toEqual(["A1001", "A1002"]);
@@ -271,7 +275,7 @@ describe("模拟模式完整流程", () => {
     db.saveSettings({ balanceRule: "cover" });
     const custId = db.saveCustomer(null, { name: "余额客户", contact: null, phone: null, email: null, note: null, markup: {} });
     db.setCustomerChannels(custId, db.listChannels().map((c) => c.code));
-    const rows = await readSheetRows("t.xlsx", await batch.buildTemplate(req.sender), "first");
+    const rows = await readSheetRows("t.xlsx", await batch.buildTemplate(req.sender, { examplesInFirstSheet: true }), "first");
     const jobId = batch.createJob({ customerId: custId, createdBy: "admin", filename: "t.xlsx", channels: ["LP10210030"], pickMode: "cheapest", orders: batch.parseOrders(rows, null).orders });
     batch.ensureRunning(jobId);
     let job = await wait(jobId, ["ready"]);

@@ -35,6 +35,12 @@ export function computePrice(cost: number, rule: MarkupRule, roundingStep = 0.01
   return roundUp(Math.max(marked, floor), roundingStep);
 }
 
+/** 美元金额（余额等）：“$200.00” / “-$4.18” */
+export function usd(v: number | null | undefined): string {
+  if (v === null || v === undefined || Number.isNaN(v)) return "-";
+  return `${v < 0 ? "-" : ""}$${Math.abs(v).toFixed(2)}`;
+}
+
 export function money(v: number | null | undefined, currency = ""): string {
   if (v === null || v === undefined || Number.isNaN(v)) return "-";
   return `${v.toFixed(2)}${currency ? " " + currency : ""}`;

@@ -1,3 +1,4 @@
+import { fmtTime } from "@/lib/time";
 import Link from "next/link";
 import { listCustomers, listShipments, shipmentCost, shipmentProfit, shipmentReceivable, STATUS_LABEL } from "@/lib/db";
 import { money } from "@/lib/pricing";
@@ -60,7 +61,7 @@ export default async function ShipmentsPage({ searchParams }: { searchParams: Pr
       </div>
 
       <div className="card table-wrap">
-        <table>
+        <table className="list">
           <thead>
             <tr>
               <th>时间</th><th>单号</th><th>客户</th><th>收件人</th><th>渠道</th><th>运单号</th><th>状态</th>
@@ -70,10 +71,10 @@ export default async function ShipmentsPage({ searchParams }: { searchParams: Pr
           <tbody>
             {rows.map((s) => (
               <tr key={s.id}>
-                <td className="small muted">{s.createdAt}</td>
+                <td className="small muted">{fmtTime(s.createdAt)}</td>
                 <td><Link href={`/shipments/${s.id}`}>{s.customNo}</Link></td>
                 <td>{s.customerName}</td>
-                <td>{s.recipient.nameFirst} {s.recipient.nameLast}<div className="small muted">{s.recipient.city}, {s.recipient.country} {s.recipient.zipCode}</div></td>
+                <td>{s.recipient.nameFirst} {s.recipient.nameLast}<div className="small muted">{s.recipient.city}, {s.recipient.province ?? s.recipient.country} {s.recipient.zipCode}</div></td>
                 <td>{s.channelName}</td>
                 <td>{s.trackingNo ?? "-"}</td>
                 <td><StatusBadge status={s.status} /></td>
@@ -88,7 +89,7 @@ export default async function ShipmentsPage({ searchParams }: { searchParams: Pr
           </tbody>
         </table>
       </div>
-      <p className="small muted">时间为 UTC；成本优先显示 ShipBest 实扣（预报价），没有实扣时显示试算成本。合计已包含官方账单补差和取消费。</p>
+      <p className="small muted">时间为美西时间；成本优先显示 ShipBest 实扣（预报价），没有实扣时显示试算成本。合计已包含官方账单补差和取消费。</p>
     </>
   );
 }

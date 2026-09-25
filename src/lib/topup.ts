@@ -66,6 +66,8 @@ export async function createTopup(input: {
   reference?: string;
   note?: string;
   proof?: Buffer | null;
+  /** 客户付款时页面上显示的汇率：和当前汇率相差不超过 1.5% 时按它计算（客户是按页面金额付的款） */
+  quotedRate?: number | null;
 }): Promise<number> {
   if (!getCustomer(input.customerId)) throw new Error("客户不存在");
   const amount = Math.round(input.amountUsd * 100) / 100;
@@ -78,8 +80,9 @@ export async function createTopup(input: {
     // 服务器按当前汇率重新计算应付人民币，不信任页面传来的金额
     const q = await usdCnyQuote();
     fxLive = q.live;
-    fxRate = q.rate;
-    payAmount = cnyToPay(amount, q.rate);
+    const shown = input.quotedRate && Number.isFinite(input.quotedRate) ? input.quotedRate : null;
+    fxRate = shown && Math.abs(shown - q.rate) / q.rate <= 0.015 ? shown : q.rate;
+    payAmount = cnyToPay(amount, fxRate);
     payCurrency = "CNY";
   }
   const proof = input.proof?.length ? { buf: input.proof, ...checkImage(input.proof) } : null;
@@ -142,7 +145,9 @@ export function approveTopup(id: number, creditedUsd: number, adminNote: string 
       customerId: t.customerId,
       type: "topup",
       amount,
-      note: `充值申请 #${t.id} · ${pay}${t.reference ? ` · 参考号 ${t.reference}` : ""}`,
+      note: `充值申请 #${t.id} · ${pay}${Math.abs(amount - t.amountUsd) > 0.005 ? ` · 申请 $${t.amountUsd.toFixed(2)}，实际入账 $${amount.toFixed(2)}` : ""}${
+        t.reference ? ` · 参考号 ${t.reference}` : ""
+      }${adminNote ? ` · ${adminNote}` : ""}`,
       createdBy: "admin",
     });
     db()

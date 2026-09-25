@@ -23,10 +23,13 @@ export const SHIPBEST_HEADERS = [
   "申报总金额", "申报总数量",
 ];
 
-export async function buildTemplate(sender?: Address | null): Promise<Buffer> {
+export async function buildTemplate(sender?: Address | null, opts: { examplesInFirstSheet?: boolean } = {}): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
+  // 第一个工作表只有表头：客户直接填写，忘了删示例也不会误下单；示例放在单独的工作表
   const ws = wb.addWorksheet("导入模板");
   ws.addRow(SHIPBEST_HEADERS);
+  const ex = opts.examplesInFirstSheet ? ws : wb.addWorksheet("示例（不会导入）");
+  if (ex !== ws) ex.addRow(SHIPBEST_HEADERS);
   const s = sender;
   const senderCols = s
     ? [s.nameLast, s.nameFirst, s.phone ?? "", s.country, s.province ?? "", s.city, s.area ?? "", s.zipCode, s.email ?? "", s.address1, s.address2 ?? "", s.corporateName ?? "", "", "", ""]
@@ -34,9 +37,13 @@ export async function buildTemplate(sender?: Address | null): Promise<Buffer> {
   const recip = (last: string, first: string, phone: string, st: string, city: string, zip: string, a1: string, a2 = "") =>
     [last, first, phone, "US", st, city, "", zip, "", a1, a2, "", "", "", ""];
   // 示例：A1001 两个 SKU（第二行自定义单号留空），A1002 一个 SKU
-  ws.addRow(["A1001", "", "不需要", "", "不需要", 25, 20, 10, 900, "cm/g", "", "TS-001", "T恤", "T-shirt", 2, 8, 300, "cm/g", "", "", "", "610910", "", ...recip("Doe", "John", "512-555-0100", "TX", "Austin", "78701", "500 Congress Ave"), ...senderCols]);
-  ws.addRow(["", "", "", "", "", "", "", "", "", "", "", "CAP-02", "帽子", "Cap", 1, 5, 150, "cm/g"]);
-  ws.addRow(["A1002", "", "不需要", "", "不需要", 12, 9, 5, 3.5, "in/lb", "", "BAG-01", "背包", "Backpack", 1, 20, 3.5, "in/lb", "", "", "", "", "", ...recip("Smith", "Mary", "213-555-0199", "CA", "Los Angeles", "90001", "123 Main St", "Apt 4"), ...senderCols]);
+  ex.addRow(["A1001", "", "不需要", "", "不需要", 25, 20, 10, 900, "cm/g", "", "TS-001", "T恤", "T-shirt", 2, 8, 300, "cm/g", "", "", "", "610910", "", ...recip("Doe", "John", "512-555-0100", "TX", "Austin", "78701", "500 Congress Ave"), ...senderCols]);
+  ex.addRow(["", "", "", "", "", "", "", "", "", "", "", "CAP-02", "帽子", "Cap", 1, 5, 150, "cm/g"]);
+  ex.addRow(["A1002", "", "不需要", "", "不需要", 12, 9, 5, 3.5, "in/lb", "", "BAG-01", "背包", "Backpack", 1, 20, 3.5, "in/lb", "", "", "", "", "", ...recip("Smith", "Mary", "213-555-0199", "CA", "Los Angeles", "90001", "123 Main St", "Apt 4"), ...senderCols]);
+  if (ex !== ws) {
+    ex.getRow(1).font = { bold: true };
+    ex.columns.forEach((c) => (c.width = 14));
+  }
   ws.getRow(1).font = { bold: true };
   ws.columns.forEach((c) => (c.width = 14));
 
@@ -49,7 +56,7 @@ export async function buildTemplate(sender?: Address | null): Promise<Buffer> {
     ["保险 / 签名", "保险服务：需要 / 不需要；签名服务：不需要 / 直接签名 / 间接签名 / 成人签名。"],
     ["寄件人", "寄件人各列可以留空，留空时使用账户里的默认寄件地址。"],
     ["商品性质", "1 带磁 2 不带磁 3 带电 4 不带电 5 液体，多个用逗号分隔；留空默认 2,4。"],
-    ["示例", "“导入模板”里的 3 行是示例（2 个订单），请删除后填写自己的订单。"],
+    ["示例", "“示例”工作表里有 2 个订单的填写示例（不会被导入）。请在第一个工作表“导入模板”里填写自己的订单。"],
   ];
   help.addRow(["项目", "说明"]).font = { bold: true };
   notes.forEach((n) => help.addRow(n));
@@ -253,6 +260,8 @@ export interface RowQuote {
   currency?: string;
   zone?: string | null;
   error?: string;
+  /** 我们的成本（只给后台看，客户端会去掉） */
+  cost?: number;
 }
 
 /** cheapest = 每单选最便宜；file = 优先用表格里的物流产品 */
@@ -338,11 +347,11 @@ function duplicateWarning(customerId: number, ref: string, jobId: number): strin
   if (s) return `订单号 ${ref} 已经出过面单（${s.tracking_no ?? s.custom_no}，${s.created_at.slice(0, 10)}），可能是重复导入，默认不提交`;
   const r = db()
     .prepare(
-      `SELECT j.id FROM batch_job_rows r JOIN batch_jobs j ON j.id = r.job_id
+      `SELECT j.id, j.filename, j.created_at FROM batch_job_rows r JOIN batch_jobs j ON j.id = r.job_id
        WHERE j.customer_id = ? AND r.customer_ref = ? AND r.job_id <> ? AND r.status IN ('pending', 'quoted') LIMIT 1`,
     )
-    .get(customerId, ref, jobId) as { id: number } | undefined;
-  if (r) return `订单号 ${ref} 在批次 #${r.id} 里还没提交，可能是重复导入，默认不提交`;
+    .get(customerId, ref, jobId) as { id: number; filename: string | null; created_at: string } | undefined;
+  if (r) return `订单号 ${ref} 在另一个未提交的批次里（${r.filename ?? "批量导入"}，${r.created_at.slice(0, 10)}），可能是重复导入，默认不提交`;
   return null;
 }
 
@@ -601,7 +610,7 @@ async function quoteJob(jobId: number) {
       try {
         const q = await quoteChannel(job.customerId, code, req);
         quotes.push(q.ok
-          ? { code, name: q.channelName, ok: true, price: q.price!, currency: q.currency, zone: q.zone ?? null }
+          ? { code, name: q.channelName, ok: true, price: q.price!, currency: q.currency, zone: q.zone ?? null, cost: q.cost }
           : { code, name: q.channelName, ok: false, error: q.error });
       } catch (e) {
         quotes.push({ code, name: getChannel(code)?.name ?? code, ok: false, error: (e as Error).message });

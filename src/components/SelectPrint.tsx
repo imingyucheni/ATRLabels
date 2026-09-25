@@ -34,7 +34,7 @@ export default function SelectPrint({
         </a>
         <span className="small muted">勾选已出面单的记录，合并成一个 4×6 PDF 打印</span>
       </div>
-      <table>
+      <table className="list">
         <thead>
           <tr>
             <th style={{ width: 32 }}>

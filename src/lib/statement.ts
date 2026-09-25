@@ -1,9 +1,11 @@
+import { fmtTime } from "./time";
 import { getCustomer, listAdjustments, listShipments, STATUS_LABEL } from "./db";
 
 export interface StatementLine {
   date: string;
   type: "面单" | "取消" | "补差";
   ref: string;
+  customerRef: string;
   trackingNo: string;
   detail: string;
   amount: number;
@@ -23,9 +25,10 @@ export function buildStatement(customerId: number, from?: string, to?: string) {
     if (s.status === "exception") continue;
     const cancelled = s.status === "cancelled";
     lines.push({
-      date: s.createdAt,
+      date: fmtTime(s.createdAt),
       type: cancelled ? "取消" : "面单",
       ref: s.customNo,
+      customerRef: s.customerRef ?? "",
       trackingNo: s.trackingNo ?? "",
       detail: `${s.channelName ?? ""} · ${s.recipient.city} ${s.recipient.zipCode}${s.status !== "labeled" ? ` · ${STATUS_LABEL[s.status]}` : ""}${cancelled ? `（原价 ${s.price.toFixed(2)}，已退 ${(s.refundAmount ?? 0).toFixed(2)}）` : ""}`,
       amount: cancelled ? s.cancelFee ?? 0 : s.price,
@@ -35,9 +38,10 @@ export function buildStatement(customerId: number, from?: string, to?: string) {
   for (const a of listAdjustments({ customerId, from, to })) {
     if (!a.shipmentId || a.customerAmount === 0) continue;
     lines.push({
-      date: a.createdAt,
+      date: fmtTime(a.createdAt),
       type: "补差",
       ref: a.customNo ?? a.matchKey,
+      customerRef: "",
       trackingNo: a.trackingNo ?? "",
       detail: `${a.customerAmount > 0 ? "补收" : "退还"}${a.reason ? ` · ${a.reason}` : ""}`,
       amount: a.customerAmount,

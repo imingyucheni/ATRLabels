@@ -1,3 +1,4 @@
+import { fmtTime } from "@/lib/time";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireCustomer } from "@/lib/auth";
@@ -103,7 +104,7 @@ export default async function PortalShipmentDetail({ params }: { params: Promise
             )}
             {s.adjustment !== 0 && (<><dt>账单补差</dt><dd>{money(s.adjustment, s.currency)}</dd></>)}
             <dt>系统单号</dt><dd>{s.customNo}</dd>
-            <dt>下单时间</dt><dd>{s.createdAt} UTC</dd>
+            <dt>下单时间</dt><dd>{fmtTime(s.createdAt)}</dd>
             {s.remark && (<><dt>备注</dt><dd>{s.remark}</dd></>)}
           </dl>
           {adjustments.length > 0 && (
@@ -129,7 +130,7 @@ export default async function PortalShipmentDetail({ params }: { params: Promise
             <tbody>
               {charges.map((l) => (
                 <tr key={l.id}>
-                  <td className="small muted">{l.createdAt}</td>
+                  <td className="small muted">{fmtTime(l.createdAt)}</td>
                   <td>{LEDGER_TYPE_LABEL[l.type]}</td>
                   <td className="small">{l.note}</td>
                   <td className={`num ${l.amount >= 0 ? "profit-pos" : ""}`}>{l.amount >= 0 ? "+" : ""}{money(l.amount)}</td>

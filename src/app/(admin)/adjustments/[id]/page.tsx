@@ -1,3 +1,4 @@
+import { fmtTime } from "@/lib/time";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ADJUSTMENT_POLICY_LABEL, getAdjustmentBatch, listAdjustments } from "@/lib/db";
@@ -28,7 +29,7 @@ export default async function BatchPage({ params }: { params: Promise<{ id: stri
         <Link href="/adjustments">← 返回</Link>
       </div>
       <div className="stats">
-        <div className="stat"><div className="muted">导入时间</div><div>{b.createdAt} UTC</div></div>
+        <div className="stat"><div className="muted">导入时间</div><div>{fmtTime(b.createdAt)}</div></div>
         <div className="stat"><div className="muted">ShipBest 补差合计</div><div className="v">{money(b.costTotal)}</div></div>
         <div className="stat"><div className="muted">向客户补收/退合计</div><div className="v">{money(b.customerTotal)}</div></div>
         <div className="stat"><div className="muted">已匹配 / 总行数</div><div className="v">{b.matchedCount} / {b.rowCount}</div></div>

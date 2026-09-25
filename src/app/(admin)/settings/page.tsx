@@ -8,6 +8,7 @@ import FlashForm from "@/components/FlashForm";
 import RuleInputs from "@/components/RuleInputs";
 import { refreshFxAction, saveChannelsAction, savePaymentSettingsAction, saveSettingsAction, syncChannelsAction, verifyAction } from "@/app/actions";
 import { cnyToPay, usdCnyQuote } from "@/lib/fx";
+import FilePick from "@/components/FilePick";
 
 export default async function SettingsPage() {
   const s = getSettings();
@@ -119,7 +120,7 @@ export default async function SettingsPage() {
         </div>
         <div className="grid" style={{ marginTop: 10 }}>
           <label className="f" style={{ gridColumn: "span 2" }}>支付宝收款码图片（PNG / JPG，可选）{s.alipayQr ? "：已上传，重新选择可替换" : ""}
-            <input type="file" name="alipayQr" accept=".png,.jpg,.jpeg" />
+            <FilePick name="alipayQr" accept=".png,.jpg,.jpeg" />
           </label>
           {s.alipayQr && (
             // eslint-disable-next-line @next/next/no-img-element

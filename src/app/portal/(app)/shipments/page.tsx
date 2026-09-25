@@ -1,3 +1,4 @@
+import { fmtTime } from "@/lib/time";
 import Link from "next/link";
 import { requireCustomer } from "@/lib/auth";
 import { STATUS_LABEL } from "@/lib/db";
@@ -34,9 +35,9 @@ export default async function PortalShipments({ searchParams }: { searchParams: 
           id: s.id,
           hasLabel: s.hasLabel,
           cells: [
-            <span key="t" className="small muted">{s.createdAt}</span>,
+            <span key="t" className="small muted">{fmtTime(s.createdAt)}</span>,
             <Link key="n" href={`/portal/shipments/${s.id}`}>{s.customerRef || s.customNo}</Link>,
-            <span key="r">{s.recipient.nameFirst} {s.recipient.nameLast}<div className="small muted">{s.recipient.city}, {s.recipient.country} {s.recipient.zipCode}</div></span>,
+            <span key="r">{s.recipient.nameFirst} {s.recipient.nameLast}<div className="small muted">{s.recipient.city}, {s.recipient.province ?? s.recipient.country} {s.recipient.zipCode}</div></span>,
             s.channelName,
             s.trackingNo ?? "-",
             <StatusBadge key="s" status={s.status} />,

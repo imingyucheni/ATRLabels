@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect, useRef, useState, startTransition } from "react";
 import { portalTopupAction } from "@/app/portal/actions";
+import FilePick from "@/components/FilePick";
 
 export default function TopupForm(props: {
   rate: number;
@@ -32,6 +33,7 @@ export default function TopupForm(props: {
         e.preventDefault();
         const fd = new FormData(e.currentTarget);
         fd.set("method", method);
+        fd.set("quotedRate", String(props.rate));
         startTransition(() => action(fd));
       }}
     >
@@ -52,17 +54,21 @@ export default function TopupForm(props: {
           {method === "alipay" ? (
             <div className="alert warn">
               当前汇率 <b>{props.rate}</b>（{props.rateNote}）<br />
-              充值 {usd ? `$${usd.toFixed(2)}` : "…"} 需支付 <b style={{ fontSize: 18 }}>¥{usd ? cny.toFixed(2) : "—"}</b>
-              <div className="small">汇率随实时汇率变动，以提交时的金额为准。</div>
+              {usd ? (
+                <>充值 ${usd.toFixed(2)} 需支付 <b style={{ fontSize: 18 }}>¥{cny.toFixed(2)}</b></>
+              ) : (
+                <>填写充值金额后显示需要支付的人民币金额</>
+              )}
+              <div className="small">请按这里显示的金额付款，付款后提交申请即按这个汇率入账。页面打开超过 1 小时请先刷新再付款。</div>
             </div>
           ) : (
-            <div className="alert warn">请通过 Zelle 转账 <b>{usd ? `$${usd.toFixed(2)}` : "…"}</b>，到账后按美元金额加到余额。</div>
+            <div className="alert warn">{usd ? <>请通过 Zelle 转账 <b>${usd.toFixed(2)}</b>，到账后按美元金额加到余额。</> : "填写充值金额后，通过 Zelle 转账相同的美元金额。"}</div>
           )}
           <label className="f" style={{ marginBottom: 10 }}>
             {method === "zelle" ? "Zelle 转账参考号 / 付款人姓名" : "支付宝订单号 / 付款人姓名"}
             <input name="reference" maxLength={100} />
           </label>
-          <label className="f" style={{ marginBottom: 10 }}>付款截图（建议上传，PNG / JPG / PDF，5MB 以内）<input name="proof" type="file" accept=".png,.jpg,.jpeg,.pdf" /></label>
+          <label className="f" style={{ marginBottom: 10 }}>付款截图（建议上传，PNG / JPG / PDF，5MB 以内）<FilePick name="proof" accept=".png,.jpg,.jpeg,.pdf" /></label>
           <label className="f" style={{ marginBottom: 12 }}>备注<input name="note" maxLength={300} /></label>
           <button className="primary" disabled={pending}>{pending ? "提交中…" : "我已付款，提交充值申请"}</button>
         </div>

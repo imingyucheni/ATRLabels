@@ -16,6 +16,7 @@ import {
 } from "@/app/batchActions";
 import { JOB_STATUS_LABEL } from "@/lib/batchLabels";
 import { money } from "@/lib/pricing";
+import FilePick from "@/components/FilePick";
 
 const ROW_STATUS: Record<string, [string, string]> = {
   pending: ["试算中", "pending"],
@@ -44,7 +45,7 @@ export default function BatchOrders(props: {
   const [onlyAvailable, setOnlyAvailable] = useState(true);
   const [requoteSet, setRequoteSet] = useState<Set<string>>(new Set());
   const [bulkChannel, setBulkChannel] = useState("");
-  const [custId, setCustId] = useState<number | undefined>(props.customers?.[0]?.id);
+  const [custId, setCustId] = useState<number | undefined>(undefined);
   const channelsOf = (id?: number) =>
     props.mode === "admin" ? props.customers?.find((c) => c.id === id)?.channels ?? [] : props.channels ?? [];
   const uploadChannels = channelsOf(custId);
@@ -116,7 +117,7 @@ export default function BatchOrders(props: {
           </a>
         </div>
         <ol className="small muted" style={{ paddingLeft: 18, marginTop: 0 }}>
-          <li>使用 <b>ShipBest 导单模板</b>：原来在 ShipBest 后台用的表格可以直接上传，也可以点右上角下载模板（已预填你的寄件地址，含填写说明）。</li>
+          <li>使用 <b>ShipBest 导单模板</b>：原来在 ShipBest 后台用的表格可以直接上传，也可以点右上角下载模板（含填写说明和示例）。寄件人各列留空时，使用{props.mode === "portal" ? "账户设置里的默认寄件地址" : "客户的默认寄件地址"}。</li>
           <li>系统用下面勾选的渠道逐单试算，每单列出各渠道价格，默认选最便宜的，可以逐单修改。</li>
           <li>确认后勾选订单“提交订单”，完成后一键合并打印全部 4×6 面单。</li>
         </ol>
@@ -125,6 +126,7 @@ export default function BatchOrders(props: {
             {props.mode === "admin" && (
               <label className="f"><span className="req">客户</span>
                 <select name="customerId" required value={custId ?? ""} onChange={(e) => setCustId(Number(e.target.value))}>
+                  <option value="" disabled>请选择客户</option>
                   {props.customers?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </label>
@@ -136,7 +138,7 @@ export default function BatchOrders(props: {
               </select>
             </label>
             <label className="f" style={{ gridColumn: "span 2" }}><span className="req">文件（.xlsx / .csv）</span>
-              <input type="file" name="file" accept=".xlsx,.csv" required />
+              <FilePick name="file" accept=".xlsx,.csv" required />
             </label>
           </div>
           <div>
@@ -147,7 +149,7 @@ export default function BatchOrders(props: {
               ))}
               {!uploadChannels.length && (
                 <span className="small" style={{ color: "var(--warn)" }}>
-                  {props.mode === "admin" ? "这个客户还没有开通任何渠道，请先到“客户”详情里开通。" : "您的账户还没有开通物流渠道，请联系客服开通。"}
+                  {props.mode === "admin" ? (custId ? "这个客户还没有开通任何渠道，请先到“客户”详情里开通。" : "请先选择客户。") : "您的账户还没有开通物流渠道，请联系客服开通。"}
                 </span>
               )}
             </div>
@@ -192,7 +194,7 @@ export default function BatchOrders(props: {
       <div className="card">
         <div className="row" style={{ justifyContent: "space-between" }}>
           <h2 style={{ margin: 0 }}>
-            批次 #{job.id} · {job.filename}{props.mode === "admin" ? ` · ${job.customerName}` : ""} ·{" "}
+            {props.mode === "admin" ? `批次 #${job.id} · ` : "批次 · "}{job.filename}{props.mode === "admin" ? ` · ${job.customerName}` : ""} ·{" "}
             <span className={`badge ${job.status === "done" ? "labeled" : working ? "pending" : ""}`}>{JOB_STATUS_LABEL[job.status]}</span>
           </h2>
           <a href={props.basePath}>＋ 导入新的订单</a>
@@ -362,7 +364,12 @@ export default function BatchOrders(props: {
                               />{" "}
                               {q.name}{q.zone ? <span className="muted"> · {q.zone}</span> : null}
                             </span>
-                            <b>{q.ok ? money(q.price, q.currency ?? "") : "不可用"}</b>
+                            <span className="nowrap">
+                              {q.ok && props.mode === "admin" && q.cost !== undefined && (
+                                <span className="muted" title="成本 / 利润">{money(q.cost)} · <span className={q.price! - q.cost < 0 ? "profit-neg" : ""}>+{(q.price! - q.cost).toFixed(2)}</span>{" "}</span>
+                              )}
+                              <b>{q.ok ? money(q.price, q.currency ?? "") : "不可用"}</b>
+                            </span>
                           </label>
                         ))}
                         {onlyAvailable && r.quotes.some((q) => !q.ok) && (

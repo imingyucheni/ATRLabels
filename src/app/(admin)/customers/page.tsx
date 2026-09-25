@@ -1,3 +1,4 @@
+import { fmtTime } from "@/lib/time";
 import Link from "next/link";
 import { customerChannels, getSettings, listCustomers } from "@/lib/db";
 import { money } from "@/lib/pricing";
@@ -21,7 +22,7 @@ export default async function CustomersPage() {
               {resets.map((r) => (
                 <tr key={r.id}>
                   <td>{r.name}<div className="small muted">{r.portal_email}</div></td>
-                  <td className="small muted">{r.created_at} UTC</td>
+                  <td className="small muted">{fmtTime(r.created_at)}</td>
                   <td style={{ width: 380 }}>
                     <FlashForm action={handleResetRequestAction} submitLabel="生成新密码" submitClass="small" confirm="为这个客户生成新密码？旧密码会失效。">
                       <input type="hidden" name="id" value={r.id} />

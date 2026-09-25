@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { saveChannelStampAction, saveStampAction, uploadChannelSampleAction } from "@/app/actions";
 import type { StampOverride, StampSettings as Global } from "@/lib/stampConfig";
+import FilePick from "@/components/FilePick";
 
 type Field = "x" | "y" | "fontSize" | "maxWidth" | "rotate";
 /** 4×6 英寸面单上的合理范围 */
@@ -158,7 +159,7 @@ export default function StampSettings({ global, channels }: { global: Global; ch
                     });
                   }}
                 >
-                  <input type="file" name="file" accept=".pdf,.png,.jpg,.jpeg" required style={{ maxWidth: 260 }} />
+                  <FilePick name="file" accept=".pdf,.png,.jpg,.jpeg" required />
                   <button className="small" disabled={busy}>上传</button>
                 </form>
               </div>

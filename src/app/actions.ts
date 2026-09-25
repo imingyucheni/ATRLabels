@@ -256,7 +256,7 @@ export async function ledgerEntryAction(_: FlashState, fd: FormData): Promise<Fl
   const id = Number(fd.get("id"));
   const type = fd.get("type") === "manual" ? "manual" : "topup";
   const amount = optNum(fd.get("amount"));
-  if (!amount) return { error: "请填写金额" };
+  if (!amount) return { error: fd.get("amount") ? "金额不能为 0" : "请填写金额" };
   if (type === "topup" && amount < 0) return { error: "充值金额必须为正数；扣款请选“手动调账”并填负数" };
   const note = str(fd.get("note"), 200) || null;
   if (type === "manual" && !note) return { error: "手动调账请填写说明" };

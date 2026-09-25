@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import {
-  BarChart3, CreditCard, FileSpreadsheet, FileText, LayoutDashboard, LogOut, PackagePlus, Receipt, Scale, Settings,
+  BarChart3, Menu, X, CreditCard, FileSpreadsheet, FileText, LayoutDashboard, LogOut, PackagePlus, Receipt, Scale, Settings,
   Truck, Upload, UserCog, Users, Wallet,
 } from "lucide-react";
 
@@ -30,15 +31,24 @@ export default function Sidebar(props: {
   const match = (i: NavItem) => (i.exact ? path === i.href : path === i.href || path.startsWith(i.href + "/"));
   const active = all.filter(match).sort((a, b) => b.href.length - a.href.length)[0]?.href;
   const initials = props.brand.replace(/[^A-Za-z]/g, "").slice(0, 3).toUpperCase() || props.brand.slice(0, 2);
+  // 手机上菜单默认收起，点右上角按钮展开；切换页面后自动收起
+  const [open, setOpen] = useState(false);
+  useEffect(() => setOpen(false), [path]);
+  const current = all.find((i) => i.href === active);
 
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar ${open ? "open" : ""}`}>
       <div className="brand">
         <div className="brand-mark">{initials}</div>
         <div>
           <div className="brand-name">{props.brand}</div>
           <div className="brand-sub">{props.brandSub}</div>
         </div>
+        {current && <span className="mobile-current">{current.label}</span>}
+        <button type="button" className="menu-toggle" aria-label={open ? "收起菜单" : "展开菜单"} aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+          {open ? <X size={18} /> : <Menu size={18} />}
+          {!open && all.some((i) => i.count) && <span className="menu-dot" />}
+        </button>
       </div>
       {props.groups.map((g, gi) => (
         <nav key={gi} aria-label={g.title}>

@@ -1,6 +1,6 @@
 import { requireCustomer } from "@/lib/auth";
 import { getSettings } from "@/lib/db";
-import { money } from "@/lib/pricing";
+import { money, usd } from "@/lib/pricing";
 import Sidebar from "@/components/Sidebar";
 import { listDraftRows } from "@/lib/batch";
 import { portalLogoutAction } from "../actions";
@@ -21,7 +21,7 @@ export default async function PortalLayout({ children }: { children: React.React
         brand={brandName}
         brandSub="客户中心"
         logout={portalLogoutAction}
-        who={{ name: me.name, balance: money(me.balance), negative: me.balance < 0 }}
+        who={{ name: me.name, balance: usd(me.balance), negative: me.balance < 0 }}
         groups={[
           { items: [{ href: "/portal", label: "首页", icon: "dashboard", exact: true }] },
           {

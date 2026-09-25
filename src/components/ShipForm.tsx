@@ -47,9 +47,10 @@ export default function ShipForm(props: {
   const router = useRouter();
   const portal = props.mode === "portal";
   const customers = props.customers ?? [];
-  const [customerId, setCustomerId] = useState<number>(props.defaultCustomerId ?? customers[0]?.id ?? 0);
+  // 后台默认不选客户，避免替错客户下单
+  const [customerId, setCustomerId] = useState<number>(props.defaultCustomerId ?? 0);
   const [customerRef, setCustomerRef] = useState("");
-  const initialCustomer = customers.find((c) => c.id === (props.defaultCustomerId ?? customers[0]?.id));
+  const initialCustomer = customers.find((c) => c.id === props.defaultCustomerId);
   const [sender, setSender] = useState<Partial<Address>>(initialCustomer?.sender ?? props.defaultSender ?? {});
   const [editSender, setEditSender] = useState(!props.defaultSender);
   const [recipient, setRecipient] = useState<Partial<Address>>({ country: "US" });
@@ -171,6 +172,7 @@ export default function ShipForm(props: {
                   setSender(c?.sender ?? props.defaultSender ?? {});
                 }}
               >
+                <option value={0} disabled>请选择客户</option>
                 {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
               {(() => {
@@ -178,7 +180,9 @@ export default function ShipForm(props: {
                 return (
                   <>
                     {c?.balance !== undefined && (
-                      <span className={`small ${c.available! <= 0 ? "profit-neg" : "muted"}`}>余额 {money(c.balance)} · 可用 {money(c.available)}</span>
+                      <span className={`small ${c.available! <= 0 ? "profit-neg" : "muted"}`}>
+                        余额 {money(c.balance)} · 可用 {money(c.available)}{c.available! <= 0 ? " · 余额不足，需先充值才能出单" : ""}
+                      </span>
                     )}
                     {c?.channelCount === 0 && (
                       <span className="small" style={{ color: "var(--warn)" }}>未开通任何渠道，请先到 <a href={`/customers/${c.id}#channels`}>客户详情</a> 开通</span>
@@ -262,7 +266,7 @@ export default function ShipForm(props: {
 
         <h3>商品明细（报关用）</h3>
         <div className="table-wrap">
-          <table>
+          <table className="sku-table">
             <thead>
               <tr><th>SKU *</th><th>中文品名 *</th><th>英文品名 *</th><th>数量 *</th><th>申报单价 *</th><th>海关编码</th><th>商品性质 *</th><th></th></tr>
             </thead>
@@ -284,7 +288,12 @@ export default function ShipForm(props: {
                             type="checkbox"
                             checked={set.has(code)}
                             onChange={(e) => {
-                              e.target.checked ? set.add(code) : set.delete(code);
+                              // 带磁/不带磁、带电/不带电 互斥
+                              const opposite: Record<string, string> = { "1": "2", "2": "1", "3": "4", "4": "3" };
+                              if (e.target.checked) {
+                                set.add(code);
+                                if (opposite[code]) set.delete(opposite[code]);
+                              } else set.delete(code);
                               setSku(i, { productNature: [...set].sort().join(",") });
                             }}
                           /> {label}
@@ -309,7 +318,7 @@ export default function ShipForm(props: {
         <div className="row" style={{ justifyContent: "space-between", marginBottom: quotes ? 12 : 0 }}>
           <h2 style={{ margin: 0 }}>报价</h2>
           <button className="primary" onClick={onQuote} disabled={quoting || (!portal && !customerId)}>
-            {quoting ? "试算中…" : quotes ? "重新试算" : "试算所有渠道"}
+            {quoting ? "查询中…" : quotes ? "重新查询运费" : "查询运费"}
           </button>
         </div>
         {notice && <div className="alert warn">{notice}</div>}

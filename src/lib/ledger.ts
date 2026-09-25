@@ -38,6 +38,25 @@ export function balanceOf(customerId: number): number {
   return round2(r.b);
 }
 
+/** 某天开始前（不含）/ 某天结束时（含）的余额；日期按服务器本地时间 */
+export function balanceAt(customerId: number, opts: { before?: string; through?: string }): number {
+  const where = opts.before ? "AND date(created_at, 'localtime') < ?" : opts.through ? "AND date(created_at, 'localtime') <= ?" : "";
+  const args = opts.before ? [opts.before] : opts.through ? [opts.through] : [];
+  const r = db().prepare(`SELECT COALESCE(SUM(amount), 0) AS b FROM ledger WHERE customer_id = ? ${where}`).get(customerId, ...args) as { b: number };
+  return round2(r.b);
+}
+
+/** 期间内的充值合计 */
+export function topupsBetween(customerId: number, from?: string, to?: string): number {
+  const r = db()
+    .prepare(
+      `SELECT COALESCE(SUM(amount), 0) AS b FROM ledger WHERE customer_id = ? AND type = 'topup'
+       ${from ? "AND date(created_at, 'localtime') >= @from" : ""} ${to ? "AND date(created_at, 'localtime') <= @to" : ""}`,
+    )
+    .get(customerId, ...(from || to ? [{ from, to }] : [])) as { b: number };
+  return round2(r.b);
+}
+
 export function addLedger(e: {
   customerId: number;
   type: LedgerType;
