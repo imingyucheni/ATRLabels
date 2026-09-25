@@ -36,6 +36,13 @@ if ! command -v node >/dev/null || [ "$(node -v | cut -d. -f1 | tr -d v)" -lt 20
 fi
 node -v
 
+# 小内存服务器构建时容易内存不足：内存小于 3G 且没有交换空间时，自动加 2G 交换空间
+if [ "$(awk '/MemTotal/{print int($2/1024)}' /proc/meminfo)" -lt 3000 ] && ! swapon --show | grep -q .; then
+  say "添加 2G 交换空间"
+  fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile
+  grep -q '^/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+fi
+
 say "下载 / 更新代码"
 if [ -d "$APP_DIR/.git" ]; then
   git -C "$APP_DIR" fetch origin "$BRANCH" && git -C "$APP_DIR" checkout -B "$BRANCH" "origin/$BRANCH"
