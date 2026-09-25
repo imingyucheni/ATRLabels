@@ -68,7 +68,8 @@ export default function BatchOrders(props: {
   const [busy, start] = useTransition();
   const [onlyProblems, setOnlyProblems] = useState(false);
   // 和 ShipBest 一样：默认只显示能送达（可下单）的渠道
-  const [onlyAvailable, setOnlyAvailable] = useState(true);
+  // 默认显示全部渠道：送不到的也列出来（灰色、不能选、显示原因）
+  const [onlyAvailable, setOnlyAvailable] = useState(false);
   const [requoteSet, setRequoteSet] = useState<Set<string>>(new Set());
   const [bulkChannel, setBulkChannel] = useState("");
   const [custId, setCustId] = useState<number | undefined>(undefined);
@@ -371,12 +372,12 @@ export default function BatchOrders(props: {
                       <span><ChannelLabel code={r.channelCode} name={r.channelName} /> <b>{r.price !== null ? money(r.price, r.currency ?? "") : ""}</b></span>
                     ) : r.quotes.length ? (
                       <div style={{ display: "grid", gap: 2 }}>
-                        {r.quotes.filter((q) => q.ok || !onlyAvailable).map((q) => (
+                        {[...r.quotes].sort((a, b) => (a.ok === b.ok ? (a.price ?? 0) - (b.price ?? 0) : a.ok ? -1 : 1)).filter((q) => q.ok || !onlyAvailable).map((q) => (
                           <label
                             key={q.code}
                             className="small"
                             title={q.ok ? "" : tr(q.error)}
-                            style={{ display: "flex", justifyContent: "space-between", gap: 12, opacity: q.ok ? 1 : 0.5, cursor: rowEditable && q.ok ? "pointer" : "default" }}
+                            style={{ display: "flex", justifyContent: "space-between", gap: 12, opacity: q.ok ? 1 : 0.6, cursor: rowEditable && q.ok ? "pointer" : "default" }}
                           >
                             <span>
                               <input
@@ -395,7 +396,7 @@ export default function BatchOrders(props: {
                               {q.ok && props.mode === "admin" && q.cost !== undefined && (
                                 <span className="muted" title={t("成本 / 利润")}>{money(q.cost)} · <span className={q.price! - q.cost < 0 ? "profit-neg" : ""}>+{(q.price! - q.cost).toFixed(2)}</span>{" "}</span>
                               )}
-                              <b style={q.ok ? undefined : { color: "var(--muted)", fontWeight: 500 }}>{q.ok ? money(q.price, q.currency ?? "") : uncovered(q.error) ? t("地址未覆盖") : t("不可用")}</b>
+                              <b style={q.ok ? undefined : { color: "var(--err)", fontWeight: 500 }}>{q.ok ? money(q.price, q.currency ?? "") : uncovered(q.error) ? t("地址未覆盖") : t("不可用")}</b>
                             </span>
                           </label>
                         ))}

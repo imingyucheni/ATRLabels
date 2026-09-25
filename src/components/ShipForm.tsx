@@ -94,7 +94,8 @@ export default function ShipForm(props: {
   const [remark, setRemark] = useState("");
 
   const [quotes, setQuotes] = useState<Quote[] | null>(null);
-  const [onlyAvailable, setOnlyAvailable] = useState(true);
+  // 默认显示全部渠道：送不到的也列出来（灰色、不能选、显示原因）
+  const [onlyAvailable, setOnlyAvailable] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
   const [quoting, startQuote] = useTransition();
@@ -492,8 +493,8 @@ export default function ShipForm(props: {
                       )}
                     </tr>
                   ) : (
-                    <tr key={q.channelCode}>
-                      <td><ChannelLabel code={q.channelCode} name={q.channelName} /></td>
+                    <tr key={q.channelCode} className="row-disabled">
+                      <td><ChannelLabel code={q.channelCode} name={q.channelName} size="md" /></td>
                       <td colSpan={portal ? 3 : 6} className="small" style={{ color: "var(--err)" }}>
                         <b>{/不通邮|派送范围|未覆盖/.test(q.error ?? "") ? t("地址未覆盖") : t("不可用")}</b>
                         {q.error && !/^地址未覆盖/.test(q.error) ? `${t("：")}${tm(q.error)}` : q.error ? `${t("：")}${tm(q.error.replace(/^地址未覆盖：/, ""))}` : ""}

@@ -597,3 +597,6 @@ button.accent-outline:hover, .btn.accent-outline:hover { background: var(--accen
 .carrier-mark img { height: 100%; width: auto; max-width: 96px; object-fit: contain; display: block; }
 .carrier-mark.sm img { max-width: 64px; }
 .carrier-text { font-weight: 800; font-size: 11px; letter-spacing: 0.02em; white-space: nowrap; }
+
+/* 送不到的渠道：整行变淡、不能选 */
+tr.row-disabled td:first-child { opacity: 0.55; }
