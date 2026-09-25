@@ -138,10 +138,17 @@ export function parseAmount(raw: string): number | null {
   return Math.round((neg ? -n : n) * 100) / 100;
 }
 
+/**
+ * 向客户补收 / 退还的金额。
+ * with_markup：按该单下单时的加价百分比（不含每单固定加价和最低利润，那部分下单时已收过）。
+ * 补收向上取到分（0.063 → 0.07），退款舍去零头（-0.063 → -0.06），避免小额补差被四舍五入吃掉加价。
+ */
 export function customerAmountFor(costAmount: number, policy: AdjustmentPolicy, rule: MarkupRule): number {
   if (policy === "none") return 0;
-  if (policy === "with_markup") return Math.round(costAmount * (1 + rule.percent / 100) * 100) / 100;
-  return costAmount;
+  if (policy === "at_cost") return costAmount;
+  // 先按万分之一分取整，去掉浮点误差（0.2 * 1.05 = 0.21000000000000002）
+  const cents = Math.round(costAmount * (1 + rule.percent / 100) * 100 * 1e4) / 1e4;
+  return (cents >= 0 ? Math.ceil(cents) : -Math.floor(-cents)) / 100;
 }
 
 /* ---------------- 预览 / 导入 ---------------- */
@@ -163,6 +170,8 @@ export interface PreviewRow {
   rawAmount: string;
   costAmount: number | null;
   customerAmount: number | null;
+  /** 转嫁时用的加价百分比 */
+  markupPercent: number | null;
   reason: string;
   shipmentId: number | null;
   customNo: string | null;
@@ -204,6 +213,7 @@ export function buildPreview(rows: string[][], m: Mapping): Preview {
       rawAmount,
       costAmount: null,
       customerAmount: null,
+      markupPercent: null,
       reason,
       shipmentId: null,
       customNo: null,
@@ -227,6 +237,7 @@ export function buildPreview(rows: string[][], m: Mapping): Preview {
         row.customerId = s.customerId;
         row.customerName = s.customerName;
         row.customerAmount = customerAmountFor(row.costAmount, policy, s.rule);
+        row.markupPercent = policy === "with_markup" ? s.rule.percent : null;
         row.possibleDuplicate = listAdjustments({ shipmentId: s.id }).some((a) => Math.abs(a.costAmount - row.costAmount!) < 0.005);
       }
     }

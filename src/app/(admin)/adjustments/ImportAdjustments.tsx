@@ -175,7 +175,7 @@ export default function ImportAdjustments() {
                       {r.error ? <span className="profit-neg">{r.error}</span> : r.shipmentId ? <>{r.customNo}<div className="small muted">{r.customerName}</div></> : <span className="profit-neg">未找到面单</span>}
                       {r.possibleDuplicate && <div className="small" style={{ color: "var(--warn)" }}>⚠ 该单已有相同金额的补差，可能重复</div>}
                     </td>
-                    <td className="num">{money(r.customerAmount)}</td>
+                    <td className="num">{money(r.customerAmount)}{r.markupPercent !== null && <div className="small muted">+{r.markupPercent}%</div>}</td>
                     <td className="small">{r.reason}</td>
                   </tr>
                 ))}

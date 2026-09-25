@@ -96,7 +96,8 @@ describe("模拟模式完整流程", () => {
     const preview = adj.buildPreview(sheet.rows, mapping);
     expect(preview.rows.length).toBe(2); // 合计行被跳过
     expect(preview.unmatched).toBe(1);
-    expect(preview.byCustomer).toEqual([{ customerId: custId, customerName: "补差客户", count: 1, costTotal: 1.25, customerTotal: 1.25 }]);
+    expect(preview.byCustomer).toEqual([{ customerId: custId, customerName: "补差客户", count: 1, costTotal: 1.25, customerTotal: 1.32 }]); // 默认按加价比例：1.25 × 1.05 = 1.3125 → 1.32
+    expect(preview.rows.find((r) => r.shipmentId)!.markupPercent).toBe(5);
 
     const batchId = adj.importAdjustments("bill.xlsx", sheet.rows, mapping, null);
     expect(() => adj.importAdjustments("bill.xlsx", sheet.rows, mapping, null)).toThrow(/已经导入过/);
@@ -106,12 +107,12 @@ describe("模拟模式完整流程", () => {
 
     const after = db.getShipment(id)!;
     expect(after.costAdj).toBe(1.25);
-    expect(after.customerAdj).toBe(1.25);
-    expect(db.shipmentProfit(after)).toBeCloseTo(s.price - s.actualCost!, 2); // 按原金额转嫁，利润不变
+    expect(after.customerAdj).toBe(1.32);
+    expect(db.shipmentProfit(after)).toBeCloseTo(s.price - s.actualCost! + 0.07, 2); // 补差也赚加价部分
 
     const st = buildStatement(custId)!;
-    expect(st.totals.adjustments).toBe(1.25);
-    expect(st.totals.total).toBeCloseTo(s.price + 1.25, 2);
+    expect(st.totals.adjustments).toBe(1.32);
+    expect(st.totals.total).toBeCloseTo(s.price + 1.32, 2);
 
     // 再次预览会提示可能重复
     const again = adj.buildPreview(sheet.rows, mapping);

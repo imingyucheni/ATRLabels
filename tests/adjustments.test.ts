@@ -58,6 +58,14 @@ describe("补差表格解析", () => {
     expect(customerAmountFor(2, "at_cost", rule)).toBe(2);
     expect(customerAmountFor(2, "with_markup", rule)).toBe(2.2);
     expect(customerAmountFor(-2, "with_markup", rule)).toBe(-2.2);
+    const five = { percent: 5, fixed: 0.5, minProfit: 1 };
+    // 补收 0.06，加价 5% → 0.063 → 向上取到 0.07
+    expect(customerAmountFor(0.06, "with_markup", five)).toBe(0.07);
+    // 刚好整分的不因浮点误差多进一分
+    expect(customerAmountFor(0.2, "with_markup", five)).toBe(0.21);
+    expect(customerAmountFor(1.08, "with_markup", five)).toBe(1.14);
+    // 退款舍去零头
+    expect(customerAmountFor(-0.06, "with_markup", five)).toBe(-0.06);
     expect(customerAmountFor(2, "none", rule)).toBe(0);
   });
 

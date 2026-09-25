@@ -135,15 +135,15 @@ export interface Settings {
 }
 
 /**
+ * with_markup 按该单下单时的加价比例转嫁（默认）
  * at_cost 按原金额转嫁（补多少收多少，退多少退多少）
- * with_markup 按该单的加价比例转嫁
  * none 不转嫁，由我们承担/享有
  */
 export type AdjustmentPolicy = "at_cost" | "with_markup" | "none";
 
 export const ADJUSTMENT_POLICY_LABEL: Record<AdjustmentPolicy, string> = {
+  with_markup: "按该单加价比例转嫁给客户（例如补收 0.06、加价 5% → 客户补 0.07）",
   at_cost: "按原金额转嫁给客户",
-  with_markup: "按该单加价比例转嫁给客户",
   none: "不转嫁（我们自己承担/享有）",
 };
 
@@ -155,7 +155,7 @@ const DEFAULT_SETTINGS: Settings = {
   defaultUnit: 3,
   defaultCurrency: "USD",
   sender: null,
-  adjustmentPolicy: "at_cost",
+  adjustmentPolicy: "with_markup",
 };
 
 export function getSettings(): Settings {
