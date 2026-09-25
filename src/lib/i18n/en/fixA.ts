@@ -1,4 +1,9 @@
 export const fixA: Record<string, string> = {
+  "测试环境 · 这里的订单、充值、余额都是测试数据，和正式数据完全分开；切回“正式”模式就是真实数据": "Test environment · orders, top-ups and balances here are test data, fully separate from live data; switch back to Live mode for real data",
+  "模拟和沙盒模式使用单独的测试数据（第一次切换时复制正式环境的客户、渠道和设置，订单、充值、余额从零开始），测试时的操作不会进入正式数据。": "Demo and Sandbox modes use separate test data (customers, services and settings are copied from live the first time; orders, top-ups and balances start empty). Nothing done while testing reaches your live data.",
+  "用正式数据重置测试环境": "Reset test environment from live data",
+  "清空所有测试订单、充值和余额，并重新复制正式环境的客户、渠道和设置？": "Clear all test orders, top-ups and balances and copy customers, services and settings from live again?",
+  "测试环境已重置：客户、渠道、设置已从正式数据重新复制，测试订单、充值和余额已清空": "Test environment reset: customers, services and settings copied from live; test orders, top-ups and balances cleared",
   "充值到账 / 未通过": "Top-up received / declined",
   "余额不足提醒": "Low balance alert",
   "面单异常": "Label problems",

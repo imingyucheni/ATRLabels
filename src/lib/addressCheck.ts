@@ -7,7 +7,7 @@
  * - 模拟模式下（没填密钥）用简单规则模拟，方便演示和测试。
  */
 import crypto from "node:crypto";
-import { db, getSettings } from "./db";
+import { db, getSettings, liveDb } from "./db";
 import { isMockMode } from "./shipbest/client";
 import type { Address } from "./shipbest/types";
 
@@ -61,7 +61,8 @@ export function addrConfig() {
 const month = () => new Date().toISOString().slice(0, 7);
 
 function usageConn() {
-  const c = db();
+  // 用量记在正式数据库里：测试环境查的也算在同一个每月上限里（同一个 Google 密钥）
+  const c = liveDb();
   c.exec("CREATE TABLE IF NOT EXISTS address_usage (month TEXT NOT NULL, provider TEXT NOT NULL, count INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (month, provider))");
   return c;
 }

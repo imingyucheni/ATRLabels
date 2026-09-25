@@ -6,8 +6,60 @@ import { DEFAULT_STAMP, presetForChannel, type StampOverride, type StampSettings
 import type { MarkupRule, PartialRule } from "./pricing";
 import type { Address, PackageInfo, SkuItem, UnitSystem } from "./shipbest/types";
 
-export function dataDir() {
+/**
+ * 数据目录。正式环境和测试环境（模拟 / 沙盒模式）的数据完全分开：
+ * - 正式：DATA_DIR/atrlabels.db（以及面单、充值凭证等文件）
+ * - 测试：DATA_DIR/test/ 下面一整套（第一次切到测试模式时从正式数据复制客户、渠道、设置，订单和流水清空）
+ * 当前模式记在 DATA_DIR/env.json（不在数据库里，因为要先知道模式才知道打开哪个数据库）。
+ */
+export function rootDir() {
   return path.resolve(/*turbopackIgnore: true*/ process.env.DATA_DIR || "./data");
+}
+
+export type StoredMode = "mock" | "sandbox" | "live";
+let modeCache: { mode: StoredMode | null; at: number } | null = null;
+
+/** 界面上选的接口模式（env.json）；还没有时从老数据的设置里读出来并保存 */
+export function storedMode(): StoredMode | null {
+  if (modeCache && Date.now() - modeCache.at < 2000) return modeCache.mode;
+  let mode: StoredMode | null = null;
+  const file = path.join(rootDir(), "env.json");
+  try {
+    const m = JSON.parse(fs.readFileSync(file, "utf8")).mode;
+    if (m === "mock" || m === "sandbox" || m === "live") mode = m;
+  } catch {
+    // 老版本：模式存在正式数据库的设置里
+    try {
+      const r = liveDb().prepare("SELECT value FROM settings WHERE key = 'shipbest'").get() as { value: string } | undefined;
+      const m = r ? JSON.parse(r.value).mode : null;
+      if (m === "mock" || m === "sandbox" || m === "live") {
+        mode = m;
+        fs.writeFileSync(file, JSON.stringify({ mode }));
+      }
+    } catch {
+      mode = null;
+    }
+  }
+  modeCache = { mode, at: Date.now() };
+  return mode;
+}
+
+export function setStoredMode(mode: StoredMode) {
+  fs.mkdirSync(rootDir(), { recursive: true });
+  fs.writeFileSync(path.join(rootDir(), "env.json"), JSON.stringify({ mode }));
+  modeCache = null;
+}
+
+/** 当前用的是正式数据还是测试数据 */
+export function currentEnv(): "live" | "test" {
+  // 单库运行（测试用例、沙盒站自己就是一整套独立数据）
+  if (process.env.ATR_SINGLE_DB === "1" || process.env.APP_ENV === "sandbox" || process.env.DB_FILE) return "live";
+  const m = storedMode();
+  return m === "mock" || m === "sandbox" ? "test" : "live";
+}
+
+export function dataDir() {
+  return currentEnv() === "test" ? path.join(rootDir(), "test") : rootDir();
 }
 
 const SCHEMA = `
@@ -250,21 +302,68 @@ function migrate(conn: Database.Database) {
   }
 }
 
-const g = globalThis as unknown as { __db?: Database.Database };
+const g = globalThis as unknown as { __dbs?: Record<string, Database.Database> };
+
+function open(file: string) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const conn = new Database(file);
+  conn.pragma("journal_mode = WAL");
+  conn.pragma("foreign_keys = ON");
+  conn.exec(SCHEMA);
+  migrate(conn);
+  return conn;
+}
+
+const LIVE_FILE = () => process.env.DB_FILE || path.join(rootDir(), "atrlabels.db");
+const TEST_FILE = () => path.join(rootDir(), "test", "atrlabels.db");
+
+/** 正式环境的数据库（不管当前模式） */
+export function liveDb(): Database.Database {
+  g.__dbs ??= {};
+  if (!g.__dbs.live) {
+    const conn = open(LIVE_FILE());
+    if (process.env.DEMO_SEED === "1") seedDemo(conn);
+    g.__dbs.live = conn;
+  }
+  return g.__dbs.live;
+}
+
+/** 测试环境的数据库：没有时从正式数据复制一份，清空订单、流水、充值、补差 */
+function testDb(): Database.Database {
+  g.__dbs ??= {};
+  if (!g.__dbs.test) {
+    const file = TEST_FILE();
+    if (!fs.existsSync(file)) {
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      liveDb().exec(`VACUUM INTO '${file.replace(/'/g, "''")}'`);
+      const conn = open(file);
+      conn.transaction(() => {
+        for (const t of ["adjustments", "adjustment_batches", "ledger", "topup_requests", "batch_job_rows", "batch_jobs", "shipments", "password_resets"]) conn.exec(`DELETE FROM ${t}`);
+        for (const t of ["mock_orders", "email_log"]) {
+          if (conn.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(t)) conn.exec(`DELETE FROM ${t}`);
+        }
+      })();
+      g.__dbs.test = conn;
+    } else {
+      g.__dbs.test = open(file);
+    }
+  }
+  return g.__dbs.test;
+}
 
 export function db(): Database.Database {
-  if (!g.__db) {
-    const dir = dataDir();
-    fs.mkdirSync(dir, { recursive: true });
-    const conn = new Database(process.env.DB_FILE || path.join(dir, "atrlabels.db"));
-    conn.pragma("journal_mode = WAL");
-    conn.pragma("foreign_keys = ON");
-    conn.exec(SCHEMA);
-    migrate(conn);
-    if (process.env.DEMO_SEED === "1") seedDemo(conn);
-    g.__db = conn;
-  }
-  return g.__db;
+  return currentEnv() === "test" ? testDb() : liveDb();
+}
+
+/** 测试环境重新从正式数据复制（清掉所有测试订单、充值、余额） */
+export function resetTestEnv() {
+  g.__dbs ??= {};
+  g.__dbs.test?.close();
+  delete g.__dbs.test;
+  const dir = path.join(rootDir(), "test");
+  for (const f of ["atrlabels.db", "atrlabels.db-wal", "atrlabels.db-shm"]) fs.rmSync(path.join(dir, f), { force: true });
+  for (const sub of ["labels", "topup"]) fs.rmSync(path.join(dir, sub), { recursive: true, force: true });
+  if (currentEnv() === "test") testDb();
 }
 
 /* ---------------- 设置 ---------------- */

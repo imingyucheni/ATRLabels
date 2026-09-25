@@ -6,12 +6,13 @@ import { isSandboxSite, shipbestConfig, type ShipBestMode } from "@/lib/shipbest
 import StampSettings from "@/components/StampSettings";
 import FlashForm from "@/components/FlashForm";
 import RuleInputs from "@/components/RuleInputs";
-import { saveSmtpAction, testMailAction, setFinancePinAction, clearTestDataAction, saveAddrCheckAction, testAddrAction, refreshFxAction, saveChannelsAction, savePaymentSettingsAction, saveSettingsAction, saveShipBestAction, syncChannelsAction, verifyAction } from "@/app/actions";
+import { resetTestEnvAction, saveSmtpAction, testMailAction, setFinancePinAction, clearTestDataAction, saveAddrCheckAction, testAddrAction, refreshFxAction, saveChannelsAction, savePaymentSettingsAction, saveSettingsAction, saveShipBestAction, syncChannelsAction, verifyAction } from "@/app/actions";
 import { cnyToPay, usdCnyQuote } from "@/lib/fx";
 import FilePick from "@/components/FilePick";
 import { CarrierMark } from "@/components/ChannelLabel";
 import { CARRIERS, carrierById, defaultPublicName, guessCarrier, publicChannel } from "@/lib/carriers";
 import { testDataStats } from "@/lib/cleanup";
+import { currentEnv } from "@/lib/db";
 import { addrConfig, monthlyUsage } from "@/lib/addressCheck";
 import { hasFinancePin } from "@/lib/financePin";
 import { smtpConfig } from "@/lib/mailer";
@@ -55,6 +56,14 @@ export default async function SettingsPage() {
         </div>
         {isSandboxSite() && (
           <div className="alert warn" style={{ marginTop: 12 }}>{t("这里是沙盒站：数据和正式站分开，永远不会真实出单。选“正式”也会按沙盒处理。")}</div>
+        )}
+        <p className="small muted" style={{ marginTop: 10 }}>
+          {t("模拟和沙盒模式使用单独的测试数据（第一次切换时复制正式环境的客户、渠道和设置，订单、充值、余额从零开始），测试时的操作不会进入正式数据。")}
+        </p>
+        {currentEnv() === "test" && !isSandboxSite() && (
+          <div className="row" style={{ marginBottom: 8 }}>
+            <FlashForm action={resetTestEnvAction} submitLabel="用正式数据重置测试环境" submitClass="small" inline confirm="清空所有测试订单、充值和余额，并重新复制正式环境的客户、渠道和设置？" />
+          </div>
         )}
         <div className="mode-cards">
           {(["mock", "sandbox", "live"] as const).map((m) => (
@@ -383,7 +392,7 @@ export default async function SettingsPage() {
         <div style={{ height: 12 }} />
       </FlashForm>
 
-      {(() => {
+      {currentEnv() === "live" && (() => {
         const st = testDataStats();
         return (
           <div className="card danger-card" id="cleanup">

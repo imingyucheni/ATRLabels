@@ -44,6 +44,7 @@ import { saveDimRule } from "@/lib/rates";
 import { CARRIERS } from "@/lib/carriers";
 import { clearChannelNameCache } from "@/lib/channelDisplay";
 import { clearTestData } from "@/lib/cleanup";
+import { resetTestEnv, setStoredMode } from "@/lib/db";
 import { sendMail } from "@/lib/mailer";
 import { checkFinancePin, setFinancePin } from "@/lib/financePin";
 import { testAddressService } from "@/lib/addressCheck";
@@ -453,6 +454,14 @@ export async function testMailAction(_: FlashState, fd: FormData): Promise<Flash
   }
 }
 
+export async function resetTestEnvAction(_: FlashState): Promise<FlashState> {
+  await requireAdmin();
+  resetTestEnv();
+  clearChannelNameCache();
+  revalidatePath("/", "layout");
+  return { ok: "测试环境已重置：客户、渠道、设置已从正式数据重新复制，测试订单、充值和余额已清空" };
+}
+
 export async function clearTestDataAction(_: FlashState, fd: FormData): Promise<FlashState> {
   await requireAdmin();
   const typed = str(fd.get("confirm"), 50);
@@ -818,6 +827,12 @@ export async function saveShipBestAction(_: FlashState, fd: FormData): Promise<F
   if (baseUrl && !/^https:\/\/[^\s/]+/i.test(baseUrl)) return { error: "接口地址要以 https:// 开头" };
   const next = { mode, apiId, token, baseUrl } as const;
   saveSettings({ shipbest: next });
+  // 切换模式 = 切换正式 / 测试数据；账号信息两边保持一致
+  if (mode !== "env") {
+    setStoredMode(mode);
+    saveSettings({ shipbest: next });
+  }
+  clearChannelNameCache();
   revalidatePath("/", "layout");
   if (mode === "live" || mode === "sandbox") {
     if (!apiId || !token) return { error: "沙盒和正式模式都需要填写 API ID 和 Token" };

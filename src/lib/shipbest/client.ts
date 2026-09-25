@@ -1,4 +1,4 @@
-import { db, getSettings } from "../db";
+import { db, getSettings, storedMode } from "../db";
 import { coverageFor } from "../coverage";
 import { rateQuote } from "../rates";
 import { buildHeaders } from "./sign";
@@ -340,8 +340,10 @@ export function shipbestConfig() {
   const sb = getSettings().shipbest ?? { mode: "env", apiId: "", token: "" };
   const apiId = sb.apiId || process.env.SHIPBEST_API_ID || "";
   const token = sb.token || process.env.SHIPBEST_ACCESS_TOKEN || "";
-  let mode: ShipBestMode =
-    sb.mode === "mock" || sb.mode === "sandbox" || sb.mode === "live" ? sb.mode : process.env.SHIPBEST_MOCK === "1" ? "mock" : "live";
+  // 模式以 env.json 为准（决定用正式还是测试数据）；老数据 / 单库运行时看设置和环境变量
+  const stored = process.env.ATR_SINGLE_DB === "1" ? null : storedMode();
+  const saved = stored ?? (sb.mode === "mock" || sb.mode === "sandbox" || sb.mode === "live" ? sb.mode : null);
+  let mode: ShipBestMode = saved ?? (process.env.SHIPBEST_MOCK === "1" ? "mock" : "live");
   // 沙盒站不允许真实出单：设置里是“正式”也按沙盒处理
   if (mode === "live" && isSandboxSite()) mode = "sandbox";
   // 沙盒站还没填 API 账号时先用模拟模式（能正常试用，不会报错）

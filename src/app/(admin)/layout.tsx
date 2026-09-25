@@ -1,6 +1,7 @@
 import { requireAdmin } from "@/lib/auth";
 import { isSandboxSite, shipbestMode } from "@/lib/shipbest/client";
 import { siteSwitch } from "@/lib/sites";
+import { currentEnv } from "@/lib/db";
 import { pendingTopupCount } from "@/lib/topup";
 import { pendingResets } from "@/lib/passwordReset";
 import Sidebar from "@/components/Sidebar";
@@ -75,6 +76,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       />
       <main className="main">
         {isSandboxSite() && <div className="site-ribbon">{t("沙盒站 · 测试专用，数据和正式站分开，不会真实出单")}</div>}
+        {!isSandboxSite() && currentEnv() === "test" && (
+          <div className="site-ribbon">{t("测试环境 · 这里的订单、充值、余额都是测试数据，和正式数据完全分开；切回“正式”模式就是真实数据")}</div>
+        )}
         {children}
       </main>
     </div>
