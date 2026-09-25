@@ -1,4 +1,5 @@
 import { impersonatedCustomerId, requireCustomer } from "@/lib/auth";
+import { isMockMode } from "@/lib/shipbest/client";
 import { getSettings } from "@/lib/db";
 import { money, usd } from "@/lib/pricing";
 import Sidebar from "@/components/Sidebar";
@@ -46,6 +47,7 @@ export default async function PortalLayout({ children }: { children: React.React
         ]}
       />
       <main className="main">
+        {isMockMode() && <div className="acting-bar">演示模式：运费是按报价表模拟的，面单也是模拟的，不会真实出单。</div>}
         {acting && (
           <form action={leaveCustomerAction} className="acting-bar">
             <span>管理员正在以 <b>{me.name}</b> 的身份操作这个客户的 OMS，下单、充值等记录会标记为管理员代操作。</span>

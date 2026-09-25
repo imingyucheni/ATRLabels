@@ -9,9 +9,12 @@ import { randomBytes } from "node:crypto";
 import ExcelJS from "exceljs";
 import { cellText } from "./adjustments";
 import { db, getSettings, listChannels } from "./db";
+import { extractRates, importRates, type RateRow } from "./rates";
 
 export interface CoverageSheet {
   sheet: string;
+  /** zip = 邮编表；rate = 价格表（成本价，模拟报价用） */
+  kind: "zip" | "rate";
   /** 识别方式说明，例如“按 Gate 列筛选 LAX” */
   how: string;
   /** 这个口岸下的邮编数 */
@@ -23,7 +26,7 @@ export interface CoverageSheet {
 }
 
 interface Parsed {
-  sheets: (CoverageSheet & { zips: Map<string, string> })[];
+  sheets: (CoverageSheet & { zips: Map<string, string>; rates?: RateRow[] })[];
   filename: string;
   gateway: string;
   expires: number;
@@ -111,23 +114,43 @@ export async function parseCoverageWorkbook(filename: string, buf: Buffer, gatew
   await wb.xlsx.load(buf as unknown as ArrayBuffer);
   const sheets: Parsed["sheets"] = [];
   for (const ws of wb.worksheets) {
-    if (!/邮编|zip/i.test(ws.name) || /偏远|remote|das/i.test(ws.name)) continue;
     const rows: string[][] = [];
-    ws.eachRow({ includeEmpty: false }, (row) => {
+    ws.eachRow({ includeEmpty: true }, (row) => {
       const vals = row.values as ExcelJS.CellValue[];
       rows.push(Array.from({ length: Math.max(0, vals.length - 1) }, (_, i) => cellText(vals[i + 1])));
     });
-    const r = extractZips(rows, gw);
     const guess = guessChannel(ws.name);
-    if ("error" in r) sheets.push({ sheet: ws.name, how: "", count: 0, sample: [], guess, error: r.error, zips: new Map() });
-    else sheets.push({ sheet: ws.name, how: r.how, count: r.zips.size, sample: [...r.zips.keys()].slice(0, 5), guess, zips: r.zips });
+    if (/邮编|zip/i.test(ws.name)) {
+      if (/偏远|remote|das/i.test(ws.name)) continue;
+      const r = extractZips(rows.filter((x) => x.some(Boolean)), gw);
+      if ("error" in r) sheets.push({ sheet: ws.name, kind: "zip", how: "", count: 0, sample: [], guess, error: r.error, zips: new Map() });
+      else sheets.push({ sheet: ws.name, kind: "zip", how: r.how, count: r.zips.size, sample: [...r.zips.keys()].slice(0, 5), guess, zips: r.zips });
+      continue;
+    }
+    // 价格表：按 oz / lb 和分区列价格
+    const rates = extractRates(rows);
+    if (rates.length >= 5) {
+      const zones = [...new Set(rates.flatMap((x) => Object.keys(x.prices).map(Number)))].sort((a, b) => a - b);
+      const first = rates[0];
+      const z1 = Math.min(...Object.keys(first.prices).map(Number));
+      sheets.push({
+        sheet: ws.name,
+        kind: "rate",
+        how: `${rates.length} 个重量档（最高 ${Math.round((rates[rates.length - 1].maxOz / 16) * 10) / 10} lb），分区 ${zones.join("/")}`,
+        count: rates.length,
+        sample: [`${first.maxOz}oz · Zone${z1} $${first.prices[z1]}`],
+        guess,
+        zips: new Map(),
+        rates,
+      });
+    }
   }
-  if (!sheets.length) throw new Error("这个文件里没有找到“邮编”工作表（工作表名称需要带“邮编”或 zip）");
+  if (!sheets.length) throw new Error("这个文件里没有找到邮编表或价格表（邮编表的工作表名称需要带“邮编”或 zip）");
   const token = randomBytes(12).toString("hex");
   const now = Date.now();
   for (const [k, v] of uploads) if (v.expires < now) uploads.delete(k);
   uploads.set(token, { sheets, filename, gateway: gw, expires: now + 30 * 60_000 });
-  return { token, gateway: gw, sheets: sheets.map(({ zips: _z, ...s }) => s) };
+  return { token, gateway: gw, sheets: sheets.map(({ zips: _z, rates: _r, ...s }) => s) };
 }
 
 /** 确认导入：sheet → 渠道代码；同一渠道原来的覆盖表整体替换 */
@@ -135,11 +158,19 @@ export function importCoverage(token: string, mapping: Record<string, string>) {
   const up = uploads.get(token);
   if (!up) throw new Error("上传已过期，请重新上传文件");
   const known = new Set(listChannels().map((c) => c.code));
-  const done: { channel: string; count: number }[] = [];
+  const done: { channel: string; count: number; kind: "zip" | "rate" }[] = [];
   db().transaction(() => {
     for (const s of up.sheets) {
       const code = mapping[s.sheet];
-      if (!code || !known.has(code) || !s.zips.size) continue;
+      if (!code || !known.has(code)) continue;
+      if (s.kind === "rate") {
+        if (s.rates?.length) {
+          importRates(code, s.rates);
+          done.push({ channel: code, count: s.rates.length, kind: "rate" as const });
+        }
+        continue;
+      }
+      if (!s.zips.size) continue;
       db().prepare("DELETE FROM channel_zips WHERE channel_code = ?").run(code);
       const ins = db().prepare("INSERT OR REPLACE INTO channel_zips (channel_code, zip, zone) VALUES (?, ?, ?)");
       for (const [z, zone] of s.zips) ins.run(code, z, zone || null);
@@ -150,7 +181,7 @@ export function importCoverage(token: string, mapping: Record<string, string>) {
            zip_count = excluded.zip_count, uploaded_at = excluded.uploaded_at`,
         )
         .run(code, up.filename, s.sheet, up.gateway, s.zips.size);
-      done.push({ channel: code, count: s.zips.size });
+      done.push({ channel: code, count: s.zips.size, kind: "zip" as const });
     }
   })();
   uploads.delete(token);

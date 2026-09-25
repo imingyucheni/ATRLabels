@@ -389,3 +389,15 @@ table.list td { white-space: nowrap; }
 .cred-card { border-color: var(--accent); background: var(--accent-soft); }
 .cred-text { margin: 12px 0; padding: 12px 14px; border-radius: 8px; background: var(--surface); border: 1px solid var(--line);
   font-family: inherit; font-size: 13.5px; line-height: 1.7; white-space: pre-wrap; user-select: all; }
+
+/* 智能识别地址 */
+.smart-paste { display: grid; gap: 6px; margin-bottom: 14px; padding: 10px; border: 1px dashed var(--line-strong); border-radius: 10px; background: var(--surface-2, var(--sunken)); }
+.smart-paste textarea { min-height: 52px; resize: vertical; background: var(--surface); }
+
+/* 寄件地址簿 */
+.sender-list { display: grid; gap: 8px; margin-top: 12px; }
+.sender-item { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; }
+.sender-item.default { border-color: var(--accent); background: var(--accent-soft); }
+.sender-edit { margin-top: 12px; padding: 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2, var(--sunken)); }
+.sender-pick { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+.sender-pick select { flex: 1; min-width: 200px; }

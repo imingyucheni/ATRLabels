@@ -38,6 +38,8 @@ import {
   getCustomer,
 } from "@/lib/db";
 import type { PartialRule } from "@/lib/pricing";
+import { getShipBestClient } from "@/lib/shipbest/client";
+import { listSenders, saveSender } from "@/lib/senders";
 import { clearCredentials, readablePassword, rememberCredentials } from "@/lib/credentials";
 import { clearBlocks, importCoverage, lookupZip, parseCoverageWorkbook, removeCoverage, setPrefilter } from "@/lib/coverage";
 import { addLedger, balanceOf, postAdjustment } from "@/lib/ledger";
@@ -45,7 +47,6 @@ import { saveChannelSample } from "@/lib/labels";
 import { approveTopup, rejectTopup, saveAlipayQr } from "@/lib/topup";
 import { usdCnyQuote } from "@/lib/fx";
 import { adminResetFromRequest } from "@/lib/passwordReset";
-import { getShipBestClient } from "@/lib/shipbest/client";
 import type { Address, ShipmentRequest } from "@/lib/shipbest/types";
 import { cleanAddress, cleanRequest, n, optNum, str, unit } from "@/lib/sanitize";
 import type { StampConfig, StampOverride, StampSettings } from "@/lib/stampConfig";
@@ -265,9 +266,15 @@ export async function saveCustomerSenderAction(_: FlashState, fd: FormData): Pro
   await requireAdmin();
   const id = Number(fd.get("id"));
   const sender = cleanAddress(Object.fromEntries([...fd.entries()].filter(([k]) => k.startsWith("sender.")).map(([k, v]) => [k.slice(7), v])) as Partial<Address>);
-  setCustomerSender(id, sender.nameFirst || sender.address1 ? sender : null);
+  if (sender.nameFirst || sender.address1) {
+    // 更新客户地址簿里的默认地址（没有就新建一个默认地址）
+    const def = listSenders(id).find((x) => x.isDefault);
+    saveSender(id, { id: def?.id, label: def?.label, address: sender, makeDefault: true });
+  } else {
+    setCustomerSender(id, null);
+  }
   revalidatePath(`/customers/${id}`);
-  return { ok: "寄件地址已保存" };
+  return { ok: "默认寄件地址已保存" };
 }
 
 export async function ledgerEntryAction(_: FlashState, fd: FormData): Promise<FlashState> {
@@ -669,4 +676,27 @@ export async function clearBlocksAction(_: FlashState, fd: FormData): Promise<Fl
 export async function lookupZipAction(zip: string) {
   await requireAdmin();
   return lookupZip(str(zip, 10));
+}
+
+/* ---------------- ShipBest 接口账号 ---------------- */
+
+export async function saveShipBestAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  await requireAdmin();
+  const cur = getSettings().shipbest ?? { mode: "env", apiId: "", token: "" };
+  const mode = fd.get("mode") === "live" ? "live" : fd.get("mode") === "mock" ? "mock" : "env";
+  const apiId = str(fd.get("apiId"), 100) || cur.apiId;
+  const token = str(fd.get("token"), 200) || cur.token; // 留空 = 不修改
+  const next = { mode, apiId, token } as const;
+  saveSettings({ shipbest: next });
+  revalidatePath("/", "layout");
+  if (mode === "live") {
+    if (!apiId || !token) return { error: "正式模式需要填写 API ID 和 Token" };
+    try {
+      await getShipBestClient().verify();
+    } catch (e) {
+      return { error: `已保存，但连接测试失败：${(e as Error).message}` };
+    }
+    return { ok: "已切换到正式模式，连接成功。请点“同步渠道”获取真实渠道，之后的报价和出单都是真实的。" };
+  }
+  return { ok: mode === "mock" ? "已切换到模拟模式（价格是模拟的，不会真实出单）" : "已保存" };
 }

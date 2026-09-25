@@ -48,7 +48,7 @@ describe("模拟模式完整流程", () => {
     await expect(svc.createLabel({ customerId: custId, channelCode: quotes[0].channelCode, req, expectedPrice: quotes[0].price! })).rejects.toThrow(/余额不足/);
     expect(db.listShipments().length).toBe(before);
     ledger.addLedger({ customerId: custId, type: "topup", amount: 100, createdBy: "admin" });
-    expect(quotes.length).toBe(5);
+    expect(quotes.length).toBe(7);
     const q = quotes[0];
     expect(q.ok).toBe(true);
     expect(q.rule!.percent).toBe(10); // 客户专属加价
@@ -162,6 +162,26 @@ describe("模拟模式完整流程", () => {
     // 0) 下载的模板第一个工作表只有表头，原样上传不会下单
     const blank = batch.parseOrders(await readSheetRows("t.xlsx", await batch.buildTemplate(req.sender), "first"), null);
     expect(blank.error).toContain("没有订单数据");
+
+    // 0.1) 服务商格式的写法：in/oz 换算成磅、商品性质写中文、示例行跳过
+    const wb0 = new ExcelJS.Workbook();
+    const w0 = wb0.addWorksheet("导入模板");
+    w0.addRow(batch.SHIPBEST_HEADERS);
+    const rec = ["Doe", "Jane", "512-555-0100", "US", "TX", "Austin", null, "78701", null, "1 Test St"];
+    const snd = ["House", "Ware", "6265550100", "US", "CA", "Chino", null, "91710", null, "1 Warehouse Way"];
+    const line = (ref: string, unit: string, wt: number, nature: string) =>
+      [ref, null, "不需要", null, "不需要", 10, 8, 4, wt, unit, null, "S1", "T恤", "T-shirt", 1, 5, wt, unit, null, null, null, null, nature,
+        ...rec, null, null, null, null, null, ...snd];
+    w0.addRow(line(batch.EXAMPLE_REF, "cm/g", 900, "带磁"));
+    w0.addRow([...Array(11).fill(null), "EX-SKU", "帽子", "Cap", 1, 5, 100, "cm/g"]); // 示例的续行也跳过
+    w0.addRow(line("R-OZ", "in/oz", 32, "不带磁,不带电"));
+    w0.addRow(line("R-LB", "in/lb", 2, "带电"));
+    const p0 = batch.parseOrders(await readSheetRows("x.xlsx", Buffer.from(await wb0.xlsx.writeBuffer()), "first"), null);
+    expect(p0.orders.map((o) => o.customerRef)).toEqual(["R-OZ", "R-LB"]);
+    expect(p0.orders[0].req.pkg).toMatchObject({ weight: 2, displayUnitSystem: 3 });
+    expect(p0.orders[0].req.skuList[0]).toMatchObject({ weight: 2, unit: 3, productNature: "2,4" });
+    expect(p0.orders[0].req.skuList).toHaveLength(1);
+    expect(p0.orders[1].req.skuList[0].productNature).toBe("2,3");
 
     // 1) 示例格式可以直接上传：3 行示例 = 2 单（A1001 两个 SKU）
     const tplRows = await readSheetRows("t.xlsx", await batch.buildTemplate(req.sender, { examplesInFirstSheet: true }), "first");

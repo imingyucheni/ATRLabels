@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireCustomer } from "@/lib/auth";
 import { customerChannels, getSettings } from "@/lib/db";
+import { listSenders } from "@/lib/senders";
 import { money, usd } from "@/lib/pricing";
 import ShipForm from "@/components/ShipForm";
 
@@ -28,7 +29,7 @@ export default async function PortalShipPage() {
       {!customerChannels(me.id).length && (
         <div className="alert warn">您的账户还没有开通物流渠道，暂时无法查询运费和下单。请联系客服开通{s.supportContact ? `：${s.supportContact}` : "。"}</div>
       )}
-      <ShipForm mode="portal" defaultSender={me.sender ?? s.sender} defaultUnit={s.defaultUnit} defaultCurrency={s.defaultCurrency} />
+      <ShipForm mode="portal" senders={listSenders(me.id)} defaultSender={me.sender ?? s.sender} defaultUnit={s.defaultUnit} defaultCurrency={s.defaultCurrency} />
     </>
   );
 }

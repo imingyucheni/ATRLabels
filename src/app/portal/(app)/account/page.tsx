@@ -1,7 +1,8 @@
 import { requireCustomer } from "@/lib/auth";
-import AddressFields from "@/components/AddressFields";
 import FlashForm from "@/components/FlashForm";
-import { portalChangePasswordAction, portalSaveSenderAction } from "@/app/portal/actions";
+import SenderBook from "@/components/SenderBook";
+import { listSenders } from "@/lib/senders";
+import { portalChangePasswordAction } from "@/app/portal/actions";
 
 export default async function PortalAccount() {
   const me = await requireCustomer();
@@ -14,12 +15,7 @@ export default async function PortalAccount() {
           <dt>登录邮箱</dt><dd>{me.portalEmail}</dd>
         </dl>
       </div>
-      <FlashForm action={portalSaveSenderAction} submitLabel="保存寄件地址" className="card">
-        <h2>默认寄件地址</h2>
-        <p className="small muted">下单时自动填入，下单页面也可以临时修改。</p>
-        <AddressFields value={me.sender} namePrefix="sender." />
-        <div style={{ height: 12 }} />
-      </FlashForm>
+      <SenderBook initial={listSenders(me.id)} />
       <FlashForm action={portalChangePasswordAction} submitLabel="修改密码" className="card" resetOnSuccess>
         <h2>修改密码</h2>
         <div className="grid" style={{ marginBottom: 12 }}>

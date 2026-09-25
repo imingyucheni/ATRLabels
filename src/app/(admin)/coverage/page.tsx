@@ -1,5 +1,6 @@
 import { getSettings, listChannels } from "@/lib/db";
 import { blockStats, listCoverage } from "@/lib/coverage";
+import { rateStats } from "@/lib/rates";
 import { fmtTime } from "@/lib/time";
 import FlashForm from "@/components/FlashForm";
 import CoverageUpload from "@/components/CoverageUpload";
@@ -10,10 +11,11 @@ export default async function CoveragePage() {
   const channels = listChannels();
   const sources = new Map(listCoverage().map((c) => [c.channelCode, c]));
   const blocks = blockStats();
+  const rates = rateStats();
   const totalBlocks = Object.values(blocks).reduce((a, n) => a + n, 0);
   return (
     <>
-      <h1>派送范围</h1>
+      <h1>派送范围与价格表</h1>
       <div className="card">
         <h2>怎么判断一个地址能不能送</h2>
         <ol className="small" style={{ paddingLeft: 18, margin: 0, display: "grid", gap: 6 }}>
@@ -37,7 +39,7 @@ export default async function CoveragePage() {
       <div className="card table-wrap">
         <h2>各渠道的邮编表</h2>
         <table className="list">
-          <thead><tr><th>渠道</th><th>邮编表</th><th>口岸</th><th className="num">表内邮编</th><th>按邮编表预筛</th><th className="num">记住的不通邮</th><th></th></tr></thead>
+          <thead><tr><th>渠道</th><th>邮编表</th><th>口岸</th><th className="num">表内邮编</th><th>按邮编表预筛</th><th>价格表（模拟报价用）</th><th className="num">记住的不通邮</th><th></th></tr></thead>
           <tbody>
             {channels.map((c) => {
               const s = sources.get(c.code);
@@ -57,6 +59,7 @@ export default async function CoveragePage() {
                       </FlashForm>
                     ) : "-"}
                   </td>
+                  <td className="small">{rates[c.code] ? `${rates[c.code].rows} 个重量档` : <span className="muted">未导入</span>}</td>
                   <td className="num">
                     {blocks[c.code] ? (
                       <FlashForm action={clearBlocksAction} submitLabel="清除" submitClass="small" inline confirm="清除后这些邮编下次会重新向 ShipBest 查询。确定？">

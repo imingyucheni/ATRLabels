@@ -17,6 +17,7 @@ import {
   leaveCustomer,
 } from "@/lib/auth";
 import { adminOrigin } from "@/lib/sites";
+import { deleteSender, listSenders, saveSender, setDefaultSender } from "@/lib/senders";
 import { getCustomerLogin, getPasswordHash, getSettings, setCustomerPassword, setCustomerSender, setLabelNote } from "@/lib/db";
 import { InsufficientBalanceError } from "@/lib/ledger";
 import { ownsShipment, publicError, toPublicQuote, type PublicQuote } from "@/lib/portal";
@@ -126,14 +127,39 @@ export async function portalRefreshAction(_: FlashState, fd: FormData): Promise<
 
 /* ---------------- 账户 ---------------- */
 
-export async function portalSaveSenderAction(_: FlashState, fd: FormData): Promise<FlashState> {
+/* ---------------- 寄件地址簿 ---------------- */
+
+export async function saveSenderBookAction(input: { id?: number; label?: string; address: Partial<Address>; makeDefault?: boolean }) {
   const me = await requireCustomer();
-  const sender = cleanAddress(
-    Object.fromEntries([...fd.entries()].filter(([k]) => k.startsWith("sender.")).map(([k, v]) => [k.slice(7), v])) as Partial<Address>,
-  );
-  setCustomerSender(me.id, sender.nameFirst || sender.address1 ? sender : null);
+  const address = cleanAddress(input.address);
+  const errs: string[] = [];
+  if (!address.nameFirst || !address.nameLast) errs.push("姓名");
+  if (!address.address1) errs.push("地址1");
+  if (!address.city) errs.push("城市");
+  if (!address.zipCode) errs.push("邮编");
+  if (errs.length) return { error: `请填写：${errs.join("、")}` };
+  try {
+    const id = saveSender(me.id, { id: input.id ? Number(input.id) : undefined, label: str(input.label, 50), address, makeDefault: !!input.makeDefault });
+    revalidatePath("/portal/account");
+    revalidatePath("/portal/ship");
+    return { id, senders: listSenders(me.id) };
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+}
+
+export async function setDefaultSenderAction(id: number) {
+  const me = await requireCustomer();
+  setDefaultSender(me.id, Number(id));
   revalidatePath("/portal/account");
-  return { ok: "默认寄件地址已保存" };
+  return { senders: listSenders(me.id) };
+}
+
+export async function deleteSenderAction(id: number) {
+  const me = await requireCustomer();
+  deleteSender(me.id, Number(id));
+  revalidatePath("/portal/account");
+  return { senders: listSenders(me.id) };
 }
 
 export async function portalChangePasswordAction(_: FlashState, fd: FormData): Promise<FlashState> {

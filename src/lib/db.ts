@@ -298,6 +298,8 @@ export interface Settings {
   fxLast: { live: number; source: string; at: string } | null;
   /** 发货口岸（邮编覆盖表按这个口岸取邮编），91710 Chino 对应 LAX */
   originGateway: string;
+  /** ShipBest 接口：在后台“设置”里填写；mode = env 时按服务器环境变量 */
+  shipbest: { mode: "env" | "mock" | "live"; apiId: string; token: string };
 }
 
 /**
@@ -335,6 +337,7 @@ const DEFAULT_SETTINGS: Settings = {
   fxManualRate: 7.2,
   fxLast: null,
   originGateway: "LAX",
+  shipbest: { mode: "env", apiId: "", token: "" },
 };
 
 export function getSettings(): Settings {

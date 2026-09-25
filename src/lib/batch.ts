@@ -23,45 +23,150 @@ export const SHIPBEST_HEADERS = [
   "申报总金额", "申报总数量",
 ];
 
-export async function buildTemplate(sender?: Address | null, opts: { examplesInFirstSheet?: boolean } = {}): Promise<Buffer> {
+/** 模板里的示例行：自定义单号以“示例”开头，导入时跳过（连同它下面的 SKU 续行） */
+export const EXAMPLE_REF = "示例-请删除此行";
+const isExampleRef = (ref: string) => /^(示例|例[:：]|example)/i.test(ref.trim());
+
+/** 模板各区块的颜色（和 ShipBest 模板一样按区块上色，必填列标题为红色） */
+const GROUPS: { from: number; to: number; name: string; fill: string }[] = [
+  { from: 1, to: 11, name: "订单与包裹", fill: "FFC6E0B4" },
+  { from: 12, to: 23, name: "商品（SKU）", fill: "FFFCE4D6" },
+  { from: 24, to: 38, name: "收件人", fill: "FFDDEBF7" },
+  { from: 39, to: 53, name: "寄件人（整段留空 = 用账户默认寄件地址）", fill: "FFFFF2CC" },
+  { from: 54, to: 55, name: "申报", fill: "FFEDEDED" },
+];
+
+const LISTS = {
+  insurance: ["不需要", "需要"],
+  sign: ["不需要", "直接签名", "间接签名", "成人签名"],
+  unit: ["cm/g", "cm/kg", "in/lb", "in/oz"],
+  nature: ["普货", "带电", "带磁", "带磁,带电", "液体", "不带磁", "不带电"],
+};
+
+const HEADER_NOTES: Record<number, string> = {
+  1: "每个订单一个唯一的单号（例如平台订单号）。\n同一订单有多个 SKU 时，第 2 行起这一列留空，只填 SKU 那几列。",
+  2: "可以留空：系统会用多个渠道比价，默认选最便宜的。\n也可以从下拉框选指定渠道。",
+  10: "包裹尺寸和重量的单位，从下拉框选择。",
+  12: "USPS 面单上会加印这里的 SKU。",
+  23: "从下拉框选择：一般商品选“普货”；带电池选“带电”。留空默认普货。",
+  24: "收件人的姓（Last name）。",
+  25: "收件人的名（First name）。",
+  39: "寄件人整段都可以留空，留空时使用账户里的默认寄件地址。",
+};
+
+export async function buildTemplate(
+  sender?: Address | null,
+  opts: { examplesInFirstSheet?: boolean; channels?: string[] } = {},
+): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
-  // 第一个工作表只有表头：客户直接填写，忘了删示例也不会误下单；示例放在单独的工作表
-  const ws = wb.addWorksheet("导入模板");
-  ws.addRow(SHIPBEST_HEADERS);
-  const ex = opts.examplesInFirstSheet ? ws : wb.addWorksheet("示例（不会导入）");
-  if (ex !== ws) ex.addRow(SHIPBEST_HEADERS);
+  const ws = wb.addWorksheet("导入模板", { views: [{ state: "frozen", ySplit: 1 }] });
+  const ex = wb.addWorksheet("填写示例", { views: [{ state: "frozen", ySplit: 1 }] });
+  const help = wb.addWorksheet("说明");
+  // 下拉框的选项放在隐藏的工作表里（选项多、含逗号也没问题）
+  const lists = wb.addWorksheet("_下拉选项", { state: "veryHidden" });
+  const channels = opts.channels ?? [];
+  const listCols: [keyof typeof LISTS | "channel", string[]][] = [
+    ["channel", channels], ["insurance", LISTS.insurance], ["sign", LISTS.sign], ["unit", LISTS.unit], ["nature", LISTS.nature],
+  ];
+  const ref: Record<string, string> = {};
+  listCols.forEach(([k, vals], i) => {
+    const col = String.fromCharCode(65 + i);
+    vals.forEach((v, j) => (lists.getCell(`${col}${j + 1}`).value = v));
+    if (vals.length) ref[k] = `'_下拉选项'!$${col}$1:$${col}$${vals.length}`;
+  });
+
+  const styleSheet = (sheet: ExcelJS.Worksheet, withNotes: boolean) => {
+    const head = sheet.addRow(SHIPBEST_HEADERS);
+    head.height = 30;
+    head.eachCell((cell, c) => {
+      const g = GROUPS.find((x) => c >= x.from && c <= x.to)!;
+      const required = String(cell.value).startsWith("*");
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: g.fill } };
+      cell.font = { bold: true, color: { argb: required ? "FFC00000" : "FF404040" } };
+      cell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
+      cell.border = { bottom: { style: "thin", color: { argb: "FFBFBFBF" } }, right: { style: "hair", color: { argb: "FFD9D9D9" } } };
+      if (withNotes && HEADER_NOTES[c]) cell.note = HEADER_NOTES[c];
+    });
+    const widths: Record<number, number> = { 1: 22, 2: 20, 12: 20, 13: 12, 14: 14, 23: 16, 26: 16, 33: 26, 34: 16, 48: 26 };
+    sheet.columns.forEach((col, i) => (col.width = widths[i + 1] ?? 12));
+  };
+
   const s = sender;
   const senderCols = s
     ? [s.nameLast, s.nameFirst, s.phone ?? "", s.country, s.province ?? "", s.city, s.area ?? "", s.zipCode, s.email ?? "", s.address1, s.address2 ?? "", s.corporateName ?? "", "", "", ""]
     : Array(15).fill("");
   const recip = (last: string, first: string, phone: string, st: string, city: string, zip: string, a1: string, a2 = "") =>
     [last, first, phone, "US", st, city, "", zip, "", a1, a2, "", "", "", ""];
-  // 示例：A1001 两个 SKU（第二行自定义单号留空），A1002 一个 SKU
-  ex.addRow(["A1001", "", "不需要", "", "不需要", 25, 20, 10, 900, "cm/g", "", "TS-001", "T恤", "T-shirt", 2, 8, 300, "cm/g", "", "", "", "610910", "", ...recip("Doe", "John", "512-555-0100", "TX", "Austin", "78701", "500 Congress Ave"), ...senderCols]);
-  ex.addRow(["", "", "", "", "", "", "", "", "", "", "", "CAP-02", "帽子", "Cap", 1, 5, 150, "cm/g"]);
-  ex.addRow(["A1002", "", "不需要", "", "不需要", 12, 9, 5, 3.5, "in/lb", "", "BAG-01", "背包", "Backpack", 1, 20, 3.5, "in/lb", "", "", "", "", "", ...recip("Smith", "Mary", "213-555-0199", "CA", "Los Angeles", "90001", "123 Main St", "Apt 4"), ...senderCols]);
-  if (ex !== ws) {
-    ex.getRow(1).font = { bold: true };
-    ex.columns.forEach((c) => (c.width = 14));
-  }
-  ws.getRow(1).font = { bold: true };
-  ws.columns.forEach((c) => (c.width = 14));
+  const ch = channels[0] ?? "";
+  const exampleRows = (first: string, second: string) => [
+    [first, ch, "不需要", "", "不需要", 25, 20, 10, 900, "cm/g", "", "TS-001", "T恤", "T-shirt", 2, 8, 300, "cm/g", "", "", "", "610910", "普货",
+      ...recip("Doe", "John", "512-555-0100", "TX", "Austin", "78701", "500 Congress Ave"), ...senderCols, 21, 3],
+    ["", "", "", "", "", "", "", "", "", "", "", "CAP-02", "帽子", "Cap", 1, 5, 150, "cm/g"],
+    [second, "", "不需要", "", "不需要", 12, 9, 5, 3.5, "in/lb", "", "BAG-01", "背包", "Backpack", 1, 20, 3.5, "in/lb", "", "", "", "", "",
+      ...recip("Smith", "Mary", "213-555-0199", "CA", "Los Angeles", "90001", "123 Main St", "Apt 4"), ...senderCols, 20, 1],
+  ];
+  const paintExample = (row: ExcelJS.Row) => {
+    row.eachCell({ includeEmpty: false }, (cell) => {
+      cell.font = { italic: true, color: { argb: "FF7F7F7F" } };
+    });
+  };
 
-  const help = wb.addWorksheet("说明");
+  // 1) 导入模板：表头 + 一行示例（自定义单号以“示例”开头，导入时自动跳过）
+  styleSheet(ws, true);
+  if (opts.examplesInFirstSheet) {
+    exampleRows("A1001", "A1002").forEach((r) => ws.addRow(r));
+  } else {
+    paintExample(ws.addRow(exampleRows(EXAMPLE_REF, "")[0]));
+  }
+  // 下拉框：前 1000 行
+  const dv = (col: string, key: string, strict: boolean, prompt: string) => {
+    if (!ref[key]) return;
+    for (const sheet of [ws, ex]) {
+      for (let r = 2; r <= 1001; r++) {
+        sheet.getCell(`${col}${r}`).dataValidation = {
+          type: "list",
+          allowBlank: true,
+          formulae: [ref[key]],
+          showErrorMessage: strict,
+          errorStyle: "stop",
+          errorTitle: "请从下拉框选择",
+          error: prompt,
+        };
+      }
+    }
+  };
+  dv("B", "channel", false, "请选择物流产品，或留空由系统比价");
+  dv("C", "insurance", true, "请选择：需要 / 不需要");
+  dv("E", "sign", true, "请选择签名服务");
+  dv("J", "unit", true, "请选择包裹单位");
+  dv("R", "unit", true, "请选择 SKU 单位");
+  dv("W", "nature", false, "从下拉框选择，或手动输入");
+
+  // 2) 填写示例：两个订单，其中第一个有两个 SKU
+  styleSheet(ex, false);
+  exampleRows("A1001", "A1002").forEach((r) => ex.addRow(r));
+
+  // 3) 说明
   const notes: [string, string][] = [
-    ["格式", "与 ShipBest 后台“导入订单”模板相同，原来的表格可以直接上传。带 * 为必填。"],
-    ["多个 SKU", "同一个订单有多个 SKU 时，第 2 行起“自定义单号”留空，只填 SKU 相关列。"],
-    ["物流产品", "可以留空。上传后系统会用多个渠道试算，每单默认选最便宜的，也可以按表格里的物流产品。"],
-    ["包裹单位", "cm/g、cm/kg 或 in/lb。SKU 单位同理。"],
-    ["保险 / 签名", "保险服务：需要 / 不需要；签名服务：不需要 / 直接签名 / 间接签名 / 成人签名。"],
-    ["寄件人", "寄件人各列可以留空，留空时使用账户里的默认寄件地址。"],
-    ["商品性质", "1 带磁 2 不带磁 3 带电 4 不带电 5 液体，多个用逗号分隔；留空默认 2,4。"],
-    ["示例", "“示例”工作表里有 2 个订单的填写示例（不会被导入）。请在第一个工作表“导入模板”里填写自己的订单。"],
+    ["格式", "与 ShipBest 后台“导入订单”模板相同，原来的表格可以直接上传。标题为红色（带 *）的列必填。"],
+    ["示例行", `“导入模板”第 2 行是填写示例（自定义单号为“${EXAMPLE_REF}”），导入时会自动跳过，可以删掉也可以保留。更完整的示例见“填写示例”工作表。`],
+    ["多个 SKU", "同一个订单有多个 SKU 时，第 2 行起“自定义单号”留空，只填 SKU 那几列（见“填写示例”里的 A1001）。"],
+    ["物流产品", "可以留空。上传后系统会用多个渠道比价，每单默认选最便宜的；也可以从下拉框指定渠道。"],
+    ["单位", "包裹单位和 SKU 单位从下拉框选：cm/g、cm/kg、in/lb、in/oz。"],
+    ["保险 / 签名", "从下拉框选择。保险选“需要”时要填保险金额。"],
+    ["商品性质", "从下拉框选择：一般商品选“普货”（不带磁、不带电）；带电池选“带电”，带磁铁选“带磁”。留空默认普货。"],
+    ["寄件人", "寄件人整段可以留空，留空时使用账户里的默认寄件地址。"],
+    ["颜色", GROUPS.map((g) => g.name).join(" / ") + "：每个区块一种颜色。"],
   ];
   help.addRow(["项目", "说明"]).font = { bold: true };
   notes.forEach((n) => help.addRow(n));
-  help.getColumn(1).width = 14;
-  help.getColumn(2).width = 90;
+  GROUPS.forEach((g) => {
+    const row = help.addRow([g.name, `标题颜色（第 ${g.from}–${g.to} 列）`]);
+    row.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: g.fill } };
+  });
+  help.getColumn(1).width = 30;
+  help.getColumn(2).width = 100;
+  help.eachRow((r) => (r.alignment = { wrapText: true, vertical: "top" }));
   return Buffer.from(await wb.xlsx.writeBuffer());
 }
 
@@ -83,13 +188,38 @@ const num = (v: string | undefined) => {
   return Number.isFinite(n) ? n : 0;
 };
 
+/** 单位是 in/oz 时，重量要换算成磅（接口只有 cm/g、cm/kg、in/lb 三种） */
+const isOz = (v: string) => /oz|盎司/i.test(v ?? "");
+
 function parseUnit(v: string, def: UnitSystem): UnitSystem {
   const s = (v ?? "").toLowerCase().replace(/\s/g, "");
   if (!s) return def;
-  if (/in|lb|英/.test(s)) return 3;
+  if (/in|lb|oz|英|盎司/.test(s)) return 3;
   if (/kg/.test(s)) return 2;
   if (/g/.test(s)) return 1;
   return def;
+}
+
+/** 商品性质：支持代码（2,4）或中文（不带磁,不带电） */
+const NATURE_CODE: [RegExp, string][] = [[/不带磁/, "2"], [/带磁/, "1"], [/不带电/, "4"], [/带电/, "3"], [/液体/, "5"]];
+const GENERAL = /^(普货|标品|普通|无特殊|general)$/i;
+export function parseNature(v: string): string {
+  const s = (v ?? "").trim();
+  if (!s) return "2,4";
+  const codes = new Set<string>();
+  if (GENERAL.test(s)) return "2,4";
+  for (const part of s.split(/[,，、;；/\s]+/).filter(Boolean)) {
+    if (/^[1-5]$/.test(part)) codes.add(part);
+    else {
+      const hit = NATURE_CODE.find(([re]) => re.test(part));
+      if (hit) codes.add(hit[1]);
+    }
+  }
+  if (!codes.size) return "2,4";
+  // 只写了“带电”时补上“不带磁”，只写了“带磁”时补上“不带电”
+  if (!codes.has("1") && !codes.has("2")) codes.add("2");
+  if (!codes.has("3") && !codes.has("4")) codes.add("4");
+  return [...codes].sort().join(",");
 }
 
 function parseSign(v: string): 0 | 1 | 2 | 3 {
@@ -168,7 +298,8 @@ export function parseOrders(rows: string[][], defaultSender: Address | null): { 
     if (!r.some((c) => c && c.trim())) continue;
     const ref = get(r, col.ref);
     const skuCode = get(r, col.sku);
-    const skuUnit = parseUnit(get(r, col.skuUnit) || get(r, col.unit), st.defaultUnit);
+    const skuUnitText = get(r, col.skuUnit) || get(r, col.unit);
+    const skuUnit = parseUnit(skuUnitText, st.defaultUnit);
     const sku: SkuItem = {
       sku: skuCode,
       productNameCn: get(r, col.cn),
@@ -177,13 +308,18 @@ export function parseOrders(rows: string[][], defaultSender: Address | null): { 
       declaredUnitPrice: num(get(r, col.price)),
       declaredCurrency: st.defaultCurrency,
       hsCode: get(r, col.hs),
-      productNature: get(r, col.nature) || "2,4",
+      productNature: parseNature(get(r, col.nature)),
       length: num(get(r, col.skuLen)),
       width: num(get(r, col.skuWid)),
       height: num(get(r, col.skuHei)),
-      weight: num(get(r, col.skuWt)),
+      weight: isOz(skuUnitText) ? Math.round((num(get(r, col.skuWt)) / 16) * 1000) / 1000 : num(get(r, col.skuWt)),
       unit: skuUnit,
     };
+    // 模板里的示例行（以及它下面的 SKU 续行）跳过
+    if (ref && isExampleRef(ref)) {
+      current = null;
+      continue;
+    }
     // 自定义单号为空、只有 SKU 的行：属于上一单
     if (!ref) {
       if (current && skuCode) current.req.skuList.push(sku);
@@ -204,7 +340,7 @@ export function parseOrders(rows: string[][], defaultSender: Address | null): { 
           length: num(get(r, col.len)),
           width: num(get(r, col.wid)),
           height: num(get(r, col.hei)),
-          weight: num(get(r, col.wt)),
+          weight: isOz(get(r, col.unit)) ? Math.round((num(get(r, col.wt)) / 16) * 1000) / 1000 : num(get(r, col.wt)),
           displayUnitSystem: parseUnit(get(r, col.unit), st.defaultUnit),
           signServiceType: parseSign(get(r, col.sign)),
           insuranceService: insurance as 0 | 1,

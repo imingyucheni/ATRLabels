@@ -62,7 +62,7 @@ describe("派送范围（邮编覆盖表）", () => {
   it("打开预筛后，试算前排除不在邮编表里的渠道，不影响没有邮编表的渠道", async () => {
     const r = await cov.parseCoverageWorkbook("rates.xlsx", await workbook(), "LAX");
     const done = cov.importCoverage(r.token, { "GOFO邮编": "LP10210029", "UNI邮编": "LP10210028" });
-    expect(done).toEqual([{ channel: "LP10210029", count: 2 }, { channel: "LP10210028", count: 1 }]);
+    expect(done).toEqual([{ channel: "LP10210029", count: 2, kind: "zip" }, { channel: "LP10210028", count: 1, kind: "zip" }]);
     expect(cov.coverageFor("LP10210029", "90001-1234")).toEqual({ covered: true, zone: "1" });
     expect(cov.coverageFor("LP10210029", "10001")).toEqual({ covered: false, zone: null });
     expect(cov.coverageFor("LP10210030", "10001")).toBeNull(); // USPS 没有邮编表
@@ -116,5 +116,37 @@ describe("派送范围（邮编覆盖表）", () => {
     const q3 = await svc.quoteAll(id, req("59901"));
     expect(q3[0].ok).toBe(true);
     expect(cov.blockedZip("LP10210030", "59901")).toBeNull();
+  });
+});
+
+describe("价格表（模拟报价按成本价）", () => {
+  it("识别 oz / lb 两段，按重量 + 分区查价", async () => {
+    const rates = await import("@/lib/rates");
+    const svc = await import("@/lib/service");
+    const db = await import("@/lib/db");
+    const rows = [
+      ["测试价格表"],
+      ["Oz", "Zone 1", "Zone 2", "Zone 3", "Zone 4", "Zone 5", "Zone 6", "Zone 7", "Zone 8"],
+      ["4 oz", "2.00", "2.10", "2.20", "2.30", "2.40", "2.50", "2.60", "2.70"],
+      ["15.99oz", "3.00", "3.10", "3.20", "3.30", "3.40", "3.50", "3.60", "3.70"],
+      ["Lbs.", "Zone 1", "Zone 2", "Zone 3", "Zone 4", "Zone 5", "Zone 6", "Zone 7", "Zone 8"],
+      ["1 lbs", "4.00", "4.10", "4.20", "4.30", "4.40", "4.50", "4.60", "4.70"],
+      ["2 lbs", "5.00", "5.10", "5.20", "5.30", "5.40", "5.50", "5.60", "5.70"],
+      ["3 lbs", "6.00", "6.10", "6.20", "6.30", "6.40", "6.50", "6.60", "6.70"],
+      [],
+      ["备注", "其他说明"],
+    ];
+    const r = rates.extractRates(rows);
+    expect(r.map((x) => x.maxOz)).toEqual([4, 15.99, 16, 32, 48]);
+    rates.importRates("LP10210030", r);
+    // 1.5 lb（24 oz）到 Austin 78701（没有邮编表时按估算分区：7 开头 → zone 6）
+    const q = rates.rateQuote("LP10210030", { ...req("78701"), pkg: { ...req("78701").pkg, weight: 1.5, displayUnitSystem: 3 } });
+    expect(q).toEqual({ price: 5.5, zone: 6 });
+    // 报价：成本 = 价格表价格，客户价在上面加价
+    db.saveSettings({ markup: { percent: 10, fixed: 0, minProfit: 0 }, roundingStep: 0.01 });
+    const id = db.saveCustomer(null, { name: "价格表客户", contact: null, phone: null, email: null, note: null, markup: {} });
+    db.setCustomerChannels(id, ["LP10210030"]);
+    const quotes = await svc.quoteAll(id, { ...req("78701"), pkg: { ...req("78701").pkg, weight: 1.5, displayUnitSystem: 3 } });
+    expect(quotes[0]).toMatchObject({ ok: true, cost: 5.5, price: 6.05, zone: "zone6" });
   });
 });

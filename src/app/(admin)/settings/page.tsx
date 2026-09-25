@@ -1,12 +1,12 @@
 import { ADJUSTMENT_POLICY_LABEL, channelCustomerCounts, getSettings, listChannels } from "@/lib/db";
 import { BALANCE_RULE_LABEL } from "@/lib/ledger";
 import { computePrice, money, resolveRule, type MarkupRule } from "@/lib/pricing";
-import { isMockMode } from "@/lib/shipbest/client";
+import { isMockMode, shipbestConfig } from "@/lib/shipbest/client";
 import AddressFields from "@/components/AddressFields";
 import StampSettings from "@/components/StampSettings";
 import FlashForm from "@/components/FlashForm";
 import RuleInputs from "@/components/RuleInputs";
-import { refreshFxAction, saveChannelsAction, savePaymentSettingsAction, saveSettingsAction, syncChannelsAction, verifyAction } from "@/app/actions";
+import { refreshFxAction, saveChannelsAction, savePaymentSettingsAction, saveSettingsAction, saveShipBestAction, syncChannelsAction, verifyAction } from "@/app/actions";
 import { cnyToPay, usdCnyQuote } from "@/lib/fx";
 import FilePick from "@/components/FilePick";
 
@@ -15,20 +15,43 @@ export default async function SettingsPage() {
   const fx = await usdCnyQuote();
   const channels = listChannels();
   const opened = channelCustomerCounts();
-  const configured = isMockMode() || (!!process.env.SHIPBEST_API_ID && !!process.env.SHIPBEST_ACCESS_TOKEN);
+  const sb = shipbestConfig();
+  const sbSaved = s.shipbest ?? { mode: "env", apiId: "", token: "" };
   const example = [5, 10, 20];
 
   return (
     <>
       <h1>设置</h1>
 
-      <div className="card">
-        <h2>ShipBest 连接</h2>
-        <p className="small muted">
-          apiId / accessToken 通过服务器环境变量 <code>SHIPBEST_API_ID</code>、<code>SHIPBEST_ACCESS_TOKEN</code> 配置（在 OMS 后台的 API 配置里获取），不保存在数据库中。
-          {isMockMode() ? " 当前为模拟模式（SHIPBEST_MOCK=1），不会真实下单。" : configured ? " 已配置。" : " 尚未配置。"}
-        </p>
-        <div className="row">
+      <div className="card" id="shipbest">
+        <div className="row" style={{ justifyContent: "space-between" }}>
+          <h2 style={{ margin: 0 }}>ShipBest 连接</h2>
+          <span className={`badge ${isMockMode() ? "pending" : "ok"}`}>{isMockMode() ? "当前：模拟模式（价格是模拟的）" : "当前：正式模式"}</span>
+        </div>
+        {isMockMode() && (
+          <div className="alert warn" style={{ marginTop: 12 }}>
+            现在是<b>模拟模式</b>：报价和面单都是系统模拟的，不会调用 ShipBest，价格和 OMS 里的真实价格对不上。
+            填好 API ID 和 Token、选“正式”后保存，再点“同步渠道”，就会用真实价格和真实出单。
+          </div>
+        )}
+        <FlashForm action={saveShipBestAction} submitLabel="保存并测试连接">
+          <div className="grid" style={{ margin: "12px 0" }}>
+            <label className="f">模式
+              <select name="mode" defaultValue={sbSaved.mode === "env" ? (sb.mock ? "mock" : "live") : sbSaved.mode}>
+                <option value="live">正式（真实报价、真实出单扣费）</option>
+                <option value="mock">模拟（测试用，不会真实出单）</option>
+              </select>
+            </label>
+            <label className="f">API ID
+              <input name="apiId" defaultValue={sbSaved.apiId || (sb.source === "env" ? sb.apiId : "")} placeholder="OMS 后台 → API 配置里的 ID" autoComplete="off" />
+            </label>
+            <label className="f">API Token
+              <input name="token" type="password" autoComplete="new-password"
+                placeholder={sb.token ? `已保存（尾号 ${sb.token.slice(-4)}），留空不修改` : "OMS 后台 → API 配置里的 Token"} />
+            </label>
+          </div>
+        </FlashForm>
+        <div className="row" style={{ marginTop: 8 }}>
           <FlashForm action={verifyAction} submitLabel="测试连接" submitClass="" inline />
           <FlashForm action={syncChannelsAction} submitLabel="同步渠道" inline />
         </div>

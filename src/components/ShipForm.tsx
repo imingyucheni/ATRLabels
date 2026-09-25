@@ -3,7 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { quoteAction } from "@/app/actions";
-import { portalCreateAction, portalQuoteAction } from "@/app/portal/actions";
+import type { SavedSender } from "@/lib/senders";
+import { portalCreateAction, portalQuoteAction, saveSenderBookAction } from "@/app/portal/actions";
 import type { PublicQuote } from "@/lib/portal";
 import AddressFields from "@/components/AddressFields";
 import { money } from "@/lib/pricing";
@@ -30,6 +31,15 @@ const NATURE = [
   ["5", "液体"],
 ] as const;
 
+/** 常用商品性质：大部分是普货（不带磁、不带电），特殊的再选 */
+const NATURE_PRESETS = [
+  { value: "2,4", label: "普货（无特殊）" },
+  { value: "2,3", label: "带电" },
+  { value: "1,4", label: "带磁" },
+  { value: "1,3", label: "带磁 + 带电" },
+  { value: "2,4,5", label: "液体" },
+];
+
 const UNIT_LABEL: Record<UnitSystem, [string, string]> = { 1: ["g", "cm"], 2: ["kg", "cm"], 3: ["lb", "in"] };
 
 /** 报价行：后台看到完整信息（成本、利润），客户端只有价格 */
@@ -41,6 +51,8 @@ export default function ShipForm(props: {
   customers?: { id: number; name: string; balance?: number; available?: number; sender?: Address | null; channelCount?: number }[];
   defaultCustomerId?: number;
   defaultSender: Address | null;
+  /** 客户端：寄件地址簿 */
+  senders?: SavedSender[];
   defaultUnit: UnitSystem;
   defaultCurrency: string;
 }) {
@@ -55,6 +67,10 @@ export default function ShipForm(props: {
   const initialCustomer = customers.find((c) => c.id === props.defaultCustomerId);
   const [sender, setSender] = useState<Partial<Address>>(initialCustomer?.sender ?? props.defaultSender ?? {});
   const [editSender, setEditSender] = useState(!props.defaultSender);
+  const [senders, setSenders] = useState<SavedSender[]>(props.senders ?? []);
+  const [senderId, setSenderId] = useState<number | "new" | "">(props.senders?.find((x) => x.isDefault)?.id ?? "");
+  const [senderMsg, setSenderMsg] = useState<string | null>(null);
+  const [savingSender, startSaveSender] = useTransition();
   const [recipient, setRecipient] = useState<Partial<Address>>({ country: "US" });
   const [unit, setUnit] = useState<UnitSystem>(props.defaultUnit);
   const [pkg, setPkg] = useState({ length: "", width: "", height: "", weight: "" });
@@ -216,14 +232,66 @@ export default function ShipForm(props: {
             <h2>寄件人</h2>
             {!editSender && <button className="small" onClick={() => setEditSender(true)}>修改</button>}
           </div>
+          {portal && senders.length > 0 && (
+            <div className="sender-pick">
+              <select
+                value={senderId}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setSenderMsg(null);
+                  if (v === "new") {
+                    setSenderId("new");
+                    dirty(setSender)({ country: "US" });
+                    setEditSender(true);
+                  } else {
+                    const hit = senders.find((x) => x.id === Number(v));
+                    setSenderId(Number(v));
+                    if (hit) dirty(setSender)(hit.address);
+                    setEditSender(false);
+                  }
+                }}
+              >
+                {senderId === "" && <option value="">（系统默认发货仓）</option>}
+                {senders.map((x) => <option key={x.id} value={x.id}>{x.label}{x.isDefault ? "（默认）" : ""}</option>)}
+                <option value="new">＋ 使用新的寄件地址…</option>
+              </select>
+              <a className="small" href="/portal/account">管理地址簿</a>
+            </div>
+          )}
           {editSender ? (
-            <AddressFields value={sender} onChange={dirty(setSender)} />
+            <>
+              <AddressFields value={sender} onChange={(a) => { dirty(setSender)(a); setSenderMsg(null); }} />
+              {portal && (
+                <div className="row" style={{ marginTop: 10 }}>
+                  <button
+                    type="button"
+                    className="small"
+                    disabled={savingSender}
+                    onClick={() =>
+                      startSaveSender(async () => {
+                        const editingId = typeof senderId === "number" ? senderId : undefined;
+                        const r = await saveSenderBookAction({ id: editingId, address: sender, label: senders.find((x) => x.id === editingId)?.label });
+                        if (r.error) return setSenderMsg(r.error);
+                        setSenders(r.senders!);
+                        setSenderId(r.id!);
+                        setEditSender(false);
+                        setSenderMsg(editingId ? "已更新地址簿里的这个地址" : "已保存到寄件地址簿，下次可以直接选择");
+                      })
+                    }
+                  >
+                    {savingSender ? "保存中…" : typeof senderId === "number" ? "更新到地址簿" : "保存到寄件地址簿"}
+                  </button>
+                  <span className="small muted">不保存也可以直接下单</span>
+                </div>
+              )}
+            </>
           ) : (
             <div className="muted">
               {sender.nameFirst} {sender.nameLast} {sender.corporateName && `· ${sender.corporateName}`}<br />
               {sender.address1}, {sender.city} {sender.province} {sender.zipCode} {sender.country}
             </div>
           )}
+          {senderMsg && <div className="small" style={{ marginTop: 8, color: "var(--accent)" }}>{senderMsg}</div>}
         </div>
         <div className="card">
           <h2>收件人</h2>
@@ -286,27 +354,42 @@ export default function ShipForm(props: {
                   <td style={{ width: 80 }}><input type="number" min="1" value={s.quantity} onChange={(e) => setSku(i, { quantity: e.target.value })} /></td>
                   <td style={{ width: 110 }}><input type="number" min="0" step="0.01" value={s.declaredUnitPrice} onChange={(e) => setSku(i, { declaredUnitPrice: e.target.value })} /></td>
                   <td style={{ width: 130 }}><input value={s.hsCode} onChange={(e) => setSku(i, { hsCode: e.target.value })} /></td>
-                  <td style={{ minWidth: 200 }} className="small">
-                    {NATURE.map(([code, label]) => {
-                      const set = new Set(s.productNature.split(",").filter(Boolean));
+                  <td style={{ minWidth: 170 }} className="small">
+                    {(() => {
+                      const preset = NATURE_PRESETS.find((p) => p.value === s.productNature)?.value ?? "custom";
                       return (
-                        <label key={code} style={{ marginRight: 8, whiteSpace: "nowrap" }}>
-                          <input
-                            type="checkbox"
-                            checked={set.has(code)}
-                            onChange={(e) => {
-                              // 带磁/不带磁、带电/不带电 互斥
-                              const opposite: Record<string, string> = { "1": "2", "2": "1", "3": "4", "4": "3" };
-                              if (e.target.checked) {
-                                set.add(code);
-                                if (opposite[code]) set.delete(opposite[code]);
-                              } else set.delete(code);
-                              setSku(i, { productNature: [...set].sort().join(",") });
-                            }}
-                          /> {label}
-                        </label>
+                        <>
+                          <select value={preset} onChange={(e) => setSku(i, { productNature: e.target.value === "custom" ? s.productNature || "2,4" : e.target.value })}>
+                            {NATURE_PRESETS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+                            <option value="custom">自定义…</option>
+                          </select>
+                          {preset === "custom" && (
+                            <div style={{ marginTop: 4 }}>
+                              {NATURE.map(([code, label]) => {
+                                const set = new Set(s.productNature.split(",").filter(Boolean));
+                                return (
+                                  <label key={code} style={{ marginRight: 8, whiteSpace: "nowrap" }}>
+                                    <input
+                                      type="checkbox"
+                                      checked={set.has(code)}
+                                      onChange={(e) => {
+                                        // 带磁/不带磁、带电/不带电 互斥
+                                        const opposite: Record<string, string> = { "1": "2", "2": "1", "3": "4", "4": "3" };
+                                        if (e.target.checked) {
+                                          set.add(code);
+                                          if (opposite[code]) set.delete(opposite[code]);
+                                        } else set.delete(code);
+                                        setSku(i, { productNature: [...set].sort().join(",") });
+                                      }}
+                                    /> {label}
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </>
                       );
-                    })}
+                    })()}
                   </td>
                   <td>{skus.length > 1 && <button className="small danger" onClick={() => dirty(setSkus)(skus.filter((_, j) => j !== i))}>删除</button>}</td>
                 </tr>

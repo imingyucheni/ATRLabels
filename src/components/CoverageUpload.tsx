@@ -36,21 +36,22 @@ export default function CoverageUpload(props: { gateway: string; channels: { cod
             });
           }}
         >
-          <label className="f">服务商报价表（.xlsx，自动读取名字带“邮编”的工作表）<FilePick name="file" accept=".xlsx" required /></label>
+          <label className="f">服务商报价表（.xlsx，自动读取邮编表和各渠道价格表）<FilePick name="file" accept=".xlsx" required /></label>
           <label className="f" style={{ width: 140 }}>发货口岸<input name="gateway" defaultValue={props.gateway} maxLength={10} /></label>
           <button className="primary" disabled={busy}>{busy ? "读取中…" : "读取"}</button>
           <span className="small muted">从 91710（Chino）发货对应 LAX。文件较大时读取需要几秒。</span>
         </form>
       ) : (
         <>
-          <p className="small muted">口岸 {preview.gateway}。确认每张邮编表对应的渠道（选“不导入”则跳过）；同一渠道原来的邮编表会被替换。</p>
+          <p className="small muted">口岸 {preview.gateway}。确认每张表对应的渠道（选“不导入”则跳过）；同一渠道原来的表会被替换。价格表是你们的成本价，只在模拟模式下用来算报价（正式模式以 ShipBest 接口价格为准）。</p>
           <div className="table-wrap">
             <table className="list">
-              <thead><tr><th>工作表</th><th>识别方式</th><th className="num">可派送邮编</th><th>示例</th><th>对应渠道</th></tr></thead>
+              <thead><tr><th>工作表</th><th>类型</th><th>识别结果</th><th className="num">数量</th><th>示例</th><th>对应渠道</th></tr></thead>
               <tbody>
                 {preview.sheets.map((s) => (
                   <tr key={s.sheet}>
                     <td>{s.sheet}</td>
+                    <td><span className={`badge ${s.kind === "rate" ? "pending" : "labeled"}`}>{s.kind === "rate" ? "价格表" : "邮编表"}</span></td>
                     <td className="small">{s.error ? <span style={{ color: "var(--err)" }}>{s.error}</span> : s.how}</td>
                     <td className="num">{s.count.toLocaleString()}</td>
                     <td className="small muted">{s.sample.join(", ")}</td>
@@ -74,7 +75,9 @@ export default function CoverageUpload(props: { gateway: string; channels: { cod
                   const r = await importCoverageAction(preview.token, map);
                   if (r.error) return setError(r.error);
                   setPreview(null);
-                  setNotice(`已导入 ${r.done!.length} 个渠道的邮编表（共 ${r.done!.reduce((a, d) => a + d.count, 0).toLocaleString()} 个邮编）`);
+                  const zips = r.done!.filter((d) => d.kind === "zip");
+                  const rates = r.done!.filter((d) => d.kind === "rate");
+                  setNotice(`已导入 ${zips.length} 个渠道的邮编表（共 ${zips.reduce((a, d) => a + d.count, 0).toLocaleString()} 个邮编）、${rates.length} 个渠道的价格表`);
                   router.refresh();
                 })
               }

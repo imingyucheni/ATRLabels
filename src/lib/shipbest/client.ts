@@ -1,3 +1,6 @@
+import { getSettings } from "../db";
+import { coverageFor } from "../coverage";
+import { rateQuote } from "../rates";
 import { buildHeaders } from "./sign";
 import type {
   ApiResult,
@@ -167,9 +170,11 @@ export class MockShipBestClient implements ShipBestClient {
     { code: "LP10210030", name: "USPS-（91710）" },
     { code: "LP10210433", name: "SwiftX-91710" },
     { code: "LP10210434", name: "YWE-91710" },
+    { code: "LP10210435", name: "YWE Air-91710" },
+    { code: "LP10210701", name: "SPX-LAX" },
   ];
-  /** [基础价, 每磅] —— 不同重量下最便宜的渠道不同 */
-  private rates: [number, number][] = [[3.0, 0.55], [3.2, 0.45], [4.6, 0.8], [2.9, 0.75], [3.1, 0.62]];
+  /** 没有导入报价表时的粗略价格：[基础价, 每磅] —— 不同重量下最便宜的渠道不同 */
+  private rates: [number, number][] = [[3.0, 0.55], [3.2, 0.45], [4.6, 0.8], [2.9, 0.75], [3.1, 0.62], [3.3, 0.6], [3.0, 0.5]];
 
   async verify() {}
 
@@ -185,6 +190,29 @@ export class MockShipBestClient implements ShipBestClient {
     // 模拟部分渠道不覆盖某些地区（真实情况会返回“不通邮”）
     if ((idx === 3 || idx === 4) && req.recipient.zipCode.startsWith("2")) {
       throw new ShipBestError(1, `国家[${req.recipient.country}],邮编[${req.recipient.zipCode}]不通邮`);
+    }
+    // 上传了邮编表的渠道：不在表里的邮编按“不通邮”处理（和真实接口一样）
+    const cov = coverageFor(productCode, req.recipient.zipCode);
+    if (cov && !cov.covered) {
+      throw new ShipBestError(1, `国家[${req.recipient.country}],邮编[${req.recipient.zipCode}]不通邮`);
+    }
+    // 上传了服务商报价表的渠道：按“重量 + 分区”查成本价（没有折扣）
+    const rated = rateQuote(productCode, req);
+    if (rated) {
+      const extra = req.pkg.signServiceType ? 3 : 0;
+      const total = Math.round((rated.price + extra) * 100) / 100;
+      return {
+        logisticsProductId: idx + 1,
+        logisticsProductName: this.products[idx].name,
+        baseShippingFee: rated.price,
+        baseDiscountShippingFee: rated.price,
+        extraShippingFee: extra,
+        extraDiscountShippingFee: extra,
+        totalShippingFee: total,
+        totalDiscountShippingFee: total,
+        currency: "USD",
+        zone: `zone${rated.zone}`,
+      };
     }
     const [b, per] = this.rates[idx];
     const base = Math.round((b + lb * per) * 100) / 100;
@@ -255,16 +283,29 @@ export class MockShipBestClient implements ShipBestClient {
 
 const g = globalThis as unknown as { __shipbestMock?: MockShipBestClient };
 
-export function isMockMode() {
-  return process.env.SHIPBEST_MOCK === "1";
+/** 接口账号：后台“设置”里填写的优先，没填时用服务器环境变量 */
+export function shipbestConfig() {
+  const sb = getSettings().shipbest ?? { mode: "env", apiId: "", token: "" };
+  const apiId = sb.apiId || process.env.SHIPBEST_API_ID || "";
+  const token = sb.token || process.env.SHIPBEST_ACCESS_TOKEN || "";
+  const mock = sb.mode === "mock" ? true : sb.mode === "live" ? false : process.env.SHIPBEST_MOCK === "1";
+  return { apiId, token, mock, source: sb.apiId ? "settings" : process.env.SHIPBEST_API_ID ? "env" : "none" };
 }
 
+export function isMockMode() {
+  return shipbestConfig().mock;
+}
+
+let live: { key: string; client: HttpShipBestClient } | null = null;
+
 export function getShipBestClient(): ShipBestClient {
-  if (isMockMode()) return (g.__shipbestMock ??= new MockShipBestClient());
-  const apiId = process.env.SHIPBEST_API_ID;
-  const token = process.env.SHIPBEST_ACCESS_TOKEN;
-  if (!apiId || !token) {
-    throw new Error("未配置 SHIPBEST_API_ID / SHIPBEST_ACCESS_TOKEN（或设置 SHIPBEST_MOCK=1 使用模拟模式）");
+  const c = shipbestConfig();
+  if (c.mock) return (g.__shipbestMock ??= new MockShipBestClient());
+  if (!c.apiId || !c.token) {
+    throw new Error("还没有填写 ShipBest API ID / Token，请到后台“设置 → ShipBest 连接”填写");
   }
-  return new HttpShipBestClient(process.env.SHIPBEST_BASE_URL || "https://oms.shipbest.com", apiId, token);
+  const base = process.env.SHIPBEST_BASE_URL || "https://oms.shipbest.com";
+  const key = `${base}|${c.apiId}|${c.token}`;
+  if (live?.key !== key) live = { key, client: new HttpShipBestClient(base, c.apiId, c.token) };
+  return live.client;
 }
