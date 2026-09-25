@@ -9,6 +9,7 @@ import {
   type AdjustmentPolicy,
   type NewAdjustment,
 } from "./db";
+import { postAdjustment } from "./ledger";
 import type { MarkupRule } from "./pricing";
 import { describeRow, guessHeaderRow } from "./sheetGuess";
 
@@ -285,5 +286,10 @@ export function importAdjustments(filename: string, rows: string[][], m: Mapping
       raw: rows[r.rowNo - 1] ?? [],
     }));
   if (!valid.length) throw new Error("没有可导入的有效行");
-  return insertAdjustmentBatch({ filename, fileHash, policy: preview.policy, note, header: rows[m.headerRow] ?? [] }, valid);
+  const batchId = insertAdjustmentBatch({ filename, fileHash, policy: preview.policy, note, header: rows[m.headerRow] ?? [] }, valid);
+  // 已匹配的补差记入客户钱包
+  for (const a of listAdjustments({ batchId })) {
+    if (a.shipmentId && a.customerId) postAdjustment(a.id, a.customerId, a.shipmentId, a.customerAmount, a.reason);
+  }
+  return batchId;
 }

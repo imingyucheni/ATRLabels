@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import {
+  db,
   getChannel,
   getCustomer,
   getSettings,
@@ -13,6 +14,7 @@ import {
   type ShipmentPatch,
 } from "./db";
 import { downloadLabel } from "./labels";
+import { chargeLabel, refundCancelled, removeShipmentLedger } from "./ledger";
 import { computePrice, resolveRule, type MarkupRule } from "./pricing";
 import { getShipBestClient, ShipBestError } from "./shipbest/client";
 import type { Address, ShipmentRequest } from "./shipbest/types";
@@ -178,6 +180,12 @@ export interface CreateInput {
   /** 页面上展示给员工的报价，用于防止价格在确认期间变化 */
   expectedPrice: number;
   remark?: string;
+  /** 客户自己的订单号 */
+  customerRef?: string;
+  /** 谁下的单：admin / customer */
+  createdBy?: "admin" | "customer";
+  /** 下单后是否等待面单生成（批量下单时关闭，最后统一刷新） */
+  waitForLabel?: boolean;
 }
 
 export async function createLabel(input: CreateInput): Promise<number> {
@@ -195,7 +203,10 @@ export async function createLabel(input: CreateInput): Promise<number> {
   if (Math.abs((quote.price ?? 0) - input.expectedPrice) > 0.005) throw new PriceChangedError(quote);
 
   const customNo = newCustomNo();
-  const id = insertShipment({
+  const createdBy = input.createdBy ?? "admin";
+  // 建本地记录和扣款放在同一个事务里：余额不足时什么都不留下
+  const id = db().transaction(() => {
+    const newId = insertShipment({
     customNo,
     customerId,
     channelCode,
@@ -210,13 +221,19 @@ export async function createLabel(input: CreateInput): Promise<number> {
     price: quote.price!,
     rule: quote.rule!,
     remark: input.remark || null,
-  });
+    customerRef: input.customerRef || null,
+    createdBy,
+    });
+    chargeLabel(customerId, newId, quote.price!, createdBy);
+    return newId;
+  })();
 
   try {
     await getShipBestClient().createOrder(customNo, channelCode, req, input.remark);
   } catch (e) {
     if (e instanceof ShipBestError) {
-      // ShipBest 明确拒绝：订单没有建成，删掉本地记录，让员工修改后重试
+      // ShipBest 明确拒绝：订单没有建成，退回扣款、删掉本地记录，修改后重试
+      removeShipmentLedger(id);
       deleteShipment(id);
       throw e;
     }
@@ -225,6 +242,7 @@ export async function createLabel(input: CreateInput): Promise<number> {
     return id;
   }
 
+  if (input.waitForLabel === false) return id;
   // 面单一般是异步生成，轮询几次
   for (let i = 0; i < 8; i++) {
     await new Promise((r) => setTimeout(r, i === 0 ? 1200 : 2000));
@@ -266,7 +284,14 @@ export async function refreshShipment(id: number): Promise<Shipment> {
     }
   }
   updateShipment(id, patch);
+  settleCancel(id);
   return getShipment(id)!;
+}
+
+/** 订单变成已取消后，把退款记入客户钱包（幂等） */
+function settleCancel(id: number) {
+  const s = getShipment(id);
+  if (s?.status === "cancelled" && s.refundAmount) refundCancelled(s.customerId, id, s.refundAmount, "system");
 }
 
 /* ---------------- 取消 ---------------- */
@@ -305,7 +330,8 @@ export async function requestCancel(id: number): Promise<{ done: boolean; messag
   try {
     await getShipBestClient().cancelOrder(s.orderNo ? { orderNo: s.orderNo } : { customNo: s.customNo });
     updateShipment(id, { ...cancelPatch(s, wasLabeled(s)), sbStatus: 6 });
-    return { done: true, message: "已通过接口取消" };
+    settleCancel(id);
+    return { done: true, message: "已取消，费用已退回账户余额" };
   } catch (e) {
     updateShipment(id, {
       status: "cancel_requested",
@@ -319,6 +345,7 @@ export function confirmCancelled(id: number, cancelFee: number, sbCancelFee: num
   const s = getShipment(id);
   if (!s) throw new Error("记录不存在");
   updateShipment(id, { ...cancelPatch(s, true, { cancelFee, sbCancelFee }), errorMsg: null });
+  settleCancel(id);
 }
 
 /** 取消费默认值（给页面预填用） */

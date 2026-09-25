@@ -25,6 +25,7 @@ import {
   type Settings,
 } from "@/lib/db";
 import type { PartialRule } from "@/lib/pricing";
+import { postAdjustment } from "@/lib/ledger";
 import { getShipBestClient } from "@/lib/shipbest/client";
 import type { Address, ShipmentRequest, SkuItem, UnitSystem } from "@/lib/shipbest/types";
 import {
@@ -360,7 +361,9 @@ export async function linkAdjustmentAction(_: FlashState, fd: FormData): Promise
   if (adj.shipment_id) return { error: "已经关联过了" };
   const s = findShipmentByKey(str(fd.get("key")));
   if (!s) return { error: "找不到这个单号对应的面单" };
-  linkAdjustment(adj.id, s.id, s.customerId, customerAmountFor(adj.cost_amount, adj.policy, s.rule));
+  const amount = customerAmountFor(adj.cost_amount, adj.policy, s.rule);
+  linkAdjustment(adj.id, s.id, s.customerId, amount);
+  postAdjustment(adj.id, s.customerId, s.id, amount, null);
   revalidatePath(`/adjustments`);
   return { ok: `已关联到 ${s.customNo}（${s.customerName}）` };
 }

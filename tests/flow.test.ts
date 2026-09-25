@@ -21,10 +21,12 @@ const req: ShipmentRequest = {
 describe("模拟模式完整流程", () => {
   let db: typeof import("@/lib/db");
   let svc: typeof import("@/lib/service");
+  let ledger: typeof import("@/lib/ledger");
 
   beforeAll(async () => {
     db = await import("@/lib/db");
     svc = await import("@/lib/service");
+    ledger = await import("@/lib/ledger");
     db.saveSettings({ markup: { percent: 5, fixed: 0, minProfit: 0 } });
     await svc.syncChannels();
   });
@@ -39,6 +41,12 @@ describe("模拟模式完整流程", () => {
   it("报价 → 出单 → 面单 → 取消", async () => {
     const custId = db.saveCustomer(null, { name: "测试客户", contact: null, phone: null, email: null, note: null, markup: { percent: 10 } });
     const quotes = await svc.quoteAll(custId, req);
+
+    // 余额不足不能出单，也不留下任何记录
+    const before = db.listShipments().length;
+    await expect(svc.createLabel({ customerId: custId, channelCode: quotes[0].channelCode, req, expectedPrice: quotes[0].price! })).rejects.toThrow(/余额不足/);
+    expect(db.listShipments().length).toBe(before);
+    ledger.addLedger({ customerId: custId, type: "topup", amount: 100, createdBy: "admin" });
     expect(quotes.length).toBe(3);
     const q = quotes[0];
     expect(q.ok).toBe(true);
@@ -55,6 +63,7 @@ describe("模拟模式完整流程", () => {
     expect(s.labelMime).toBe("application/pdf");
     expect(fs.readFileSync(path.join(dir, s.labelPath!)).subarray(0, 4).toString()).toBe("%PDF");
     expect(db.shipmentProfit(s)).toBeCloseTo(s.price - s.actualCost!, 2);
+    expect(ledger.balanceOf(custId)).toBeCloseTo(100 - s.price, 2);
 
     // 已出面单：接口取消失败 → 标记处理中 → 人工确认
     const r = await svc.requestCancel(id);
@@ -67,6 +76,11 @@ describe("模拟模式完整流程", () => {
     expect(c.status).toBe("cancelled");
     expect(c.refundAmount).toBeCloseTo(s.price - fees.cancelFee, 2);
     expect(db.shipmentProfit(c)).toBeCloseTo(fees.cancelFee - fees.sbCancelFee, 2);
+    // 退款回到钱包：只扣取消手续费
+    expect(ledger.balanceOf(custId)).toBeCloseTo(100 - fees.cancelFee, 2);
+    // 重复刷新不会重复退款
+    await svc.refreshShipment(id).catch(() => null);
+    expect(ledger.balanceOf(custId)).toBeCloseTo(100 - fees.cancelFee, 2);
   }, 30_000);
 
   it("导入官方账单补差并计入客户对账单", async () => {
@@ -74,6 +88,7 @@ describe("模拟模式完整流程", () => {
     const adj = await import("@/lib/adjustments");
     const { buildStatement } = await import("@/lib/statement");
     const custId = db.saveCustomer(null, { name: "补差客户", contact: null, phone: null, email: null, note: null, markup: {} });
+    ledger.addLedger({ customerId: custId, type: "topup", amount: 50, createdBy: "admin" });
     const q = (await svc.quoteAll(custId, req))[0];
     const id = await svc.createLabel({ customerId: custId, channelCode: q.channelCode, req, expectedPrice: q.price! });
     const s = db.getShipment(id)!;
@@ -106,6 +121,7 @@ describe("模拟模式完整流程", () => {
     expect(resaved.alreadyImported).toBe(true);
 
     const after = db.getShipment(id)!;
+    expect(ledger.balanceOf(custId)).toBeCloseTo(50 - s.price - 1.32, 2); // 补差自动从钱包扣
     expect(after.costAdj).toBe(1.25);
     expect(after.customerAdj).toBe(1.32);
     expect(db.shipmentProfit(after)).toBeCloseTo(s.price - s.actualCost! + 0.07, 2); // 补差也赚加价部分
@@ -121,5 +137,6 @@ describe("模拟模式完整流程", () => {
     // 撤销批次
     db.deleteAdjustmentBatch(batchId);
     expect(db.getShipment(id)!.costAdj).toBe(0);
+    expect(ledger.balanceOf(custId)).toBeCloseTo(50 - s.price, 2); // 撤销批次，扣款一起撤回
   }, 30_000);
 });

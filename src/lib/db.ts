@@ -87,6 +87,48 @@ CREATE TABLE IF NOT EXISTS adjustments (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_adj_shipment ON adjustments(shipment_id);
+CREATE TABLE IF NOT EXISTS ledger (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  customer_id INTEGER NOT NULL REFERENCES customers(id),
+  -- topup 充值 / label 出单扣款 / refund 取消退款 / adjustment 账单补差 / manual 手动调账
+  type TEXT NOT NULL,
+  -- 正数 = 增加客户余额，负数 = 扣款
+  amount REAL NOT NULL,
+  shipment_id INTEGER REFERENCES shipments(id),
+  adjustment_id INTEGER REFERENCES adjustments(id) ON DELETE CASCADE,
+  note TEXT,
+  created_by TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_ledger_customer ON ledger(customer_id);
+CREATE INDEX IF NOT EXISTS idx_ledger_shipment ON ledger(shipment_id);
+CREATE TABLE IF NOT EXISTS batch_jobs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  customer_id INTEGER NOT NULL REFERENCES customers(id),
+  created_by TEXT NOT NULL,
+  filename TEXT,
+  channel_mode TEXT NOT NULL,
+  status TEXT NOT NULL,
+  error TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS batch_job_rows (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  job_id INTEGER NOT NULL REFERENCES batch_jobs(id) ON DELETE CASCADE,
+  row_no INTEGER NOT NULL,
+  customer_ref TEXT,
+  req_json TEXT NOT NULL,
+  channel_code TEXT,
+  channel_name TEXT,
+  price REAL,
+  currency TEXT,
+  -- pending 待处理 / quoted 已报价 / error 错误 / created 已下单 / failed 下单失败
+  status TEXT NOT NULL,
+  error TEXT,
+  shipment_id INTEGER REFERENCES shipments(id)
+);
+CREATE INDEX IF NOT EXISTS idx_job_rows ON batch_job_rows(job_id);
 CREATE INDEX IF NOT EXISTS idx_adj_customer ON adjustments(customer_id);
 CREATE INDEX IF NOT EXISTS idx_shipments_created ON shipments(created_at);
 `;
@@ -99,6 +141,18 @@ function migrate(conn: Database.Database) {
   if (!bcols.includes("header_json")) conn.exec("ALTER TABLE adjustment_batches ADD COLUMN header_json TEXT");
   const acols = (conn.prepare("PRAGMA table_info(adjustments)").all() as { name: string }[]).map((c) => c.name);
   if (!acols.includes("raw_json")) conn.exec("ALTER TABLE adjustments ADD COLUMN raw_json TEXT");
+  if (!cols.includes("customer_ref")) conn.exec("ALTER TABLE shipments ADD COLUMN customer_ref TEXT");
+  if (!cols.includes("created_by")) conn.exec("ALTER TABLE shipments ADD COLUMN created_by TEXT");
+  const ccols = (conn.prepare("PRAGMA table_info(customers)").all() as { name: string }[]).map((c) => c.name);
+  const addCust: [string, string][] = [
+    ["portal_email", "TEXT"],
+    ["password_hash", "TEXT"],
+    ["portal_enabled", "INTEGER NOT NULL DEFAULT 0"],
+    ["credit_limit", "REAL NOT NULL DEFAULT 0"],
+    ["sender_json", "TEXT"],
+  ];
+  for (const [c, t] of addCust) if (!ccols.includes(c)) conn.exec(`ALTER TABLE customers ADD COLUMN ${c} ${t}`);
+  conn.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_customers_email ON customers(portal_email) WHERE portal_email IS NOT NULL");
 }
 
 const g = globalThis as unknown as { __db?: Database.Database };
@@ -245,6 +299,16 @@ export interface Customer {
   note: string | null;
   markup: PartialRule;
   createdAt: string;
+  /** 客户登录邮箱 */
+  portalEmail: string | null;
+  portalEnabled: boolean;
+  hasPassword: boolean;
+  /** 信用额度：余额最低可以到 -creditLimit */
+  creditLimit: number;
+  /** 客户默认寄件地址（为空时用系统默认） */
+  sender: Address | null;
+  /** 当前余额（流水合计） */
+  balance: number;
 }
 
 interface CustomerRow {
@@ -258,6 +322,12 @@ interface CustomerRow {
   markup_fixed: number | null;
   markup_min_profit: number | null;
   created_at: string;
+  portal_email: string | null;
+  password_hash: string | null;
+  portal_enabled: number;
+  credit_limit: number;
+  sender_json: string | null;
+  balance: number | null;
 }
 
 function toCustomer(r: CustomerRow): Customer {
@@ -270,19 +340,58 @@ function toCustomer(r: CustomerRow): Customer {
     note: r.note,
     markup: { percent: r.markup_percent, fixed: r.markup_fixed, minProfit: r.markup_min_profit },
     createdAt: r.created_at,
+    portalEmail: r.portal_email,
+    portalEnabled: !!r.portal_enabled,
+    hasPassword: !!r.password_hash,
+    creditLimit: r.credit_limit ?? 0,
+    sender: r.sender_json ? JSON.parse(r.sender_json) : null,
+    balance: Math.round((r.balance ?? 0) * 100) / 100,
   };
 }
 
+const CUSTOMER_SELECT = `SELECT c.*, (SELECT SUM(l.amount) FROM ledger l WHERE l.customer_id = c.id) AS balance FROM customers c`;
+
 export function listCustomers(): Customer[] {
-  return (db().prepare("SELECT * FROM customers ORDER BY name").all() as CustomerRow[]).map(toCustomer);
+  return (db().prepare(`${CUSTOMER_SELECT} ORDER BY c.name`).all() as CustomerRow[]).map(toCustomer);
 }
 
 export function getCustomer(id: number): Customer | null {
-  const r = db().prepare("SELECT * FROM customers WHERE id = ?").get(id) as CustomerRow | undefined;
+  const r = db().prepare(`${CUSTOMER_SELECT} WHERE c.id = ?`).get(id) as CustomerRow | undefined;
   return r ? toCustomer(r) : null;
 }
 
-export type CustomerInput = Omit<Customer, "id" | "createdAt">;
+/** 客户登录用：返回客户和密码哈希 */
+export function getCustomerLogin(email: string): { id: number; passwordHash: string | null; enabled: boolean } | null {
+  const r = db()
+    .prepare("SELECT id, password_hash, portal_enabled FROM customers WHERE portal_email = ? COLLATE NOCASE")
+    .get(email.trim()) as { id: number; password_hash: string | null; portal_enabled: number } | undefined;
+  return r ? { id: r.id, passwordHash: r.password_hash, enabled: !!r.portal_enabled } : null;
+}
+
+export function getPasswordHash(id: number): string | null {
+  const r = db().prepare("SELECT password_hash FROM customers WHERE id = ?").get(id) as { password_hash: string | null } | undefined;
+  return r?.password_hash ?? null;
+}
+
+export function updateCustomerPortal(id: number, p: { email: string | null; enabled: boolean; creditLimit: number }) {
+  if (p.email) {
+    const dup = db().prepare("SELECT id FROM customers WHERE portal_email = ? COLLATE NOCASE AND id != ?").get(p.email, id);
+    if (dup) throw new Error("这个登录邮箱已经被其他客户使用");
+  }
+  db()
+    .prepare("UPDATE customers SET portal_email = ?, portal_enabled = ?, credit_limit = ? WHERE id = ?")
+    .run(p.email ? p.email.toLowerCase() : null, p.enabled ? 1 : 0, p.creditLimit, id);
+}
+
+export function setCustomerPassword(id: number, hash: string) {
+  db().prepare("UPDATE customers SET password_hash = ? WHERE id = ?").run(hash, id);
+}
+
+export function setCustomerSender(id: number, sender: Address | null) {
+  db().prepare("UPDATE customers SET sender_json = ? WHERE id = ?").run(sender ? JSON.stringify(sender) : null, id);
+}
+
+export type CustomerInput = Pick<Customer, "name" | "contact" | "phone" | "email" | "note" | "markup">;
 
 export function saveCustomer(id: number | null, c: CustomerInput): number {
   const vals = [
@@ -360,6 +469,10 @@ export interface Shipment {
   sbCancelFee: number | null;
   refundAmount: number | null;
   remark: string | null;
+  /** 客户自己的订单号 */
+  customerRef: string | null;
+  /** admin / customer */
+  createdBy: string | null;
   /** 官方账单补差合计：正数 = ShipBest 向我们补扣，负数 = 退给我们 */
   costAdj: number;
   /** 向客户补收（正）/ 退客户（负）的合计 */
@@ -397,6 +510,8 @@ interface ShipmentRow {
   sb_cancel_fee: number | null;
   refund_amount: number | null;
   remark: string | null;
+  customer_ref: string | null;
+  created_by: string | null;
   cost_adj: number | null;
   customer_adj: number | null;
   created_at: string;
@@ -433,6 +548,8 @@ function toShipment(r: ShipmentRow): Shipment {
     sbCancelFee: r.sb_cancel_fee,
     refundAmount: r.refund_amount,
     remark: r.remark,
+    customerRef: r.customer_ref,
+    createdBy: r.created_by,
     costAdj: r.cost_adj ?? 0,
     customerAdj: r.customer_adj ?? 0,
     createdAt: r.created_at,
@@ -455,14 +572,16 @@ export interface NewShipment {
   price: number;
   rule: MarkupRule;
   remark: string | null;
+  customerRef?: string | null;
+  createdBy?: string | null;
 }
 
 export function insertShipment(s: NewShipment): number {
   const r = db()
     .prepare(
       `INSERT INTO shipments (custom_no, customer_id, channel_code, channel_name, sender_json, recipient_json,
-        package_json, sku_json, quoted_cost, currency, zone, price, rule_json, status, remark)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?, 'pending', ?)`,
+        package_json, sku_json, quoted_cost, currency, zone, price, rule_json, status, remark, customer_ref, created_by)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?, 'pending', ?, ?, ?)`,
     )
     .run(
       s.customNo,
@@ -479,6 +598,8 @@ export function insertShipment(s: NewShipment): number {
       s.price,
       JSON.stringify(s.rule),
       s.remark,
+      s.customerRef ?? null,
+      s.createdBy ?? null,
     );
   return Number(r.lastInsertRowid);
 }
@@ -571,9 +692,9 @@ export function listShipments(f: ShipmentFilter = {}): Shipment[] {
     args.push(f.to);
   }
   if (f.q) {
-    where.push("(s.custom_no LIKE ? OR s.order_no LIKE ? OR s.tracking_no LIKE ? OR s.recipient_json LIKE ?)");
+    where.push("(s.custom_no LIKE ? OR s.order_no LIKE ? OR s.tracking_no LIKE ? OR s.recipient_json LIKE ? OR s.customer_ref LIKE ?)");
     const like = `%${f.q}%`;
-    args.push(like, like, like, like);
+    args.push(like, like, like, like, like);
   }
   const sql = `${SHIPMENT_SELECT}
     ${where.length ? "WHERE " + where.join(" AND ") : ""} ORDER BY s.id DESC ${f.limit ? `LIMIT ${Number(f.limit)}` : ""}`;
