@@ -32,6 +32,7 @@ ask() { local q="$1" def="${2:-}" v; read -r -p "$q${def:+ [$def]}: " v; echo "$
 if [ -f "$CONF" ] && [ "${1:-}" != "--reconfigure" ]; then
   # shellcheck disable=SC1090
   . "$CONF"
+  echo "使用已保存的设置（$CONF）。要重新填写域名 / 仓库地址，请执行：bash install.sh --reconfigure"
 else
   say "基本信息"
   DOMAIN=$(ask "系统要使用的域名（先把域名 A 记录解析到这台服务器 IP；没有域名直接回车，用 http://IP:3000 访问）" "")
@@ -114,9 +115,21 @@ TAG="build-${BRANCH//\//-}"
 API="https://api.github.com/repos/$SLUG/releases/tags/$TAG"
 auth=(); [ -n "$TOKEN" ] && auth=(-H "Authorization: Bearer $TOKEN")
 
+RELEASE_JSON=""
+load_release() { # 读取发布信息；失败时说明原因并退出
+  local code
+  RELEASE_JSON=$(mktemp)
+  code=$(curl -sS -o "$RELEASE_JSON" -w '%{http_code}' "${auth[@]}" -H "Accept: application/vnd.github+json" "$API" || echo 000)
+  case "$code" in
+    200) return 0 ;;
+    404) return 1 ;; # 还没构建出来（或令牌看不到这个仓库）
+    401) warn "GitHub 令牌无效或已过期（401）。请重新生成令牌后执行：bash install.sh --reconfigure"; exit 1 ;;
+    403) warn "GitHub 令牌权限不足（403）。令牌需要这个仓库的 Contents: Read-only 权限。改好后执行：bash install.sh --reconfigure"; exit 1 ;;
+    *) warn "连接 GitHub 失败（HTTP $code），稍后重试…"; return 1 ;;
+  esac
+}
 asset_url() { # 发布包里某个文件的下载地址
-  curl -fsSL "${auth[@]}" -H "Accept: application/vnd.github+json" "$API" 2>/dev/null |
-    python3 -c "import json,sys; a={x['name']:x['url'] for x in json.load(sys.stdin).get('assets',[])}; print(a.get(sys.argv[1],''))" "$1" 2>/dev/null || true
+  python3 -c "import json,sys; a={x['name']:x['url'] for x in json.load(open(sys.argv[2])).get('assets',[])}; print(a.get(sys.argv[1],''))" "$1" "$RELEASE_JSON" 2>/dev/null || true
 }
 fetch_asset() { curl -fsSL "${auth[@]}" -H "Accept: application/octet-stream" -o "$2" "$1"; }
 
@@ -126,26 +139,41 @@ if [ -f "$REL/server.js" ]; then
   MODE=prebuilt
 else
   say "下载构建好的发布包"
+  [ -z "$TOKEN" ] && warn "提示：仓库地址里没有 GitHub 令牌，私有仓库会下载失败。"
   for i in $(seq 1 40); do
-    vurl=$(asset_url VERSION)
-    if [ -n "$vurl" ] && [ "$(curl -fsSL "${auth[@]}" -H 'Accept: application/octet-stream' "$vurl" 2>/dev/null | tr -d '[:space:]')" = "$SHA" ]; then
-      purl=$(asset_url atrlabels.tgz)
-      tmp=$(mktemp -d)
-      if [ -n "$purl" ] && fetch_asset "$purl" "$tmp/app.tgz"; then
-        mkdir -p "$REL.tmp" && tar -xzf "$tmp/app.tgz" -C "$REL.tmp" && rm -rf "$REL" && mv "$REL.tmp" "$REL"
+    if load_release; then
+      vurl=$(asset_url VERSION)
+      ver=""
+      [ -n "$vurl" ] && ver=$(curl -fsSL "${auth[@]}" -H 'Accept: application/octet-stream' "$vurl" 2>/dev/null | tr -d '[:space:]' || true)
+      if [ "$ver" = "$SHA" ]; then
+        purl=$(asset_url atrlabels.tgz)
+        tmp=$(mktemp -d)
+        echo "下载中（约 30MB）…"
+        if [ -n "$purl" ] && fetch_asset "$purl" "$tmp/app.tgz"; then
+          rm -rf "$REL.tmp" && mkdir -p "$REL.tmp" && tar -xzf "$tmp/app.tgz" -C "$REL.tmp" && rm -rf "$REL" && mv "$REL.tmp" "$REL"
+          rm -rf "$tmp"
+          MODE=prebuilt
+          break
+        fi
         rm -rf "$tmp"
-        MODE=prebuilt
-        break
+        warn "下载失败，重试…"
+      elif [ "$i" = 1 ]; then
+        echo "发布包版本：${ver:0:7}（需要 ${SHA:0:7}）"
       fi
-      rm -rf "$tmp"
+    elif [ "$i" = 1 ]; then
+      echo "还没有找到发布包（404）。"
     fi
-    [ "$i" = 1 ] && echo "GitHub 正在构建这个版本（一般 3–5 分钟），请稍等…"
+    [ "$i" = 1 ] && echo "GitHub 可能正在构建这个版本（一般 1–3 分钟），每 15 秒检查一次…"
     sleep 15
   done
 fi
 
 if [ "$MODE" != prebuilt ]; then
-  warn "没有下载到构建好的发布包，改为在本机构建（小内存服务器可能很慢）。"
+  if [ "$(awk '/MemTotal/{print int($2/1024)}' /proc/meminfo)" -lt 3500 ]; then
+    warn "没有下载到构建好的发布包。这台服务器内存较小，不适合在本机构建，已停止。请截图发给技术支持。"
+    exit 1
+  fi
+  warn "没有下载到构建好的发布包，改为在本机构建（需要几分钟）。"
   cd "$APP_DIR"
   npm ci --no-audit --no-fund
   set -a; . "$ENV_FILE"; set +a
