@@ -91,7 +91,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       <div className="kpis">
         <Kpi label={t.cancelled ? tr("订单（另取消 {n} 单）", { n: t.cancelled }) : tr("订单")} value={String(t.orders)} now={t.orders} prev={r.previous.orders} tr={tr} />
         <Kpi label={tr("客户消费")} value={money(t.revenue)} now={t.revenue} prev={r.previous.revenue} isMoney tr={tr} />
-        <Kpi label={tr("成本（ShipBest）")} value={money(t.cost)} now={t.cost} prev={r.previous.cost} isMoney tr={tr} />
+        <Kpi label={tr("成本")} value={money(t.cost)} now={t.cost} prev={r.previous.cost} isMoney tr={tr} />
         <Kpi label={tr("利润")} value={money(t.profit)} now={t.profit} prev={r.previous.profit} isMoney tr={tr} />
         <Kpi label={tr("利润率")} value={`${(margin * 100).toFixed(1)}%`} now={margin} prev={prevMargin} tr={tr} />
         <Kpi label={tr("充值到账")} value={money(r.topups)} now={r.topups} hint={tr("期间内确认到账的充值")} tr={tr} />

@@ -67,8 +67,8 @@ export default function ImportAdjustments() {
   function onImport() {
     if (!preview) return;
     const msg =
-      t("确认导入？\n有效 {valid} 行，其中 {unmatched} 行未匹配到面单（会保存，之后可手动关联）。", { valid: preview.rows.length - preview.invalid, unmatched: preview.unmatched }) +
-      (preview.duplicates ? t("\n\n⚠ 有 {n} 行在对应面单上已经有相同金额的补差，可能是重复导入！", { n: preview.duplicates }) : "");
+      t("确认导入？\n有效 {valid} 行，其中 {unmatched} 行未匹配到面单（会保存，之后可手动关联）。", { valid: preview.rows.length - preview.invalid - preview.duplicates, unmatched: preview.unmatched }) +
+      (preview.duplicates ? t("\n\n有 {n} 行单号之前已经导入过或在表格里重复，会自动跳过，不会重复扣款。", { n: preview.duplicates }) : "");
     if (!window.confirm(msg)) return;
     start(async () => {
       const r = await importAdjustmentAction({ filename: sheet!.filename, rows: sheet!.rows, mapping: mapping!, note });
@@ -141,15 +141,16 @@ export default function ImportAdjustments() {
         <>
           {preview.duplicates > 0 && (
             <div className="alert warn" style={{ marginTop: 12 }}>
-              {t("⚠ 有 {n} 行在对应面单上已经有相同金额的补差记录，可能这张表之前已经导入过。请在下方勾选“只看有问题的行”核对后再导入。", { n: preview.duplicates })}
+              {t("有 {n} 行单号之前已经导入过补差，或在表格里重复出现，这些行会自动跳过，不会重复扣款。可以勾选“只看有问题的行”查看。", { n: preview.duplicates })}
             </div>
           )}
           <h3>{t("按客户汇总")}</h3>
           <div className="stats">
             <div className="stat"><div className="muted">{t("ShipBest 补差合计")}</div><div className="v">{money(preview.costTotal)}</div></div>
-            <div className="stat"><div className="muted">{t("已匹配")}</div><div className="v">{preview.rows.length - preview.unmatched - preview.invalid}</div></div>
+            <div className="stat"><div className="muted">{t("已匹配")}</div><div className="v">{preview.rows.length - preview.unmatched - preview.invalid - preview.duplicates}</div></div>
             <div className="stat"><div className="muted">{t("未匹配")}</div><div className={`v ${preview.unmatched ? "profit-neg" : ""}`}>{preview.unmatched}</div></div>
             <div className="stat"><div className="muted">{t("金额无法识别（跳过）")}</div><div className={`v ${preview.invalid ? "profit-neg" : ""}`}>{preview.invalid}</div></div>
+            <div className="stat"><div className="muted">{t("重复单号（跳过）")}</div><div className={`v ${preview.duplicates ? "profit-neg" : ""}`}>{preview.duplicates}</div></div>
           </div>
           <table>
             <thead><tr><th>{t("客户")}</th><th className="num">{t("单数")}</th><th className="num">{t("ShipBest 补差")}</th><th className="num">{t("向客户补收(+)/退(-)")}</th></tr></thead>
@@ -177,7 +178,6 @@ export default function ImportAdjustments() {
                     <td className="num">{money(r.costAmount)}</td>
                     <td>
                       {r.error ? <span className="profit-neg">{tm(r.error)}</span> : r.shipmentId ? <>{r.customNo}<div className="small muted">{r.customerName}</div></> : <span className="profit-neg">{t("未找到面单")}</span>}
-                      {r.possibleDuplicate && <div className="small" style={{ color: "var(--warn)" }}>{t("⚠ 该单已有相同金额的补差，可能重复")}</div>}
                     </td>
                     <td className="num">{money(r.customerAmount)}{r.markupPercent !== null && <div className="small muted">+{r.markupPercent}%</div>}</td>
                     <td className="small">{r.reason ? r.reason.split(" · ").map((x) => tm(x)).join(" · ") : r.reason}</td>
@@ -188,7 +188,7 @@ export default function ImportAdjustments() {
           </div>
           <div className="row" style={{ marginTop: 12 }}>
             <input placeholder={t("批次备注（可选），例如：2026年9月账单")} value={note} onChange={(e) => setNote(e.target.value)} style={{ maxWidth: 360 }} />
-            <button className="primary" onClick={onImport} disabled={busy || preview.rows.length === preview.invalid}>{t("确认导入")}</button>
+            <button className="primary" onClick={onImport} disabled={busy || preview.rows.length === preview.invalid + preview.duplicates}>{t("确认导入")}</button>
           </div>
         </>
       )}

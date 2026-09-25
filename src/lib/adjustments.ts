@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 import ExcelJS from "exceljs";
 import {
   batchExists,
+  db,
+  normalizeTrackingKey,
   findShipmentByKey,
   getSettings,
   insertAdjustmentBatch,
@@ -185,7 +187,7 @@ export interface PreviewRow {
   customNo: string | null;
   customerId: number | null;
   customerName: string | null;
-  /** 该面单已有相同金额的补差记录，可能重复 */
+  /** 这一单之前已导入过补差，或在表格里重复出现：跳过，不会重复扣款 */
   possibleDuplicate: boolean;
   error?: string;
 }
@@ -200,10 +202,30 @@ export interface Preview {
   costTotal: number;
 }
 
+export const DUP_BEFORE = "这一单之前已经导入过补差，跳过（不会重复扣款）";
+export const DUP_IN_FILE = "单号在表格里重复出现，只导入第一行";
+
+/** 之前导入过补差的单号（统一写法）和面单 */
+function importedBefore() {
+  const rows = db().prepare("SELECT match_key, shipment_id FROM adjustments").all() as { match_key: string; shipment_id: number | null }[];
+  return {
+    keys: new Set(rows.map((r) => normalizeTrackingKey(r.match_key))),
+    shipments: new Set(rows.filter((r) => r.shipment_id).map((r) => r.shipment_id!)),
+  };
+}
+
+/** 这张面单是否已经有补差记录 */
+export function shipmentHasAdjustment(shipmentId: number) {
+  return !!db().prepare("SELECT 1 FROM adjustments WHERE shipment_id = ? LIMIT 1").get(shipmentId);
+}
+
 export function buildPreview(rows: string[][], m: Mapping): Preview {
   const { adjustmentPolicy: policy } = getSettings();
   const out: PreviewRow[] = [];
   const cache = new Map<string, ReturnType<typeof findShipmentByKey>>();
+  const before = importedBefore();
+  const seenKeys = new Set<string>();
+  const seenShipments = new Set<number>();
   for (let i = m.headerRow + 1; i < rows.length; i++) {
     const r = rows[i];
     const matchKey = (r[m.keyCol] ?? "").trim();
@@ -248,15 +270,21 @@ export function buildPreview(rows: string[][], m: Mapping): Preview {
         row.customerName = s.customerName;
         row.customerAmount = customerAmountFor(row.costAmount, policy, s.rule);
         row.markupPercent = policy === "with_markup" ? s.rule.percent : null;
-        row.possibleDuplicate = listAdjustments({ shipmentId: s.id }).some((a) => Math.abs(a.costAmount - row.costAmount!) < 0.005);
       }
+      // 同一个单号只能补差一次：之前导入过的、表格里重复出现的都跳过
+      const nk = normalizeTrackingKey(matchKey);
+      if (before.keys.has(nk) || (row.shipmentId && before.shipments.has(row.shipmentId))) row.error = DUP_BEFORE;
+      else if (seenKeys.has(nk) || (row.shipmentId && seenShipments.has(row.shipmentId))) row.error = DUP_IN_FILE;
+      if (row.error) row.possibleDuplicate = true;
+      seenKeys.add(nk);
+      if (row.shipmentId) seenShipments.add(row.shipmentId);
     }
     out.push(row);
   }
 
   const groups = new Map<number, Preview["byCustomer"][number]>();
   for (const r of out) {
-    if (!r.customerId) continue;
+    if (!r.customerId || r.error) continue;
     const g = groups.get(r.customerId) ?? { customerId: r.customerId, customerName: r.customerName!, count: 0, costTotal: 0, customerTotal: 0 };
     g.count++;
     g.costTotal += r.costAmount!;
@@ -268,9 +296,9 @@ export function buildPreview(rows: string[][], m: Mapping): Preview {
     policy,
     byCustomer: [...groups.values()].sort((a, b) => b.customerTotal - a.customerTotal),
     unmatched: out.filter((r) => !r.error && !r.shipmentId).length,
-    invalid: out.filter((r) => r.error).length,
+    invalid: out.filter((r) => r.error && !r.possibleDuplicate).length,
     duplicates: out.filter((r) => r.possibleDuplicate).length,
-    costTotal: out.reduce((a, r) => a + (r.costAmount ?? 0), 0),
+    costTotal: out.reduce((a, r) => a + (r.error ? 0 : (r.costAmount ?? 0)), 0),
   };
 }
 

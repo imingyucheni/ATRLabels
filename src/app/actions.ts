@@ -13,6 +13,7 @@ import {
   type Mapping,
   type ParsedSheet,
   type Preview,
+  shipmentHasAdjustment,
 } from "@/lib/adjustments";
 import {
   deleteAdjustmentBatch,
@@ -591,6 +592,7 @@ export async function linkAdjustmentAction(_: FlashState, fd: FormData): Promise
   if (adj.shipment_id) return { error: "已经关联过了" };
   const s = findShipmentByKey(str(fd.get("key")));
   if (!s) return { error: "找不到这个单号对应的面单" };
+  if (shipmentHasAdjustment(s.id)) return { error: "这一单已经有补差记录了，不能重复关联（避免重复扣款）" };
   // 关联到异常状态的面单时先提醒，勾选“仍然关联”后再提交
   if (fd.get("force") !== "1") {
     const warn: string[] = [];

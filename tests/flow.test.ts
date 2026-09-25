@@ -142,6 +142,20 @@ describe("模拟模式完整流程", () => {
     // 再次预览会提示可能重复
     const again = adj.buildPreview(sheet.rows, mapping);
     expect(again.rows.find((r) => r.shipmentId)!.possibleDuplicate).toBe(true);
+    // 换一个文件、同一个单号：直接跳过，不会重复扣款；表格内重复的单号只导第一行
+    const other = [["跟踪号", "补差金额"], [s.trackingNo!, "2.00"], ["NEW-KEY-1", "1.00"], ["NEW-KEY-1", "1.00"]];
+    const m2 = { headerRow: 0, keyCol: 0, altKeyCol: -1, amountCol: 1, reasonCol: -1, positiveMeans: "charge" as const };
+    const p3 = adj.buildPreview(other, m2);
+    expect(p3.rows[0].error).toBe(adj.DUP_BEFORE);
+    expect(p3.rows[2].error).toBe(adj.DUP_IN_FILE);
+    expect(p3.duplicates).toBe(2);
+    expect(p3.byCustomer).toEqual([]);
+    // NOT-IN-SYSTEM 之前导入过（未匹配），再出现也跳过
+    expect(adj.buildPreview([["跟踪号", "补差金额"], ["not-in-system", "1"]], m2).rows[0].error).toBe(adj.DUP_BEFORE);
+    const b2 = adj.importAdjustments("other.xlsx", other, m2, null);
+    expect(db.listAdjustments({ batchId: b2 }).length).toBe(1);
+    expect(ledger.balanceOf(custId)).toBeCloseTo(50 - s.price - 1.32, 2); // 没有再扣
+    db.deleteAdjustmentBatch(b2);
 
     // 撤销批次
     db.deleteAdjustmentBatch(batchId);
@@ -156,6 +170,7 @@ describe("模拟模式完整流程", () => {
     const p2 = adj.buildPreview(rows2, { headerRow: 0, keyCol: 0, altKeyCol: -1, amountCol: 1, reasonCol: -1, positiveMeans: "charge" });
     expect(p2.rows[0].shipmentId).toBe(id);
     expect(p2.rows[1].shipmentId).toBe(id);
+    expect(p2.rows[1].error).toBe(adj.DUP_IN_FILE); // 同一单写法不同也算重复
     expect(p2.rows[2].error).toMatch(/科学计数法/);
   }, 30_000);
 
