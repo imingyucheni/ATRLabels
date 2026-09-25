@@ -139,13 +139,20 @@ export async function portalCancelAction(_: FlashState, fd: FormData): Promise<F
   if (!ownsShipment(me.id, id)) return { error: await tMsg("面单不存在") };
   const s = getShipment(id);
   if (!s || (s.status !== "pending" && s.status !== "labeled")) return { error: await tMsg("这张面单当前不能申请取消") };
+  const contact = getSettings().supportContact;
+  const failed = async () => {
+    const t = await getT();
+    return { error: contact ? t("取消失败，请联系客服：{contact}", { contact }) : t("取消失败，请联系客服") };
+  };
   try {
-    const r = await requestCancel(id);
+    // 接口取消成功才算取消；失败就告诉客户联系客服（面单保持有效）
+    const r = await requestCancel(id, { markOnFail: false });
     revalidatePath(`/portal/shipments/${id}`);
     revalidatePath("/portal", "layout");
-    return { ok: await tMsg(r.done ? "已取消，费用已退回账户余额" : "已提交取消申请，客服处理完成后费用会退回账户余额") };
+    if (!r.done) return failed();
+    return { ok: await tMsg("已取消，费用已退回账户余额") };
   } catch {
-    return { error: await tMsg("申请取消失败，请稍后再试或联系客服") };
+    return failed();
   }
 }
 

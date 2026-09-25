@@ -440,7 +440,10 @@ function round2(n: number) {
  * 申请取消：先尝试接口取消（未出单的订单通常可以直接取消）；
  * 接口不支持时标记为“取消处理中”，由员工在 OMS 联系 ShipBest 人工取消后再确认。
  */
-export async function requestCancel(id: number): Promise<{ done: boolean; message: string }> {
+export async function requestCancel(
+  id: number,
+  opts: { markOnFail?: boolean } = {},
+): Promise<{ done: boolean; message: string }> {
   const s = getShipment(id);
   if (!s) throw new Error("记录不存在");
   if (s.status === "cancelled") return { done: true, message: "已经是取消状态" };
@@ -450,6 +453,11 @@ export async function requestCancel(id: number): Promise<{ done: boolean; messag
     settleCancel(id);
     return { done: true, message: "已取消，费用已退回账户余额" };
   } catch (e) {
+    // 客户自己申请：接口取消失败时不改状态（面单照常有效），只留一条记录给后台看
+    if (opts.markOnFail === false) {
+      updateShipment(id, { errorMsg: `客户申请取消，接口取消未成功：${(e as Error).message}` });
+      return { done: false, message: (e as Error).message };
+    }
     updateShipment(id, {
       status: "cancel_requested",
       errorMsg: `接口取消未成功：${(e as Error).message}。请在 OMS 联系 ShipBest 人工取消，完成后点“确认已取消”。`,

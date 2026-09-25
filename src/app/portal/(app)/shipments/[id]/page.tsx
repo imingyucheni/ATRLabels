@@ -104,8 +104,8 @@ export default async function PortalShipmentDetail({ params }: { params: Promise
                 inline
                 confirm={
                   s.hasLabel || s.trackingNo
-                    ? t("确认申请取消这张面单？面单已生成，取消后收取 {pct}% 取消手续费，其余运费退回账户余额。取消处理完成前请不要使用这张面单。", { pct: feePct })
-                    : t("确认申请取消这张订单？面单还没生成，取消后运费全额退回账户余额。")
+                    ? t("确认取消这张面单？面单已生成，取消后收取 {pct}% 取消手续费，其余运费退回账户余额，取消后面单不能再使用。", { pct: feePct })
+                    : t("确认取消这张订单？面单还没生成，取消后运费全额退回账户余额。")
                 }
               >
                 <input type="hidden" name="id" value={s.id} />

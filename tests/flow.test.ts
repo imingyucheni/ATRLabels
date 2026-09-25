@@ -68,6 +68,12 @@ describe("模拟模式完整流程", () => {
     expect(ledger.balanceOf(custId)).toBeCloseTo(100 - s.price, 2);
 
     // 已出面单：接口取消失败 → 标记处理中 → 人工确认
+    // 客户自己申请：接口取消失败时不改状态，面单照常有效，也不退款
+    const self = await svc.requestCancel(id, { markOnFail: false });
+    expect(self.done).toBe(false);
+    expect(db.getShipment(id)!.status).toBe("labeled");
+    expect(ledger.balanceOf(custId)).toBeCloseTo(100 - s.price, 2);
+
     const r = await svc.requestCancel(id);
     expect(r.done).toBe(false);
     expect(db.getShipment(id)!.status).toBe("cancel_requested");

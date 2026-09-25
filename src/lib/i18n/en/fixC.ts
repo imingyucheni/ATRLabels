@@ -1,4 +1,8 @@
 export const fixC: Record<string, string> = {
+  "取消失败，请联系客服：{contact}": "Cancellation failed. Please contact support: {contact}",
+  "取消失败，请联系客服": "Cancellation failed. Please contact support.",
+  "确认取消这张面单？面单已生成，取消后收取 {pct}% 取消手续费，其余运费退回账户余额，取消后面单不能再使用。": "Cancel this label? It has already been created: a {pct}% cancellation fee applies and the rest is refunded to your balance. The label can't be used after cancelling.",
+  "确认取消这张订单？面单还没生成，取消后运费全额退回账户余额。": "Cancel this order? No label has been created yet, so the full postage is refunded to your balance.",
   // 面单详情：按客户纸张显示打印按钮
   "打开 / 打印面单 · {paper}": "Open / Print label · {paper}",
   // 后台运费试算：商品明细可选
