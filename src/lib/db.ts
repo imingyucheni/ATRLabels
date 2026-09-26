@@ -420,6 +420,8 @@ export interface Settings {
   originGateway: string;
   /** ShipBest 接口：在后台“设置”里填写；mode = env 时按服务器环境变量 */
   shipbest: { mode: "env" | "mock" | "sandbox" | "live"; apiId: string; token: string; baseUrl?: string };
+  /** 官网（客户 OMS 网址的首页）上的公司信息和联系方式 */
+  site: { company: string; address: string; phone: string; wechat: string; email: string; hours: string };
   /** 嘉谷万邑（Dragon Open API）尾程面单：第二个服务商 */
   jiagu: { enabled: boolean; clientId: string; secret: string; ownershipId: string; customerId: string; warehouseId: string; warehouses?: Record<string, string>; authUrl?: string; apiUrl?: string };
   /** USPS 地址核对（Addresses API v3） */
@@ -473,6 +475,7 @@ const DEFAULT_SETTINGS: Settings = {
   originGateway: "LAX",
   shipbest: { mode: "env", apiId: "", token: "" },
   jiagu: { enabled: false, clientId: "", secret: "", ownershipId: "", customerId: "", warehouseId: "" },
+  site: { company: "Atronia Innovations Inc.", address: "Chino, CA 91710", phone: "", wechat: "", email: "", hours: "周一至周六 9:00–18:00（美西时间）" },
   usps: { enabled: true, consumerKey: "", consumerSecret: "" },
   addrCheck: { enabled: true, provider: "google", googleKey: "", monthlyCap: 5000 },
   financePin: null,

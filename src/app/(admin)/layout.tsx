@@ -4,6 +4,7 @@ import { siteSwitch } from "@/lib/sites";
 import { currentEnv } from "@/lib/db";
 import { pendingTopupCount } from "@/lib/topup";
 import { pendingResets } from "@/lib/passwordReset";
+import { newLeadCount } from "@/lib/leads";
 import Sidebar from "@/components/Sidebar";
 import fs from "node:fs";
 import path from "node:path";
@@ -31,6 +32,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   await requireAdmin();
   const pendingTopups = pendingTopupCount();
   const resets = pendingResets().length;
+  const leads = newLeadCount();
   const t = await getT();
   return (
     <div className="shell">
@@ -57,6 +59,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             title: "客户",
             items: [
               { href: "/customers", label: "客户管理", icon: "customers", count: resets },
+              { href: "/leads", label: "开户申请", icon: "leads", count: leads },
               { href: "/quote", label: "运费试算", icon: "ship" },
               { href: "/finance", label: "财务 · 充值审核", icon: "finance", count: pendingTopups },
             ],

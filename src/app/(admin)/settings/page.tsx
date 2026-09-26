@@ -7,7 +7,7 @@ import StampSettings from "@/components/StampSettings";
 import FlashForm from "@/components/FlashForm";
 import RuleInputs from "@/components/RuleInputs";
 import { DEFAULT_JG_WAREHOUSES, isJiaguCode, JG_PREFIX, JG_SUFFIX } from "@/lib/shipbest/jiagu";
-import { saveJiaguAction, testJiaguAction, resetTestEnvAction, saveSmtpAction, testMailAction, setFinancePinAction, clearTestDataAction, saveAddrCheckAction, testAddrAction, refreshFxAction, saveChannelsAction, savePaymentSettingsAction, saveSettingsAction, saveShipBestAction, syncChannelsAction, verifyAction } from "@/app/actions";
+import { saveSiteAction, saveJiaguAction, testJiaguAction, resetTestEnvAction, saveSmtpAction, testMailAction, setFinancePinAction, clearTestDataAction, saveAddrCheckAction, testAddrAction, refreshFxAction, saveChannelsAction, savePaymentSettingsAction, saveSettingsAction, saveShipBestAction, syncChannelsAction, verifyAction } from "@/app/actions";
 import { cnyToPay, usdCnyQuote } from "@/lib/fx";
 import FilePick from "@/components/FilePick";
 import { CarrierMark } from "@/components/ChannelLabel";
@@ -100,6 +100,29 @@ export default async function SettingsPage() {
           <FlashForm action={syncChannelsAction} submitLabel="同步渠道" inline />
         </div>
       </div>
+
+      {(() => {
+        const site = { ...{ company: "", address: "", phone: "", wechat: "", email: "", hours: "" }, ...s.site };
+        return (
+          <div className="card" id="site">
+            <div className="row" style={{ justifyContent: "space-between" }}>
+              <h2 style={{ margin: 0 }}>{t("官网与联系方式")}</h2>
+              <a className="btn small" href="/site" target="_blank">{t("查看官网")}</a>
+            </div>
+            <p className="small muted" style={{ marginTop: 10 }}>{t("客户 OMS 网址的首页就是官网：介绍服务、引导“申请开户”和登录。这里填的联系方式会显示在官网上，留空的不显示。官网上的品牌名称就是下面“客户端显示的公司名称”。")}</p>
+            <FlashForm action={saveSiteAction} submitLabel="保存" review>
+              <div className="grid" style={{ margin: "12px 0" }}>
+                <label className="f">{t("公司名称")}<input name="company" defaultValue={site.company} maxLength={80} /></label>
+                <label className="f">{t("地址")}<input name="address" defaultValue={site.address} maxLength={120} placeholder="Chino, CA 91710" /></label>
+                <label className="f">{t("微信")}<input name="wechat" defaultValue={site.wechat} maxLength={40} /></label>
+                <label className="f">{t("电话")}<input name="phone" defaultValue={site.phone} maxLength={40} /></label>
+                <label className="f">{t("邮箱")}<input name="email" type="email" defaultValue={site.email} maxLength={80} /></label>
+                <label className="f">{t("服务时间")}<input name="hours" defaultValue={site.hours} maxLength={80} /></label>
+              </div>
+            </FlashForm>
+          </div>
+        );
+      })()}
 
       {(() => {
         const jg = s.jiagu ?? { enabled: false, clientId: "", secret: "", ownershipId: "", customerId: "", warehouseId: "" };

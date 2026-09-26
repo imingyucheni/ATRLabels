@@ -14,6 +14,7 @@ import { common } from "./en/common";
 import { fixA } from "./en/fixA";
 import { fixB } from "./en/fixB";
 import { fixC } from "./en/fixC";
+import { site } from "./en/site";
 import { orders } from "./en/orders";
 import { orderPatterns } from "./en/orderPatterns";
 import { patterns } from "./en/patterns";
@@ -21,7 +22,7 @@ import { patterns } from "./en/patterns";
 export type Lang = "zh" | "en";
 export type Vars = Record<string, string | number | null | undefined>;
 
-const EN: Record<string, string> = { ...admin3, ...admin2, ...admin1, ...common, ...orders, ...account, ...fixA, ...fixB, ...fixC };
+const EN: Record<string, string> = { ...admin3, ...admin2, ...admin1, ...common, ...orders, ...account, ...fixA, ...fixB, ...fixC, ...site };
 const PATTERNS: [RegExp, string][] = [...patterns, ...orderPatterns, ...admin1Patterns, ...admin2Patterns, ...admin3Patterns];
 
 function fill(s: string, vars?: Vars) {

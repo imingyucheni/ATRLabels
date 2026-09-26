@@ -46,6 +46,7 @@ import { saveDimRule } from "@/lib/rates";
 import { CARRIERS } from "@/lib/carriers";
 import { clearChannelNameCache, sameNameChannels } from "@/lib/channelDisplay";
 import { clearTestData } from "@/lib/cleanup";
+import { updateLead } from "@/lib/leads";
 import { getJiaguClient, jiaguConfig, JG_PREFIX, JG_SUFFIX, warehouseFor } from "@/lib/shipbest/jiagu";
 import { createBackup, deleteBackup, restoreBackup } from "@/lib/backup";
 import { resetTestEnv, setStoredMode } from "@/lib/db";
@@ -890,6 +891,34 @@ export async function saveShipBestAction(_: FlashState, fd: FormData): Promise<F
     return { ok: "已切换到正式模式，连接成功。请点“同步渠道”获取真实渠道，之后的报价和出单都是真实的。" };
   }
   return { ok: mode === "mock" ? "已切换到模拟模式（价格是模拟的，不会真实出单）" : "已保存" };
+}
+
+/* ---------------- 官网 ---------------- */
+
+export async function updateLeadAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  await requireAdmin();
+  const raw = fd.get("status");
+  const status = raw === "contacted" || raw === "done" || raw === "rejected" ? raw : "new";
+  updateLead(Number(fd.get("id")), status, str(fd.get("adminNote"), 200) || null);
+  revalidatePath("/leads");
+  revalidatePath("/", "layout");
+  return { ok: "已保存" };
+}
+
+export async function saveSiteAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  await requireAdmin();
+  saveSettings({
+    site: {
+      company: str(fd.get("company"), 80),
+      address: str(fd.get("address"), 120),
+      phone: str(fd.get("phone"), 40),
+      wechat: str(fd.get("wechat"), 40),
+      email: str(fd.get("email"), 80),
+      hours: str(fd.get("hours"), 80),
+    },
+  });
+  revalidatePath("/site");
+  return { ok: "已保存，官网上的联系方式已更新" };
 }
 
 /* ---------------- 嘉谷万邑 ---------------- */
