@@ -14,7 +14,6 @@ export default function SiteNav({ brand, home = true }: { brand: string; home?: 
   const anchor = (id: string) => (home ? `#${id}` : `/site#${id}`);
   const links = [
     { href: anchor("why"), label: t("优势") },
-    { href: anchor("compare"), label: t("对比") },
     { href: anchor("how"), label: t("流程") },
     { href: anchor("faq"), label: t("常见问题") },
   ];
@@ -30,8 +29,8 @@ export default function SiteNav({ brand, home = true }: { brand: string; home?: 
         </div>
         <div className="site-nav-right">
           <PrefToggles />
-          <Link href="/portal" className="btn">{t("登录")}</Link>
-          <Link href="/site/apply" className="btn primary">{t("申请开户")}</Link>
+          <Link href="/portal" className="btn site-btn-ghost">{t("登录")}</Link>
+          <Link href="/site/apply" className="btn site-btn-primary">{t("免费开户")}</Link>
         </div>
         <button type="button" className="site-burger" aria-label={t("菜单")} aria-expanded={open} onClick={() => setOpen(!open)}>
           {open ? <X size={20} /> : <Menu size={20} />}

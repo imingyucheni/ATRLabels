@@ -152,6 +152,20 @@ export function listOwnAdjustments(customerId: number): PortalAdjustment[] {
 }
 
 /** 客户取消订单时要扣的手续费比例（给客户看） */
+/** 取消时限（小时），0 = 不限 */
+export function cancelWindowHours() {
+  const h = Number(getSettings().cancelWindowHours ?? 48);
+  return Number.isFinite(h) && h > 0 ? h : 0;
+}
+
+/** 下单时间（UTC，“YYYY-MM-DD HH:MM:SS”）加上时限后是否已过期 */
+export function cancelWindowPassed(createdAt: string, now = Date.now()) {
+  const h = cancelWindowHours();
+  if (!h) return false;
+  const t = Date.parse(createdAt.includes("T") ? createdAt : createdAt.replace(" ", "T") + "Z");
+  return Number.isFinite(t) && now - t > h * 3600_000;
+}
+
 export function portalCancelFeePercent() {
   return getSettings().cancelFeePercent;
 }

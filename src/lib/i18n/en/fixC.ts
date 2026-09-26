@@ -120,4 +120,13 @@ export const fixC: Record<string, string> = {
   "启用前请填写 Client ID、Client Secret、权属 ID 和客户 ID": "Fill in Client ID, Client Secret, Ownership ID and Customer ID before enabling",
   "已保存（嘉谷已停用，嘉谷渠道暂时不能报价和下单）": "Saved (Jiagu disabled \u2014 its services can't quote or ship for now)",
   "嘉谷没有启用或账号没填完整": "Jiagu is not enabled or the account details are incomplete",
+  // 取消时限
+  "下单已超过 {h} 小时，不能再取消": "More than {h} hours have passed since the order, so it can no longer be cancelled",
+  "下单后 {h} 小时内可以取消。": "Cancellation is available within {h} hours of ordering.",
+  "下单已超过 {h} 小时，不能再取消。如有特殊情况请联系客服。": "More than {h} hours have passed since the order, so it can no longer be cancelled. Contact support for special cases.",
+  "下单后可取消时限（小时）": "Cancellation window after ordering (hours)",
+  "0 = 不限": "0 = no limit",
+  "超过可取消时限后，客户端不再显示“申请取消”；后台仍可操作（特殊情况和服务商沟通后使用）。": "After the window, customers no longer see \u201cRequest cancel\u201d; admins can still cancel (for special cases agreed with the provider).",
+  "这张面单下单已超过可取消时限，服务商可能不接受取消。确定仍要申请取消吗？": "This label is past the cancellation window and the provider may refuse. Request cancellation anyway?",
+  "下单已超过 {h} 小时（可取消时限），客户端已不能申请取消。": "More than {h} hours since the order (the cancellation window); customers can no longer request cancellation.",
 };

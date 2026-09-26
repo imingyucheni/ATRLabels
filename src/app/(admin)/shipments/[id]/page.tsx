@@ -10,6 +10,7 @@ import { SB_STATUS, type Address } from "@/lib/shipbest/types";
 import FlashForm from "@/components/FlashForm";
 import StatusBadge from "@/components/StatusBadge";
 import Profit from "@/components/Profit";
+import { cancelWindowHours, cancelWindowPassed } from "@/lib/portal";
 import { cancelAction, confirmCancelAction, refreshAction, saveLabelNoteAction, withdrawCancelAction } from "@/app/actions";
 import { stampFor, stampText } from "@/lib/stamp";
 import { LEDGER_TYPE_LABEL, listLedger } from "@/lib/ledger";
@@ -103,11 +104,16 @@ export default async function ShipmentDetail({ params }: { params: Promise<{ id:
             </FlashForm>
             {canCancel && (
               <FlashForm action={cancelAction} submitLabel="申请取消" submitClass="danger" inline
-                confirm="确认取消这张面单？已出面单的订单需 ShipBest 人工取消，并收取取消费。">
+                confirm={cancelWindowPassed(s.createdAt)
+                  ? "这张面单下单已超过可取消时限，服务商可能不接受取消。确定仍要申请取消吗？"
+                  : "确认取消这张面单？已出面单的订单需 ShipBest 人工取消，并收取取消费。"}>
                 <input type="hidden" name="id" value={s.id} />
               </FlashForm>
             )}
           </div>
+          {canCancel && cancelWindowPassed(s.createdAt) && (
+            <p className="small warn-text" style={{ marginTop: 8 }}>{t("下单已超过 {h} 小时（可取消时限），客户端已不能申请取消。", { h: cancelWindowHours() })}</p>
+          )}
           {s.status === "cancel_requested" && (
             <div className="card" style={{ marginTop: 12, background: "var(--warn-soft)" }}>
               <h2>{t("确认已取消")}</h2>

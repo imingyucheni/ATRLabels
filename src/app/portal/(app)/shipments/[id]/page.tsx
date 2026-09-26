@@ -3,7 +3,7 @@ import ChannelLabel from "@/components/ChannelLabel";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireCustomer } from "@/lib/auth";
-import { getOwnShipment, listOwnAdjustments, portalCancelFeePercent } from "@/lib/portal";
+import { cancelWindowHours, cancelWindowPassed, getOwnShipment, listOwnAdjustments, portalCancelFeePercent } from "@/lib/portal";
 import { money } from "@/lib/pricing";
 import { LEDGER_TYPE_LABEL, listLedger } from "@/lib/ledger";
 import type { Address } from "@/lib/shipbest/types";
@@ -37,7 +37,11 @@ export default async function PortalShipmentDetail({ params }: { params: Promise
   const adjustments = listOwnAdjustments(me.id).filter((a) => a.shipmentId === s.id);
   const [wu, lu] = UNITS[s.pkg.displayUnitSystem] ?? UNITS[3];
   // 未出单 / 已出面单的订单客户可以自己申请取消；异常单请联系客服
-  const canCancel = s.status === "pending" || s.status === "labeled";
+  const cancellable = s.status === "pending" || s.status === "labeled";
+  // 服务商规定下单后一定时间内（默认 48 小时）才能取消
+  const windowH = cancelWindowHours();
+  const tooLate = cancellable && cancelWindowPassed(s.createdAt);
+  const canCancel = cancellable && !tooLate;
   const paper = isPaperSize(me.labelPaper) ? me.labelPaper : "4x6";
   const feePct = portalCancelFeePercent();
   const contact = getSettings().supportContact;
@@ -110,7 +114,11 @@ export default async function PortalShipmentDetail({ params }: { params: Promise
           {canCancel && (
             <p className="small muted" style={{ marginTop: 8 }}>
               {t("不需要这张面单了可以点“申请取消”：未出面单的全额退款；已出面单的收取 {pct}% 手续费。", { pct: feePct })}
+              {windowH > 0 && <> {t("下单后 {h} 小时内可以取消。", { h: windowH })}</>}
             </p>
+          )}
+          {tooLate && (
+            <p className="small muted" style={{ marginTop: 8 }}>{t("下单已超过 {h} 小时，不能再取消。如有特殊情况请联系客服。", { h: windowH })}</p>
           )}
         </div>
 

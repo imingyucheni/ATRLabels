@@ -350,10 +350,11 @@ export default async function SettingsPage() {
 
         <h3>{t("取消订单")}</h3>
         <div className="grid">
+          <label className="f">{t("下单后可取消时限（小时）")}<input name="cancelWindowHours" type="number" step="1" min="0" defaultValue={s.cancelWindowHours ?? 48} placeholder={t("0 = 不限")} /></label>
           <label className="f">{t("向客户收取手续费 %")}<input name="cancelFeePercent" type="number" step="0.01" defaultValue={s.cancelFeePercent} /></label>
           <label className="f">{t("ShipBest 收取取消费 %")}<input name="sbCancelFeePercent" type="number" step="0.01" defaultValue={s.sbCancelFeePercent} /></label>
         </div>
-        <p className="small muted">{t("客户取消费按客户价计算，ShipBest 取消费按我们的成本计算；只有已出面单的订单才收取。确认取消时可以手动修改。")}</p>
+        <p className="small muted">{t("客户取消费按客户价计算，ShipBest 取消费按我们的成本计算；只有已出面单的订单才收取。确认取消时可以手动修改。")} {t("超过可取消时限后，客户端不再显示“申请取消”；后台仍可操作（特殊情况和服务商沟通后使用）。")}</p>
 
         <h3>{t("官方账单补差（多退少补）")}</h3>
         <div className="grid">

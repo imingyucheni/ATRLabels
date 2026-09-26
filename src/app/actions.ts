@@ -339,6 +339,7 @@ export async function saveSettingsAction(_: FlashState, fd: FormData): Promise<F
     },
     roundingStep: optNum(fd.get("roundingStep")) ?? cur.roundingStep,
     cancelFeePercent: optNum(fd.get("cancelFeePercent")) ?? cur.cancelFeePercent,
+    cancelWindowHours: Math.max(0, Math.round(optNum(fd.get("cancelWindowHours")) ?? cur.cancelWindowHours ?? 48)),
     sbCancelFeePercent: optNum(fd.get("sbCancelFeePercent")) ?? cur.sbCancelFeePercent,
     defaultUnit: unit(fd.get("defaultUnit")),
     defaultCurrency: str(fd.get("defaultCurrency"), 3).toUpperCase() || "USD",

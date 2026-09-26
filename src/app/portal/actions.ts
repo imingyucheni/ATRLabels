@@ -22,7 +22,7 @@ import { isPaperSize, PAPER_LABEL } from "@/lib/labelLayout";
 import { deleteSender, listSenders, saveSender, setDefaultSender } from "@/lib/senders";
 import { activeShipmentByRef, duplicateRefMessage, getCustomerLogin, getPasswordHash, getSettings, getShipment, setCustomerLabelPaper, setCustomerPassword, setCustomerSender, setLabelNote } from "@/lib/db";
 import { InsufficientBalanceError } from "@/lib/ledger";
-import { ownsShipment, publicError, toPublicQuote, type PublicQuote } from "@/lib/portal";
+import { cancelWindowHours, cancelWindowPassed, ownsShipment, publicError, toPublicQuote, type PublicQuote } from "@/lib/portal";
 import { cleanAddress, cleanRequest, n, str } from "@/lib/sanitize";
 import { createLabel, PriceChangedError, quoteAll, refreshShipment, requestCancel, validateRequest } from "@/lib/service";
 import { ShipBestError } from "@/lib/shipbest/client";
@@ -156,6 +156,7 @@ export async function portalCancelAction(_: FlashState, fd: FormData): Promise<F
   if (!ownsShipment(me.id, id)) return { error: await tMsg("面单不存在") };
   const s = getShipment(id);
   if (!s || (s.status !== "pending" && s.status !== "labeled")) return { error: await tMsg("这张面单当前不能申请取消") };
+  if (cancelWindowPassed(s.createdAt)) return { error: (await getT())("下单已超过 {h} 小时，不能再取消", { h: cancelWindowHours() }) };
   const contact = getSettings().supportContact;
   const failed = async () => {
     const t = await getT();

@@ -19,3 +19,16 @@ describe("官网开户申请", () => {
     expect(leads.newLeadCount()).toBe(5);
   });
 });
+
+describe("取消时限", () => {
+  it("默认 48 小时；0 = 不限", async () => {
+    const { cancelWindowPassed } = await import("@/lib/portal");
+    const db = await import("@/lib/db");
+    const now = Date.parse("2026-09-26T12:00:00Z");
+    expect(cancelWindowPassed("2026-09-24 13:00:00", now)).toBe(false); // 47 小时
+    expect(cancelWindowPassed("2026-09-24 11:00:00", now)).toBe(true); // 49 小时
+    db.saveSettings({ cancelWindowHours: 0 });
+    expect(cancelWindowPassed("2026-01-01 00:00:00", now)).toBe(false);
+    db.saveSettings({ cancelWindowHours: 48 });
+  });
+});

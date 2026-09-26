@@ -381,6 +381,8 @@ export interface Settings {
   roundingStep: number;
   /** 取消订单时向客户收取的手续费比例（%） */
   cancelFeePercent: number;
+  /** 下单后多少小时内可以取消（服务商规定，默认 48 小时；0 = 不限） */
+  cancelWindowHours: number;
   /** ShipBest 取消订单向我们收取的费用比例（%） */
   sbCancelFeePercent: number;
   defaultUnit: UnitSystem;
@@ -453,6 +455,7 @@ const DEFAULT_SETTINGS: Settings = {
   markup: { percent: 5, fixed: 0, minProfit: 0 },
   roundingStep: 0.01,
   cancelFeePercent: 10,
+  cancelWindowHours: 48,
   sbCancelFeePercent: 10,
   defaultUnit: 3,
   defaultCurrency: "USD",
