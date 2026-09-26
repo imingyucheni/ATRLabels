@@ -66,7 +66,7 @@ export default async function SitePage() {
           <div>
             {logos.map((c) => (
               <span key={c.id} className="carrier-mark md mono">
-                {c.logo ? <img src={c.logo} alt={c.name} /> : <span className="carrier-text">{c.name}</span>}
+                {c.logo ? <img src={c.logo} alt={c.name} /> : c.id === "fedex" ? <span className="carrier-text fedex"><b>Fed</b><i>Ex</i></span> : <span className="carrier-text">{c.name}</span>}
               </span>
             ))}
           </div>

@@ -56,7 +56,7 @@ export default function RateCalculator() {
           {rows.map((r, i) => (
             <div key={r.id} className={`calc-row${i === 0 ? " best" : ""}`}>
               <span className="carrier-mark md">
-                {r.logo ? <img src={r.logo} alt={r.name} /> : <span className="carrier-text" style={{ color: "#4d148c" }}>FedEx</span>}
+                {r.logo ? <img src={r.logo} alt={r.name} /> : <span className="carrier-text fedex"><b>Fed</b><i>Ex</i></span>}
               </span>
               <div className="calc-name">
                 <b>{r.name}</b>

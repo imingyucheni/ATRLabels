@@ -54,7 +54,7 @@ export default function ProductTabs() {
                     ["", "FedEx Ground", "1–5", "10.79"],
                   ].map(([logo, name, days, price, best]) => (
                     <tr key={name as string} className={best ? "best" : ""}>
-                      <td><span className="carrier-mark md">{logo ? <img src={logo as string} alt={name as string} /> : <span className="carrier-text" style={{ color: "#4d148c" }}>FedEx</span>}</span></td>
+                      <td><span className="carrier-mark md">{logo ? <img src={logo as string} alt={name as string} /> : <span className="carrier-text fedex"><b>Fed</b><i>Ex</i></span>}</span></td>
                       <td><b>{name}</b><small>{t("{d} 天", { d: days as string })}</small></td>
                       <td className="num">{best && <em>{t("最低价")}</em>}<b>${price}</b></td>
                     </tr>
