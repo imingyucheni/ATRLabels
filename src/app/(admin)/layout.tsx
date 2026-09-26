@@ -59,7 +59,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             title: "客户",
             items: [
               { href: "/customers", label: "客户管理", icon: "customers", count: resets },
-              { href: "/leads", label: "开户申请", icon: "leads", count: leads },
+              { href: "/leads", label: "客户咨询", icon: "leads", count: leads },
               { href: "/quote", label: "运费试算", icon: "ship" },
               { href: "/finance", label: "财务 · 充值审核", icon: "finance", count: pendingTopups },
             ],

@@ -109,7 +109,7 @@ export default async function SettingsPage() {
               <h2 style={{ margin: 0 }}>{t("官网与联系方式")}</h2>
               <a className="btn small" href="/site" target="_blank">{t("查看官网")}</a>
             </div>
-            <p className="small muted" style={{ marginTop: 10 }}>{t("客户 OMS 网址的首页就是官网：介绍服务、引导“申请开户”和登录。这里填的联系方式会显示在官网上，留空的不显示。官网上的品牌名称就是下面“客户端显示的公司名称”。")}</p>
+            <p className="small muted" style={{ marginTop: 10 }}>{t("客户 OMS 网址的首页就是官网：介绍服务、引导访客“联系我们”（不开放自助注册）和老客户登录。这里填的联系方式会显示在官网上，留空的不显示。官网上的品牌名称就是下面“客户端显示的公司名称”。")}</p>
             <FlashForm action={saveSiteAction} submitLabel="保存" review>
               <div className="grid" style={{ margin: "12px 0" }}>
                 <label className="f">{t("公司名称")}<input name="company" defaultValue={site.company} maxLength={80} /></label>

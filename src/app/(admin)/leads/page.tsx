@@ -16,8 +16,8 @@ export default async function LeadsPage() {
     <>
       <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-end" }}>
         <div>
-          <h1 style={{ marginBottom: 2 }}>{t("开户申请")}</h1>
-          <p className="small muted" style={{ margin: 0 }}>{t("官网上“申请开户”提交的联系方式。联系后改状态、写备注，开户请到“客户管理”新建客户。")}</p>
+          <h1 style={{ marginBottom: 2 }}>{t("客户咨询")}</h1>
+          <p className="small muted" style={{ margin: 0 }}>{t("官网“联系我们”表单提交的咨询。联系后改状态、写备注；确认合作后到“客户管理”为客户开通账户。")}</p>
         </div>
         <Link className="btn" href="/site" target="_blank">{t("查看官网")}</Link>
       </div>
@@ -52,7 +52,7 @@ export default async function LeadsPage() {
                 </td>
               </tr>
             ))}
-            {!leads.length && <tr><td colSpan={6} className="muted">{t("还没有开户申请。官网地址就是客户 OMS 网址的首页。")}</td></tr>}
+            {!leads.length && <tr><td colSpan={6} className="muted">{t("还没有客户咨询。官网地址就是客户 OMS 网址的首页。")}</td></tr>}
           </tbody>
         </table>
       </div>

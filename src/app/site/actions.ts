@@ -9,7 +9,7 @@ export type ApplyState = { ok?: boolean; error?: string; values?: Partial<Values
 
 const str = (v: FormDataEntryValue | null, max: number) => String(v ?? "").trim().slice(0, max);
 
-/** 官网“申请开户”（不需要登录） */
+/** 官网“联系我们”表单（不需要登录；不会自动开户） */
 export async function applyAction(_: ApplyState, fd: FormData): Promise<ApplyState> {
   const values: Values = {
     company: str(fd.get("company"), 80),
