@@ -12,11 +12,11 @@ export default function ProductTabs() {
   const t = useT();
   const [tab, setTab] = useState<Tab>("rates");
   const [paused, setPaused] = useState(false);
-  const [paper, setPaper] = useState<"4x6" | "a4" | "letter">("4x6");
+  const [paper, setPaper] = useState<"4x6" | "half" | "letter" | "letter2">("4x6");
   const tabs: { id: Tab; icon: typeof Scale; title: string; desc: string }[] = [
     { id: "rates", icon: Scale, title: t("实时比价"), desc: t("多家渠道同时报价，自动选最低。") },
     { id: "bulk", icon: FileSpreadsheet, title: t("批量导入"), desc: t("Excel 导入上千单，逐单比价。") },
-    { id: "print", icon: Printer, title: t("合并打印"), desc: t("4×6、A4、Letter，一次打印。") },
+    { id: "print", icon: Printer, title: t("合并打印"), desc: t("4×6 热敏纸或 Letter 普通纸，一次打印。") },
     { id: "ledger", icon: Receipt, title: t("透明对账"), desc: t("每笔扣款、补差逐单可查。") },
   ];
 
@@ -85,15 +85,30 @@ export default function ProductTabs() {
             {tab === "print" && (
               <div className="pt-print">
                 <div className="pt-paper" role="radiogroup" aria-label={t("纸张")}>
-                  {(["4x6", "a4", "letter"] as const).map((p) => (
+                  {([["4x6", t("4×6 热敏纸")], ["half", t("半张纸")], ["letter", t("Letter · 1 张")], ["letter2", t("Letter · 2 张")]] as const).map(([p, label]) => (
                     <button key={p} type="button" role="radio" aria-checked={paper === p} className={paper === p ? "on" : ""} onClick={() => setPaper(p)}>
-                      {p === "4x6" ? "4×6" : p === "a4" ? "A4" : "Letter"}
+                      {label}
                     </button>
                   ))}
                 </div>
-                <div className={`pt-sheet ${paper}`}>
-                  {(paper === "4x6" ? [0] : [0, 1]).map((i) => <ShippingLabel key={i} variant={i} />)}
-                </div>
+                {/* 按真实比例示意：和系统里“打印 / 下载”的排版一致 */}
+                {paper === "4x6" ? (
+                  <div className="pp-thermal"><ShippingLabel /></div>
+                ) : (
+                  <div className={`pp-page ${paper}`}>
+                    {paper === "letter" && <div className="pp-slot up"><ShippingLabel /></div>}
+                    {paper === "half" && <div className="pp-slot land half"><div className="pp-rot"><ShippingLabel /></div></div>}
+                    {paper === "letter2" && (
+                      <>
+                        <div className="pp-slot land top"><div className="pp-rot"><ShippingLabel /></div></div>
+                        <div className="pp-cut" />
+                        <div className="pp-slot land bottom"><div className="pp-rot"><ShippingLabel variant={1} /></div></div>
+                      </>
+                    )}
+                    <span className="pp-size">{paper === "half" ? '8.5 × 5.5"' : '8.5 × 11"'}</span>
+                  </div>
+                )}
+                <p className="pp-note">{paper === "4x6" ? t("热敏打印机直接打印，一张一单") : paper === "half" ? t("半张纸，面单横放，一页一张") : paper === "letter" ? t("整张纸，面单原尺寸放在上半部分，方便裁剪") : t("整张纸上下各一张，中间有裁剪线")}</p>
               </div>
             )}
 

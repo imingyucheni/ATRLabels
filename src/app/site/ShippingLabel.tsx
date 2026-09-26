@@ -23,7 +23,7 @@ export default function ShippingLabel({ variant = 0 }: { variant?: number }) {
       <line x1="8" y1="60" x2="192" y2="60" stroke="#111" strokeWidth="1.5" />
       <text x="10" y="74" fontSize="6" fill="#666" fontFamily="Arial, sans-serif">FROM</text>
       <text x="10" y="84" fontSize="7" fill="#111" fontFamily="Arial, sans-serif">ATR LOGISTICS</text>
-      <text x="10" y="93" fontSize="7" fill="#111" fontFamily="Arial, sans-serif">CHINO CA 91710</text>
+      <text x="10" y="93" fontSize="7" fill="#111" fontFamily="Arial, sans-serif">LOS ANGELES CA 90058</text>
       <text x="10" y="116" fontSize="6" fill="#666" fontFamily="Arial, sans-serif">SHIP TO</text>
       {to.map((l, i) => (
         <text key={l} x="22" y={130 + i * 13} fontSize={i === 0 ? 10 : 9} fontWeight={i === 0 ? 700 : 500} fill="#111" fontFamily="Arial, sans-serif">{l}</text>

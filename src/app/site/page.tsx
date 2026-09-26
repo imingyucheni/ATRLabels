@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, Headset, Receipt, Wallet } from "lucide-react";
+import { ArrowRight, Building2, DatabaseBackup, Factory, Headset, MapPinned, MessageSquare, PackageCheck, Receipt, ShoppingBag, Undo2, UserCheck, Wallet } from "lucide-react";
 import { getSettings } from "@/lib/db";
 import { getLang, getT } from "@/lib/prefs";
 import { CARRIERS } from "@/lib/carriers";
@@ -83,6 +83,35 @@ export default async function SitePage() {
         </div>
       </section>
 
+      {/* ---------- 适合谁 ---------- */}
+      <section className="us-section tight-top" id="who">
+        <div className="site-wrap">
+          <div className="us-head center">
+            <p className="us-eyebrow">{t("适合谁")}</p>
+            <h2>{t("为每天都在发货的你而设计")}</h2>
+          </div>
+          <div className="who-grid">
+            {[
+              { icon: ShoppingBag, tone: "blue", title: t("跨境电商卖家"), body: t("Amazon、TikTok Shop、Temu、Shopify 自发货订单，一个账户比价出单。"), tags: ["TikTok Shop", "Temu", "Shopify"] },
+              { icon: Building2, tone: "violet", title: t("海外仓 / 3PL"), body: t("每天上千单批量导入，逐单自动选最低渠道，合并打印。"), tags: [t("批量导入"), t("合并打印")] },
+              { icon: Factory, tone: "teal", title: t("本地品牌 / 批发商"), body: t("洛杉矶本地发货，预付余额，不用和多家物流分别对账。"), tags: [t("预付余额"), t("一张账单")] },
+            ].map((w) => (
+              <article key={w.title} className={`who-card ${w.tone}`}>
+                <div className="who-art" aria-hidden="true">
+                  <span className="who-icon"><w.icon size={26} strokeWidth={1.6} /></span>
+                  <i className="b1" /><i className="b2" /><i className="b3" />
+                </div>
+                <div className="who-body">
+                  <h3>{w.title}</h3>
+                  <p>{w.body}</p>
+                  <div className="who-tags">{w.tags.map((x) => <span key={x}>{x}</span>)}</div>
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* ---------- 产品轮播 ---------- */}
       <section className="us-section" id="product">
         <div className="site-wrap">
@@ -100,7 +129,7 @@ export default async function SitePage() {
           <div>
             <p className="us-eyebrow light">{t("覆盖范围")}</p>
             <h2>{t("从洛杉矶，发往全美")}</h2>
-            <p className="us-sub light">{t("仓库在 Chino, CA，覆盖美国本土 48 州。西海岸时效更快，运费更低。")}</p>
+            <p className="us-sub light">{t("从洛杉矶发货，覆盖美国本土 48 州。西海岸时效更快，运费更低。")}</p>
             <div className="us-map-stats">
               <div><b>48</b><span>{t("本土州")}</span></div>
               <div><b>Zone 1–8</b><span>{t("全分区报价")}</span></div>
@@ -110,29 +139,78 @@ export default async function SitePage() {
         </div>
       </section>
 
+      {/* ---------- 为什么更省 ---------- */}
+      <section className="us-section save-band">
+        <div className="site-wrap save-grid">
+          <div>
+            <p className="us-eyebrow">{t("为什么更省")}</p>
+            <h2>{t("每一单，都拿当下最低价")}</h2>
+            <p className="us-sub">{t("不同重量、不同目的地，最便宜的渠道并不固定。只用一家物流，就会有很多单多付运费；逐单比价，每一单都选最低。")}</p>
+          </div>
+          <div className="save-card">
+            <div className="save-head"><b>{t("100 单运费示意")}</b><span>{t("混合重量 · 全美目的地")}</span></div>
+            <div className="save-row">
+              <span>{t("固定用一家渠道")}</span>
+              <div className="save-bar"><i className="gray" style={{ width: "100%" }} /></div>
+              <b>$642</b>
+            </div>
+            <div className="save-row best">
+              <span>{t("逐单自动比价")}</span>
+              <div className="save-bar"><i className="grad" style={{ width: "78%" }} /></div>
+              <b>$501</b>
+            </div>
+            <div className="save-foot"><span className="save-chip">−$141</span>{t("示意数据，实际节省取决于你的订单结构")}</div>
+          </div>
+        </div>
+      </section>
+
+      {/* ---------- 合作流程 ---------- */}
+      <section className="us-section" id="how">
+        <div className="site-wrap">
+          <div className="us-head center">
+            <p className="us-eyebrow">{t("合作流程")}</p>
+            <h2>{t("四步开始发货")}</h2>
+          </div>
+          <ol className="flow">
+            {[
+              { icon: MessageSquare, title: t("联系我们"), body: t("说说你的渠道和发货量") },
+              { icon: UserCheck, title: t("开通账户"), body: t("确认价格，我们为你开户") },
+              { icon: Wallet, title: t("充值余额"), body: t("Zelle 或支付宝") },
+              { icon: PackageCheck, title: t("出单发货"), body: t("单个或 Excel 批量") },
+            ].map((f, i) => (
+              <li key={f.title}>
+                <span className={`flow-icon c${i}`}><f.icon size={22} strokeWidth={1.7} /></span>
+                <small>0{i + 1}</small>
+                <b>{f.title}</b>
+                <p>{f.body}</p>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </section>
+
       {/* ---------- 为什么选我们 ---------- */}
       <section className="us-section" id="why">
         <div className="site-wrap">
           <div className="us-head">
             <p className="us-eyebrow">{t("为什么选我们")}</p>
-            <h2>{t("为专业卖家打造")}</h2>
+            <h2>{t("服务保障")}</h2>
           </div>
-          <div className="lux-cards">
-            <article>
-              <Headset size={22} strokeWidth={1.6} />
-              <h3>{t("本地团队")}</h3>
-              <p>{t("就在洛杉矶，中英文沟通，工作时间快速响应。")}</p>
-            </article>
-            <article>
-              <Receipt size={22} strokeWidth={1.6} />
-              <h3>{t("透明计费")}</h3>
-              <p>{t("下单前看到最终价格；补差逐单列明，不重复扣。")}</p>
-            </article>
-            <article>
-              <Wallet size={22} strokeWidth={1.6} />
-              <h3>{t("没有月费")}</h3>
-              <p>{t("预付余额，按单扣费；Zelle、支付宝充值。")}</p>
-            </article>
+          <div className="lux-cards six">
+            {[
+              { icon: Headset, tone: "blue", title: t("本地团队"), body: t("就在洛杉矶，中英文沟通，工作时间快速响应。") },
+              { icon: Receipt, tone: "violet", title: t("透明计费"), body: t("下单前看到最终价格；补差逐单列明，不重复扣。") },
+              { icon: Wallet, tone: "teal", title: t("没有月费"), body: t("预付余额，按单扣费；Zelle、支付宝充值。") },
+              { icon: MapPinned, tone: "amber", title: t("地址自动核对"), body: t("缺公寓号、地址不存在会提醒，少退件、少改派。") },
+              { icon: Undo2, tone: "rose", title: hours > 0 ? t("{h} 小时内可取消", { h: hours }) : t("随时申请取消"), body: t("未出面单全额退回余额。") },
+              { icon: DatabaseBackup, tone: "indigo", title: t("数据每日备份"), body: t("订单、面单、账单每天自动备份，客户数据相互隔离。") },
+            ].map((c) => (
+              <article key={c.title} className={c.tone}>
+                <span className="lux-icon"><c.icon size={20} strokeWidth={1.7} /></span>
+                <h3>{c.title}</h3>
+                <p>{c.body}</p>
+              </article>
+            ))}
           </div>
         </div>
       </section>
@@ -156,7 +234,7 @@ export default async function SitePage() {
       </section>
 
       {/* ---------- 联系我们 ---------- */}
-      <section className="us-section" id="contact">
+      <section className="us-section contact-band" id="contact">
         <div className="site-wrap us-apply embed">
           <ContactIntro t={t} lang={lang} site={site} compact />
           <div className="site-apply-card"><ContactForm volumes={VOLUME_OPTIONS} /></div>

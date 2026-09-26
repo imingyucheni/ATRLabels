@@ -14,8 +14,9 @@ export default function SiteNav({ brand, home = true }: { brand: string; home?: 
   const anchor = (id: string) => (home ? `#${id}` : `/site#${id}`);
   const links = [
     { href: anchor("product"), label: t("产品") },
+    { href: anchor("who"), label: t("适合谁") },
     { href: anchor("coverage"), label: t("覆盖范围") },
-    { href: anchor("why"), label: t("优势") },
+    { href: anchor("how"), label: t("流程") },
     { href: anchor("faq"), label: t("常见问题") },
   ];
   return (

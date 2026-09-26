@@ -33,7 +33,7 @@ function inside([x, y]: [number, number]) {
 const DOTS: [number, number][] = [];
 for (let lat = 49.4; lat > 24.6; lat -= 0.6) for (let lon = -124.8; lon < -66.8; lon += 0.6) if (inside([lon, lat])) DOTS.push([px(lon), py(lat)]);
 
-const ORIGIN = { x: px(-117.7), y: py(34.0) };
+const ORIGIN = { x: px(-118.2), y: py(34.05) };
 const CITIES = [
   { id: "sea", name: "Seattle", lon: -122.3, lat: 47.6, zone: 5, days: "2–4" },
   { id: "den", name: "Denver", lon: -105.0, lat: 39.7, zone: 5, days: "2–4" },
@@ -77,13 +77,13 @@ export default function CoverageMap() {
         ))}
         <g>
           <circle cx={ORIGIN.x} cy={ORIGIN.y} r={8} className="cov-origin" />
-          <text x={ORIGIN.x + 14} y={ORIGIN.y + 22} className="cov-origin-label">Chino, CA</text>
+          <text x={ORIGIN.x + 14} y={ORIGIN.y + 22} className="cov-origin-label">Los Angeles</text>
         </g>
       </svg>
       <div className={`cov-card${cur ? " show" : ""}`}>
         {cur ? (
           <>
-            <b>Chino → {cur.name}</b>
+            <b>Los Angeles → {cur.name}</b>
             <span>Zone {cur.zone} · {t("常见 {d} 天送达", { d: cur.days })}</span>
           </>
         ) : (

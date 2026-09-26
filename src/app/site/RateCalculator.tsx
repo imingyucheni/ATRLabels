@@ -6,7 +6,7 @@ import { useT } from "@/components/I18n";
 
 /** 首屏互动试算：选目的地、拖重量，价格实时变化（示意价格，不是实时报价） */
 const DESTS = [
-  { id: "la", city: "Los Angeles, CA", zip: "90001", zone: 2 },
+  { id: "sd", city: "San Diego, CA", zip: "92101", zone: 3 },
   { id: "sea", city: "Seattle, WA", zip: "98101", zone: 5 },
   { id: "dal", city: "Dallas, TX", zip: "75201", zone: 6 },
   { id: "chi", city: "Chicago, IL", zip: "60601", zone: 7 },
@@ -32,7 +32,7 @@ export default function RateCalculator() {
       <div className="us-window-bar"><i /><i /><i /><span>{t("运费比价")}</span><em className="calc-live"><b /> {t("可以试试")}</em></div>
       <div className="us-window-body">
         <div className="calc-route">
-          <div><small>{t("发件")}</small><b>Chino, CA 91710</b></div>
+          <div><small>{t("发件")}</small><b>Los Angeles, CA 90058</b></div>
           <ArrowRight size={16} />
           <div><small>{t("收件")}</small><b>{dest.city} {dest.zip}</b></div>
           <span className="calc-zone">Zone {dest.zone}</span>
