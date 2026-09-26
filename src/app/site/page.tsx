@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, Building2, DatabaseBackup, Factory, Headset, MapPinned, MessageSquare, PackageCheck, Receipt, ShoppingBag, Undo2, UserCheck, Wallet } from "lucide-react";
+import { ArrowRight, DatabaseBackup, Headset, MapPinned, MessageSquare, PackageCheck, Receipt, Undo2, UserCheck, Wallet } from "lucide-react";
 import { getSettings } from "@/lib/db";
 import { getLang, getT } from "@/lib/prefs";
 import { CARRIERS } from "@/lib/carriers";
@@ -7,6 +7,7 @@ import { VOLUME_OPTIONS } from "@/lib/leads";
 import SiteNav from "./SiteNav";
 import RateCalculator from "./RateCalculator";
 import ProductTabs from "./ProductTabs";
+import WhoTabs from "./WhoTabs";
 import CoverageMap from "./CoverageMap";
 import ContactForm from "./ContactForm";
 import ContactIntro from "./ContactIntro";
@@ -90,25 +91,7 @@ export default async function SitePage() {
             <p className="us-eyebrow">{t("适合谁")}</p>
             <h2>{t("为每天都在发货的你而设计")}</h2>
           </div>
-          <div className="who-grid">
-            {[
-              { icon: ShoppingBag, tone: "blue", title: t("跨境电商卖家"), body: t("Amazon、TikTok Shop、Temu、Shopify 自发货订单，一个账户比价出单。"), tags: ["TikTok Shop", "Temu", "Shopify"] },
-              { icon: Building2, tone: "violet", title: t("海外仓 / 3PL"), body: t("每天上千单批量导入，逐单自动选最低渠道，合并打印。"), tags: [t("批量导入"), t("合并打印")] },
-              { icon: Factory, tone: "teal", title: t("本地品牌 / 批发商"), body: t("洛杉矶本地发货，预付余额，不用和多家物流分别对账。"), tags: [t("预付余额"), t("一张账单")] },
-            ].map((w) => (
-              <article key={w.title} className={`who-card ${w.tone}`}>
-                <div className="who-art" aria-hidden="true">
-                  <span className="who-icon"><w.icon size={26} strokeWidth={1.6} /></span>
-                  <i className="b1" /><i className="b2" /><i className="b3" />
-                </div>
-                <div className="who-body">
-                  <h3>{w.title}</h3>
-                  <p>{w.body}</p>
-                  <div className="who-tags">{w.tags.map((x) => <span key={x}>{x}</span>)}</div>
-                </div>
-              </article>
-            ))}
-          </div>
+          <WhoTabs />
         </div>
       </section>
 
