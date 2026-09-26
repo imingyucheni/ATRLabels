@@ -29,8 +29,8 @@ export default function SiteNav({ brand, home = true }: { brand: string; home?: 
         </div>
         <div className="site-nav-right">
           <PrefToggles />
-          <Link href="/portal" className="btn site-btn-ghost">{t("登录")}</Link>
-          <Link href="/site/apply" className="btn site-btn-primary">{t("免费开户")}</Link>
+          <Link href="/portal" className="site-nav-login">{t("登录")}</Link>
+          <Link href="/site/apply" className="btn us-btn">{t("免费开户")}</Link>
         </div>
         <button type="button" className="site-burger" aria-label={t("菜单")} aria-expanded={open} onClick={() => setOpen(!open)}>
           {open ? <X size={20} /> : <Menu size={20} />}

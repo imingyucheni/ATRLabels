@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, Check, CheckCircle2, FileSpreadsheet, MapPin, MessageCircle, Printer, Receipt, Scale, Undo2 } from "lucide-react";
+import { ArrowRight, Check, Clock, FileSpreadsheet, MapPin, Receipt, Scale } from "lucide-react";
 import { getSettings } from "@/lib/db";
 import { getLang, getT } from "@/lib/prefs";
 import { CARRIERS, type Carrier } from "@/lib/carriers";
@@ -16,17 +16,17 @@ export async function generateMetadata() {
   };
 }
 
-function Mark({ c }: { c: Carrier }) {
+const carrier = (id: string) => CARRIERS.find((c) => c.id === id)!;
+
+function Mark({ c, mono = false }: { c: Carrier; mono?: boolean }) {
   return (
-    <span className="carrier-mark md">
-      {c.logo ? <img src={c.logo} alt={c.name} /> : <span className="carrier-text" style={{ color: c.color }}>{c.name}</span>}
+    <span className={`carrier-mark md${mono ? " mono" : ""}`}>
+      {c.logo ? <img src={c.logo} alt={c.name} /> : <span className="carrier-text" style={{ color: mono ? undefined : c.color }}>{c.name}</span>}
     </span>
   );
 }
 
-const carrier = (id: string) => CARRIERS.find((c) => c.id === id)!;
-
-/** 官网首页（客户 OMS 网址的首页）：少文字、多画面，突出比价、本地团队、透明计费 */
+/** 官网首页：美式 B2B 风格——白底、深海军蓝、单一强调色、克制的排版 */
 export default async function SitePage() {
   const t = await getT();
   const lang = await getLang();
@@ -36,11 +36,11 @@ export default async function SitePage() {
   const hours = Number(s.cancelWindowHours ?? 48);
   const logos = ["usps", "uniuni", "gofo", "speedx", "swiftx", "fedex"].map(carrier);
 
-  const quotes = [
-    { id: "gofo", name: "Gofo Express", price: "3.39", best: true },
-    { id: "uniuni", name: "UniUni Express", price: "3.49" },
-    { id: "usps", name: "USPS Ground Advantage", price: "5.89" },
-    { id: "fedex", name: "FedEx Ground", price: "10.79" },
+  const rates = [
+    { id: "gofo", service: "Gofo Express", days: t("2–5 天"), price: "3.39", best: true },
+    { id: "uniuni", service: "UniUni Express", days: t("2–5 天"), price: "3.49" },
+    { id: "usps", service: "USPS Ground Advantage", days: t("2–5 天"), price: "5.89" },
+    { id: "fedex", service: "FedEx Ground", days: t("1–5 天"), price: "10.79" },
   ];
 
   const faq: [string, string][] = [
@@ -52,185 +52,199 @@ export default async function SitePage() {
 
   return (
     <div className="site">
-      <div className="site-dark">
-        <SiteNav brand={brand} />
+      <SiteNav brand={brand} />
 
-        {/* ---------- 首屏 ---------- */}
-        <header className="site-hero">
-          <div className="site-glow" aria-hidden="true" />
-          <div className="site-wrap site-hero-grid">
-            <div className="site-hero-copy">
-              <span className="site-eyebrow"><MapPin size={13} /> {t("洛杉矶 Chino 本地发货")}</span>
-              <h1>
-                {t("尾程面单")}
-                <br />
-                <span className="site-grad">{t("省到每一分")}</span>
-              </h1>
-              <p className="site-lead">{t("多家渠道实时比价，自动选最便宜。无月费，按单付费。")}</p>
-              <div className="site-cta">
-                <Link href="/site/apply" className="btn site-btn-primary lg">{t("免费开户")} <ArrowRight size={16} /></Link>
-                <Link href="/portal" className="btn site-btn-ghost lg">{t("登录")}</Link>
-              </div>
-              <div className="site-stats">
-                <div><b>$0</b><span>{t("月费")}</span></div>
-                <div><b>6+</b><span>{t("尾程渠道")}</span></div>
-                {hours > 0 && <div><b>{hours}h</b><span>{t("内可取消")}</span></div>}
-              </div>
+      {/* ---------- Hero ---------- */}
+      <header className="us-hero">
+        <div className="site-wrap us-hero-grid">
+          <div>
+            <p className="us-eyebrow">{t("美西尾程 · 洛杉矶")}</p>
+            <h1><span className="l">{t("每个渠道，")}</span><span className="l">{t("一个账户，")}</span><span className="l accent">{t("最低运费。")}</span></h1>
+            <p className="us-lead">{t("实时比较 USPS、UniUni、GOFO、FedEx 等渠道报价，自动选出最低价。预付余额，无月费。")}</p>
+            <div className="us-cta">
+              <Link href="/site/apply" className="btn us-btn lg">{t("免费开户")}</Link>
+              <Link href="/portal" className="us-link">{t("登录账户")} <ArrowRight size={16} /></Link>
             </div>
-
-            <div className="site-visual" aria-label={t("报价示例")}>
-              <div className="site-glass">
-                <div className="site-glass-head">
-                  <span>91710 → 90001 · 1.5 lb</span>
-                  <span className="site-live"><i /> {t("实时报价")}</span>
-                </div>
-                {quotes.map((q, i) => (
-                  <div key={q.id} className={`site-q${q.best ? " best" : ""}`} style={{ animationDelay: `${0.15 + i * 0.12}s` }}>
-                    <Mark c={carrier(q.id)} />
-                    <span className="site-q-name">{q.name}</span>
-                    {q.best && <span className="site-q-tag">{t("最低")}</span>}
-                    <b className="site-q-price">${q.price}</b>
-                  </div>
-                ))}
-                <p className="site-glass-note">{t("示意，以实时报价为准")}</p>
-              </div>
-              <div className="site-chip one"><CheckCircle2 size={15} /> {t("地址已核对")}</div>
-              <div className="site-chip two"><Printer size={15} /> {t("面单已生成")}</div>
-            </div>
+            <p className="us-fine">{t("无月费")} · {t("无最低单量")}{hours > 0 ? ` · ${t("{h} 小时内可取消", { h: hours })}` : ""}</p>
           </div>
-        </header>
 
-        {/* ---------- 渠道滚动条 ---------- */}
-        <div className="site-marquee" aria-label={t("支持的尾程渠道")}>
-          <div className="site-marquee-track">
-            {[...logos, ...logos, ...logos].map((c, i) => <Mark key={i} c={c} />)}
+          {/* 产品界面示意 */}
+          <div className="us-window" aria-label={t("报价示例")}>
+            <div className="us-window-bar"><i /><i /><i /><span>{t("运费比价")}</span></div>
+            <div className="us-window-body">
+              <div className="us-route">
+                <div><small>{t("发件")}</small><b>Chino, CA 91710</b></div>
+                <ArrowRight size={16} />
+                <div><small>{t("收件")}</small><b>Los Angeles, CA 90001</b></div>
+                <div className="us-route-w"><small>{t("重量")}</small><b>1.5 lb</b></div>
+              </div>
+              <table className="us-rates">
+                <tbody>
+                  {rates.map((r) => (
+                    <tr key={r.id} className={r.best ? "best" : ""}>
+                      <td><Mark c={carrier(r.id)} /></td>
+                      <td><b>{r.service}</b><small>{r.days}</small></td>
+                      <td className="num">{r.best && <em>{t("最低价")}</em>}<b>${r.price}</b></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p className="us-window-note">{t("示意，以实时报价为准")}</p>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* ---------- 亮点（Bento） ---------- */}
-      <section className="site-section" id="why">
+        <div className="site-wrap us-logos">
+          <span>{t("支持的尾程渠道")}</span>
+          <div>{logos.map((c) => <Mark key={c.id} c={c} mono />)}</div>
+        </div>
+      </header>
+
+      {/* ---------- Metrics ---------- */}
+      <section className="us-metrics">
         <div className="site-wrap">
-          <h2 className="site-h2 reveal">{t("省钱，也省心")}</h2>
-          <div className="site-bento">
-            <article className="tile wide reveal">
-              <div className="tile-copy"><Scale size={18} /><h3>{t("自动选最便宜")}</h3><p>{t("多家渠道同时报价")}</p></div>
-              <div className="viz-bars">
-                {[["Gofo", 34, "$3.39", true], ["UniUni", 36, "$3.49"], ["USPS", 58, "$5.89"], ["FedEx", 100, "$10.79"]].map(([n, w, p, best]) => (
-                  <div key={n as string} className={best ? "best" : ""}>
-                    <span>{n}</span><i style={{ width: `${w}%` }} /><b>{p}</b>
-                  </div>
-                ))}
-              </div>
-            </article>
+          <div><b>$0</b><span>{t("月费")}</span></div>
+          <div><b>6+</b><span>{t("尾程渠道")}</span></div>
+          {hours > 0 && <div><b>{hours}h</b><span>{t("可取消时限")}</span></div>}
+          <div><b>1</b><span>{t("个账户管理所有渠道")}</span></div>
+        </div>
+      </section>
 
-            <article className="tile reveal">
-              <div className="tile-copy"><MessageCircle size={18} /><h3>{t("本地中文客服")}</h3><p>{t("微信直接找人")}</p></div>
-              <div className="viz-chat">
-                <span className="me">{t("这单能改地址吗？")}</span>
-                <span className="them">{t("可以，马上处理 👍")}</span>
-              </div>
-            </article>
-
-            <article className="tile reveal">
-              <div className="tile-copy"><Receipt size={18} /><h3>{t("账目透明")}</h3><p>{t("每笔都有明细")}</p></div>
-              <div className="viz-ledger">
-                <div><span>{t("运费")}</span><b>−$3.39</b></div>
-                <div><span>{t("补差")}</span><b>−$0.42</b></div>
-                <div className="pos"><span>{t("充值")}</span><b>+$500.00</b></div>
-              </div>
-            </article>
-
-            <article className="tile reveal">
-              <div className="tile-copy"><FileSpreadsheet size={18} /><h3>{t("Excel 批量出单")}</h3><p>{t("上千单一次导入")}</p></div>
-              <div className="viz-progress">
-                <div className="viz-progress-top"><span>orders.xlsx</span><b>1,248 / 1,248</b></div>
-                <div className="viz-progress-bar"><i /></div>
-              </div>
-            </article>
-
-            <article className="tile reveal">
-              <div className="tile-copy"><MapPin size={18} /><h3>{t("地址自动核对")}</h3><p>{t("少退件、少改派")}</p></div>
-              <div className="viz-addr">
-                <span>1200 E Florence Ave</span>
-                <span>Los Angeles, CA 90001</span>
-                <em><Check size={13} /> {t("已核对")}</em>
-              </div>
-            </article>
-
-            <article className="tile wide reveal">
-              <div className="tile-copy"><Printer size={18} /><h3>{t("合并打印")}</h3><p>4×6 · A4 · Letter</p></div>
-              <div className="viz-labels">
-                {[0, 1, 2].map((i) => (
-                  <div key={i} className="lbl" style={{ ["--i" as string]: i }}>
-                    <span className="lbl-top" />
-                    <span className="lbl-line" /><span className="lbl-line short" />
-                    <span className="lbl-code" />
-                  </div>
-                ))}
-              </div>
-            </article>
-
-            <article className="tile reveal accent">
-              <div className="tile-copy"><Undo2 size={18} /><h3>{hours > 0 ? t("{h} 小时内可取消", { h: hours }) : t("随时申请取消")}</h3><p>{t("未出面单全额退")}</p></div>
-              <div className="viz-big">{hours > 0 ? `${hours}h` : "↺"}</div>
-            </article>
+      {/* ---------- Pillars ---------- */}
+      <section className="us-section" id="why">
+        <div className="site-wrap">
+          <div className="us-head">
+            <p className="us-eyebrow">{t("为什么选我们")}</p>
+            <h2>{t("为专业卖家打造")}</h2>
+          </div>
+          <div className="us-pillars">
+            <div><span>01</span><Scale size={22} strokeWidth={1.6} /><h3>{t("实时比价")}</h3><p>{t("多家渠道同时报价，自动选最低。")}</p></div>
+            <div><span>02</span><FileSpreadsheet size={22} strokeWidth={1.6} /><h3>{t("批量出单")}</h3><p>{t("Excel 导入上千单，一次打印。")}</p></div>
+            <div><span>03</span><Receipt size={22} strokeWidth={1.6} /><h3>{t("透明计费")}</h3><p>{t("每笔扣款、补差逐单可查。")}</p></div>
           </div>
         </div>
       </section>
 
-      {/* ---------- 三步 ---------- */}
-      <section className="site-section tight" id="how">
+      {/* ---------- Feature rows ---------- */}
+      <section className="us-section alt" id="how">
         <div className="site-wrap">
-          <h2 className="site-h2 reveal">{t("三步开始出单")}</h2>
-          <ol className="site-steps3 reveal">
-            <li><span>1</span><b>{t("申请开户")}</b><p>{t("留个联系方式")}</p></li>
-            <li><span>2</span><b>{t("充值")}</b><p>Zelle · {t("支付宝")}</p></li>
-            <li><span>3</span><b>{t("出单")}</b><p>{t("单个或 Excel 批量")}</p></li>
-          </ol>
+          <div className="us-row">
+            <div className="us-row-copy">
+              <p className="us-eyebrow">{t("批量出单")}</p>
+              <h2>{t("从 Excel 到面单，几分钟完成")}</h2>
+              <ul className="us-list">
+                <li><Check size={16} /> {t("逐单自动选最低渠道")}</li>
+                <li><Check size={16} /> {t("收件地址自动核对")}</li>
+                <li><Check size={16} /> {t("4×6、A4、Letter 合并打印")}</li>
+              </ul>
+            </div>
+            <div className="us-panel">
+              <div className="us-panel-head"><FileSpreadsheet size={16} /> orders_0926.xlsx <span className="us-pill ok">{t("已完成")}</span></div>
+              <div className="us-kpis">
+                <div><small>{t("订单")}</small><b>1,248</b></div>
+                <div><small>{t("已出面单")}</small><b>1,248</b></div>
+                <div><small>{t("地址问题")}</small><b>0</b></div>
+              </div>
+              <div className="us-bar"><i /></div>
+            </div>
+          </div>
+
+          <div className="us-row reverse">
+            <div className="us-row-copy">
+              <p className="us-eyebrow">{t("透明计费")}</p>
+              <h2>{t("每一分钱，都有记录")}</h2>
+              <ul className="us-list">
+                <li><Check size={16} /> {t("下单前看到最终价格")}</li>
+                <li><Check size={16} /> {t("补差逐单列明，不重复扣")}</li>
+                <li><Check size={16} /> {t("对账明细随时导出")}</li>
+              </ul>
+            </div>
+            <div className="us-panel">
+              <table className="us-ledger">
+                <thead><tr><th>{t("日期")}</th><th>{t("说明")}</th><th className="num">{t("金额")}</th></tr></thead>
+                <tbody>
+                  <tr><td>09/26</td><td>{t("运费")} · Gofo Express</td><td className="num">−$3.39</td></tr>
+                  <tr><td>09/26</td><td>{t("补差")} · {t("重量复核")}</td><td className="num">−$0.42</td></tr>
+                  <tr><td>09/25</td><td>{t("充值")} · Zelle</td><td className="num pos">+$500.00</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       </section>
 
-      {/* ---------- 常见问题 ---------- */}
-      <section className="site-section tight" id="faq">
-        <div className="site-wrap site-narrow">
-          <h2 className="site-h2 reveal">{t("常见问题")}</h2>
-          <div className="site-faq reveal">
+      {/* ---------- Local support ---------- */}
+      <section className="us-section">
+        <div className="site-wrap us-local">
+          <div>
+            <p className="us-eyebrow">{t("本地服务")}</p>
+            <h2>{t("就在洛杉矶，随时找得到人")}</h2>
+            <p className="us-sub">{t("中英文沟通，工作时间快速响应。")}</p>
+          </div>
+          <div className="us-local-card">
+            <div><MapPin size={18} strokeWidth={1.6} /><span>{site.company}<br />{site.address || "Chino, CA 91710"}</span></div>
+            {site.hours && <div><Clock size={18} strokeWidth={1.6} /><span>{lang === "en" ? t(site.hours) : site.hours}</span></div>}
+            {(site.wechat || site.phone || site.email) && (
+              <div className="us-local-contact">
+                {site.wechat && <span>{t("微信")} <b>{site.wechat}</b></span>}
+                {site.phone && <span>{t("电话")} <b>{site.phone}</b></span>}
+                {site.email && <span>{t("邮箱")} <a href={`mailto:${site.email}`}>{site.email}</a></span>}
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* ---------- FAQ ---------- */}
+      <section className="us-section alt" id="faq">
+        <div className="site-wrap us-faq">
+          <div>
+            <p className="us-eyebrow">FAQ</p>
+            <h2>{t("常见问题")}</h2>
+          </div>
+          <dl>
             {faq.map(([q, a]) => (
-              <details key={q}>
-                <summary>{q}</summary>
-                <p>{a}</p>
-              </details>
+              <div key={q}><dt>{q}</dt><dd>{a}</dd></div>
             ))}
+          </dl>
+        </div>
+      </section>
+
+      {/* ---------- CTA ---------- */}
+      <section className="us-cta-band">
+        <div className="site-wrap">
+          <h2>{t("准备好降低运费了吗？")}</h2>
+          <div className="us-cta">
+            <Link href="/site/apply" className="btn us-btn-light lg">{t("免费开户")}</Link>
+            <Link href="/portal" className="us-link light">{t("登录账户")} <ArrowRight size={16} /></Link>
           </div>
         </div>
       </section>
 
-      {/* ---------- 结尾 ---------- */}
-      <section className="site-dark site-final">
-        <div className="site-glow bottom" aria-hidden="true" />
-        <div className="site-wrap">
-          <h2>{t("今天就开始省运费")}</h2>
-          <div className="site-cta center">
-            <Link href="/site/apply" className="btn site-btn-primary lg">{t("免费开户")} <ArrowRight size={16} /></Link>
-            <Link href="/portal" className="btn site-btn-ghost lg">{t("登录")}</Link>
+      <footer className="us-footer">
+        <div className="site-wrap us-footer-grid">
+          <div>
+            <b className="us-footer-brand">{brand}</b>
+            <p>{t("美西本地尾程面单")}</p>
           </div>
-          {(site.wechat || site.phone || site.email) && (
-            <div className="site-contact">
-              {site.wechat && <span>{t("微信")} <b>{site.wechat}</b></span>}
-              {site.phone && <span>{t("电话")} <b>{site.phone}</b></span>}
-              {site.email && <span>{t("邮箱")} <a href={`mailto:${site.email}`}>{site.email}</a></span>}
-            </div>
-          )}
+          <div>
+            <h4>{t("产品")}</h4>
+            <a href="#why">{t("实时比价")}</a>
+            <a href="#how">{t("批量出单")}</a>
+            <a href="#faq">{t("常见问题")}</a>
+          </div>
+          <div>
+            <h4>{t("账户")}</h4>
+            <Link href="/site/apply">{t("免费开户")}</Link>
+            <Link href="/portal">{t("登录账户")}</Link>
+          </div>
+          <div>
+            <h4>{t("公司")}</h4>
+            <span>{site.company}</span>
+            <span>{site.address || "Chino, CA 91710"}</span>
+          </div>
         </div>
-      </section>
-
-      <footer className="site-footer">
-        <div className="site-wrap">
-          <span><b>{brand}</b> · {site.company}{site.address ? ` · ${site.address}` : ""}</span>
-          {site.hours && <span>{lang === "en" ? t(site.hours) : site.hours}</span>}
-          <span>© {new Date().getFullYear()}</span>
-        </div>
+        <div className="site-wrap us-footer-bottom">© {new Date().getFullYear()} {site.company || brand}</div>
       </footer>
     </div>
   );
