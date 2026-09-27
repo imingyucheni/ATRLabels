@@ -211,7 +211,8 @@ async function quoteRemote(customerId: number, channelCode: string, channelName:
     const price = computePrice(cost, rule, isInternalCustomer(customerId) ? 0.01 : roundingStep);
     return {
       channelCode,
-      channelName: q.logisticsProductName || channelName,
+      // 用我们渠道表里的名称（带“· SB / · GDE”服务商标记）；嘉谷的报价接口不返回产品名
+      channelName: getChannel(channelCode)?.name || q.logisticsProductName || channelName,
       ok: true,
       cost,
       listCost: q.totalShippingFee,

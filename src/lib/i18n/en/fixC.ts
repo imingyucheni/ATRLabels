@@ -137,4 +137,8 @@ export const fixC: Record<string, string> = {
   "成本价（出单价）": "Cost (your price)",
   "订单号（可选）": "Order no. (optional)",
   "确认用 {channel} 出单？\n成本价：{price}（公司自用，不扣客户余额）": "Ship with {channel}?\nCost: {price} (house account, no customer is charged)",
+  "管理员批量下单": "Admin bulk shipping",
+  "上传表格批量出单：按我们的成本价，所有已启用的渠道逐单比价。订单记在“公司自用（成本价）”账户下，不扣任何客户的余额。": "Upload a spreadsheet to ship in bulk at our cost, rate-shopping every enabled service per order. Orders go under the “House account (at cost)” and never charge a customer's balance.",
+  "设置里的默认寄件地址": "the default sender address in Settings",
+  "提交 {n} 单，按成本价合计 {amount}（公司自用，不扣客户余额）？": "Submit {n} orders at a total cost of {amount} (house account, no customer is charged)?",
 };

@@ -50,7 +50,8 @@ function useTrMsg() {
 }
 
 export default function BatchOrders(props: {
-  mode: "admin" | "portal";
+  /** house = 管理员自用（公司账户，成本价、所有渠道、不看余额） */
+  mode: "admin" | "portal" | "house";
   /** 后台：客户列表，每个客户带自己已开通的渠道 */
   customers?: { id: number; name: string; channels: { code: string; name: string }[] }[];
   /** 客户端：当前客户已开通的渠道 */
@@ -72,9 +73,10 @@ export default function BatchOrders(props: {
   const [onlyAvailable, setOnlyAvailable] = useState(false);
   const [requoteSet, setRequoteSet] = useState<Set<string>>(new Set());
   const [bulkChannel, setBulkChannel] = useState("");
-  const [custId, setCustId] = useState<number | undefined>(undefined);
+  const house = props.mode === "house";
+  const [custId, setCustId] = useState<number | undefined>(house ? props.customers?.[0]?.id : undefined);
   const channelsOf = (id?: number) =>
-    props.mode === "admin" ? props.customers?.find((c) => c.id === id)?.channels ?? [] : props.channels ?? [];
+    props.mode !== "portal" ? props.customers?.find((c) => c.id === id)?.channels ?? [] : props.channels ?? [];
   const uploadChannels = channelsOf(custId);
 
   const load = useCallback(async (id: number) => {
@@ -144,13 +146,14 @@ export default function BatchOrders(props: {
           </a>
         </div>
         <ol className="small muted" style={{ paddingLeft: 18, marginTop: 0 }}>
-          <li>{t("使用")} <b>{t("ShipBest 导单模板")}</b>{t("：原来在 ShipBest 后台用的表格可以直接上传，也可以点右上角下载模板（含填写说明和示例）。寄件人各列留空时，使用{who}。", { who: props.mode === "portal" ? t("账户设置里的默认寄件地址") : t("客户的默认寄件地址") })}</li>
+          <li>{t("使用")} <b>{t("ShipBest 导单模板")}</b>{t("：原来在 ShipBest 后台用的表格可以直接上传，也可以点右上角下载模板（含填写说明和示例）。寄件人各列留空时，使用{who}。", { who: props.mode === "portal" ? t("账户设置里的默认寄件地址") : house ? t("设置里的默认寄件地址") : t("客户的默认寄件地址") })}</li>
           <li>{t("系统用下面勾选的渠道逐单试算，每单列出各渠道价格，默认选最便宜的，可以逐单修改。")}</li>
           <li>{t("确认后勾选订单“提交订单”，完成后一键合并打印全部面单（纸张在“账户设置”里选，默认 4×6）。")}</li>
         </ol>
         <form action={onUpload} style={{ display: "grid", gap: 12 }}>
           <input type="hidden" name="mode" value={props.mode} />
           <div className="grid" style={{ alignItems: "end" }}>
+            {house && <input type="hidden" name="customerId" value={custId ?? ""} />}
             {props.mode === "admin" && (
               <label className="f"><span className="req">{t("客户")}</span>
                 <select name="customerId" required value={custId ?? ""} onChange={(e) => setCustId(Number(e.target.value))}>
@@ -210,6 +213,10 @@ export default function BatchOrders(props: {
   const cheapestTotal = chosen.reduce((a, r) => a + Math.min(...r.quotes.filter((q) => q.ok).map((q) => q.price!)), 0);
 
   function onSubmit() {
+    if (house) {
+      if (window.confirm(t("提交 {n} 单，按成本价合计 {amount}（公司自用，不扣客户余额）？", { n: chosen.length, amount: money(total) }))) act(() => confirmBatchJobAction(job!.id));
+      return;
+    }
     const warn = total > job!.available
       ? job!.balanceRule === "positive"
         ? "\n\n⚠ " + t("可用余额 {amount} 不够全部提交。余额大于 0 时会继续出单，最后一单可能让余额变成负数（下次充值时抵扣）；余额 ≤ 0 时自动暂停，充值后可以继续提交。", { amount: money(job!.available) })
@@ -224,7 +231,7 @@ export default function BatchOrders(props: {
       <div className="card">
         <div className="row" style={{ justifyContent: "space-between" }}>
           <h2 style={{ margin: 0 }}>
-            {props.mode === "admin" ? `${t("批次")} #${job.id} · ` : `${t("批次")} · `}{job.filename}{props.mode === "admin" ? ` · ${job.customerName}` : ""} ·{" "}
+            {props.mode !== "portal" ? `${t("批次")} #${job.id} · ` : `${t("批次")} · `}{job.filename}{props.mode === "admin" ? ` · ${job.customerName}` : ""} ·{" "}
             <span className={`badge ${job.status === "done" ? "labeled" : working ? "pending" : ""}`}>{t(JOB_STATUS_LABEL[job.status])}</span>
           </h2>
           <a href={props.basePath}>{t("＋ 导入新的订单")}</a>
@@ -244,7 +251,7 @@ export default function BatchOrders(props: {
           <div className="stat"><div className="muted">{t("已勾选待提交")}</div><div className="v">{chosen.length}</div><div className="small muted">{t("预计应付 {amount}", { amount: money(total) })}</div></div>
           <div className="stat"><div className="muted">{t("已下单")}</div><div className="v">{created.length}</div><div className="small muted">{t("合计 {amount}", { amount: money(createdTotal) })}</div></div>
           <div className="stat"><div className="muted">{t("有问题")}</div><div className={`v ${problems ? "profit-neg" : ""}`}>{problems}</div></div>
-          <div className="stat"><div className="muted">{props.mode === "portal" ? t("账户可用余额") : t("客户可用余额")}</div><div className={`v ${job.available < total ? "profit-neg" : ""}`}>{money(job.available)}</div></div>
+          {!house && <div className="stat"><div className="muted">{props.mode === "portal" ? t("账户可用余额") : t("客户可用余额")}</div><div className={`v ${job.available < total ? "profit-neg" : ""}`}>{money(job.available)}</div></div>}
         </div>
 
         {editable && quoted.length > 0 && (
@@ -406,7 +413,7 @@ export default function BatchOrders(props: {
                               <ChannelLabel code={q.code} name={q.name} />{q.zone ? <span className="muted"> · {q.zone}</span> : null}
                             </span>
                             <span className="nowrap">
-                              {q.ok && props.mode === "admin" && q.cost !== undefined && (
+                              {q.ok && props.mode !== "portal" && !house && q.cost !== undefined && (
                                 <span className="muted" title={t("成本 / 利润")}>{money(q.cost)} · <span className={q.price! - q.cost < 0 ? "profit-neg" : ""}>+{(q.price! - q.cost).toFixed(2)}</span>{" "}</span>
                               )}
                               <b style={q.ok ? undefined : { color: "var(--err)", fontWeight: 500 }}>{q.ok ? money(q.price, q.currency ?? "") : uncovered(q.error) ? t("地址未覆盖") : t("不可用")}</b>

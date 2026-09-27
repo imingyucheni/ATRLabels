@@ -18,7 +18,7 @@ import {
   setSelected,
   type BatchJob,
 } from "@/lib/batch";
-import { getCustomer, getSettings } from "@/lib/db";
+import { getCustomer, getSettings, houseCustomerId } from "@/lib/db";
 import { publicError } from "@/lib/portal";
 import { str } from "@/lib/sanitize";
 
@@ -47,11 +47,13 @@ export async function createBatchJobAction(fd: FormData): Promise<{ jobId?: numb
   try {
     // 从客户 OMS 提交（包括管理员进入客户 OMS 代操作）时按 OMS 的登录身份；从后台提交时按选择的客户
     // 后台不出面单：批量导入只能在客户 OMS 里进行
-    if (fd.get("mode") !== "portal") return { error: "后台不能下单，请在客户列表点“进入 OMS”代客户操作" };
-    const fromPortal = true;
-    const a: Awaited<ReturnType<typeof actor>> = fromPortal ? { admin: false, customerId: (await currentCustomerId()) ?? 0 } : await actor();
+    // 管理员自用（公司账户，成本价）：只能在后台“管理员批量下单”里提交
+    const house = fd.get("mode") === "house";
+    if (!house && fd.get("mode") !== "portal") return { error: "后台不能替客户下单，请在客户列表点“进入 OMS”代客户操作" };
+    if (house && !(await isLoggedIn())) return { error: "请先登录后台" };
+    const a: Awaited<ReturnType<typeof actor>> = house ? { admin: true } : { admin: false, customerId: (await currentCustomerId()) ?? 0 };
     if (!a.admin && !a.customerId) return { error: "请先登录" };
-    const customerId = a.admin ? Number(fd.get("customerId")) : a.customerId;
+    const customerId = house ? houseCustomerId() : a.admin ? Number(fd.get("customerId")) : a.customerId;
     if (!getCustomer(customerId)) return { error: "请选择客户" };
     const file = fd.get("file");
     if (!(file instanceof File) || !file.size) return { error: "请选择文件" };

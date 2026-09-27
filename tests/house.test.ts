@@ -58,4 +58,36 @@ describe("管理员下单（公司自用账户，成本价）", () => {
     const q = (await svc.quoteAll(cid, req)).find((x) => x.ok)!;
     expect(q.price!).toBeGreaterThan(q.cost!);
   });
+
+  it("批量导入：所有渠道比价、按成本价出单、不扣余额", async () => {
+    const batch = await import("@/lib/batch");
+    const { readSheetRows } = await import("@/lib/adjustments");
+    const id = db.houseCustomerId();
+    const rows = await readSheetRows("t.xlsx", await batch.buildTemplate(req.sender, { examplesInFirstSheet: true }), "first");
+    const { orders, error } = batch.parseOrders(rows, batch.senderFor(id));
+    expect(error).toBeFalsy();
+    const ok = orders.filter((o) => !o.errors.length);
+    expect(ok.length).toBeGreaterThan(0);
+    const jobId = batch.createJob({ customerId: id, createdBy: "admin", filename: "t.xlsx", channels: [], pickMode: "cheapest", orders: ok });
+    batch.ensureRunning(jobId);
+    const wait = async (st: string[]) => {
+      for (let i = 0; i < 150; i++) {
+        const j = batch.getJob(jobId)!;
+        if (st.includes(j.status)) return j;
+        await new Promise((r) => setTimeout(r, 200));
+      }
+      throw new Error("timeout " + batch.getJob(jobId)!.status);
+    };
+    let job = await wait(["ready"]);
+    const quoted = job.rows.filter((r) => r.status === "quoted");
+    expect(quoted.length).toBeGreaterThan(0);
+    // 每单都按所有已启用渠道试算，价格 = 成本
+    expect(quoted[0].quotes.length).toBe(db.listChannels(true).length);
+    for (const q of quoted[0].quotes.filter((x) => x.ok)) expect(q.price).toBe(q.cost);
+    batch.setSelected(jobId, "all");
+    batch.confirmJob(jobId);
+    job = await wait(["done", "ready"]);
+    expect(job.rows.filter((r) => r.status === "created").length).toBe(quoted.length);
+    expect(ledger.listLedger({ customerId: id }).length).toBe(0);
+  }, 60_000);
 });

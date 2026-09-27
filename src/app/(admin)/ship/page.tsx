@@ -20,7 +20,10 @@ export default async function AdminShipPage() {
             {t("按我们的成本价出单，所有已启用的渠道一起比价（包括多个 USPS、GOFO 等）。订单记在“公司自用（成本价）”账户下，不扣任何客户的余额。")}
           </p>
         </div>
-        <Link className="btn" href={`/shipments?customerId=${houseId}`}>{t("我下的单")}</Link>
+        <div className="row">
+          <Link className="btn" href="/ship/batch">{t("批量导入")}</Link>
+          <Link className="btn" href={`/shipments?customerId=${houseId}`}>{t("我下的单")}</Link>
+        </div>
       </div>
       {!channels.length && <div className="alert warn" style={{ marginTop: 12 }}>{t("没有启用的渠道，请先到")} <Link href="/settings">{t("设置")}</Link> {t("同步渠道。")}</div>}
       <div style={{ height: 12 }} />
