@@ -28,6 +28,7 @@ import { computePrice, resolveRule, roundUp, type MarkupRule, type PartialRule }
 import { getShipBestClient, shipbestMode, ShipBestError } from "./shipbest/client";
 import { isJiaguCode } from "./shipbest/jiagu";
 import { guessCarrier } from "./carriers";
+import { publicError } from "./portal";
 import type { Address, ShipmentRequest } from "./shipbest/types";
 import { isCountryCode, isUsZip, usStateCode } from "./geo";
 import { fillProductNames } from "./sanitize";
@@ -448,6 +449,11 @@ export async function refreshShipment(id: number): Promise<Shipment> {
     if (s.status !== "cancelled") Object.assign(patch, cancelPatch(s, wasLabeled(s)));
   } else if (s.status !== "cancel_requested") {
     patch.status = d.status === 4 ? "labeled" : d.status === 3 ? "exception" : "pending";
+    // 嘉谷：下单 5 分钟还没有面单基本就是出问题了 → 标异常，让客户联系我们或先换渠道重新下单，我们再找嘉谷处理
+    if (patch.status === "pending" && !patch.labelUrl && isJiaguCode(s.channelCode) && labelOverdue(s.createdAt)) {
+      patch.status = "exception";
+      patch.errorMsg = JG_LABEL_TIMEOUT_MSG;
+    }
   }
 
   if (patch.labelUrl && !s.labelPath) {
@@ -464,13 +470,23 @@ export async function refreshShipment(id: number): Promise<Shipment> {
   // 刚变成异常：通知客户
   if (patch.status === "exception" && s.status !== "exception") {
     const ref = s.customerRef || s.customNo;
-    const reason = patch.errorMsg || "";
+    // 通知邮件给客户看：去掉服务商名称等内部信息
+    const reason = patch.errorMsg ? publicError(patch.errorMsg) : "";
     notifyLater(s.customerId, "exception", { zh: `订单 ${ref} 出单异常`, en: `Order ${ref} has a problem` }, {
       zh: [`订单 ${ref} 出单异常${reason ? `：${reason}` : ""}。请登录查看，或联系客服处理。`],
       en: [`Order ${ref} could not be processed${reason ? `: ${reason}` : ""}. Please sign in to check or contact support.`],
     });
   }
   return getShipment(id)!;
+}
+
+/** 嘉谷下单后多久还没有面单算出问题 */
+export const JG_LABEL_TIMEOUT_MIN = 5;
+export const JG_LABEL_TIMEOUT_MSG = `嘉谷 ${JG_LABEL_TIMEOUT_MIN} 分钟内未出面单：请客户联系我们或换其他渠道重新下单，并联系嘉谷处理；处理完在这里取消（未出面单全额退款）`;
+
+function labelOverdue(createdAt: string, now = Date.now()) {
+  const t = Date.parse(createdAt.includes("T") ? createdAt : createdAt.replace(" ", "T") + "Z");
+  return Number.isFinite(t) && now - t > JG_LABEL_TIMEOUT_MIN * 60_000;
 }
 
 /** 寄件人三行（模拟面单的 FROM） */

@@ -176,4 +176,6 @@ export const admin3: Record<string, string> = {
   "导单模板.xlsx": "import-template.xlsx",
   "（参考）": " (est.)",
   "嘉谷未返回分区，按同一目的地其他渠道的分区估算": "Jiagu returned no zone; estimated from another service's zone for the same destination",
+  "嘉谷 5 分钟内未出面单：请客户联系我们或换其他渠道重新下单，并联系嘉谷处理；处理完在这里取消（未出面单全额退款）": "Jiagu returned no label within 5 minutes: ask the customer to contact us or re-order with another service, and follow up with Jiagu; cancel here once resolved (full refund, no label was issued)",
+  "该渠道出单超时，还没有生成面单。请联系客服，或换其他渠道重新下单": "This service timed out and no label was created. Please contact support, or re-order with another service",
 };

@@ -38,6 +38,8 @@ export function publicError(msg?: string | null): string {
   const raw = msg.replace(/(^|[：:]\s*)\[-?\d+\]\s*/g, "$1").replace(/嘉谷[：:]\s*/g, "").replace(/嘉谷/g, "");
   // 地址不在派送范围：统一说成“地址未覆盖”
   if (/不通邮|派送范围/.test(raw)) return "地址未覆盖：这个渠道送不到该邮编";
+  // 服务商超时未出面单
+  if (/分钟内未出面单/.test(raw)) return "该渠道出单超时，还没有生成面单。请联系客服，或换其他渠道重新下单";
   if (raw.includes("还没有开通任何物流渠道")) return "您的账户还没有开通物流渠道，请联系客服开通";
   if (raw.includes("未开通此渠道")) return "您的账户未开通此渠道，请联系客服";
   // 涉及我们和 ShipBest 之间的账户、授权、余额等问题，不给客户看原因

@@ -106,6 +106,37 @@ describe("嘉谷万邑接口", () => {
     await expect(client.cancelOrder({ customNo: "C-3" })).rejects.toThrow(/订单已出库/);
   });
 
+  it("下单 5 分钟还没有面单：标异常，提示客户联系我们或换渠道；同订单号可以重新下单", async () => {
+    fakeServer({
+      "/api/gts/GetMailNoByOrderNbr": () => ({ IsSuccess: true, Result: {} }),
+      "/api/gts/GetLabelAsync": () => ({ IsSuccess: true, Result: {} }),
+    });
+    const svc = await import("@/lib/service");
+    const { publicError } = await import("@/lib/portal");
+    const cid = db.saveCustomer(null, { name: "超时客户", contact: null, phone: null, email: null, note: null, markup: {} });
+    const mk = (customNo: string, ref: string) => {
+      const id = db.insertShipment({
+        customNo, customerId: cid, channelCode: "JG-579181", channelName: "GOFO", sender: req.sender, recipient: req.recipient, pkg: req.pkg, skuList: req.skuList,
+        quotedCost: 3, currency: "USD", zone: null, price: 4, rule: { percent: 0, fixed: 1, minProfit: 0 }, remark: null, customerRef: ref, createdBy: "admin", env: "live", addressCheck: null,
+      });
+      jg.jgOrders.save({ customNo, productCode: "JG-579181", productName: "GOFO", status: 2 });
+      return id;
+    };
+    const late = mk("T-LATE", "R-LATE");
+    db.db().prepare("UPDATE shipments SET created_at = datetime('now', '-6 minutes') WHERE id = ?").run(late);
+    const fresh = mk("T-FRESH", "R-FRESH");
+
+    const s1 = await svc.refreshShipment(late);
+    expect(s1.status).toBe("exception");
+    expect(s1.errorMsg).toContain("5 分钟内未出面单");
+    expect(publicError(s1.errorMsg)).toBe("该渠道出单超时，还没有生成面单。请联系客服，或换其他渠道重新下单");
+    expect(db.activeShipmentByRef(cid, "R-LATE")).toBeUndefined(); // 可以换渠道重新下单
+    expect((await svc.refreshShipment(late)).status).toBe("exception"); // 再刷新也保持异常
+
+    expect((await svc.refreshShipment(fresh)).status).toBe("pending"); // 还没到 5 分钟
+    expect(db.activeShipmentByRef(cid, "R-FRESH")).toBeDefined();
+  });
+
   it("客户看到的名称：只显示物流商全称，不露出服务商和内部说明", async () => {
     const { defaultPublicName } = await import("@/lib/carriers");
     expect(defaultPublicName("USPS-D价-GA-917不预上网 · GDE")).toBe("USPS");

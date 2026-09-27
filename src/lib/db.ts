@@ -1144,12 +1144,12 @@ export function normalizeTrackingKey(key: string): string {
   return m ? m[1] : k;
 }
 
-/** 同一客户、同一订单号还有效（没取消）的面单；取消了的可以重新下单 */
+/** 同一客户、同一订单号还有效的面单；取消了的、出单异常（没有面单）的可以重新下单 */
 export function activeShipmentByRef(customerId: number, ref: string) {
   return db()
     .prepare(
       `SELECT id, custom_no, tracking_no, status, created_at FROM shipments
-       WHERE customer_id = ? AND customer_ref = ? AND status <> 'cancelled' ORDER BY id DESC LIMIT 1`,
+       WHERE customer_id = ? AND customer_ref = ? AND status NOT IN ('cancelled', 'exception') ORDER BY id DESC LIMIT 1`,
     )
     .get(customerId, ref.trim()) as { id: number; custom_no: string; tracking_no: string | null; status: ShipmentStatus; created_at: string } | undefined;
 }
