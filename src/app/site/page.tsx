@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, DatabaseBackup, Headset, MapPinned, MessageSquare, PackageCheck, Receipt, Undo2, UserCheck, Wallet } from "lucide-react";
+import { ArrowRight, BellRing, Calculator, Check, CircleHelp, DatabaseBackup, Headset, LogIn, Map, MapPinned, MessageSquare, PackageCheck, Receipt, Tag, UserCheck, Wallet } from "lucide-react";
 import { getSettings } from "@/lib/db";
 import { getLang, getT } from "@/lib/prefs";
 import { CARRIERS } from "@/lib/carriers";
@@ -46,7 +46,7 @@ export default async function SitePage() {
       <SiteNav brand={brand} />
 
       {/* ---------- Hero ---------- */}
-      <header className="us-hero lux">
+      <header className="us-hero lux" id="top">
         <div className="lux-bg" aria-hidden="true" />
         <div className="site-wrap us-hero-grid">
           <div>
@@ -57,7 +57,11 @@ export default async function SitePage() {
               <Link href="#contact" className="btn us-btn lg">{t("联系我们")}</Link>
               <Link href="/portal" className="us-link">{t("客户登录")} <ArrowRight size={16} /></Link>
             </div>
-            <p className="us-fine">{t("无月费")} · {t("无最低单量")}{hours > 0 ? ` · ${t("{h} 小时内可取消", { h: hours })}` : ""}</p>
+            <ul className="hero-ticks">
+              <li><Check size={16} /> {t("无月费、无最低单量")}</li>
+              <li><Check size={16} /> {t("下单前看到最终价格")}</li>
+              {hours > 0 && <li><Check size={16} /> {t("{h} 小时内可取消", { h: hours })}</li>}
+            </ul>
           </div>
           <RateCalculator />
         </div>
@@ -74,13 +78,24 @@ export default async function SitePage() {
         </div>
       </header>
 
-      {/* ---------- Metrics ---------- */}
-      <section className="us-metrics">
-        <div className="site-wrap">
-          <div><b>$0</b><span>{t("月费")}</span></div>
-          <div><b>6+</b><span>{t("尾程渠道")}</span></div>
-          {hours > 0 && <div><b>{hours}h</b><span>{t("可取消时限")}</span></div>}
-          <div><b>1</b><span>{t("个账户管理所有渠道")}</span></div>
+      {/* ---------- 四个核心数字 ---------- */}
+      <section className="vc-band">
+        <div className="site-wrap vc-grid">
+          {[
+            { big: "6+", title: t("尾程渠道"), body: t("USPS、UniUni、GOFO、SpeedX、FedEx 等，一次报价全部比较。"), href: "#product", link: t("看看怎么比价"), tone: "blue" },
+            { big: "$0", title: t("月费"), body: t("预付余额，按单扣费，没有最低单量。"), href: "#how", link: t("怎么开通"), tone: "teal" },
+            { big: "1,000+", title: t("单一次导入"), body: t("Excel 批量导入，逐单比价、合并打印。"), href: "#product", link: t("批量出单"), tone: "violet" },
+            hours > 0
+              ? { big: `${hours}h`, title: t("内可取消"), body: t("未出面单全额退回余额。"), href: "#faq", link: t("取消规则"), tone: "rose" }
+              : { big: "1", title: t("个账户管理所有渠道"), body: t("一张账单，逐单可查。"), href: "#why", link: t("服务保障"), tone: "rose" },
+          ].map((v) => (
+            <a key={v.title} href={v.href} className={`vc-card ${v.tone}`}>
+              <b>{v.big}</b>
+              <strong>{v.title}</strong>
+              <span>{v.body}</span>
+              <em>{v.link} <ArrowRight size={14} /></em>
+            </a>
+          ))}
         </div>
       </section>
 
@@ -103,6 +118,66 @@ export default async function SitePage() {
             <h2>{t("一个平台，搞定尾程发货")}</h2>
           </div>
           <ProductTabs />
+        </div>
+      </section>
+
+      {/* ---------- 功能亮点：左右交替图文 ---------- */}
+      <section className="us-section alt" id="features">
+        <div className="site-wrap">
+          <div className="us-head center">
+            <p className="us-eyebrow">{t("功能亮点")}</p>
+            <h2>{t("细节做好，发货少出错")}</h2>
+          </div>
+
+          <div className="feat-row">
+            <div className="feat-copy">
+              <span className="feat-icon violet"><Tag size={20} /></span>
+              <h3>{t("面单自动加印 SKU")}</h3>
+              <p>{t("拣货打包直接看面单就知道装什么。系统会检查服务商的面单：已经印了 SKU 就不重复加，没有就自动印在空白处。")}</p>
+              <ul><li><Check size={15} /> {t("不同渠道的版式分别设置位置")}</li><li><Check size={15} /> {t("原始面单保留，可随时下载")}</li></ul>
+            </div>
+            <div className="feat-visual">
+              <div className="fv-label">
+                <div className="fv-label-top"><b>USPS GROUND ADVANTAGE</b><span>ZONE 7</span></div>
+                <div className="fv-lines"><i /><i /><i className="short" /></div>
+                <div className="fv-bars" aria-hidden="true">{Array.from({ length: 34 }, (_, i) => <i key={i} style={{ width: (i * 7) % 3 + 1 }} />)}</div>
+                <div className="fv-stamp">SKU: TEE-BLK-M x2 / CAP-01</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="feat-row rev">
+            <div className="feat-copy">
+              <span className="feat-icon amber"><MapPinned size={20} /></span>
+              <h3>{t("收件地址自动核对")}</h3>
+              <p>{t("查运费时就核对地址：缺公寓号、地址不存在会先提醒，写法不标准给出建议地址，少退件、少改派。")}</p>
+              <ul><li><Check size={15} /> {t("确认后才能下单")}</li><li><Check size={15} /> {t("批量导入逐单核对")}</li></ul>
+            </div>
+            <div className="feat-visual">
+              <div className="fv-card">
+                <div className="fv-addr"><small>{t("收件地址")}</small><b>1200 Broadway, New York, NY 10001</b></div>
+                <div className="fv-alert warn"><b>{t("缺少公寓 / 单元号")}</b><span>{t("这栋楼有多个单元，请补充 Apt / Suite")}</span></div>
+                <div className="fv-alert ok"><b>{t("建议地址")}</b><span>1200 BROADWAY APT 5C, NEW YORK NY 10001-4318</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div className="feat-row">
+            <div className="feat-copy">
+              <span className="feat-icon rose"><BellRing size={20} /></span>
+              <h3>{t("异常及时提醒")}</h3>
+              <p>{t("面单迟迟没出来、服务商返回异常，系统会马上标出来并提醒你，可以立刻换渠道重新下单，不耽误当天发货。")}</p>
+              <ul><li><Check size={15} /> {t("同一订单号可以换渠道重下")}</li><li><Check size={15} /> {t("未出面单全额退回")}</li></ul>
+            </div>
+            <div className="feat-visual">
+              <div className="fv-card fv-timeline">
+                <div className="done"><i /><b>{t("已下单")}</b><small>10:02</small></div>
+                <div className="warn"><i /><b>{t("面单超时未出，已提醒")}</b><small>10:07</small></div>
+                <div className="done"><i /><b>{t("换渠道重新出单")}</b><small>10:08</small></div>
+                <div className="done"><i /><b>{t("原订单全额退回")}</b><small>10:30</small></div>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -183,9 +258,6 @@ export default async function SitePage() {
             {[
               { icon: Headset, tone: "blue", title: t("本地团队"), body: t("就在洛杉矶，中英文沟通，工作时间快速响应。") },
               { icon: Receipt, tone: "violet", title: t("透明计费"), body: t("下单前看到最终价格；补差逐单列明，不重复扣。") },
-              { icon: Wallet, tone: "teal", title: t("没有月费"), body: t("预付余额，按单扣费；Zelle、支付宝充值。") },
-              { icon: MapPinned, tone: "amber", title: t("地址自动核对"), body: t("缺公寓号、地址不存在会提醒，少退件、少改派。") },
-              { icon: Undo2, tone: "rose", title: hours > 0 ? t("{h} 小时内可取消", { h: hours }) : t("随时申请取消"), body: t("未出面单全额退回余额。") },
               { icon: DatabaseBackup, tone: "indigo", title: t("数据每日备份"), body: t("订单、面单、账单每天自动备份，客户数据相互隔离。") },
             ].map((c) => (
               <article key={c.title} className={c.tone}>
@@ -195,6 +267,38 @@ export default async function SitePage() {
               </article>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* ---------- 行动区 ---------- */}
+      <section className="cta-band">
+        <div className="site-wrap cta-in">
+          <div>
+            <h2>{t("今天就开始省运费")}</h2>
+            <ul className="hero-ticks light">
+              <li><Check size={16} /> {t("无月费、无最低单量")}</li>
+              <li><Check size={16} /> {t("确认价格后为你开户")}</li>
+              <li><Check size={16} /> {t("中英文本地服务")}</li>
+            </ul>
+          </div>
+          <div className="cta-actions">
+            <Link href="#contact" className="btn us-btn-light lg">{t("联系我们")}</Link>
+            <Link href="/portal" className="us-link light">{t("客户登录")} <ArrowRight size={16} /></Link>
+          </div>
+        </div>
+        <div className="site-wrap res-grid">
+          {[
+            { icon: Calculator, title: t("运费试算"), body: t("选目的地、拖重量，马上看各渠道价格。"), href: "#top" },
+            { icon: Map, title: t("覆盖范围"), body: t("从洛杉矶发往美国本土 48 州。"), href: "#coverage" },
+            { icon: CircleHelp, title: t("常见问题"), body: t("开户、充值、取消、补差。"), href: "#faq" },
+            { icon: LogIn, title: t("客户登录"), body: t("老客户登录下单、查询、对账。"), href: "/portal" },
+          ].map((r) => (
+            <a key={r.title} href={r.href} className="res-card">
+              <r.icon size={20} strokeWidth={1.7} />
+              <b>{r.title}</b>
+              <span>{r.body}</span>
+            </a>
+          ))}
         </div>
       </section>
 
@@ -225,26 +329,43 @@ export default async function SitePage() {
       </section>
 
       <footer className="us-footer">
-        <div className="site-wrap us-footer-grid">
+        <div className="site-wrap us-footer-grid wide">
           <div>
             <b className="us-footer-brand">{brand}</b>
             <p>{t("美西本地尾程面单")}</p>
+            <p className="us-footer-tag">{t("一个账户比遍主流尾程渠道，预付余额、无月费，洛杉矶本地团队中文服务。")}</p>
+            <Link href="#contact" className="btn us-btn" style={{ alignSelf: "flex-start", marginTop: 6 }}>{t("联系我们")}</Link>
           </div>
           <div>
-            <h4>{t("产品")}</h4>
+            <h4>{t("产品功能")}</h4>
             <a href="#product">{t("实时比价")}</a>
-            <a href="#coverage">{t("覆盖范围")}</a>
-            <a href="#faq">{t("常见问题")}</a>
+            <a href="#product">{t("批量导入")}</a>
+            <a href="#product">{t("合并打印")}</a>
+            <a href="#features">{t("面单自动加印 SKU")}</a>
+            <a href="#features">{t("收件地址自动核对")}</a>
+            <a href="#product">{t("透明对账")}</a>
           </div>
           <div>
-            <h4>{t("账户")}</h4>
-            <a href="#contact">{t("联系我们")}</a>
-            <Link href="/portal">{t("客户登录")}</Link>
+            <h4>{t("支持渠道")}</h4>
+            {logos.map((c) => <span key={c.id}>{c.name}</span>)}
+          </div>
+          <div>
+            <h4>{t("适合谁")}</h4>
+            <a href="#who">{t("跨境电商卖家")}</a>
+            <a href="#who">{t("海外仓 / 3PL")}</a>
+            <a href="#who">{t("本地品牌 / 批发商")}</a>
+            <h4 style={{ marginTop: 14 }}>{t("帮助")}</h4>
+            <a href="#faq">{t("常见问题")}</a>
+            <a href="#coverage">{t("覆盖范围")}</a>
           </div>
           <div>
             <h4>{t("公司")}</h4>
             <span>{site.company}</span>
             <span>{site.address || "Chino, CA 91710"}</span>
+            {site.phone && <span>{site.phone}</span>}
+            {site.wechat && <span>{t("微信")}{t("：")}{site.wechat}</span>}
+            {site.email && <a href={`mailto:${site.email}`}>{site.email}</a>}
+            <Link href="/portal">{t("客户登录")}</Link>
           </div>
         </div>
         <div className="site-wrap us-footer-bottom">© {new Date().getFullYear()} {site.company || brand}</div>
