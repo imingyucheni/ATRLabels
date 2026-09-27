@@ -132,6 +132,11 @@ describe("嘉谷万邑接口", () => {
     expect(publicError(s1.errorMsg)).toBe("该渠道出单超时，还没有生成面单。请联系客服，或换其他渠道重新下单");
     expect(db.activeShipmentByRef(cid, "R-LATE")).toBeUndefined(); // 可以换渠道重新下单
     expect((await svc.refreshShipment(late)).status).toBe("exception"); // 再刷新也保持异常
+    // 服务商反馈：同样的返回只记一条，带次数；系统判断只记一次
+    const { listProviderEvents } = await import("@/lib/providerLog");
+    const ev = listProviderEvents("T-LATE");
+    expect(ev.find((e) => e.action === "查询面单（GetMailNoByOrderNbr）")).toMatchObject({ provider: "嘉谷", times: 2, message: "成功 · 没有运单号 · 没有面单" });
+    expect(ev.filter((e) => e.action === "系统判断").length).toBe(1);
 
     expect((await svc.refreshShipment(fresh)).status).toBe("pending"); // 还没到 5 分钟
     expect(db.activeShipmentByRef(cid, "R-FRESH")).toBeDefined();

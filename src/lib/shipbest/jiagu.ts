@@ -8,6 +8,7 @@
 import { db, getSettings } from "../db";
 import { ShipBestError } from "./errors";
 import type { FeeQuote, OrderDetail, Product, ShipmentRequest } from "./types";
+import { logProviderEvent } from "../providerLog";
 
 export const JG_PREFIX = "JG-";
 export const JG_SUFFIX = " · GDE";
@@ -153,6 +154,11 @@ interface JgResult<T> {
   result?: T;
 }
 
+/** 查面单的返回概括成一句，记到服务商反馈里 */
+function replySummary(ok: boolean, message: string, tracking?: string | null, label?: string | null) {
+  return [ok ? "成功" : "失败", message, tracking ? `运单号 ${tracking}` : "没有运单号", label ? "有面单" : "没有面单"].filter(Boolean).join(" · ");
+}
+
 /** 错误信息统一带上“嘉谷”，后台能看出是哪个服务商；客户端会过滤掉服务商字样 */
 export class JiaguError extends ShipBestError {
   constructor(code: string | number | null | undefined, message: string) {
@@ -278,11 +284,17 @@ export class JiaguClient {
       "/api/gts/ShippingLabel",
       { ...buildJiaguBody(this.cfg, req, id), OrderNbr: customNo, ProductID: id },
     );
-    // ErrorCode = 100：订单已建，服务商面单稍后返回，之后查状态时再取
-    if (!r.ok && r.code !== "100") throw new JiaguError(r.code, r.message || "下单失败");
     const x = r.result ?? {};
     const tracking = x.MasterTrackingNbr || x.TrackingNbr || null;
     const label = x.MasterLabelUrl || x.labels?.[0]?.labelUri || null;
+    logProviderEvent(customNo, "嘉谷", "提交订单", r.code, [
+      r.ok ? "成功" : r.code === "100" ? "已接单，面单稍后生成" : "失败",
+      r.message,
+      x.Identifier && `嘉谷单号 ${x.Identifier}`,
+      tracking && `运单号 ${tracking}`,
+    ].filter(Boolean).join(" · "));
+    // ErrorCode = 100：订单已建，服务商面单稍后返回，之后查状态时再取
+    if (!r.ok && r.code !== "100") throw new JiaguError(r.code, r.message || "下单失败");
     jgOrders.save({ customNo, productCode: code, productName, identifier: x.Identifier, trackingNo: tracking, labelUrl: label, status: tracking && label ? 4 : 2 });
   }
 
@@ -296,8 +308,10 @@ export class JiaguClient {
       });
       let tracking = r.ok ? r.result?.TrackingNbr : undefined;
       let label = r.ok ? r.result?.WaybillUrl : undefined;
+      logProviderEvent(customNo, "嘉谷", "查询面单（GetMailNoByOrderNbr）", r.code, replySummary(r.ok, r.message, r.result?.TrackingNbr, r.result?.WaybillUrl));
       if (!tracking || !label) {
         const a = await this.call<{ mailNo?: string; labelUrl?: string }>("/api/gts/GetLabelAsync", { ownershipID: this.cfg.ownershipId, customerID: this.cfg.customerId, orderNbr: customNo });
+        logProviderEvent(customNo, "嘉谷", "查询面单（GetLabelAsync）", a.code, replySummary(a.ok, a.message, a.result?.mailNo, a.result?.labelUrl));
         if (a.ok) {
           tracking = tracking || a.result?.mailNo;
           label = label || a.result?.labelUrl;

@@ -29,6 +29,8 @@ import { getShipBestClient, shipbestMode, ShipBestError } from "./shipbest/clien
 import { isJiaguCode } from "./shipbest/jiagu";
 import { guessCarrier } from "./carriers";
 import { publicError } from "./portal";
+import { logProviderEvent } from "./providerLog";
+import { SB_STATUS } from "./shipbest/types";
 import type { Address, ShipmentRequest } from "./shipbest/types";
 import { isCountryCode, isUsZip, usStateCode } from "./geo";
 import { fillProductNames } from "./sanitize";
@@ -407,6 +409,7 @@ export async function createLabel(input: CreateInput): Promise<number> {
 
   try {
     await getShipBestClient().createOrder(customNo, channelCode, req, input.remark);
+    if (!isJiaguCode(channelCode)) logProviderEvent(customNo, "ShipBest", "提交订单", null, "成功");
   } catch (e) {
     if (e instanceof ShipBestError) {
       // ShipBest 明确拒绝：订单没有建成，退回扣款、删掉本地记录，修改后重试
@@ -415,6 +418,7 @@ export async function createLabel(input: CreateInput): Promise<number> {
       throw e;
     }
     // 网络超时等：ShipBest 那边可能已经建单，保留记录，稍后用自定义单号刷新
+    logProviderEvent(customNo, providerOf(channelCode), "提交订单", null, `提交结果未知：${(e as Error).message}`);
     updateShipment(id, { errorMsg: `提交结果未知（${(e as Error).message}），请稍后点“刷新状态”` });
     return id;
   }
@@ -435,6 +439,10 @@ export async function refreshShipment(id: number): Promise<Shipment> {
   const s = getShipment(id);
   if (!s) throw new Error("记录不存在");
   const d = await getShipBestClient().getOrder(s.orderNo ? { orderNo: s.orderNo } : { customNo: s.customNo });
+  // 嘉谷的查询在接口层已经逐个记下；ShipBest 这里记一条状态
+  if (!isJiaguCode(s.channelCode)) {
+    logProviderEvent(s.customNo, "ShipBest", "查询状态", d.status, [SB_STATUS[d.status] ?? "", d.errorMsg, d.trackingNo ? `运单号 ${d.trackingNo}` : ""].filter(Boolean).join(" · "));
+  }
 
   const patch: ShipmentPatch = {
     orderNo: d.orderNo || s.orderNo,
@@ -453,6 +461,7 @@ export async function refreshShipment(id: number): Promise<Shipment> {
     if (patch.status === "pending" && !patch.labelUrl && isJiaguCode(s.channelCode) && labelOverdue(s.createdAt)) {
       patch.status = "exception";
       patch.errorMsg = JG_LABEL_TIMEOUT_MSG;
+      if (s.status !== "exception") logProviderEvent(s.customNo, "系统", "系统判断", null, `下单 ${JG_LABEL_TIMEOUT_MIN} 分钟仍没有面单，标记为异常`);
     }
   }
 
@@ -478,6 +487,11 @@ export async function refreshShipment(id: number): Promise<Shipment> {
     });
   }
   return getShipment(id)!;
+}
+
+/** 这张面单走的是哪家服务商 */
+export function providerOf(channelCode: string) {
+  return isJiaguCode(channelCode) ? "嘉谷" : "ShipBest";
 }
 
 /** 嘉谷下单后多久还没有面单算出问题 */
@@ -541,10 +555,12 @@ export async function requestCancel(
   if (s.status === "cancelled") return { done: true, message: "已经是取消状态" };
   try {
     await getShipBestClient().cancelOrder(s.orderNo ? { orderNo: s.orderNo } : { customNo: s.customNo });
+    logProviderEvent(s.customNo, providerOf(s.channelCode), "申请取消", null, "成功");
     updateShipment(id, { ...cancelPatch(s, wasLabeled(s)), sbStatus: 6 });
     settleCancel(id);
     return { done: true, message: "已取消，费用已退回账户余额" };
   } catch (e) {
+    logProviderEvent(s.customNo, providerOf(s.channelCode), "申请取消", e instanceof ShipBestError ? e.code : null, `失败：${(e as Error).message}`);
     // 客户自己申请：接口取消失败时不改状态（面单照常有效），只留一条记录给后台看
     if (opts.markOnFail === false) {
       updateShipment(id, { errorMsg: `客户申请取消，接口取消未成功：${(e as Error).message}` });

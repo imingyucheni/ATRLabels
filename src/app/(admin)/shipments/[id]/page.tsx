@@ -1,11 +1,15 @@
 import LabelActions from "@/components/LabelActions";
-import { fmtTime } from "@/lib/time";
+import { fmtTime, TZ_LABEL } from "@/lib/time";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getCustomer, getSettings, getShipment, listAdjustments, shipmentProfit } from "@/lib/db";
+import { getCustomer, getSettings, getShipment, listAdjustments, shipmentProfit, STATUS_LABEL } from "@/lib/db";
 import { isPaperSize } from "@/lib/labelLayout";
 import { money } from "@/lib/pricing";
-import { defaultCancelFees } from "@/lib/service";
+import { defaultCancelFees, JG_LABEL_TIMEOUT_MIN, JG_LABEL_TIMEOUT_MSG, providerOf } from "@/lib/service";
+import { listProviderEvents } from "@/lib/providerLog";
+import { isJiaguCode, jgOrders, jiaguConfig, warehouseFor } from "@/lib/shipbest/jiagu";
+import { stripProviderTag } from "@/lib/carriers";
+import CopyText from "@/components/CopyText";
 import { SB_STATUS, type Address } from "@/lib/shipbest/types";
 import FlashForm from "@/components/FlashForm";
 import StatusBadge from "@/components/StatusBadge";
@@ -46,6 +50,33 @@ export default async function ShipmentDetail({ params }: { params: Promise<{ id:
   const stampCfg = stampFor(s);
   const charges = listLedger({ shipmentId: s.id }).reverse();
   const canCancel = s.status === "pending" || s.status === "labeled" || s.status === "exception";
+
+  // 服务商反馈：对方单号、仓库、每次返回的内容，外加一段可以直接发给服务商的说明
+  const jg = isJiaguCode(s.channelCode);
+  const provider = providerOf(s.channelCode);
+  const events = listProviderEvents(s.customNo);
+  const providerNo = jg ? jgOrders.get(s.customNo)?.identifier ?? null : s.orderNo;
+  const productId = jg ? s.channelCode.slice(3) : s.channelCode;
+  const jgCfg = jg ? jiaguConfig() : null;
+  const warehouse = jgCfg ? warehouseFor(jgCfg, Number(productId)) : null;
+  const problem =
+    s.errorMsg === JG_LABEL_TIMEOUT_MSG ? `下单 ${JG_LABEL_TIMEOUT_MIN} 分钟后仍没有面单`
+    : s.errorMsg ? s.errorMsg
+    : STATUS_LABEL[s.status];
+  const troubled = ["pending", "exception", "cancel_requested"].includes(s.status);
+  const evLine = (e: (typeof events)[number]) =>
+    `- ${fmtTime(e.firstAt)}${e.times > 1 ? ` ~ ${fmtTime(e.lastAt).slice(11)}（${e.times} 次）` : ""} ${e.action}：${e.code ? `[${e.code}] ` : ""}${e.message}`;
+  const providerText = [
+    "您好，麻烦帮忙查一下这单：",
+    `订单号（我们提交的 ${jg ? "OrderNbr" : "customNo"}）：${s.customNo}`,
+    providerNo ? `${provider}单号：${providerNo}` : "",
+    s.trackingNo ? `运单号：${s.trackingNo}` : "",
+    `渠道：${stripProviderTag(s.channelName ?? s.channelCode)}（产品 ID ${productId}${warehouse ? `，仓库 ${warehouse}` : ""}）`,
+    `下单时间：${fmtTime(s.createdAt)}（${TZ_LABEL}）`,
+    `收件邮编：${s.recipient.zipCode} ${s.recipient.country}`,
+    `问题：${problem}`,
+    events.length ? `系统收到的返回：\n${events.slice(-6).map(evLine).join("\n")}` : "",
+  ].filter(Boolean).join("\n");
 
   return (
     <>
@@ -160,13 +191,46 @@ export default async function ShipmentDetail({ params }: { params: Promise<{ id:
           <h3>{t("订单")}</h3>
           <dl className="kv">
             <dt>{t("自定义单号")}</dt><dd>{s.customNo}</dd>
-            <dt>{t("ShipBest 单号")}</dt><dd>{s.orderNo ?? "-"}</dd>
+            <dt>{t("服务商")}</dt><dd>{t(provider)}</dd>
+            <dt>{t("服务商单号")}</dt><dd>{providerNo ?? "-"}</dd>
             <dt>{t("运单号")}</dt><dd>{s.trackingNo ?? "-"}</dd>
-            <dt>{t("ShipBest 状态")}</dt><dd>{s.sbStatus ? (SB_STATUS[s.sbStatus] ? t(SB_STATUS[s.sbStatus]) : s.sbStatus) : "-"}</dd>
+            <dt>{t("服务商状态")}</dt><dd>{s.sbStatus ? (SB_STATUS[s.sbStatus] ? t(SB_STATUS[s.sbStatus]) : s.sbStatus) : "-"}</dd>
             <dt>{t("创建时间")}</dt><dd>{fmtTime(s.createdAt)}</dd>
             {s.remark && (<><dt>{t("备注")}</dt><dd>{s.remark}</dd></>)}
           </dl>
         </div>
+      </div>
+
+      <div className="card" id="provider">
+        <h2>{t("服务商反馈")}</h2>
+        <p className="small muted">{t("向服务商下单、查面单、取消时对方返回的内容。同样的返回只记一条，显示次数和最后时间。")}</p>
+        {events.length ? (
+          <div className="table-wrap">
+            <table>
+              <thead><tr><th>{t("时间")}</th><th>{t("来源")}</th><th>{t("动作")}</th><th>{t("返回码")}</th><th>{t("返回内容")}</th></tr></thead>
+              <tbody>
+                {events.map((e) => (
+                  <tr key={e.id}>
+                    <td className="small muted" style={{ whiteSpace: "nowrap" }}>
+                      {fmtTime(e.firstAt)}
+                      {e.times > 1 && <div>{t("最后 {time} · 共 {n} 次", { time: fmtTime(e.lastAt), n: e.times })}</div>}
+                    </td>
+                    <td>{t(e.provider)}</td>
+                    <td>{t(e.action)}</td>
+                    <td className="small">{e.code ?? "-"}</td>
+                    <td className="small" style={{ wordBreak: "break-word" }}>{e.message}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="muted small">{t("还没有记录（这个功能上线前下的单没有记录，可以点“刷新状态”查一次）。")}</p>
+        )}
+        <details open={troubled} style={{ marginTop: 12 }}>
+          <summary>{t("发给服务商的问题说明（可复制）")}</summary>
+          <CopyText text={providerText} label="复制说明" />
+        </details>
       </div>
 
       {adjustments.length > 0 && (

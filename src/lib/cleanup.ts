@@ -55,6 +55,7 @@ export function clearTestData(): { backup: string; removed: ReturnType<typeof te
     conn.exec("DELETE FROM batch_jobs WHERE id NOT IN (SELECT job_id FROM batch_job_rows)");
     // 保留下来的批次里指向测试单的行（例如一个批次里既有测试单又有正式单）解除关联
     conn.exec(`UPDATE batch_job_rows SET shipment_id = NULL WHERE shipment_id IN (${TEST_IDS})`);
+    if (hasTable("provider_events")) conn.exec(`DELETE FROM provider_events WHERE custom_no IN (SELECT custom_no FROM shipments WHERE id IN (${TEST_IDS}))`);
     conn.exec(`DELETE FROM shipments WHERE id IN (${TEST_IDS})`);
     if (hasTable("mock_orders")) conn.exec("DELETE FROM mock_orders");
   })();

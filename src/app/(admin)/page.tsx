@@ -7,6 +7,7 @@ import StatusBadge from "@/components/StatusBadge";
 import { pendingTopupCount } from "@/lib/topup";
 import Profit from "@/components/Profit";
 import { getT, tMsg } from "@/lib/prefs";
+import { providerOf } from "@/lib/service";
 
 /** 和“报表”同一口径：订单数不含已取消 / 异常，含面单生成中的 */
 function summarize(from: string, to: string) {
@@ -57,8 +58,9 @@ export default async function Dashboard() {
                 <tr key={s.id}>
                   <td><Link href={`/shipments/${s.id}`}>{s.customNo}</Link></td>
                   <td>{s.customerName}</td>
+                  <td className="small">{t(providerOf(s.channelCode))}</td>
                   <td><StatusBadge status={s.status} test={s.isTest} /></td>
-                  <td className="small muted">{errs[i]}</td>
+                  <td className="small muted">{errs[i]} <Link href={`/shipments/${s.id}#provider`} className="small">{t("服务商反馈")}</Link></td>
                 </tr>
               ))}
             </tbody>
