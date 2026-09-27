@@ -129,4 +129,12 @@ export const fixC: Record<string, string> = {
   "超过可取消时限后，客户端不再显示“申请取消”；后台仍可操作（特殊情况和服务商沟通后使用）。": "After the window, customers no longer see \u201cRequest cancel\u201d; admins can still cancel (for special cases agreed with the provider).",
   "这张面单下单已超过可取消时限，服务商可能不接受取消。确定仍要申请取消吗？": "This label is past the cancellation window and the provider may refuse. Request cancellation anyway?",
   "下单已超过 {h} 小时（可取消时限），客户端已不能申请取消。": "More than {h} hours since the order (the cancellation window); customers can no longer request cancellation.",
+  // 管理员下单
+  "管理员下单": "Admin shipping",
+  "按我们的成本价出单，所有已启用的渠道一起比价（包括多个 USPS、GOFO 等）。订单记在“公司自用（成本价）”账户下，不扣任何客户的余额。": "Ship at our cost, comparing every enabled service together (including multiple USPS, GOFO, etc.). Orders are recorded under the “House account (at cost)” and never charge a customer's balance.",
+  "我下的单": "My shipments",
+  "公司自用（成本价）": "House account (at cost)",
+  "成本价（出单价）": "Cost (your price)",
+  "订单号（可选）": "Order no. (optional)",
+  "确认用 {channel} 出单？\n成本价：{price}（公司自用，不扣客户余额）": "Ship with {channel}?\nCost: {price} (house account, no customer is charged)",
 };

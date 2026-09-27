@@ -68,6 +68,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             title: "美国本地面单",
             tag: "US",
             items: [
+              { href: "/ship", label: "管理员下单", icon: "ship" },
               { href: "/shipments", label: "面单记录", icon: "list" },
               { href: "/adjustments", label: "补差导入", icon: "adjust" },
               { href: "/coverage", label: "派送范围与价格", icon: "map" },

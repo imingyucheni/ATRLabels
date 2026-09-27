@@ -19,7 +19,7 @@ export default async function ShipmentsPage({ searchParams }: { searchParams: Pr
     q: sp.q || undefined,
   };
   const rows = listShipments({ ...filter, limit: 500 });
-  const customers = listCustomers();
+  const customers = listCustomers({ includeInternal: true });
   const qs = new URLSearchParams(Object.entries(sp).filter(([, v]) => v) as [string, string][]).toString();
 
   const totals = rows.reduce(

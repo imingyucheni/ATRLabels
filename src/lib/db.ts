@@ -234,6 +234,8 @@ function migrate(conn: Database.Database) {
   if (!cols.includes("customer_ref")) conn.exec("ALTER TABLE shipments ADD COLUMN customer_ref TEXT");
   if (!cols.includes("created_by")) conn.exec("ALTER TABLE shipments ADD COLUMN created_by TEXT");
   const ccols = (conn.prepare("PRAGMA table_info(customers)").all() as { name: string }[]).map((c) => c.name);
+  // 公司自用账户（管理员按成本价下单用，不在客户列表里显示）
+  if (!ccols.includes("internal")) conn.exec("ALTER TABLE customers ADD COLUMN internal INTEGER NOT NULL DEFAULT 0");
   const jcols = (conn.prepare("PRAGMA table_info(batch_jobs)").all() as { name: string }[]).map((c) => c.name);
   if (!jcols.includes("channels_json")) conn.exec("ALTER TABLE batch_jobs ADD COLUMN channels_json TEXT");
   if (!jcols.includes("pick_mode")) conn.exec("ALTER TABLE batch_jobs ADD COLUMN pick_mode TEXT NOT NULL DEFAULT 'cheapest'");
@@ -594,6 +596,8 @@ export function customerChannelCodes(customerId: number): string[] {
 
 /** 客户可以使用的渠道 = 全局已启用 ∩ 给这个客户开通的 */
 export function customerChannels(customerId: number): Channel[] {
+  // 公司自用账户：所有已启用的渠道（包括同一物流商的多个渠道）
+  if (isInternalCustomer(customerId)) return listChannels(true);
   const rows = db()
     .prepare(
       `SELECT ch.* FROM channels ch JOIN customer_channels cc ON cc.channel_code = ch.code
@@ -656,6 +660,8 @@ export interface Customer {
   stampMode: "inherit" | "on" | "off";
   /** 面单纸张：4x6 / half / letter / letter2 */
   labelPaper: string;
+  /** 公司自用账户：按成本价、可用所有渠道、不扣余额 */
+  internal: boolean;
 }
 
 interface CustomerRow {
@@ -677,6 +683,7 @@ interface CustomerRow {
   balance: number | null;
   stamp_mode: "inherit" | "on" | "off" | null;
   label_paper: string | null;
+  internal?: number | null;
 }
 
 function toCustomer(r: CustomerRow): Customer {
@@ -697,13 +704,30 @@ function toCustomer(r: CustomerRow): Customer {
     balance: Math.round((r.balance ?? 0) * 100) / 100,
     stampMode: r.stamp_mode ?? "inherit",
     labelPaper: r.label_paper ?? "4x6",
+    internal: !!r.internal,
   };
 }
 
 const CUSTOMER_SELECT = `SELECT c.*, (SELECT SUM(l.amount) FROM ledger l WHERE l.customer_id = c.id) AS balance FROM customers c`;
 
-export function listCustomers(): Customer[] {
-  return (db().prepare(`${CUSTOMER_SELECT} ORDER BY c.name`).all() as CustomerRow[]).map(toCustomer);
+/** 客户列表（默认不含公司自用账户） */
+export function listCustomers(opts: { includeInternal?: boolean } = {}): Customer[] {
+  const where = opts.includeInternal ? "" : "WHERE c.internal = 0";
+  return (db().prepare(`${CUSTOMER_SELECT} ${where} ORDER BY c.internal, c.name`).all() as CustomerRow[]).map(toCustomer);
+}
+
+export const HOUSE_CUSTOMER_NAME = "公司自用（成本价）";
+
+/** 公司自用账户的 id（没有就建一个） */
+export function houseCustomerId(): number {
+  const r = db().prepare("SELECT id FROM customers WHERE internal = 1 ORDER BY id LIMIT 1").get() as { id: number } | undefined;
+  if (r) return r.id;
+  return Number(db().prepare("INSERT INTO customers (name, note, internal) VALUES (?, ?, 1)").run(HOUSE_CUSTOMER_NAME, "管理员下单用：成本价、所有渠道、不扣余额").lastInsertRowid);
+}
+
+export function isInternalCustomer(id: number | null | undefined): boolean {
+  if (!id) return false;
+  return !!(db().prepare("SELECT internal FROM customers WHERE id = ?").get(id) as { internal: number } | undefined)?.internal;
 }
 
 export function getCustomer(id: number): Customer | null {

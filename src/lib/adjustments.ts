@@ -3,6 +3,7 @@ import ExcelJS from "exceljs";
 import {
   batchExists,
   db,
+  isInternalCustomer,
   normalizeTrackingKey,
   findShipmentByKey,
   getSettings,
@@ -268,7 +269,8 @@ export function buildPreview(rows: string[][], m: Mapping): Preview {
         row.customNo = s.customNo;
         row.customerId = s.customerId;
         row.customerName = s.customerName;
-        row.customerAmount = customerAmountFor(row.costAmount, policy, s.rule);
+        // 公司自用账户的单：补差由公司自己承担，不向任何人收取
+        row.customerAmount = isInternalCustomer(s.customerId) ? 0 : customerAmountFor(row.costAmount, policy, s.rule);
         row.markupPercent = policy === "with_markup" ? s.rule.percent : null;
       }
       // 同一个单号只能补差一次：之前导入过的、表格里重复出现的都跳过

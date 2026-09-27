@@ -15,6 +15,7 @@ import {
   type Shipment,
   type ShipmentPatch,
   activeShipmentByRef,
+  isInternalCustomer,
   duplicateRefMessage,
 } from "./db";
 import { precheck, rememberQuote } from "./coverage";
@@ -172,6 +173,8 @@ export interface ChannelQuote {
 }
 
 function ruleFor(customerId: number, channelCode: string): MarkupRule {
+  // 公司自用账户：成本价，不加价
+  if (isInternalCustomer(customerId)) return { percent: 0, fixed: 0, minProfit: 0 };
   const s = getSettings();
   return resolveRule(s.markup, getChannel(channelCode)?.markup, getCustomer(customerId)?.markup);
 }
@@ -204,7 +207,8 @@ async function quoteRemote(customerId: number, channelCode: string, channelName:
     // 以“优惠后总运费”作为我们的成本
     const cost = q.totalDiscountShippingFee || q.totalShippingFee;
     const rule = ruleOverride ?? ruleFor(customerId, channelCode);
-    const price = computePrice(cost, rule, roundingStep);
+    // 公司自用账户按成本价：不做价格取整
+    const price = computePrice(cost, rule, isInternalCustomer(customerId) ? 0.01 : roundingStep);
     return {
       channelCode,
       channelName: q.logisticsProductName || channelName,

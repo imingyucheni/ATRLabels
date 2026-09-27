@@ -82,7 +82,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           <input type="date" name="to" defaultValue={to} aria-label={tr("结束日期")} />
           <select name="customerId" defaultValue={customerId ?? ""} aria-label={tr("客户")}>
             <option value="">{tr("全部客户")}</option>
-            {listCustomers().map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            {listCustomers({ includeInternal: true }).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
           <button>{tr("应用")}</button>
         </form>

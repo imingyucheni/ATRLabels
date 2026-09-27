@@ -1,4 +1,4 @@
-import { db, getCustomer, getSettings } from "./db";
+import { db, getCustomer, getSettings, isInternalCustomer } from "./db";
 import { checkLowBalanceSoon, notifyLater, queueAdjustmentNotice } from "./notify";
 
 /**
@@ -123,6 +123,8 @@ export function assertCanAfford(customerId: number, amount: number) {
 
 /** 出单扣款：检查额度并扣款在同一个事务里完成，防止并发超扣 */
 export function chargeLabel(customerId: number, shipmentId: number, price: number, createdBy: string, note?: string) {
+  // 公司自用账户按成本价出单，不走余额
+  if (isInternalCustomer(customerId)) return;
   db().transaction(() => {
     assertCanAfford(customerId, price);
     addLedger({ customerId, type: "label", amount: -price, shipmentId, createdBy, note: note ?? null });
@@ -136,6 +138,7 @@ export function removeShipmentLedger(shipmentId: number) {
 
 /** 取消退款（幂等：同一张单只退一次） */
 export function refundCancelled(customerId: number, shipmentId: number, refund: number, createdBy: string) {
+  if (isInternalCustomer(customerId)) return;
   const exists = db().prepare("SELECT 1 FROM ledger WHERE shipment_id = ? AND type = 'refund'").get(shipmentId);
   if (exists || !(refund > 0)) return;
   addLedger({ customerId, type: "refund", amount: refund, shipmentId, note: "取消订单退款", createdBy });
@@ -150,7 +153,7 @@ export function refundCancelled(customerId: number, shipmentId: number, refund: 
 
 /** 补差入账（幂等）：客户补收记为扣款，退还记为入账 */
 export function postAdjustment(adjustmentId: number, customerId: number, shipmentId: number, customerAmount: number, note: string | null) {
-  if (!customerAmount) return;
+  if (!customerAmount || isInternalCustomer(customerId)) return;
   const exists = db().prepare("SELECT 1 FROM ledger WHERE adjustment_id = ?").get(adjustmentId);
   if (exists) return;
   addLedger({ customerId, type: "adjustment", amount: -customerAmount, shipmentId, adjustmentId, note, createdBy: "system" });

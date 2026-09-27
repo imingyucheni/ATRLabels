@@ -39,6 +39,8 @@ import {
   type Settings,
   getCustomer,
   getChannel,
+  houseCustomerId,
+  isInternalCustomer,
 } from "@/lib/db";
 import type { PartialRule } from "@/lib/pricing";
 import { getShipBestClient, shipbestMode } from "@/lib/shipbest/client";
@@ -46,6 +48,7 @@ import { saveDimRule } from "@/lib/rates";
 import { CARRIERS } from "@/lib/carriers";
 import { clearChannelNameCache, sameNameChannels } from "@/lib/channelDisplay";
 import { clearTestData } from "@/lib/cleanup";
+import { checkAddress, needsAck, type AddressCheck } from "@/lib/addressCheck";
 import { updateLead } from "@/lib/leads";
 import { getJiaguClient, jiaguConfig, JG_PREFIX, JG_SUFFIX, warehouseFor } from "@/lib/shipbest/jiagu";
 import { createBackup, deleteBackup, restoreBackup } from "@/lib/backup";
@@ -128,7 +131,55 @@ export async function quoteAction(
   }
 }
 
-// 后台不出面单：出单都在客户 OMS 里进行（后台可以“进入客户 OMS”代客户操作）
+/* ---------------- 管理员下单（公司自用账户，按成本价） ---------------- */
+
+/** 管理员查运费：所有已启用渠道（同一物流商的多个渠道一起比），价格 = 成本 */
+export async function houseQuoteAction(raw: ShipmentRequest): Promise<{ errors?: string[]; quotes?: ChannelQuote[]; address?: AddressCheck }> {
+  await requireAdmin();
+  const req = cleanRequest(raw);
+  const errors = validateRequest(req);
+  if (errors.length) return { errors };
+  try {
+    const [quotes, address] = await Promise.all([quoteAll(houseCustomerId(), req), checkAddress(req.recipient)]);
+    return { quotes, address };
+  } catch (e) {
+    return { errors: [(e as Error).message] };
+  }
+}
+
+/** 管理员出单：记在“公司自用（成本价）”账户下，不扣任何客户余额 */
+export async function houseCreateAction(input: {
+  channelCode: string;
+  req: ShipmentRequest;
+  expectedPrice: number;
+  customerRef?: string;
+  remark?: string;
+  addressAck?: boolean;
+}): Promise<{ id?: number; error?: string; quote?: ChannelQuote }> {
+  await requireAdmin();
+  try {
+    const req = cleanRequest(input.req);
+    const address = await checkAddress(req.recipient);
+    if (needsAck(address) && !input.addressAck) return { error: "收件地址可能有问题，请检查地址，或勾选“我确认地址无误”后再下单" };
+    const id = await createLabel({
+      customerId: houseCustomerId(),
+      channelCode: str(input.channelCode),
+      req,
+      expectedPrice: n(input.expectedPrice),
+      customerRef: str(input.customerRef, 50) || undefined,
+      remark: str(input.remark, 200) || undefined,
+      createdBy: "admin",
+      addressCheck: needsAck(address) ? ({ ...address, acknowledged: true } as AddressCheck) : address,
+    });
+    revalidatePath("/shipments");
+    return { id };
+  } catch (e) {
+    if (e instanceof PriceChangedError) return { error: e.message, quote: e.quote };
+    return { error: (e as Error).message };
+  }
+}
+
+// 客户的单在客户 OMS 里出（后台可以“进入客户 OMS”代客户操作）；管理员自己的单用上面的“管理员下单”
 
 /* ---------------- 订单操作 ---------------- */
 
@@ -605,7 +656,7 @@ export async function linkAdjustmentAction(_: FlashState, fd: FormData): Promise
     if (adj.reason && s.channelName && !sameCarrier(adj.reason, s.channelName)) warn.push(`补差原因里的渠道和面单渠道（${s.channelName}）可能不一致`);
     if (warn.length) return { error: `${warn.join("；")}。确认没关联错的话，勾选“仍然关联”再提交。` };
   }
-  const amount = customerAmountFor(adj.cost_amount, adj.policy, s.rule);
+  const amount = isInternalCustomer(s.customerId) ? 0 : customerAmountFor(adj.cost_amount, adj.policy, s.rule);
   linkAdjustment(adj.id, s.id, s.customerId, amount);
   postAdjustment(adj.id, s.customerId, s.id, amount, adj.reason || `账单补差 · ${s.trackingNo ?? s.customNo}`);
   revalidatePath(`/adjustments/${adj.batch_id}`);

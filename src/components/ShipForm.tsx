@@ -6,7 +6,7 @@ import type { AddressCheck } from "@/lib/addressCheck";
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
-import { quoteAction } from "@/app/actions";
+import { houseCreateAction, houseQuoteAction, quoteAction } from "@/app/actions";
 import type { SavedSender } from "@/lib/senders";
 import { portalCreateAction, portalQuoteAction, saveSenderBookAction } from "@/app/portal/actions";
 import type { PublicQuote } from "@/lib/portal";
@@ -51,8 +51,8 @@ const UNIT_LABEL: Record<UnitSystem, [string, string]> = { 1: ["g", "cm"], 2: ["
 type Quote = PublicQuote & Partial<Pick<ChannelQuote, "cost" | "listCost" | "rule" | "profit">>;
 
 export default function ShipForm(props: {
-  /** portal = 客户自助下单：不选客户、只显示客户价 */
-  mode?: "admin" | "portal";
+  /** portal = 客户自助下单：不选客户、只显示客户价；house = 管理员按成本价下单（所有渠道） */
+  mode?: "admin" | "portal" | "house";
   customers?: { id: number; name: string; balance?: number; available?: number; sender?: Address | null; channelCount?: number }[];
   defaultCustomerId?: number;
   defaultSender: Address | null;
@@ -66,6 +66,9 @@ export default function ShipForm(props: {
   const chName = useChannelDisplay();
   const tm = useTMsg();
   const portal = props.mode === "portal";
+  const house = props.mode === "house";
+  // 可以直接出单的模式（客户自助 / 管理员自用）
+  const orderable = portal || house;
   const customers = props.customers ?? [];
   // 后台默认不选客户，避免替错客户下单
   const [customerId, setCustomerId] = useState<number>(props.defaultCustomerId ?? 0);
@@ -161,7 +164,9 @@ export default function ShipForm(props: {
       const optNum = (v: string) => (v.trim() === "" ? null : Number(v));
       const r = portal
         ? await portalQuoteAction(buildRequest())
-        : await quoteAction(customerId, buildRequest(), { percent: optNum(markup.percent), fixed: optNum(markup.fixed), minProfit: optNum(markup.minProfit) });
+        : house
+          ? await houseQuoteAction(buildRequest())
+          : await quoteAction(customerId, buildRequest(), { percent: optNum(markup.percent), fixed: optNum(markup.fixed), minProfit: optNum(markup.minProfit) });
       setErrors(r.errors ?? []);
       setQuotes(r.quotes ?? null);
       setAddr(("address" in r && r.address) || null);
@@ -186,14 +191,17 @@ export default function ShipForm(props: {
       document.getElementById("addr-check")?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
-    const msg = t("确认用 {channel} 出单？\n运费：{price}（从账户余额扣除）", { channel: chName(q.channelCode, q.channelName).name, price: money(q.price, q.currency) });
+    const msg = house
+      ? t("确认用 {channel} 出单？\n成本价：{price}（公司自用，不扣客户余额）", { channel: q.channelName, price: money(q.price, q.currency) })
+      : t("确认用 {channel} 出单？\n运费：{price}（从账户余额扣除）", { channel: chName(q.channelCode, q.channelName).name, price: money(q.price, q.currency) });
     if (!window.confirm(msg)) return;
     setCreating(q.channelCode);
     setErrors([]);
     try {
-      const r = await portalCreateAction({ channelCode: q.channelCode, req: buildRequest(), expectedPrice: q.price!, remark, customerRef, addressAck: addrAck });
+      const args = { channelCode: q.channelCode, req: buildRequest(), expectedPrice: q.price!, remark, customerRef, addressAck: addrAck };
+      const r = house ? await houseCreateAction(args) : await portalCreateAction(args);
       if (r.id) {
-        router.push(`/portal/shipments/${r.id}`);
+        router.push(house ? `/shipments/${r.id}` : `/portal/shipments/${r.id}`);
         return;
       }
       if (r.quote) {
@@ -278,7 +286,7 @@ export default function ShipForm(props: {
     <>
       <div className="card">
         <div className="row">
-          {!portal && (
+          {!orderable && (
             <label className="f" style={{ minWidth: 240 }}>
               <span>{t("按哪个客户的价格试算")}</span>
               <select
@@ -308,10 +316,10 @@ export default function ShipForm(props: {
               })()}
             </label>
           )}
-          {portal ? (
+          {orderable ? (
             <>
               <label className="f" style={{ minWidth: 200 }}>
-                {t("我的订单号（可选）")}
+                {house ? t("订单号（可选）") : t("我的订单号（可选）")}
                 <input value={customerRef} maxLength={50} onChange={(e) => setCustomerRef(e.target.value)} />
               </label>
               <label className="f" style={{ flex: 1 }}>
@@ -449,7 +457,7 @@ export default function ShipForm(props: {
           )}
         </div>
 
-        {portal ? (
+        {orderable ? (
           <>
             <h3>{t("商品明细（报关用）")}</h3>
             {skuTable(" *")}
@@ -475,7 +483,7 @@ export default function ShipForm(props: {
           </button>
         </div>
         {notice && <div className="alert warn">{tm(notice)}</div>}
-        {portal && addr && addr.status !== "unavailable" && addr.status !== "skipped" && (
+        {orderable && addr && addr.status !== "unavailable" && addr.status !== "skipped" && (
           <AddressCheckPanel
             check={addr}
             ack={addrAck}
@@ -503,6 +511,8 @@ export default function ShipForm(props: {
               <thead>
                 {portal ? (
                   <tr><th>{t("渠道")}</th><th>{t("分区")}</th><th className="num">{t("运费")}</th><th></th></tr>
+                ) : house ? (
+                  <tr><th>{t("渠道")}</th><th>{t("分区")}</th><th className="num">{t("原价")}</th><th className="num">{t("成本价（出单价）")}</th><th></th></tr>
                 ) : (
                   <tr><th>{t("渠道")}</th><th>{t("分区")}</th><th className="num">{t("原价")}</th><th className="num">{t("我们的成本")}</th><th>{t("加价规则")}</th><th className="num">{t("客户价")}</th><th className="num">{t("利润")}</th></tr>
                 )}
@@ -510,6 +520,19 @@ export default function ShipForm(props: {
               <tbody>
                 {quotes.filter((q) => q.ok || !onlyAvailable).map((q) =>
                   q.ok ? (
+                    house ? (
+                      <tr key={q.channelCode} className={q.price === bestPrice ? "best" : ""}>
+                        <td><ChannelLabel code={q.channelCode} name={q.channelName} size="md" /><div className="small muted">{q.channelCode}</div></td>
+                        <td>{q.zone ?? "-"}</td>
+                        <td className="num muted">{money(q.listCost)}</td>
+                        <td className="num"><b>{money(q.price, q.currency)}</b>{q.price === bestPrice && <div className="small profit-pos">{t("最低")}</div>}</td>
+                        <td>
+                          <button className="primary small" disabled={!!creating} onClick={() => onCreate(q)}>
+                            {creating === q.channelCode ? t("出单中…") : t("用此渠道出单")}
+                          </button>
+                        </td>
+                      </tr>
+                    ) :
                     <tr key={q.channelCode} className={q.price === bestPrice ? "best" : ""}>
                       <td><ChannelLabel code={q.channelCode} name={q.channelName} size="md" />{!portal && <div className="small muted">{q.channelCode}</div>}</td>
                       <td>{q.zone ?? "-"}</td>
@@ -533,7 +556,7 @@ export default function ShipForm(props: {
                   ) : (
                     <tr key={q.channelCode} className="row-disabled">
                       <td><ChannelLabel code={q.channelCode} name={q.channelName} size="md" /></td>
-                      <td colSpan={portal ? 3 : 6} className="small" style={{ color: "var(--err)" }}>
+                      <td colSpan={portal ? 3 : house ? 4 : 6} className="small" style={{ color: "var(--err)" }}>
                         <b>{/不通邮|派送范围|未覆盖/.test(q.error ?? "") ? t("地址未覆盖") : t("不可用")}</b>
                         {q.error && !/^地址未覆盖/.test(q.error) ? `${t("：")}${tm(q.error)}` : q.error ? `${t("：")}${tm(q.error.replace(/^地址未覆盖：/, ""))}` : ""}
                       </td>
