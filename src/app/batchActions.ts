@@ -20,6 +20,7 @@ import {
 } from "@/lib/batch";
 import { getCustomer, getSettings, houseCustomerId } from "@/lib/db";
 import { publicError } from "@/lib/portal";
+import { displayChannel } from "@/lib/channelDisplay";
 import { str } from "@/lib/sanitize";
 
 /** 后台可以操作任意客户；客户只能操作自己的任务 */
@@ -99,8 +100,10 @@ export async function getBatchJobAction(jobId: number): Promise<{ job?: BatchJob
           error: job.error && !job.error.startsWith("余额不足") ? publicError(job.error) : job.error,
           rows: job.rows.map((r) => ({
             ...r,
+            // 客户只拿到对外的渠道名（不含服务商标记、仓库代码）
+            channelName: r.channelCode ? displayChannel(r.channelCode).name : r.channelName,
             error: r.error ? publicError(r.error) : null,
-            quotes: r.quotes.map(({ cost: _cost, ...q }) => (q.error ? { ...q, error: publicError(q.error) } : q)),
+            quotes: r.quotes.map(({ cost: _cost, ...q }) => ({ ...q, name: displayChannel(q.code).name, ...(q.error ? { error: publicError(q.error) } : {}) })),
           })),
         };
     return { job: { ...view, balance: c.balance, available: c.balance + c.creditLimit, balanceRule: getSettings().balanceRule } };
