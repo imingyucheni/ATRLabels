@@ -91,3 +91,25 @@ describe("管理员下单（公司自用账户，成本价）", () => {
     expect(ledger.listLedger({ customerId: id }).length).toBe(0);
   }, 60_000);
 });
+
+describe("嘉谷缺分区时按同一目的地补上（参考）", () => {
+  it("一次比价里用其他渠道的分区补；有自己的分区就不动", async () => {
+    const svc = await import("@/lib/service");
+    const base = { ok: true, currency: "USD" } as const;
+    const res = svc.fillZones([
+      { ...base, channelCode: "JG-579181", channelName: "GOFO", zone: null },
+      { ...base, channelCode: "JG-580914", channelName: "FedEx", zone: "zone7" },
+      { ...base, channelCode: "LP-USPS", channelName: "USPS", zone: "zone6" },
+    ] as never);
+    expect(res[0]).toMatchObject({ zone: "zone6", zoneEstimated: true });
+    expect(res[1]).toMatchObject({ zone: "zone7" });
+    expect(res[1].zoneEstimated).toBeUndefined();
+  });
+
+  it("单独报价时用最近同邮编的分区补", async () => {
+    const svc = await import("@/lib/service");
+    expect(svc.zoneOf("LP-USPS", "10001-1234", "zone8")).toEqual({ zone: "zone8" });
+    expect(svc.zoneOf("JG-579181", "10001", null)).toEqual({ zone: "zone8", zoneEstimated: true });
+    expect(svc.zoneOf("JG-579181", "99999", null)).toEqual({ zone: null });
+  });
+});

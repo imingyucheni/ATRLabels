@@ -48,7 +48,7 @@ const NATURE_PRESETS = [
 const UNIT_LABEL: Record<UnitSystem, [string, string]> = { 1: ["g", "cm"], 2: ["kg", "cm"], 3: ["lb", "in"] };
 
 /** 报价行：后台看到完整信息（成本、利润），客户端只有价格 */
-type Quote = PublicQuote & Partial<Pick<ChannelQuote, "cost" | "listCost" | "rule" | "profit">>;
+type Quote = PublicQuote & Partial<Pick<ChannelQuote, "cost" | "listCost" | "rule" | "profit" | "zoneEstimated">>;
 
 export default function ShipForm(props: {
   /** portal = 客户自助下单：不选客户、只显示客户价；house = 管理员按成本价下单（所有渠道） */
@@ -523,7 +523,7 @@ export default function ShipForm(props: {
                     house ? (
                       <tr key={q.channelCode} className={q.price === bestPrice ? "best" : ""}>
                         <td><ChannelLabel code={q.channelCode} name={q.channelName} size="md" /><div className="small muted">{q.channelCode}</div></td>
-                        <td>{q.zone ?? "-"}</td>
+                        <td>{q.zone ?? "-"}{q.zoneEstimated && <span className="small muted" title={t("嘉谷未返回分区，按同一目的地其他渠道的分区估算")}>{t("（参考）")}</span>}</td>
                         <td className="num muted">{money(q.listCost)}</td>
                         <td className="num"><b>{money(q.price, q.currency)}</b>{q.price === bestPrice && <div className="small profit-pos">{t("最低")}</div>}</td>
                         <td>
@@ -535,7 +535,7 @@ export default function ShipForm(props: {
                     ) :
                     <tr key={q.channelCode} className={q.price === bestPrice ? "best" : ""}>
                       <td><ChannelLabel code={q.channelCode} name={q.channelName} size="md" />{!portal && <div className="small muted">{q.channelCode}</div>}</td>
-                      <td>{q.zone ?? "-"}</td>
+                      <td>{q.zone ?? "-"}{!portal && q.zoneEstimated && <span className="small muted" title={t("嘉谷未返回分区，按同一目的地其他渠道的分区估算")}>{t("（参考）")}</span>}</td>
                       {!portal && (
                         <>
                           <td className="num muted">{money(q.listCost)}</td>

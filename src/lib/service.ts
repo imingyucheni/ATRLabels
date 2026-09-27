@@ -26,6 +26,7 @@ import { notifyLater } from "./notify";
 import type { AddressCheck } from "./addressCheck";
 import { computePrice, resolveRule, roundUp, type MarkupRule, type PartialRule } from "./pricing";
 import { getShipBestClient, shipbestMode, ShipBestError } from "./shipbest/client";
+import { isJiaguCode } from "./shipbest/jiagu";
 import type { Address, ShipmentRequest } from "./shipbest/types";
 import { isCountryCode, isUsZip, usStateCode } from "./geo";
 import { fillProductNames } from "./sanitize";
@@ -167,6 +168,8 @@ export interface ChannelQuote {
   listCost?: number;
   currency?: string;
   zone?: string | null;
+  /** 服务商没返回分区，按同一目的地其他渠道的分区补上的（仅供参考） */
+  zoneEstimated?: boolean;
   rule?: MarkupRule;
   price?: number;
   profit?: number;
@@ -177,6 +180,36 @@ function ruleFor(customerId: number, channelCode: string): MarkupRule {
   if (isInternalCustomer(customerId)) return { percent: 0, fixed: 0, minProfit: 0 };
   const s = getSettings();
   return resolveRule(s.markup, getChannel(channelCode)?.markup, getCustomer(customerId)?.markup);
+}
+
+/* ---------------- 分区 ---------------- */
+
+/**
+ * 嘉谷大部分渠道的报价不返回分区。所有渠道都从洛杉矶地区发货，同一个目的地的分区基本一致，
+ * 所以记住其他渠道（ShipBest）最近报出的分区，缺分区时拿来补上，并标记为“参考”。
+ */
+const zoneByZip = new Map<string, { zone: string; at: number }>();
+const ZONE_TTL = 6 * 3600_000;
+
+export function zoneOf(code: string, zip: string | undefined, zone: string | null | undefined): { zone: string | null; zoneEstimated?: boolean } {
+  const z5 = (zip ?? "").trim().slice(0, 5);
+  if (zone) {
+    if (z5 && !isJiaguCode(code)) {
+      if (zoneByZip.size > 5000) zoneByZip.clear();
+      zoneByZip.set(z5, { zone, at: Date.now() });
+    }
+    return { zone };
+  }
+  const hit = z5 ? zoneByZip.get(z5) : undefined;
+  return hit && Date.now() - hit.at < ZONE_TTL ? { zone: hit.zone, zoneEstimated: true } : { zone: null };
+}
+
+/** 一次比价的结果里，缺分区的用同一目的地其他渠道的分区补上 */
+export function fillZones(results: ChannelQuote[]) {
+  const known = results.find((r) => r.ok && r.zone && !r.zoneEstimated && !isJiaguCode(r.channelCode))?.zone;
+  if (!known) return results;
+  for (const r of results) if (r.ok && !r.zone) Object.assign(r, { zone: known, zoneEstimated: true });
+  return results;
 }
 
 /** 指定渠道试算（渠道名从本地渠道表取） */
@@ -217,7 +250,7 @@ async function quoteRemote(customerId: number, channelCode: string, channelName:
       cost,
       listCost: q.totalShippingFee,
       currency: q.currency,
-      zone: q.zone ?? null,
+      ...zoneOf(channelCode, req.recipient?.zipCode, q.zone),
       rule,
       price,
       profit: Math.round((price - cost) * 100) / 100,
@@ -244,7 +277,7 @@ export async function quoteAll(customerId: number, req: ShipmentRequest): Promis
     }
   });
   await Promise.all(workers);
-  return results.sort((a, b) => Number(b.ok) - Number(a.ok) || (a.price ?? 0) - (b.price ?? 0));
+  return fillZones(results).sort((a, b) => Number(b.ok) - Number(a.ok) || (a.price ?? 0) - (b.price ?? 0));
 }
 
 /** 客户还没有开通任何渠道（门户里提示“请联系客服开通”） */
@@ -271,7 +304,7 @@ export async function quoteForProspect(req: ShipmentRequest, markup: PartialRule
       }
     }),
   );
-  return results.sort((a, b) => Number(b.ok) - Number(a.ok) || (a.price ?? 0) - (b.price ?? 0));
+  return fillZones(results).sort((a, b) => Number(b.ok) - Number(a.ok) || (a.price ?? 0) - (b.price ?? 0));
 }
 
 /* ---------------- 下单出面单 ---------------- */

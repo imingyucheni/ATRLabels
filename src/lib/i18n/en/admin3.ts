@@ -174,4 +174,6 @@ export const admin3: Record<string, string> = {
   "扣款明细-{name}-{from}_{to}.csv": "charges-{name}-{from}_{to}.csv",
   "对账单-{name}-{from}_{to}.csv": "statement-{name}-{from}_{to}.csv",
   "导单模板.xlsx": "import-template.xlsx",
+  "（参考）": " (est.)",
+  "嘉谷未返回分区，按同一目的地其他渠道的分区估算": "Jiagu returned no zone; estimated from another service's zone for the same destination",
 };
