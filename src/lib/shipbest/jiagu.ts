@@ -250,8 +250,8 @@ export class JiaguClient {
     if (!warehouseFor(this.cfg, id)) throw new JiaguError(10061, `渠道 ${id} 还没有设置仓库 ID（设置 → 嘉谷万邑）`);
     if (!q.TotalCharge || q.Message) {
       const msg = q.Message || "算价失败";
-      // 分区匹配不到 = 这个邮编不在派送范围，按“不通邮”处理（和 ShipBest 一致，客户端显示“地址未覆盖”）
-      if (/分区/.test(msg)) throw new JiaguError(1, `邮编[${req.recipient.zipCode}]不通邮（${msg}）`);
+      // 分区匹配不到：一般是邮编不在派送范围（客户端显示“地址未覆盖”）；后台保留嘉谷原话，方便和嘉谷核对
+      if (/分区/.test(msg)) throw new JiaguError(1, `嘉谷返回“${msg}”，邮编 ${req.recipient.zipCode} 不在派送范围`);
       throw new JiaguError(10061, msg);
     }
     // 总价和明细合计偶尔差 1 分（例如 5.56 / 5.57），取较高的作为成本，避免少收

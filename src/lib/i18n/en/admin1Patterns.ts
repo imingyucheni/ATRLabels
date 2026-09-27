@@ -13,6 +13,8 @@ export const admin1Patterns: [RegExp, string][] = [
   // 对账单说明（按“ · ”拆开逐段翻译）：已取消的面单
   [/^已取消（原价 ([\d.]+)，已退 ([\d.]+)）$/, "Cancelled (orig. $1, refunded $2)"],
   // 嘉谷万邑
+  [/^嘉谷返回“(.+)”，邮编 (\S+) 不在派送范围$/, "Jiagu returned “$1”: ZIP $2 is outside the service area"],
+  [/^嘉谷返回“(.+)”，邮编 (\S+) 不在派送范围；ShipBest 同承运商渠道能送这个邮编，可能是嘉谷的分区表或仓库设置问题，建议找嘉谷核对$/, "Jiagu returned “$1”: ZIP $2 is outside the service area. The same carrier via ShipBest delivers to this ZIP, so this may be a Jiagu zone-table or warehouse setup issue; check with Jiagu"],
   [/^已保存：开通了 (\d+) 个渠道，账户余额 \$([\d.]+)（预付）。点上面的“同步渠道”把嘉谷渠道加进渠道列表。还没有仓库 ID 的渠道：(.+)$/, "Saved: $1 services, balance $$$2 (prepaid). Click “Sync services” above to add Jiagu services. Services without a warehouse ID: $3"],
   [/^已保存：开通了 (\d+) 个渠道，账户余额 \$([\d.]+)（预付）。点上面的“同步渠道”把嘉谷渠道加进渠道列表。$/, "Saved: $1 services, balance $$$2 (prepaid). Click “Sync services” above to add Jiagu services."],
   [/^已保存：开通了 (\d+) 个渠道。点上面的“同步渠道”把嘉谷渠道加进渠道列表。还没有仓库 ID 的渠道：(.+)$/, "Saved: $1 services. Click “Sync services” above to add Jiagu services. Services without a warehouse ID: $2"],

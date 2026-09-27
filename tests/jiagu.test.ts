@@ -82,7 +82,7 @@ describe("嘉谷万邑接口", () => {
 
     const q = await client.trialPrice("JG-579181", req);
     expect(q).toMatchObject({ totalDiscountShippingFee: 5.39, currency: "USD", zone: "zone8" });
-    await expect(client.trialPrice("JG-307699", req)).rejects.toThrow(/不通邮/);
+    await expect(client.trialPrice("JG-307699", req)).rejects.toThrow(/嘉谷返回“订单未匹配到分区”，邮编 \d+ 不在派送范围/);
 
     // 下单：嘉谷先返回“异步”，查状态时再取面单
     await client.createOrder("C-1", "JG-579181", req);

@@ -113,3 +113,17 @@ describe("嘉谷缺分区时按同一目的地补上（参考）", () => {
     expect(svc.zoneOf("JG-579181", "99999", null)).toEqual({ zone: null });
   });
 });
+
+describe("同承运商覆盖交叉核对", () => {
+  it("嘉谷说送不到、ShipBest 同承运商能送时提示找嘉谷核对", async () => {
+    const svc = await import("@/lib/service");
+    const miss = "嘉谷返回“订单未匹配到分区”，邮编 07103 不在派送范围";
+    const res = svc.flagJiaguCoverage([
+      { ok: true, channelCode: "LP10210028", channelName: "UniUni-（91710） · SB", zone: "zone8", currency: "USD" },
+      { ok: false, channelCode: "JG-581808", channelName: "uniuni-LAX-917(不预上网) · GDE", zone: null, error: miss },
+      { ok: false, channelCode: "JG-999", channelName: "DHL-X · GDE", zone: null, error: miss },
+    ] as never);
+    expect(res[1].error).toContain("建议找嘉谷核对");
+    expect(res[2].error).toBe(miss); // 没有同承运商的 ShipBest 渠道可比
+  });
+});

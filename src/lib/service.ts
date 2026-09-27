@@ -27,6 +27,7 @@ import type { AddressCheck } from "./addressCheck";
 import { computePrice, resolveRule, roundUp, type MarkupRule, type PartialRule } from "./pricing";
 import { getShipBestClient, shipbestMode, ShipBestError } from "./shipbest/client";
 import { isJiaguCode } from "./shipbest/jiagu";
+import { guessCarrier } from "./carriers";
 import type { Address, ShipmentRequest } from "./shipbest/types";
 import { isCountryCode, isUsZip, usStateCode } from "./geo";
 import { fillProductNames } from "./sanitize";
@@ -212,6 +213,20 @@ export function fillZones(results: ChannelQuote[]) {
   return results;
 }
 
+/**
+ * 同一家承运商（例如 UniUni）不管走 ShipBest 还是嘉谷，派送范围应该一样。
+ * 嘉谷说送不到、但 ShipBest 同承运商渠道能送时，在后台提示可能是嘉谷那边的分区表 / 仓库设置问题。
+ */
+export function flagJiaguCoverage(results: ChannelQuote[]) {
+  const okCarriers = new Set(results.filter((r) => r.ok && !isJiaguCode(r.channelCode)).map((r) => guessCarrier(r.channelName)));
+  for (const r of results) {
+    if (r.ok || !isJiaguCode(r.channelCode) || !/派送范围|不通邮/.test(r.error ?? "")) continue;
+    const carrier = guessCarrier(r.channelName);
+    if (carrier !== "other" && okCarriers.has(carrier)) r.error = `${r.error}；ShipBest 同承运商渠道能送这个邮编，可能是嘉谷的分区表或仓库设置问题，建议找嘉谷核对`;
+  }
+  return results;
+}
+
 /** 指定渠道试算（渠道名从本地渠道表取） */
 export async function quoteChannel(customerId: number, channelCode: string, req: ShipmentRequest): Promise<ChannelQuote> {
   const ch = getChannel(channelCode);
@@ -277,7 +292,7 @@ export async function quoteAll(customerId: number, req: ShipmentRequest): Promis
     }
   });
   await Promise.all(workers);
-  return fillZones(results).sort((a, b) => Number(b.ok) - Number(a.ok) || (a.price ?? 0) - (b.price ?? 0));
+  return flagJiaguCoverage(fillZones(results)).sort((a, b) => Number(b.ok) - Number(a.ok) || (a.price ?? 0) - (b.price ?? 0));
 }
 
 /** 客户还没有开通任何渠道（门户里提示“请联系客服开通”） */
@@ -304,7 +319,7 @@ export async function quoteForProspect(req: ShipmentRequest, markup: PartialRule
       }
     }),
   );
-  return fillZones(results).sort((a, b) => Number(b.ok) - Number(a.ok) || (a.price ?? 0) - (b.price ?? 0));
+  return flagJiaguCoverage(fillZones(results)).sort((a, b) => Number(b.ok) - Number(a.ok) || (a.price ?? 0) - (b.price ?? 0));
 }
 
 /* ---------------- 下单出面单 ---------------- */

@@ -10,6 +10,7 @@ import ExcelJS from "exceljs";
 import { cellText } from "./adjustments";
 import { db, getSettings, listChannels } from "./db";
 import { extractRates, importRates, type RateRow } from "./rates";
+import { isJiaguCode } from "./shipbest/jiagu";
 
 export interface CoverageSheet {
   sheet: string;
@@ -249,7 +250,7 @@ export function blockedZip(code: string, zip: string): { reason: string | null; 
 /** 记录一次试算结果：不通邮 → 记住；能送 → 清除记忆 */
 export function rememberQuote(code: string, zip: string, ok: boolean, error?: string) {
   const z = normZip(zip);
-  if (!z) return;
+  if (!z || isJiaguCode(code)) return;
   if (ok) db().prepare("DELETE FROM zip_blocks WHERE channel_code = ? AND zip = ?").run(code, z);
   else if (error && isUnsupportedError(error)) {
     db()
@@ -273,7 +274,8 @@ export function clearBlocks(code?: string) {
  * 1) 接口最近回复过这个邮编不通邮；2) 打开了“按邮编表预筛”且邮编不在表里
  */
 export function precheck(code: string, zip: string): string | null {
-  const b = blockedZip(code, zip);
+  // 嘉谷的“未匹配到分区”不一定是真的送不到（也可能是对方分区表 / 仓库配置问题），每次都实时问，不用记忆
+  const b = isJiaguCode(code) ? null : blockedZip(code, zip);
   if (b) return `该地址不在此渠道的派送范围内（邮编 ${normZip(zip)}，${b.checkedAt.slice(0, 10)} 查询过）`;
   const on = db().prepare("SELECT prefilter FROM coverage_sources WHERE channel_code = ?").get(code) as { prefilter: number } | undefined;
   if (on?.prefilter) {

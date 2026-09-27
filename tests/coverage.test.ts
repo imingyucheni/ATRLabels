@@ -117,6 +117,13 @@ describe("派送范围（邮编覆盖表）", () => {
     expect(q3[0].ok).toBe(true);
     expect(cov.blockedZip("LP10210030", "59901")).toBeNull();
   });
+
+  it("嘉谷渠道不记忆不通邮，每次实时查询", () => {
+    cov.rememberQuote("JG-580914", "07103", false, "嘉谷返回“订单未匹配到分区”，邮编 07103 不在派送范围");
+    expect(cov.blockedZip("JG-580914", "07103")).toBeNull();
+    db.db().prepare("INSERT INTO zip_blocks (channel_code, zip, reason, checked_at) VALUES ('JG-580914', '07103', 'old', datetime('now'))").run();
+    expect(cov.precheck("JG-580914", "07103")).toBeNull(); // 以前记下的也不再生效
+  });
 });
 
 describe("价格表（模拟报价按成本价）", () => {
