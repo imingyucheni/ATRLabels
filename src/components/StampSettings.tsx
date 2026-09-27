@@ -11,8 +11,10 @@ type Field = "x" | "y" | "fontSize" | "maxWidth" | "rotate";
 const LIMITS: Partial<Record<Field, [number, number]>> = { x: [0, 3.9], y: [0, 5.9], fontSize: [5, 24], maxWidth: [0.5, 4] };
 
 /** 面单加印 SKU 设置：全局默认 + 每个渠道单独调整位置，右侧实时预览 */
-export default function StampSettings({ global, channels, detect = {} }: {
+export default function StampSettings({ global, channels, detect = {}, embedded = false }: {
   global: Global;
+  /** 放在设置页的折叠块里：不再套卡片和标题 */
+  embedded?: boolean;
   channels: { code: string; name: string; stamp: StampOverride | null }[];
   /** 各渠道最近面单的自动检查结果 */
   detect?: Record<string, { yes: number; no: number; image: number }>;
@@ -75,9 +77,9 @@ export default function StampSettings({ global, channels, detect = {} }: {
   };
 
   return (
-    <div className="card">
-      <h2>{t("面单加印 SKU")}</h2>
-      <p className="small muted">
+    <div className={embedded ? "" : "card"}>
+      {!embedded && <h2>{t("面单加印 SKU")}</h2>}
+      <p className="small muted" style={embedded ? { marginTop: 0 } : undefined}>
         {t("面单出来后，打印 / 下载 / 合并打印时自动在指定位置印上这一单的 SKU（原始面单不改动，面单详情页可以下载原始版本）。")}
         {t("不同渠道的面单版式不同，可以选择渠道单独开关、调整位置。位置按 4×6 英寸面单计算：距左边、距上边多少英寸。")}
       </p>

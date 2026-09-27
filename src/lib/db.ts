@@ -637,11 +637,6 @@ export function updateChannel(code: string, enabled: boolean, markup: PartialRul
     .run(enabled ? 1 : 0, markup.percent ?? null, markup.fixed ?? null, markup.minProfit ?? null, code);
 }
 
-/** 只改渠道总开关（不动加价） */
-export function setChannelEnabled(code: string, enabled: boolean) {
-  db().prepare("UPDATE channels SET enabled = ? WHERE code = ?").run(enabled ? 1 : 0, code);
-}
-
 /* ---------------- 客户 ---------------- */
 
 export interface Customer {

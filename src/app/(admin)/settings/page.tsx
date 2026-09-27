@@ -5,6 +5,7 @@ import { BALANCE_RULE_LABEL } from "@/lib/ledger";
 import { computePrice, money, resolveRule, type MarkupRule } from "@/lib/pricing";
 import { isSandboxSite, shipbestConfig, type ShipBestMode } from "@/lib/shipbest/client";
 import StampSettings from "@/components/StampSettings";
+import SettingsSection, { SettingsToggleAll } from "@/components/SettingsSection";
 import FlashForm from "@/components/FlashForm";
 import RuleInputs from "@/components/RuleInputs";
 import { DEFAULT_JG_WAREHOUSES, isJiaguCode, JG_PREFIX, JG_SUFFIX } from "@/lib/shipbest/jiagu";
@@ -44,18 +45,26 @@ export default async function SettingsPage() {
 
   return (
     <>
-      <h1>{t("设置")}</h1>
-
-      <div className="card" id="shipbest">
-        <div className="row" style={{ justifyContent: "space-between" }}>
-          <h2 style={{ margin: 0 }}>{t("ShipBest 连接")}</h2>
-          {sb.mode !== "mock" && (!sb.apiId || !sb.token) ? (
-            // 正式 / 沙盒模式但没填 API 账号：接口调不通，不能显示成“正常”的绿色
-            <span className="badge exception">{t(sb.mode === "live" ? "正式模式 · 未填写 API 账号" : "沙盒模式 · 未填写 API 账号")}</span>
-          ) : (
-            <span className={`badge ${sb.mode === "live" ? "ok" : sb.mode === "sandbox" ? "test" : "pending"}`}>{t(MODE_BADGE[sb.mode])}</span>
-          )}
+      <div className="page-head">
+        <div>
+          <h1>{t("设置")}</h1>
+          <p className="page-sub">{t("已经设置好的项目默认收起，点标题展开；需要处理的项目默认展开。")}</p>
         </div>
+        <SettingsToggleAll />
+      </div>
+
+      <SettingsSection
+        id="shipbest"
+        title={t("ShipBest 连接")}
+        defaultOpen={(sb.mode !== "mock" && (!sb.apiId || !sb.token)) || channels.length === 0}
+        summary={t("启用 {a} 个渠道", { a: channels.filter((c) => c.enabled).length })}
+        badge={sb.mode !== "mock" && (!sb.apiId || !sb.token) ? (
+          // 正式 / 沙盒模式但没填 API 账号：接口调不通，不能显示成“正常”的绿色
+          <span className="badge exception">{t(sb.mode === "live" ? "正式模式 · 未填写 API 账号" : "沙盒模式 · 未填写 API 账号")}</span>
+        ) : (
+          <span className={`badge ${sb.mode === "live" ? "ok" : sb.mode === "sandbox" ? "test" : "pending"}`}>{t(MODE_BADGE[sb.mode])}</span>
+        )}
+      >
         {isSandboxSite() && (
           <div className="alert warn" style={{ marginTop: 12 }}>{t("这里是沙盒站：数据和正式站分开，永远不会真实出单。选“正式”也会按沙盒处理。")}</div>
         )}
@@ -100,17 +109,20 @@ export default async function SettingsPage() {
           <FlashForm action={verifyAction} submitLabel="测试连接" submitClass="" inline />
           <FlashForm action={syncChannelsAction} submitLabel="同步渠道" inline />
         </div>
-      </div>
+      </SettingsSection>
 
       {(() => {
         const site = { ...{ company: "", address: "", phone: "", wechat: "", email: "", hours: "" }, ...s.site };
         return (
-          <div className="card" id="site">
-            <div className="row" style={{ justifyContent: "space-between" }}>
-              <h2 style={{ margin: 0 }}>{t("官网与联系方式")}</h2>
-              <a className="btn small" href="/site" target="_blank">{t("查看官网")}</a>
-            </div>
-            <p className="small muted" style={{ marginTop: 10 }}>{t("客户 OMS 网址的首页就是官网：介绍服务、引导访客“联系我们”（不开放自助注册）和老客户登录。这里填的联系方式会显示在官网上，留空的不显示。官网上的品牌名称就是下面“客户端显示的公司名称”。")}</p>
+          <SettingsSection
+            id="site"
+            title={t("官网与联系方式")}
+            defaultOpen={!site.phone && !site.wechat && !site.email}
+            badge={<span className={`badge ${site.phone || site.wechat || site.email ? "ok" : "pending"}`}>{site.phone || site.wechat || site.email ? t("已填写") : t("未填写")}</span>}
+            summary={[site.company, site.phone, site.wechat, site.email].filter(Boolean).join(" · ")}
+            actions={<a className="btn small" href="/site" target="_blank">{t("查看官网")}</a>}
+          >
+            <p className="small muted" style={{ marginTop: 0 }}>{t("客户 OMS 网址的首页就是官网：介绍服务、引导访客“联系我们”（不开放自助注册）和老客户登录。这里填的联系方式会显示在官网上，留空的不显示。官网上的品牌名称就是下面“客户端显示的公司名称”。")}</p>
             <FlashForm action={saveSiteAction} submitLabel="保存" review>
               <div className="grid" style={{ margin: "12px 0" }}>
                 <label className="f">{t("公司名称")}<input name="company" defaultValue={site.company} maxLength={80} /></label>
@@ -121,7 +133,7 @@ export default async function SettingsPage() {
                 <label className="f">{t("服务时间")}<input name="hours" defaultValue={site.hours} maxLength={80} /></label>
               </div>
             </FlashForm>
-          </div>
+          </SettingsSection>
         );
       })()}
 
@@ -133,13 +145,16 @@ export default async function SettingsPage() {
           const pid = code.slice(JG_PREFIX.length);
           return jg.warehouses?.[pid] || DEFAULT_JG_WAREHOUSES[pid] || jg.warehouseId;
         };
+        const jgMissing = jgChannels.filter((c) => !jgWarehouse(c.code));
         return (
-          <div className="card" id="jiagu">
-            <div className="row" style={{ justifyContent: "space-between" }}>
-              <h2 style={{ margin: 0 }}>{t("嘉谷万邑连接")}</h2>
-              <span className={`badge ${jg.enabled && ready ? "ok" : "pending"}`}>{jg.enabled && ready ? t("已启用") : ready ? t("已停用") : t("未配置")}</span>
-            </div>
-            <p className="small muted" style={{ marginTop: 10 }}>
+          <SettingsSection
+            id="jiagu"
+            title={t("嘉谷万邑连接")}
+            defaultOpen={jg.enabled && ready && jgMissing.length > 0}
+            badge={<span className={`badge ${jg.enabled && ready ? "ok" : "pending"}`}>{jg.enabled && ready ? t("已启用") : ready ? t("已停用") : t("未配置")}</span>}
+            summary={jgChannels.length ? t("{a} 个渠道，启用 {b} 个", { a: jgChannels.length, b: jgChannels.filter((c) => c.enabled).length }) : undefined}
+          >
+            <p className="small muted" style={{ marginTop: 0 }}>
               {t("第二个面单服务商（尾程订单）。启用后点上面的“同步渠道”，嘉谷的渠道会出现在渠道列表里，名称后面带“· GDE”（ShipBest 的带“· SB”），只有后台看得到；客户只看到物流商名称。模拟 / 沙盒 / 正式模式和 ShipBest 共用：沙盒模式下嘉谷也是真实报价、模拟出单。")}
             </p>
             {(() => {
@@ -148,7 +163,6 @@ export default async function SettingsPage() {
                 <div className="alert warn">{t("以下渠道还没有仓库 ID，报价和下单会失败，请向嘉谷索取：{list}", { list: missing.map((c) => c.name.replace(JG_SUFFIX, "")).join("、") })}</div>
               ) : null;
             })()}
-            {jgChannels.length > 0 && <p className="small muted">{t("取消勾选的嘉谷渠道所有客户都不能用（例如暂时停用 UPS），和下面“物流渠道”里的开关是同一个。")}</p>}
             <FlashForm action={saveJiaguAction} submitLabel="保存并测试连接" locked="修改后所有客户使用嘉谷渠道的报价和出单都会受影响" review>
               <div className="grid" style={{ margin: "12px 0" }}>
                 <label className="f">{t("启用")}
@@ -177,17 +191,13 @@ export default async function SettingsPage() {
               {jgChannels.length > 0 && (
                 <div className="table-wrap" style={{ marginBottom: 12 }}>
                   <table className="list">
-                    <thead><tr><th>{t("启用")}</th><th>{t("嘉谷渠道")}</th><th>{t("产品 ID")}</th><th>{t("仓库 ID")}</th></tr></thead>
+                    <thead><tr><th>{t("嘉谷渠道")}</th><th>{t("产品 ID")}</th><th>{t("仓库 ID")}</th></tr></thead>
                     <tbody>
                       {jgChannels.map((c) => {
                         const pid = c.code.slice(JG_PREFIX.length);
                         return (
                           <tr key={c.code} className={c.enabled ? "" : "muted"}>
-                            <td>
-                              <input type="hidden" name={`jgch_${pid}`} value="1" />
-                              <input type="checkbox" name={`jgon_${pid}`} defaultChecked={c.enabled} aria-label={t("启用")} />
-                            </td>
-                            <td>{c.name.replace(JG_SUFFIX, "")}{!c.enabled && <span className="small muted"> {t("（已停用）")}</span>}</td>
+                            <td>{c.name.replace(JG_SUFFIX, "")}{!c.enabled && <span className="badge pending" style={{ marginLeft: 6 }}>{t("已停用")}</span>}</td>
                             <td className="small muted">{pid}</td>
                             <td><input name={`wh_${pid}`} defaultValue={jg.warehouses?.[pid] ?? DEFAULT_JG_WAREHOUSES[pid] ?? ""} inputMode="numeric" autoComplete="off" style={{ width: 120 }} placeholder={jg.warehouseId || t("未填写")} /></td>
                           </tr>
@@ -195,13 +205,14 @@ export default async function SettingsPage() {
                       })}
                     </tbody>
                   </table>
+                  <p className="small muted" style={{ margin: "6px 0 0" }}>{t("渠道的启用 / 停用在下面“物流渠道”里统一设置。")} <a href="#channels">{t("去设置 ↓")}</a></p>
                 </div>
               )}
             </FlashForm>
             <div className="row" style={{ marginTop: 8 }}>
               <FlashForm action={testJiaguAction} submitLabel="测试连接 / 查余额" submitClass="" inline />
             </div>
-          </div>
+          </SettingsSection>
         );
       })()}
 
@@ -211,11 +222,12 @@ export default async function SettingsPage() {
         const us = s.usps ?? { enabled: true, consumerKey: "", consumerSecret: "" };
         const used = monthlyUsage(ac.provider);
         return (
-          <div className="card" id="addr">
-            <div className="row" style={{ justifyContent: "space-between" }}>
-              <h2 style={{ margin: 0 }}>{t("收件地址核对")}</h2>
-              <span className={`badge ${ac.enabled ? "ok" : "pending"}`}>{ac.enabled ? t("已启用") : ac.configured ? t("已停用") : t("未配置")}</span>
-            </div>
+          <SettingsSection
+            id="addr"
+            title={t("收件地址核对")}
+            badge={<span className={`badge ${ac.enabled ? "ok" : "pending"}`}>{ac.enabled ? t("已启用") : ac.configured ? t("已停用") : t("未配置")}</span>}
+            summary={ac.monthlyCap > 0 ? t("本月已用 {a} / {b} 次", { a: used, b: ac.monthlyCap }) : undefined}
+          >
             <p className="small muted">
               {t("客户查运费时自动核对收件地址：地址不存在或缺公寓号会提醒客户，必须确认后才能下单；写法不标准会给出建议地址。同一个地址只查一次，以后直接用上次的结果。")}
             </p>
@@ -263,7 +275,7 @@ export default async function SettingsPage() {
                 <FlashForm action={testAddrAction} submitLabel="测试连接" submitClass="" inline />
               </div>
             )}
-          </div>
+          </SettingsSection>
         );
       })()}
 
@@ -272,11 +284,13 @@ export default async function SettingsPage() {
         const saved = s.smtp ?? { host: "", port: 465, user: "", pass: "", from: "" };
         const logs = recentEmailLog(8);
         return (
-          <div className="card" id="mail">
-            <div className="row" style={{ justifyContent: "space-between" }}>
-              <h2 style={{ margin: 0 }}>{t("邮件通知")}</h2>
-              <span className={`badge ${sm.host && sm.from && s.notifyEnabled !== false ? "ok" : "pending"}`}>{sm.host && sm.from ? (s.notifyEnabled !== false ? t("已启用") : t("已停用")) : t("未配置")}</span>
-            </div>
+          <SettingsSection
+            id="mail"
+            title={t("邮件通知")}
+            defaultOpen={!(sm.host && sm.from)}
+            badge={<span className={`badge ${sm.host && sm.from && s.notifyEnabled !== false ? "ok" : "pending"}`}>{sm.host && sm.from ? (s.notifyEnabled !== false ? t("已启用") : t("已停用")) : t("未配置")}</span>}
+            summary={sm.from || undefined}
+          >
             <p className="small muted">
               {t("配置发件邮箱后，系统会给客户发这些通知（中英双语）：")}{NOTIFY_EVENTS.map((e) => t(NOTIFY_LABEL[e])).join(t("、"))}{t("。客户可以在“账户设置 → 邮件通知”里逐项关闭，每封邮件也有退订链接。忘记密码的重置邮件也用这个邮箱发。")}
             </p>
@@ -313,15 +327,16 @@ export default async function SettingsPage() {
                 </table>
               </details>
             )}
-          </div>
+          </SettingsSection>
         );
       })()}
 
-      <div className="card" id="finance-pin">
-        <div className="row" style={{ justifyContent: "space-between" }}>
-          <h2 style={{ margin: 0 }}>{t("财务确认密码")}</h2>
-          <span className={`badge ${hasFinancePin() ? "ok" : "pending"}`}>{hasFinancePin() ? t("已设置") : t("未设置")}</span>
-        </div>
+      <SettingsSection
+        id="finance-pin"
+        title={t("财务确认密码")}
+        defaultOpen={!hasFinancePin()}
+        badge={<span className={`badge ${hasFinancePin() ? "ok" : "pending"}`}>{hasFinancePin() ? t("已设置") : t("未设置")}</span>}
+      >
         <p className="small muted">{t("确认客户充值到账、手动充值 / 调账时，要再输入这个 4 位数字密码。设置和修改都需要管理员登录密码；连续输错 5 次锁定 30 分钟。")}</p>
         <FlashForm action={setFinancePinAction} submitLabel={hasFinancePin() ? "修改财务确认密码" : "设置财务确认密码"} resetOnSuccess>
           <div className="grid" style={{ margin: "12px 0" }}>
@@ -330,10 +345,14 @@ export default async function SettingsPage() {
             <label className="f"><span className="req">{t("再输一次")}</span><input name="pin2" type="password" inputMode="numeric" pattern="\d{4}" maxLength={4} required autoComplete="new-password" /></label>
           </div>
         </FlashForm>
-      </div>
+      </SettingsSection>
 
-      <FlashForm action={saveSettingsAction} submitLabel="保存设置" className="card" locked="修改会影响所有客户的价格和余额规则" confirm="加价、取消费、补差和余额规则会对所有客户生效，确定保存吗？">
-        <h2>{t("全局加价规则")}</h2>
+      <SettingsSection
+        id="rules"
+        title={t("全局加价规则")}
+        summary={t("+{pct}% + {fixed}，最低利润 {min}", { pct: s.markup.percent, fixed: money(s.markup.fixed), min: money(s.markup.minProfit) }) + ` · ${t("下单后可取消时限（小时）")} ${s.cancelWindowHours ?? 48}`}
+      >
+      <FlashForm action={saveSettingsAction} submitLabel="保存设置" locked="修改会影响所有客户的价格和余额规则" confirm="加价、取消费、补差和余额规则会对所有客户生效，确定保存吗？">
         <p className="small muted">
           {t("客户价 = max(成本 × (1 + 加价%) + 固定加价, 成本 + 最低利润)，再按取整步长向上取整。")}
           {t("优先级：客户专属设置 > 渠道设置 > 全局默认（按字段逐项覆盖）。成本 = ShipBest 试算的“优惠后总运费”。")}
@@ -403,11 +422,18 @@ export default async function SettingsPage() {
 
         <div style={{ height: 12 }} />
       </FlashForm>
+      </SettingsSection>
 
       {/* 收款设置和“立即更新汇率”是两个表单（不能嵌套），放在同一张卡片里 */}
-      <div className="card pay-card">
+      <SettingsSection
+        id="payment"
+        className="pay-card"
+        title={t("收款方式（客户充值）")}
+        defaultOpen={!s.zelleInfo && !s.alipayInfo}
+        badge={<span className={`badge ${s.zelleInfo || s.alipayInfo ? "ok" : "pending"}`}>{s.zelleInfo || s.alipayInfo ? t("已设置") : t("未设置")}</span>}
+        summary={[s.zelleInfo && "Zelle", s.alipayInfo && t("支付宝"), `${t("当前汇率")} ${fx.rate}`].filter(Boolean).join(" · ")}
+      >
         <FlashForm action={savePaymentSettingsAction} submitLabel="保存收款设置" locked="客户充值页会显示这里的收款账号" confirm="客户会按这里的信息付款，请再核对一遍收款账号。确定保存吗？">
-          <h2>{t("收款方式（客户充值）")}</h2>
           <p className="small muted">{t("客户在客户端“充值”页选择 Zelle（美元）或支付宝（人民币）付款，上传凭证后提交申请；你们在“财务”页确认到账后自动加到客户余额。余额以美元记账。")}</p>
           <div className="grid2">
             <label className="f">{t("Zelle 收款信息（显示给客户）")}
@@ -459,12 +485,23 @@ export default async function SettingsPage() {
           <span className="small muted">{t("当前汇率")} <b>{fx.rate}</b></span>
           <FlashForm action={refreshFxAction} submitLabel="立即更新汇率" submitClass="small" inline />
         </div>
-      </div>
+      </SettingsSection>
 
-      <StampSettings global={s.stamp} detect={labelSkuStats()} channels={channels.filter((c) => c.enabled).map((c) => ({ code: c.code, name: c.name, stamp: c.stamp }))} />
+      <SettingsSection
+        id="stamp"
+        title={t("面单加印 SKU")}
+        summary={[s.stamp.autoDetect !== false ? t("自动检查面单是否已有 SKU") : "", s.stamp.enabled ? t("所有渠道默认加印") : ""].filter(Boolean).join(" · ") || undefined}
+      >
+        <StampSettings embedded global={s.stamp} detect={labelSkuStats()} channels={channels.filter((c) => c.enabled).map((c) => ({ code: c.code, name: c.name, stamp: c.stamp }))} />
+      </SettingsSection>
 
-      <FlashForm action={saveChannelsAction} submitLabel="保存渠道设置" className="card" locked="开关渠道、改渠道加价会影响所有客户" confirm="渠道设置会对所有客户生效，确定保存吗？">
-        <h2>{t("物流渠道")}</h2>
+      <SettingsSection
+        id="channels"
+        title={t("物流渠道")}
+        defaultOpen={channels.length === 0}
+        summary={t("启用 {a} / 共 {b} 个渠道", { a: channels.filter((c) => c.enabled).length, b: channels.length })}
+      >
+      <FlashForm action={saveChannelsAction} submitLabel="保存渠道设置" locked="开关渠道、改渠道加价会影响所有客户" confirm="渠道设置会对所有客户生效，确定保存吗？">
         <p className="small muted">{t("这里是总开关：取消勾选的渠道所有客户都不能用。每个客户具体能用哪些渠道，在“客户”详情里单独开通（新客户默认不开通）。加价留空 = 沿用全局设置。")}</p>
         <div className="table-wrap">
           <table>
@@ -497,12 +534,17 @@ export default async function SettingsPage() {
         </div>
         <div style={{ height: 12 }} />
       </FlashForm>
+      </SettingsSection>
 
       {currentEnv() === "live" && (() => {
         const st = testDataStats();
         return (
-          <div className="card danger-card" id="cleanup">
-            <h2>{t("清除模拟 / 沙盒数据")}</h2>
+          <SettingsSection
+            id="cleanup"
+            className="danger-card"
+            title={t("清除模拟 / 沙盒数据")}
+            summary={hasTestData(st) ? t("可清除模拟 / 沙盒订单 {n}", { n: st.testShipments }) : t("没有需要清除的模拟 / 沙盒数据。")}
+          >
             <p className="small muted">
               {t("只删除模拟、沙盒模式下的订单，以及这些订单的扣款、退款、补差、批量导入记录和面单文件；真实订单和它们的账目不会动，上线后也可以随时用。充值和手动调账分不出是不是测试，会保留，如有测试充值请在客户页面手动调整。清除前会自动备份。")}
             </p>
@@ -523,7 +565,7 @@ export default async function SettingsPage() {
                 </label>
               </FlashForm>
             )}
-          </div>
+          </SettingsSection>
         );
       })()}
     </>
