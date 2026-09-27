@@ -148,6 +148,7 @@ export default async function SettingsPage() {
                 <div className="alert warn">{t("以下渠道还没有仓库 ID，报价和下单会失败，请向嘉谷索取：{list}", { list: missing.map((c) => c.name.replace(JG_SUFFIX, "")).join("、") })}</div>
               ) : null;
             })()}
+            {jgChannels.length > 0 && <p className="small muted">{t("取消勾选的嘉谷渠道所有客户都不能用（例如暂时停用 UPS），和下面“物流渠道”里的开关是同一个。")}</p>}
             <FlashForm action={saveJiaguAction} submitLabel="保存并测试连接" locked="修改后所有客户使用嘉谷渠道的报价和出单都会受影响" review>
               <div className="grid" style={{ margin: "12px 0" }}>
                 <label className="f">{t("启用")}
@@ -176,13 +177,17 @@ export default async function SettingsPage() {
               {jgChannels.length > 0 && (
                 <div className="table-wrap" style={{ marginBottom: 12 }}>
                   <table className="list">
-                    <thead><tr><th>{t("嘉谷渠道")}</th><th>{t("产品 ID")}</th><th>{t("仓库 ID")}</th></tr></thead>
+                    <thead><tr><th>{t("启用")}</th><th>{t("嘉谷渠道")}</th><th>{t("产品 ID")}</th><th>{t("仓库 ID")}</th></tr></thead>
                     <tbody>
                       {jgChannels.map((c) => {
                         const pid = c.code.slice(JG_PREFIX.length);
                         return (
-                          <tr key={c.code}>
-                            <td>{c.name.replace(JG_SUFFIX, "")}</td>
+                          <tr key={c.code} className={c.enabled ? "" : "muted"}>
+                            <td>
+                              <input type="hidden" name={`jgch_${pid}`} value="1" />
+                              <input type="checkbox" name={`jgon_${pid}`} defaultChecked={c.enabled} aria-label={t("启用")} />
+                            </td>
+                            <td>{c.name.replace(JG_SUFFIX, "")}{!c.enabled && <span className="small muted"> {t("（已停用）")}</span>}</td>
                             <td className="small muted">{pid}</td>
                             <td><input name={`wh_${pid}`} defaultValue={jg.warehouses?.[pid] ?? DEFAULT_JG_WAREHOUSES[pid] ?? ""} inputMode="numeric" autoComplete="off" style={{ width: 120 }} placeholder={jg.warehouseId || t("未填写")} /></td>
                           </tr>

@@ -213,4 +213,6 @@ export const admin3: Record<string, string> = {
   "面单上已有这一单的 SKU，不加印": "The label already shows this order's SKU, so no stamp",
   "面单上没有 SKU，打印时自动加印": "No SKU on the label, it will be stamped when printed",
   "图片面单，读不出文字，按渠道 / 全局设置加印": "Image label (no readable text), stamped per the service / global setting",
+  "（已停用）": " (disabled)",
+  "取消勾选的嘉谷渠道所有客户都不能用（例如暂时停用 UPS），和下面“物流渠道”里的开关是同一个。": "Unchecked Jiagu services can't be used by any customer (e.g. to pause UPS). This is the same switch as in “Services” below.",
 };

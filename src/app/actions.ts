@@ -35,6 +35,7 @@ import {
   setCustomerSender,
   updateCustomerPortal,
   updateChannel,
+  setChannelEnabled,
   setChannelDisplay,
   type Settings,
   getCustomer,
@@ -997,6 +998,11 @@ export async function saveJiaguAction(_: FlashState, fd: FormData): Promise<Flas
     return { error: "启用前请填写 Client ID、Client Secret、权属 ID 和客户 ID" };
   }
   saveSettings({ jiagu: next });
+  // 表格里每个嘉谷渠道的启用开关（和“物流渠道”里的总开关是同一个）
+  for (const k of fd.keys()) {
+    const m = /^jgch_(\d+)$/.exec(k);
+    if (m) setChannelEnabled(`${JG_PREFIX}${m[1]}`, fd.get(`jgon_${m[1]}`) === "on");
+  }
   clearChannelNameCache();
   revalidatePath("/", "layout");
   if (!next.enabled) return { ok: "已保存（嘉谷已停用，嘉谷渠道暂时不能报价和下单）" };
