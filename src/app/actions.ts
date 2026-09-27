@@ -708,6 +708,7 @@ export async function saveStampAction(g: StampSettings): Promise<FlashState> {
       ...cur,
       ...cleanStamp(g),
       enabled: !!g.enabled,
+      autoDetect: g.autoDetect !== false,
       whiteBg: !!g.whiteBg,
       bold: !!g.bold,
       showQty: !!g.showQty,

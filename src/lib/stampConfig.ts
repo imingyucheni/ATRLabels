@@ -41,6 +41,8 @@ export const DEFAULT_STAMP: StampConfig = {
 /** 全局设置（是否默认开启 + 默认位置） */
 export interface StampSettings extends StampConfig {
   enabled: boolean;
+  /** 自动检查面单：已有 SKU 不加印，有文字没 SKU 自动加印（不设置 = 开启） */
+  autoDetect?: boolean;
 }
 
 /**

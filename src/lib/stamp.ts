@@ -9,17 +9,21 @@ import { mergeStamp, type StampConfig } from "./stampConfig";
 
 export * from "./stampConfig";
 
-/** 这张面单是否加印、用什么配置 */
 /**
- * 是否加印的优先级：
- * 客户设为不加印 → 不加印；渠道设为不加印 → 不加印；渠道设为加印 → 加印；
- * 否则客户设为加印 → 加印；都没设置 → 跟随全局开关。
+ * 这张面单是否加印、用什么配置。优先级：
+ * 客户设为不加印 → 不加印；渠道设为不加印 → 不加印；
+ * 开了自动检查（默认开）且没有单独填加印文字：面单上已有 SKU → 不加印，有文字但没有 SKU → 加印；
+ * 图片面单（看不出来）/ 还没检查：渠道设为加印 → 加印；否则客户设为加印 → 加印；都没设置 → 跟随全局开关。
  */
 export function stampFor(s: Shipment): StampConfig | null {
   const st = getSettings().stamp;
   const mode = getCustomer(s.customerId)?.stampMode ?? "inherit";
   const ch = getChannel(s.channelCode)?.stamp;
   if (mode === "off" || ch?.enabled === false) return null;
+  if (st.autoDetect !== false && !s.labelNote?.trim()) {
+    if (s.labelSku === "yes") return null;
+    if (s.labelSku === "no") return mergeStamp(st, ch);
+  }
   const on = ch?.enabled === true || mode === "on" || (mode === "inherit" && st.enabled);
   if (!on) return null;
   return mergeStamp(st, ch);

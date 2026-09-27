@@ -388,6 +388,10 @@ describe("模拟模式完整流程", () => {
     const id = await svc.createLabel({ customerId: custId, channelCode: q.channelCode, req, expectedPrice: q.price! });
     const s = db.getShipment(id)!;
     const original = readLabel(s.labelPath!);
+    // 模拟面单有文字但没有 SKU：自动检查记为 no
+    expect(s.labelSku).toBe("no");
+    // 先关掉自动检查，测手动开关
+    db.saveSettings({ stamp: { ...db.getSettings().stamp, autoDetect: false } });
 
     // 默认关闭
     expect(stampFor(s)).toBeNull();
@@ -422,6 +426,25 @@ describe("模拟模式完整流程", () => {
     // 单独填写的文字
     db.setLabelNote(id, "PICK: A-01");
     expect(db.getShipment(id)!.labelNote).toBe("PICK: A-01");
+    db.setLabelNote(id, null);
+
+    // 自动检查：面单没有 SKU → 即使全局关闭也加印；已有 SKU → 即使渠道设为加印也不加；渠道明确不加印始终不加
+    db.saveSettings({ stamp: { ...db.getSettings().stamp, autoDetect: true, enabled: false } });
+    db.setCustomerStampMode(custId, "inherit");
+    db.setChannelStamp(q.channelCode, null);
+    expect(stampFor(db.getShipment(id)!)).not.toBeNull();
+    db.updateShipment(id, { labelSku: "yes" });
+    db.setChannelStamp(q.channelCode, { enabled: true });
+    expect(stampFor(db.getShipment(id)!)).toBeNull();
+    db.updateShipment(id, { labelSku: "no" });
+    db.setChannelStamp(q.channelCode, { enabled: false });
+    expect(stampFor(db.getShipment(id)!)).toBeNull();
+    // 图片面单：按原来的设置
+    db.updateShipment(id, { labelSku: "image" });
+    db.setChannelStamp(q.channelCode, null);
+    expect(stampFor(db.getShipment(id)!)).toBeNull();
+    db.setChannelStamp(q.channelCode, { enabled: true });
+    expect(stampFor(db.getShipment(id)!)).not.toBeNull();
   }, 30_000);
 });
 

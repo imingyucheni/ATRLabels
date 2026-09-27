@@ -227,6 +227,8 @@ CREATE INDEX IF NOT EXISTS idx_shipments_created ON shipments(created_at);
 function migrate(conn: Database.Database) {
   const cols = (conn.prepare("PRAGMA table_info(shipments)").all() as { name: string }[]).map((c) => c.name);
   if (!cols.includes("zone")) conn.exec("ALTER TABLE shipments ADD COLUMN zone TEXT");
+  // 面单上是否已经印了 SKU（下载面单时自动检查）：yes 有 / no 没有 / image 图片面单，看不出来
+  if (!cols.includes("label_sku")) conn.exec("ALTER TABLE shipments ADD COLUMN label_sku TEXT");
   const bcols = (conn.prepare("PRAGMA table_info(adjustment_batches)").all() as { name: string }[]).map((c) => c.name);
   if (!bcols.includes("header_json")) conn.exec("ALTER TABLE adjustment_batches ADD COLUMN header_json TEXT");
   const acols = (conn.prepare("PRAGMA table_info(adjustments)").all() as { name: string }[]).map((c) => c.name);
@@ -826,6 +828,8 @@ export const STATUS_LABEL: Record<ShipmentStatus, string> = {
   cancelled: "已取消",
 };
 
+export type LabelSku = "yes" | "no" | "image";
+
 export interface Shipment {
   id: number;
   customNo: string;
@@ -852,6 +856,8 @@ export interface Shipment {
   labelUrl: string | null;
   labelPath: string | null;
   labelMime: string | null;
+  /** 面单自带 SKU 检查结果：yes 有 / no 没有 / image 图片面单无法判断 / null 还没检查 */
+  labelSku: LabelSku | null;
   cancelFee: number | null;
   sbCancelFee: number | null;
   refundAmount: number | null;
@@ -899,6 +905,7 @@ interface ShipmentRow {
   label_url: string | null;
   label_path: string | null;
   label_mime: string | null;
+  label_sku: string | null;
   cancel_fee: number | null;
   sb_cancel_fee: number | null;
   refund_amount: number | null;
@@ -940,6 +947,7 @@ function toShipment(r: ShipmentRow): Shipment {
     labelUrl: r.label_url,
     labelPath: r.label_path,
     labelMime: r.label_mime,
+    labelSku: (r.label_sku as LabelSku | null) ?? null,
     cancelFee: r.cancel_fee,
     sbCancelFee: r.sb_cancel_fee,
     refundAmount: r.refund_amount,
@@ -1017,6 +1025,7 @@ const COLUMN_MAP: Record<string, string> = {
   labelUrl: "label_url",
   labelPath: "label_path",
   labelMime: "label_mime",
+  labelSku: "label_sku",
   cancelFee: "cancel_fee",
   sbCancelFee: "sb_cancel_fee",
   refundAmount: "refund_amount",
@@ -1034,6 +1043,7 @@ export type ShipmentPatch = Partial<
     | "labelUrl"
     | "labelPath"
     | "labelMime"
+    | "labelSku"
     | "cancelFee"
     | "sbCancelFee"
     | "refundAmount"

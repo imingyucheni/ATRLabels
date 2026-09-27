@@ -5,7 +5,7 @@ const nextConfig: NextConfig = {
   ...(process.env.BUILD_STANDALONE === "1" ? { output: "standalone" as const } : {}),
   // 数据目录和测试不要打进发布包
   outputFileTracingExcludes: { "*": ["data/**", "data-demo/**", "tests/**", "scripts/**", ".env*"] },
-  serverExternalPackages: ["better-sqlite3", "exceljs", "pdf-lib", "nodemailer"],
+  serverExternalPackages: ["better-sqlite3", "exceljs", "pdf-lib", "nodemailer", "unpdf"],
   experimental: {
     serverActions: {
       // 补差表、批量下单表通过 Server Action 上传，默认 1MB 不够

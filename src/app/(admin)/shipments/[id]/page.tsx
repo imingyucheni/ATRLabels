@@ -122,6 +122,12 @@ export default async function ShipmentDetail({ params }: { params: Promise<{ id:
           ) : (
             <p className="muted">{t("面单尚未生成。ShipBest 一般几秒内出单，可点“刷新状态”。")}</p>
           )}
+          {s.labelSku && (
+            <p className="small muted" style={{ margin: "8px 0" }}>
+              {t("自动检查")}{t("：")}
+              {s.labelSku === "yes" ? t("面单上已有这一单的 SKU，不加印") : s.labelSku === "no" ? t("面单上没有 SKU，打印时自动加印") : t("图片面单，读不出文字，按渠道 / 全局设置加印")}
+            </p>
+          )}
           <FlashForm action={saveLabelNoteAction} submitLabel="保存" submitClass="small" className="row">
             <input type="hidden" name="id" value={s.id} />
             <label className="f" style={{ flex: 1, minWidth: 220 }}>

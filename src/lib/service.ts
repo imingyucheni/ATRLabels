@@ -19,7 +19,8 @@ import {
   duplicateRefMessage,
 } from "./db";
 import { precheck, rememberQuote } from "./coverage";
-import { downloadLabel } from "./labels";
+import { downloadLabel, readLabel } from "./labels";
+import { backfillLabelSku, detectLabelSku } from "./labelSku";
 import { chargeLabel, refundCancelled, removeShipmentLedger } from "./ledger";
 import { displayChannel } from "./channelDisplay";
 import { notifyLater } from "./notify";
@@ -470,6 +471,8 @@ export async function refreshShipment(id: number): Promise<Shipment> {
       const saved = await downloadLabel(patch.labelUrl, s.customNo, { from: senderLines(s.sender) });
       patch.labelPath = saved.path;
       patch.labelMime = saved.mime;
+      // 看看服务商的面单上是否已经印了 SKU，决定打印时要不要加印
+      patch.labelSku = await detectLabelSku(readLabel(saved.path), saved.mime, s.skuList.map((k) => k.sku)).catch(() => "image" as const);
     } catch (e) {
       patch.errorMsg = (patch.errorMsg ? patch.errorMsg + "；" : "") + (e as Error).message;
     }
@@ -627,6 +630,7 @@ export function startPendingSweeper(intervalMs = 60_000) {
     busy = true;
     try {
       await refreshPendingShipments();
+      await backfillLabelSku();
     } finally {
       busy = false;
     }

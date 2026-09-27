@@ -1,4 +1,5 @@
 import { fmtTime } from "@/lib/time";
+import { labelSkuStats } from "@/lib/labelSku";
 import { ADJUSTMENT_POLICY_LABEL, channelCustomerCounts, getSettings, listChannels } from "@/lib/db";
 import { BALANCE_RULE_LABEL } from "@/lib/ledger";
 import { computePrice, money, resolveRule, type MarkupRule } from "@/lib/pricing";
@@ -455,7 +456,7 @@ export default async function SettingsPage() {
         </div>
       </div>
 
-      <StampSettings global={s.stamp} channels={channels.filter((c) => c.enabled).map((c) => ({ code: c.code, name: c.name, stamp: c.stamp }))} />
+      <StampSettings global={s.stamp} detect={labelSkuStats()} channels={channels.filter((c) => c.enabled).map((c) => ({ code: c.code, name: c.name, stamp: c.stamp }))} />
 
       <FlashForm action={saveChannelsAction} submitLabel="保存渠道设置" className="card" locked="开关渠道、改渠道加价会影响所有客户" confirm="渠道设置会对所有客户生效，确定保存吗？">
         <h2>{t("物流渠道")}</h2>

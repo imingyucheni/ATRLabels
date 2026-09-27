@@ -11,7 +11,12 @@ type Field = "x" | "y" | "fontSize" | "maxWidth" | "rotate";
 const LIMITS: Partial<Record<Field, [number, number]>> = { x: [0, 3.9], y: [0, 5.9], fontSize: [5, 24], maxWidth: [0.5, 4] };
 
 /** 面单加印 SKU 设置：全局默认 + 每个渠道单独调整位置，右侧实时预览 */
-export default function StampSettings({ global, channels }: { global: Global; channels: { code: string; name: string; stamp: StampOverride | null }[] }) {
+export default function StampSettings({ global, channels, detect = {} }: {
+  global: Global;
+  channels: { code: string; name: string; stamp: StampOverride | null }[];
+  /** 各渠道最近面单的自动检查结果 */
+  detect?: Record<string, { yes: number; no: number; image: number }>;
+}) {
   const [target, setTarget] = useState<string>(""); // "" = 全局默认
   const [g, setG] = useState<Global>(global);
   const [ov, setOv] = useState<Record<string, StampOverride>>(Object.fromEntries(channels.map((c) => [c.code, c.stamp ?? {}])));
@@ -80,6 +85,10 @@ export default function StampSettings({ global, channels }: { global: Global; ch
         {t("目前 UniUni、GOFO、SwiftX 等渠道的面单，ShipBest 已经在备注 / Remarks 里印了 SKU，不需要加印；")}<b>{t("USPS 面单没有这一栏，默认只给 USPS 加印")}</b>{t("，")}
         {t("位置在最下面一栏左侧空白（条码框下方、右下角二维码左边）。")}
       </p>
+      <p className="small">
+        <b>{t("自动检查")}</b>{t("：每张面单出来后，系统读取面单上的文字，找这一单的 SKU。")}
+        {t("已经有 → 不加印；有文字但没有 SKU → 自动加印；图片格式的面单读不出文字 → 按下面的渠道 / 全局设置。渠道设为“不加印”的始终不加印。")}
+      </p>
       <div className="alert warn small">{t("请把文字放在面单的空白处，")}<b>{t("不要盖住条码、运单号和地址")}</b>{t("（尤其开启白底时），否则承运商可能无法扫描。每个渠道设置后先用预览确认。")}</div>
       <div className="grid2">
         <div>
@@ -97,6 +106,7 @@ export default function StampSettings({ global, channels }: { global: Global; ch
             {!target ? (
               <label className="f" style={{ justifyContent: "flex-end" }}>
                 <span><input type="checkbox" checked={g.enabled} onChange={(e) => setG({ ...g, enabled: e.target.checked })} /> {t("所有渠道默认加印")}</span>
+                <span><input type="checkbox" checked={g.autoDetect !== false} onChange={(e) => setG({ ...g, autoDetect: e.target.checked })} /> {t("自动检查面单是否已有 SKU")}</span>
               </label>
             ) : (
               <label className="f">{t("这个渠道")}
@@ -174,6 +184,33 @@ export default function StampSettings({ global, channels }: { global: Global; ch
           <button className="primary" onClick={save} disabled={busy || invalid} style={{ marginTop: 12 }}>{busy ? t("保存中…") : target ? t("保存该渠道位置") : t("保存加印设置")}</button>
         </div>
         <div>
+          {Object.keys(detect).length > 0 && (
+            <div style={{ marginBottom: 12 }}>
+              <div className="small muted" style={{ marginBottom: 4 }}>{t("各渠道面单检查结果（最近 60 天）")}</div>
+              <div className="table-wrap">
+                <table>
+                  <thead><tr><th>{t("渠道")}</th><th className="num">{t("自带 SKU")}</th><th className="num">{t("没有 SKU")}</th><th className="num">{t("图片面单")}</th><th>{t("结果")}</th></tr></thead>
+                  <tbody>
+                    {channels.filter((c) => detect[c.code]).map((c) => {
+                      const d = detect[c.code];
+                      const verdict =
+                        d.yes && !d.no && !d.image ? t("面单自带 SKU，不加印")
+                        : d.no && !d.yes && !d.image ? t("面单没有 SKU，自动加印")
+                        : d.image && !d.yes && !d.no ? t("图片面单，按渠道设置")
+                        : t("每张单独判断");
+                      return (
+                        <tr key={c.code}>
+                          <td className="small">{c.name}</td>
+                          <td className="num">{d.yes}</td><td className="num">{d.no}</td><td className="num">{d.image}</td>
+                          <td className="small">{verdict}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
           <div className="small muted" style={{ marginBottom: 4 }}>{t("预览")}</div>
           {src && <iframe key={src} src={src} title={t("预览")} style={{ width: "100%", height: 560, border: "1px solid var(--line)", borderRadius: 8, background: "#fff" }} />}
         </div>
