@@ -1,6 +1,6 @@
 import { fmtTime } from "@/lib/time";
 import { labelSkuStats } from "@/lib/labelSku";
-import { acceptedCount, getTerms } from "@/lib/terms";
+import { acceptedCount, getTerms, unsignedCustomers } from "@/lib/terms";
 import { ADJUSTMENT_POLICY_LABEL, channelCustomerCounts, getSettings, listChannels } from "@/lib/db";
 import { BALANCE_RULE_LABEL } from "@/lib/ledger";
 import { computePrice, money, resolveRule, type MarkupRule } from "@/lib/pricing";
@@ -350,10 +350,33 @@ export default async function SettingsPage() {
                 <label className="f">{t("中文条款")}<textarea name="zh" rows={16} defaultValue={terms.zh} /></label>
                 <label className="f">{t("英文条款（客户端切换英文时显示）")}<textarea name="en" rows={16} defaultValue={terms.en} /></label>
               </div>
-              <label className="small" style={{ display: "block", marginBottom: 10 }}>
+              <label className="small" style={{ display: "block", marginBottom: 8 }}>
                 <input type="checkbox" name="bump" /> {t("这是重要修改：要求所有客户重新签署（版本号 +1）")}
               </label>
+              <label className="f" style={{ marginBottom: 10 }}>{t("修改说明（选填，重要修改时显示在客户的签署页顶部）")}
+                <input name="changeNote" maxLength={500} placeholder={t("例如：补差规则调整为按承运商账单实际金额收取")} />
+              </label>
             </FlashForm>
+            {(() => {
+              const unsigned = unsignedCustomers();
+              return unsigned.length ? (
+                <details style={{ marginTop: 12 }}>
+                  <summary className="small">{t("还没签署当前版本的客户（{n}）", { n: unsigned.length })}</summary>
+                  <p className="small muted">{t("这些客户下次登录客户中心时会被要求签署。")}</p>
+                  <table className="list">
+                    <tbody>
+                      {unsigned.map((c) => (
+                        <tr key={c.id}>
+                          <td><a href={`/customers/${c.id}`}>{c.name}</a></td>
+                          <td className="small muted">{c.email}</td>
+                          <td className="small">{c.signedVersion ? t("签过第 {v} 版", { v: c.signedVersion }) : t("从未签署")}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </details>
+              ) : null;
+            })()}
           </SettingsSection>
         );
       })()}

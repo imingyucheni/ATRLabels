@@ -444,7 +444,7 @@ export interface Settings {
   /** 官网（客户 OMS 网址的首页）上的公司信息和联系方式 */
   site: { company: string; address: string; phone: string; wechat: string; email: string; hours: string };
   /** 客户服务条款：留空用系统默认；version 变了客户要重新同意 */
-  terms?: { zh: string; en: string; version: number; updatedAt: string } | null;
+  terms?: { zh: string; en: string; version: number; updatedAt: string; changeNote?: string } | null;
   /** 嘉谷万邑（Dragon Open API）尾程面单：第二个服务商 */
   jiagu: { enabled: boolean; clientId: string; secret: string; ownershipId: string; customerId: string; warehouseId: string; warehouses?: Record<string, string>; authUrl?: string; apiUrl?: string };
   /** USPS 地址核对（Addresses API v3） */

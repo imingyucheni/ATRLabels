@@ -50,10 +50,17 @@ describe("客户服务条款", () => {
     terms.saveTerms(terms.getTerms().zh + "\n补充说明", terms.getTerms().en, false);
     expect(terms.hasAcceptedTerms(cid)).toBe(true);
     // 重要修改：版本 +1，要重新签；旧的存档还在
-    terms.saveTerms(terms.getTerms().zh, terms.getTerms().en, true);
-    expect(terms.getTerms().version).toBe(2);
+    db.updateCustomerPortal(cid, { email: "amy@acme.com", enabled: true, creditLimit: 0 });
+    expect(terms.unsignedCustomers()).toHaveLength(0);
+    terms.saveTerms(terms.getTerms().zh, terms.getTerms().en, true, "补差规则调整");
+    expect(terms.getTerms()).toMatchObject({ version: 2, changeNote: "补差规则调整" });
     expect(terms.hasAcceptedTerms(cid)).toBe(false);
     expect(terms.lastAcceptance(cid)!.version).toBe(1);
     expect(terms.acceptedCount()).toBe(0);
+    expect(terms.unsignedCustomers()).toEqual([expect.objectContaining({ id: cid, signedVersion: 1 })]);
+    // 重新签署后两版都有存档
+    terms.acceptTerms({ customerId: cid, party: terms.partyOf(db.getCustomer(cid)!), signer: "Amy Chen", signerTitle: "物流主管", lang: "zh", ip: null, userAgent: null });
+    expect(terms.listAcceptances(cid).map((x) => x.version)).toEqual([2, 1]);
+    expect(terms.unsignedCustomers()).toHaveLength(0);
   });
 });

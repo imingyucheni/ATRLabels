@@ -342,4 +342,13 @@ export const admin3: Record<string, string> = {
   "请填写联系人职位": "Please enter the contact's title",
   "请填写电话": "Please enter the phone",
   "请填写地址": "Please enter the address",
+  "修改说明（选填，重要修改时显示在客户的签署页顶部）": "Change note (optional, shown at the top of the signing page for major changes)",
+  "例如：补差规则调整为按承运商账单实际金额收取": "e.g. Adjustments now follow the carrier's actual billed amount",
+  "还没签署当前版本的客户（{n}）": "Customers who haven't signed the current version ({n})",
+  "这些客户下次登录客户中心时会被要求签署。": "They will be asked to sign at their next sign-in.",
+  "签过第 {v} 版": "Signed version {v}",
+  "从未签署": "Never signed",
+  "本次修改": "What changed",
+  "签署记录": "Signing history",
+  "正在查看": "Viewing",
 };

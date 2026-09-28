@@ -79,11 +79,13 @@ export interface Terms {
   en: string;
   version: number;
   updatedAt: string | null;
+  /** 这一版改了什么（重新签署时显示给客户，也写进通知邮件） */
+  changeNote: string;
 }
 
 export function getTerms(): Terms {
   const t = getSettings().terms;
-  return { zh: t?.zh?.trim() || DEFAULT_TERMS_ZH, en: t?.en?.trim() || DEFAULT_TERMS_EN, version: t?.version || 1, updatedAt: t?.updatedAt ?? null };
+  return { zh: t?.zh?.trim() || DEFAULT_TERMS_ZH, en: t?.en?.trim() || DEFAULT_TERMS_EN, version: t?.version || 1, updatedAt: t?.updatedAt ?? null, changeNote: t?.changeNote ?? "" };
 }
 
 /** 签署时记下的客户信息 */
@@ -112,8 +114,8 @@ export function renderTerms(text: string, party?: TermsParty) {
     .replace(/\{title\}/g, party?.title ?? "");
 }
 
-/** 后台保存条款；bump = 要求所有客户重新同意（版本号 +1） */
-export function saveTerms(zh: string, en: string, bump: boolean) {
+/** 后台保存条款；bump = 要求所有客户重新同意（版本号 +1），changeNote = 这次改了什么 */
+export function saveTerms(zh: string, en: string, bump: boolean, changeNote = "") {
   const cur = getTerms();
   saveSettings({
     terms: {
@@ -121,6 +123,7 @@ export function saveTerms(zh: string, en: string, bump: boolean) {
       en: en.trim() === DEFAULT_TERMS_EN.trim() ? "" : en.trim(),
       version: bump ? cur.version + 1 : cur.version,
       updatedAt: new Date().toISOString(),
+      changeNote: bump ? changeNote.trim().slice(0, 500) : cur.changeNote,
     },
   });
 }
@@ -174,17 +177,44 @@ export interface TermsAcceptance {
   acceptedAt: string;
 }
 
+type AcceptRow = { id: number; version: number; signer: string | null; signer_title: string | null; party_json: string | null; lang: string | null; text: string | null; ip: string | null; accepted_at: string };
+const toAcceptance = (r: AcceptRow): TermsAcceptance => ({
+  id: r.id, version: r.version, signer: r.signer, signerTitle: r.signer_title, party: r.party_json ? JSON.parse(r.party_json) : null, lang: r.lang, text: r.text, ip: r.ip, acceptedAt: r.accepted_at,
+});
+
 /** 这个客户最近一次同意的记录（含签署时的条款原文） */
 export function lastAcceptance(customerId: number): TermsAcceptance | null {
-  const r = conn().prepare("SELECT * FROM terms_acceptances WHERE customer_id = ? ORDER BY id DESC LIMIT 1").get(customerId) as
-    | { id: number; version: number; signer: string | null; signer_title: string | null; party_json: string | null; lang: string | null; text: string | null; ip: string | null; accepted_at: string }
-    | undefined;
-  return r
-    ? { id: r.id, version: r.version, signer: r.signer, signerTitle: r.signer_title, party: r.party_json ? JSON.parse(r.party_json) : null, lang: r.lang, text: r.text, ip: r.ip, acceptedAt: r.accepted_at }
-    : null;
+  const r = conn().prepare("SELECT * FROM terms_acceptances WHERE customer_id = ? ORDER BY id DESC LIMIT 1").get(customerId) as AcceptRow | undefined;
+  return r ? toAcceptance(r) : null;
+}
+
+/** 这个客户签过的所有版本（新的在前） */
+export function listAcceptances(customerId: number): TermsAcceptance[] {
+  return (conn().prepare("SELECT * FROM terms_acceptances WHERE customer_id = ? ORDER BY id DESC").all(customerId) as AcceptRow[]).map(toAcceptance);
+}
+
+export function getAcceptance(customerId: number, id: number): TermsAcceptance | null {
+  const r = conn().prepare("SELECT * FROM terms_acceptances WHERE customer_id = ? AND id = ?").get(customerId, id) as AcceptRow | undefined;
+  return r ? toAcceptance(r) : null;
+}
+
+/** 已开通客户端登录、还没签当前版本的客户 */
+export function unsignedCustomers(): { id: number; name: string; email: string | null; signedVersion: number | null }[] {
+  conn();
+  return db()
+    .prepare(
+      `SELECT c.id, c.name, c.portal_email AS email,
+        (SELECT MAX(version) FROM terms_acceptances a WHERE a.customer_id = c.id) AS signedVersion
+       FROM customers c
+       WHERE COALESCE(c.internal, 0) = 0 AND c.portal_enabled = 1
+         AND NOT EXISTS (SELECT 1 FROM terms_acceptances a WHERE a.customer_id = c.id AND a.version = ?)
+       ORDER BY c.name`,
+    )
+    .all(getTerms().version) as { id: number; name: string; email: string | null; signedVersion: number | null }[];
 }
 
 /** 已同意当前版本的客户数 */
 export function acceptedCount(): number {
   return (conn().prepare("SELECT COUNT(DISTINCT customer_id) AS n FROM terms_acceptances WHERE version = ?").get(getTerms().version) as { n: number }).n;
 }
+

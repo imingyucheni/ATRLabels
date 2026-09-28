@@ -39,7 +39,12 @@ export default async function PortalTermsPage() {
           </div>
           <PrefToggles />
         </div>
-        {!accepted && !acting && terms.version > 1 && <div className="alert warn">{t("服务条款已更新，请阅读并同意新的条款后继续使用。")}</div>}
+        {!accepted && !acting && terms.version > 1 && lastAcceptance(id) && (
+          <div className="alert warn">
+            {t("服务条款已更新，请阅读并同意新的条款后继续使用。")}
+            {terms.changeNote && <div style={{ marginTop: 4 }}><b>{t("本次修改")}</b>{t("：")}{terms.changeNote}</div>}
+          </div>
+        )}
         <dl className="terms-party">
           <dt>{t("客户名称")}</dt><dd>{shown.customer}</dd>
           <dt>{t("地址")}</dt><dd>{shown.address || "—"}</dd>

@@ -1,17 +1,19 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getCustomer } from "@/lib/db";
-import { lastAcceptance } from "@/lib/terms";
+import { getAcceptance, lastAcceptance, listAcceptances } from "@/lib/terms";
 import { fmtTime, TZ_LABEL } from "@/lib/time";
 import { getT } from "@/lib/prefs";
 import PrintButton from "@/components/PrintButton";
 
 /** 客户签署的服务条款存档：签署时的客户信息 + 条款原文，可以打印 / 另存为 PDF */
-export default async function CustomerTermsPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function CustomerTermsPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ a?: string }> }) {
   const c = getCustomer(Number((await params).id));
   if (!c) notFound();
   const t = await getT();
-  const a = lastAcceptance(c.id);
+  const pick = Number((await searchParams).a);
+  const a = (pick && getAcceptance(c.id, pick)) || lastAcceptance(c.id);
+  const history = listAcceptances(c.id);
   return (
     <>
       <div className="row no-print" style={{ justifyContent: "space-between", marginBottom: 12 }}>
@@ -21,6 +23,23 @@ export default async function CustomerTermsPage({ params }: { params: Promise<{ 
           <Link href={`/customers/${c.id}`}>{t("← 返回客户")}</Link>
         </div>
       </div>
+      {history.length > 1 && (
+        <div className="card no-print">
+          <h2>{t("签署记录")}</h2>
+          <table className="list">
+            <tbody>
+              {history.map((h) => (
+                <tr key={h.id}>
+                  <td>{t("第 {v} 版", { v: h.version })}</td>
+                  <td>{[h.signer, h.signerTitle].filter(Boolean).join(" · ")}</td>
+                  <td className="small muted">{fmtTime(h.acceptedAt)}</td>
+                  <td>{h.id === a?.id ? <b className="small">{t("正在查看")}</b> : <Link href={`/customers/${c.id}/terms?a=${h.id}`} className="small">{t("查看")}</Link>}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
       {!a ? (
         <div className="alert warn">{t("这个客户还没有签署服务条款。")}</div>
       ) : (

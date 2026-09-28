@@ -532,7 +532,7 @@ export async function saveTermsAction(_: FlashState, fd: FormData): Promise<Flas
   const en = String(fd.get("en") ?? "").slice(0, 30000);
   if (!zh.trim()) return { error: "中文条款不能为空" };
   const bump = fd.get("bump") === "on";
-  saveTerms(zh, en, bump);
+  saveTerms(zh, en, bump, String(fd.get("changeNote") ?? ""));
   revalidatePath("/settings");
   return { ok: bump ? `已保存为第 ${getTerms().version} 版，所有客户下次登录时需要重新签署` : "服务条款已保存" };
 }
