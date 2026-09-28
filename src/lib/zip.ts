@@ -41,6 +41,13 @@ export function zipStore(files: { name: string; data: Uint8Array }[], date = new
     const name = Buffer.from(f.name, "utf8");
     const data = Buffer.from(f.data);
     const crc = crc32(data);
+    // Info-ZIP Unicode Path 扩展字段：老版本解压软件也能认出中文文件名
+    const extra = Buffer.alloc(9 + name.length);
+    extra.writeUInt16LE(0x7075, 0);
+    extra.writeUInt16LE(5 + name.length, 2);
+    extra.writeUInt8(1, 4);
+    extra.writeUInt32LE(crc32(name), 5);
+    name.copy(extra, 9);
     const local = Buffer.alloc(30);
     local.writeUInt32LE(0x04034b50, 0);
     local.writeUInt16LE(20, 4); // 解压所需版本
@@ -52,8 +59,8 @@ export function zipStore(files: { name: string; data: Uint8Array }[], date = new
     local.writeUInt32LE(data.length, 18);
     local.writeUInt32LE(data.length, 22);
     local.writeUInt16LE(name.length, 26);
-    local.writeUInt16LE(0, 28);
-    locals.push(local, name, data);
+    local.writeUInt16LE(extra.length, 28);
+    locals.push(local, name, extra, data);
 
     const central = Buffer.alloc(46);
     central.writeUInt32LE(0x02014b50, 0);
@@ -67,9 +74,10 @@ export function zipStore(files: { name: string; data: Uint8Array }[], date = new
     central.writeUInt32LE(data.length, 20);
     central.writeUInt32LE(data.length, 24);
     central.writeUInt16LE(name.length, 28);
+    central.writeUInt16LE(extra.length, 30);
     central.writeUInt32LE(offset, 42);
-    centrals.push(central, name);
-    offset += local.length + name.length + data.length;
+    centrals.push(central, name, extra);
+    offset += local.length + name.length + extra.length + data.length;
   }
   const centralSize = centrals.reduce((a, b) => a + b.length, 0);
   const end = Buffer.alloc(22);

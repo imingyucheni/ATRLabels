@@ -29,9 +29,13 @@ describe("打包下载 ZIP", () => {
       unzip = false;
     }
     if (unzip) {
-      execFileSync("unzip", ["-q", file, "-d", dir]);
-      expect(fs.readFileSync(path.join(dir, "订单-2.pdf"), "utf8")).toBe("%PDF-1.4 two");
-      expect(fs.readFileSync(path.join(dir, "114-4632749-7321005-9400.pdf"), "utf8")).toBe("%PDF-1.4 one");
+      const out = path.join(dir, "out");
+      execFileSync("unzip", ["-q", file, "-d", out]);
+      expect(fs.readFileSync(path.join(out, "114-4632749-7321005-9400.pdf"), "utf8")).toBe("%PDF-1.4 one");
+      // 中文文件名能不能显示取决于解压软件和系统语言，这里只检查内容完整
+      const names = fs.readdirSync(out);
+      expect(names).toHaveLength(2);
+      expect(names.map((n) => fs.readFileSync(path.join(out, n), "utf8")).sort()).toEqual(["%PDF-1.4 one", "%PDF-1.4 two"]);
     } else {
       // 没有 unzip 命令时至少检查结尾记录里的文件数
       const eocd = zip.subarray(zip.length - 22);
