@@ -3,6 +3,7 @@ import { currentCustomerId, isLoggedIn } from "@/lib/auth";
 import { csvResponse } from "@/lib/csv";
 import { getCustomer, STATUS_LABEL, type ShipmentStatus } from "@/lib/db";
 import { listOrderCharges } from "@/lib/ledger";
+import { displayChannel } from "@/lib/channelDisplay";
 import { getLang, getT } from "@/lib/prefs";
 
 /** 表头首字母大写（中文不受影响） */
@@ -23,7 +24,8 @@ export async function GET(req: Request) {
   if (!c) return new Response("Not found", { status: 404 });
   const from = p.get("from") || undefined;
   const to = p.get("to") || undefined;
-  const rows = listOrderCharges(customerId, { from, to });
+  // 导出给客户的渠道名用对外名称（不含服务商标记）
+  const rows = listOrderCharges(customerId, { from, to }).map((r) => ({ ...r, channelName: displayChannel(r.channelCode).name }));
   const t = (k: "freight" | "adjustment" | "refund" | "net") => rows.reduce((a, r) => a + r[k], 0).toFixed(2);
   return csvResponse(
     tr("扣款明细-{name}-{from}_{to}.csv", { name: c.name, from: from ?? (en ? "start" : "开始"), to: to ?? (en ? "now" : "至今") }),

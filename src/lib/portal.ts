@@ -2,7 +2,7 @@
  * 客户端看到的数据：去掉成本、利润、加价规则、ShipBest 内部信息。
  * 客户端页面和接口只能通过这里的函数取数据。
  */
-import { getSettings, getShipment, listAdjustments, listShipments, type Shipment, type ShipmentFilter, type ShipmentStatus } from "./db";
+import { customerChannels, db, getSettings, getShipment, listAdjustments, listShipments, type Shipment, type ShipmentFilter, type ShipmentStatus } from "./db";
 import { displayChannel } from "./channelDisplay";
 import type { ChannelQuote } from "./service";
 import { stampFor, stampText } from "./stamp";
@@ -31,11 +31,32 @@ export function toPublicQuote(q: ChannelQuote): PublicQuote {
 }
 
 /** ShipBest 的报错里可能带内部信息，客户端只保留对客户有用的部分 */
+/** 客户页面可能用到的渠道代码：开通的渠道 + 订单 / 批量导入里出现过的 */
+export function portalChannelCodes(customerId: number): string[] {
+  const codes = new Set(customerChannels(customerId).map((c) => c.code));
+  const rows = db()
+    .prepare(
+      `SELECT DISTINCT channel_code AS c FROM shipments WHERE customer_id = ?
+       UNION SELECT DISTINCT r.channel_code FROM batch_job_rows r JOIN batch_jobs j ON j.id = r.job_id WHERE j.customer_id = ? AND r.channel_code IS NOT NULL`,
+    )
+    .all(customerId, customerId) as { c: string | null }[];
+  for (const r of rows) if (r.c) codes.add(r.c);
+  return [...codes];
+}
+
 export function publicError(msg?: string | null): string {
   if (!msg) return "该渠道暂不可用";
   // 去掉错误码前缀，例如 “[10024] ”（只去开头或冒号后的，不动“邮编[78701]”这类内容）
   // 去掉服务商名称（客户不需要知道是哪家服务商）
-  const raw = msg.replace(/(^|[：:]\s*)\[-?\d+\]\s*/g, "$1").replace(/嘉谷[：:]\s*/g, "").replace(/嘉谷/g, "");
+  const raw = msg
+    .replace(/(^|[：:]\s*)\[-?\d+\]\s*/g, "$1")
+    .replace(/(嘉谷万邑|嘉谷|万邑|Jiagu|ShipBest)\s*[：:]\s*/gi, "")
+    .replace(/嘉谷万邑|嘉谷|万邑|Jiagu/gi, "")
+    .replace(/\bJG-\d+\b/g, "")
+    .replace(/\s*·\s*(SB|GDE)\b/g, "")
+    .replace(/[（(]设置\s*→[^）)]*[）)]/g, "");
+  // 服务商接口异常（带着对方返回的原文）、后台配置问题：不给客户看细节
+  if (/HTTP \d{3}|接口返回异常|非 JSON|没有设置仓库|没有启用或没有填写账号|渠道 \d+ /.test(raw)) return "系统繁忙，请稍后再试或联系客服";
   // 地址不在派送范围：统一说成“地址未覆盖”
   if (/不通邮|派送范围/.test(raw)) return "地址未覆盖：这个渠道送不到该邮编";
   // 服务商超时未出面单

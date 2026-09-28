@@ -1,5 +1,6 @@
 import { fmtTime } from "./time";
 import { getCustomer, listAdjustments, listShipments, STATUS_LABEL } from "./db";
+import { displayChannel } from "./channelDisplay";
 
 export interface StatementLine {
   date: string;
@@ -30,7 +31,7 @@ export function buildStatement(customerId: number, from?: string, to?: string) {
       ref: s.customNo,
       customerRef: s.customerRef ?? "",
       trackingNo: s.trackingNo ?? "",
-      detail: `${s.channelName ?? ""} · ${s.recipient.city} ${s.recipient.zipCode}${s.status !== "labeled" ? ` · ${STATUS_LABEL[s.status]}` : ""}${cancelled ? `（原价 ${s.price.toFixed(2)}，已退 ${(s.refundAmount ?? 0).toFixed(2)}）` : ""}`,
+      detail: `${displayChannel(s.channelCode).name} · ${s.recipient.city} ${s.recipient.zipCode}${s.status !== "labeled" ? ` · ${STATUS_LABEL[s.status]}` : ""}${cancelled ? `（原价 ${s.price.toFixed(2)}，已退 ${(s.refundAmount ?? 0).toFixed(2)}）` : ""}`,
       amount: cancelled ? s.cancelFee ?? 0 : s.price,
       shipmentId: s.id,
     });

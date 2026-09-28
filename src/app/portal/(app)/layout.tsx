@@ -6,7 +6,8 @@ import { hasAcceptedTerms } from "@/lib/terms";
 import { money, usd } from "@/lib/pricing";
 import Sidebar from "@/components/Sidebar";
 import { listDraftRows } from "@/lib/batch";
-import { channelNameMap } from "@/lib/channelDisplay";
+import { customerChannelMap } from "@/lib/channelDisplay";
+import { portalChannelCodes } from "@/lib/portal";
 import { ChannelNamesProvider } from "@/components/ChannelLabel";
 import { getT } from "@/lib/prefs";
 import { leaveCustomerAction, portalLogoutAction } from "../actions";
@@ -27,7 +28,7 @@ export default async function PortalLayout({ children }: { children: React.React
   if (!acting && !hasAcceptedTerms(me.id)) redirect("/portal/terms");
   const t = await getT();
   return (
-    <ChannelNamesProvider map={channelNameMap()}>
+    <ChannelNamesProvider map={customerChannelMap(portalChannelCodes(me.id))}>
     <div className="shell">
       <Sidebar
         brand={brandName}

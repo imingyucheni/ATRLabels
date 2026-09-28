@@ -702,13 +702,13 @@ export function listDraftRows(customerId?: number) {
   return (
     db()
       .prepare(
-        `SELECT r.id, r.job_id, r.row_no, r.customer_ref, r.req_json, r.channel_name, r.price, r.status, r.error, j.filename, j.created_at, c.name AS customer_name
+        `SELECT r.id, r.job_id, r.row_no, r.customer_ref, r.req_json, r.channel_code, r.channel_name, r.price, r.status, r.error, j.filename, j.created_at, c.name AS customer_name
          FROM batch_job_rows r JOIN batch_jobs j ON j.id = r.job_id JOIN customers c ON c.id = j.customer_id
          WHERE r.status IN ('quoted', 'error', 'failed', 'pending') ${customerId ? "AND j.customer_id = ?" : ""}
          ORDER BY j.id DESC, r.row_no`,
       )
       .all(...(customerId ? [customerId] : [])) as {
-      id: number; job_id: number; row_no: number; customer_ref: string | null; req_json: string; channel_name: string | null; price: number | null;
+      id: number; job_id: number; row_no: number; customer_ref: string | null; req_json: string; channel_code: string | null; channel_name: string | null; price: number | null;
       status: RowStatus; error: string | null; filename: string | null; created_at: string; customer_name: string;
     }[]
   ).map((r) => {

@@ -104,3 +104,14 @@ describe("安全检查修复", () => {
     expect(() => assertZipSize(Buffer.from("not a zip at all, definitely not"))).toThrow(/格式不对/);
   });
 });
+
+describe("客户看到的报错不含服务商信息", () => {
+  it("去掉服务商名称、渠道代码、后台设置提示和接口原文", async () => {
+    const { publicError } = await import("@/lib/portal");
+    expect(publicError("嘉谷：渠道 580914 还没有设置仓库 ID（设置 → 万邑）")).toBe("系统繁忙，请稍后再试或联系客服");
+    expect(publicError("嘉谷接口返回异常（HTTP 502）<html>")).toBe("系统繁忙，请稍后再试或联系客服");
+    expect(publicError("[10024] 包裹重量不在该渠道的下单重量范围内")).toBe("包裹重量不在该渠道的下单重量范围内");
+    const m = publicError("所有渠道都无法报价：GOFO-（91710） · SB 运费试算失败（JG-580914）");
+    expect(m).not.toMatch(/SB|JG-|嘉谷|万邑/);
+  });
+});

@@ -6,6 +6,7 @@ import { LEDGER_TYPE_LABEL, listLedger, listOrderCharges } from "@/lib/ledger";
 import OrderCharges from "@/components/OrderCharges";
 import { money, usd } from "@/lib/pricing";
 import { buildStatement } from "@/lib/statement";
+import { displayChannel } from "@/lib/channelDisplay";
 import { getLang, getT } from "@/lib/prefs";
 import { translateMessage } from "@/lib/i18n";
 
@@ -28,7 +29,8 @@ export default async function PortalBilling({ searchParams }: { searchParams: Pr
   const to = sp.to ?? def.to;
   const st = buildStatement(me.id, from, to)!;
   const ledger = listLedger({ customerId: me.id, from, to });
-  const charges = listOrderCharges(me.id, { from, to });
+  // 客户只看到对外的渠道名（不含服务商标记）
+  const charges = listOrderCharges(me.id, { from, to }).map((r) => ({ ...r, channelName: displayChannel(r.channelCode).name }));
   const { supportContact } = getSettings();
 
   return (

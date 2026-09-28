@@ -242,6 +242,7 @@ export interface OrderCharge {
   customNo: string;
   customerRef: string | null;
   trackingNo: string | null;
+  channelCode: string;
   channelName: string | null;
   status: string;
   createdAt: string;
@@ -273,7 +274,7 @@ export function listOrderCharges(customerId: number, f: { from?: string; to?: st
   }
   const rows = db()
     .prepare(
-      `SELECT s.id, s.custom_no, s.customer_ref, s.tracking_no, s.channel_name, s.status, s.created_at,
+      `SELECT s.id, s.custom_no, s.customer_ref, s.tracking_no, s.channel_code, s.channel_name, s.status, s.created_at,
         COALESCE(SUM(CASE WHEN l.type = 'label' THEN l.amount END), 0) AS freight,
         COALESCE(SUM(CASE WHEN l.type = 'adjustment' THEN l.amount END), 0) AS adj,
         COALESCE(SUM(CASE WHEN l.type = 'refund' THEN l.amount END), 0) AS refund,
@@ -282,7 +283,7 @@ export function listOrderCharges(customerId: number, f: { from?: string; to?: st
        WHERE ${where.join(" AND ")} GROUP BY s.id ORDER BY s.id DESC`,
     )
     .all(...args) as {
-    id: number; custom_no: string; customer_ref: string | null; tracking_no: string | null; channel_name: string | null;
+    id: number; custom_no: string; customer_ref: string | null; tracking_no: string | null; channel_code: string; channel_name: string | null;
     status: string; created_at: string; freight: number; adj: number; refund: number; net: number;
   }[];
   return rows.map((r) => ({
@@ -290,6 +291,7 @@ export function listOrderCharges(customerId: number, f: { from?: string; to?: st
     customNo: r.custom_no,
     customerRef: r.customer_ref,
     trackingNo: r.tracking_no,
+    channelCode: r.channel_code,
     channelName: r.channel_name,
     status: r.status,
     createdAt: r.created_at,

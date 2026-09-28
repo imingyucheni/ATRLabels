@@ -25,6 +25,17 @@ export function channelNameMap(): ChannelNameMap {
   return map;
 }
 
+/**
+ * 发到客户浏览器里的映射：只含这个客户开通的渠道和他订单里出现过的渠道，只用代码当键
+ * （不带内部渠道名，也不把别的渠道发出去）
+ */
+export function customerChannelMap(codes: Iterable<string>): ChannelNameMap {
+  const all = channelNameMap();
+  const out: ChannelNameMap = {};
+  for (const code of codes) out[code] = all[code] ?? publicChannel(null, code);
+  return out;
+}
+
 /** 按代码或原名查客户看到的名称（查不到时去掉邮编后缀） */
 export function displayChannel(codeOrName: string | null | undefined, map: ChannelNameMap = channelNameMap()) {
   if (!codeOrName) return { name: "", carrier: "other" };

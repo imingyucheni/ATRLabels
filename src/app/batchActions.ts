@@ -100,6 +100,7 @@ export async function getBatchJobAction(jobId: number): Promise<{ job?: BatchJob
       : {
           ...job,
           error: job.error && !job.error.startsWith("余额不足") ? publicError(job.error) : job.error,
+          channels: job.channels.map((c) => ({ code: c.code, name: displayChannel(c.code).name })),
           rows: job.rows.map((r) => ({
             ...r,
             // 客户只拿到对外的渠道名（不含服务商标记、仓库代码）
