@@ -343,7 +343,7 @@ export default async function SettingsPage() {
           >
             <p className="small muted" style={{ marginTop: 0 }}>
               {t("客户第一次登录客户中心时，必须填写签署人、勾选同意这份条款才能使用；系统会存档签署时的客户信息和条款原文，在客户详情里可以查看。")}
-              {t("可以用的占位：{brand} 公司名称、{customer} 客户名称、{cancelHours} 可取消小时数，签署时自动换成实际内容。")}
+              {t("可以用的占位：{company} 我们的公司名称、{companyAddress} 公司地址（都来自“官网与联系方式”）、{brand} 平台名称、{customer} 客户名称、{address} 客户地址、{cancelHours} 可取消小时数，签署时自动换成实际内容。")}
             </p>
             <FlashForm action={saveTermsAction} submitLabel="保存条款" locked="修改后客户看到的服务条款会变化">
               <div className="grid2" style={{ margin: "12px 0" }}>

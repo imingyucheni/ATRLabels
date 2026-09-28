@@ -31,9 +31,10 @@ describe("客户服务条款", () => {
   it("条款自动带出公司、客户名称和可取消小时数", () => {
     const c = db.getCustomer(cid)!;
     const text = terms.renderTerms(terms.getTerms().zh, terms.partyOf(c));
-    expect(text).toContain("ATRShip（以下简称“我们”）与 Acme Trading LLC（以下简称“您”）");
+    expect(text).toContain("Atronia Innovations Inc.（ATRShip 平台运营方，以下简称“我们”）与 Acme Trading LLC（以下简称“您”）");
+    expect(text).toContain("客户：Acme Trading LLC\n地址：100 Main St, Los Angeles, CA 90001");
     expect(text).toContain("下单后 48 小时内可以申请取消");
-    expect(text).not.toMatch(/\{(brand|customer|cancelHours)\}/);
+    expect(text).not.toMatch(/\{(brand|company|companyAddress|customer|address|cancelHours)\}/);
   });
 
   it("签署后存档客户信息、签署人和条款原文；条款重要修改后要重新签署", () => {

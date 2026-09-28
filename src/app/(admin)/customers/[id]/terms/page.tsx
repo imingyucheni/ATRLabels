@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getCustomer } from "@/lib/db";
-import { getAcceptance, lastAcceptance, listAcceptances } from "@/lib/terms";
+import { getAcceptance, lastAcceptance, listAcceptances, provider } from "@/lib/terms";
 import { fmtTime, TZ_LABEL } from "@/lib/time";
 import { getT } from "@/lib/prefs";
 import PrintButton from "@/components/PrintButton";
@@ -45,6 +45,7 @@ export default async function CustomerTermsPage({ params, searchParams }: { para
       ) : (
         <div className="card terms-archive">
           <dl className="terms-party">
+            <dt>{t("服务方")}</dt><dd>{provider().company}{provider().address ? ` · ${provider().address}` : ""}</dd>
             <dt>{t("客户名称")}</dt><dd>{a.party?.customer ?? c.name}</dd>
             <dt>{t("地址")}</dt><dd>{a.party?.address || "—"}</dd>
             <dt>{t("联系人")}</dt><dd>{a.party?.contact || "—"}{a.party?.title ? ` · ${a.party.title}` : ""}</dd>

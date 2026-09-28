@@ -318,7 +318,6 @@ export const admin3: Record<string, string> = {
   "客户服务条款": "Customer Terms of Service",
   "{n} 位客户已签署当前版本": "{n} customers signed the current version",
   "客户第一次登录客户中心时，必须填写签署人、勾选同意这份条款才能使用；系统会存档签署时的客户信息和条款原文，在客户详情里可以查看。": "Customers must enter a signer and accept these terms the first time they sign in. The customer details and the exact text they signed are archived and viewable on the customer page. ",
-  "可以用的占位：{brand} 公司名称、{customer} 客户名称、{cancelHours} 可取消小时数，签署时自动换成实际内容。": "Placeholders: {brand} company name, {customer} customer name, {cancelHours} cancellation window; replaced automatically when signing.",
   "保存条款": "Save terms",
   "中文条款": "Chinese terms",
   "英文条款（客户端切换英文时显示）": "English terms (shown when the portal is in English)",
@@ -351,4 +350,6 @@ export const admin3: Record<string, string> = {
   "本次修改": "What changed",
   "签署记录": "Signing history",
   "正在查看": "Viewing",
+  "服务方": "Provider",
+  "可以用的占位：{company} 我们的公司名称、{companyAddress} 公司地址（都来自“官网与联系方式”）、{brand} 平台名称、{customer} 客户名称、{address} 客户地址、{cancelHours} 可取消小时数，签署时自动换成实际内容。": "Placeholders: {company} our company name, {companyAddress} company address (both from “Website & contact”), {brand} platform name, {customer} customer name, {address} customer address, {cancelHours} cancellation window; replaced automatically when signing.",
 };

@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { currentCustomerId, impersonatedCustomerId } from "@/lib/auth";
 import { getCustomer, getSettings } from "@/lib/db";
-import { getTerms, hasAcceptedTerms, lastAcceptance, partyOf, renderTerms } from "@/lib/terms";
+import { getTerms, hasAcceptedTerms, lastAcceptance, partyOf, provider, renderTerms } from "@/lib/terms";
 import { fmtTime } from "@/lib/time";
 import { getLang, getT } from "@/lib/prefs";
 import PrefToggles from "@/components/PrefToggles";
@@ -46,6 +46,7 @@ export default async function PortalTermsPage() {
           </div>
         )}
         <dl className="terms-party">
+          <dt>{t("服务方")}</dt><dd>{provider().company}{provider().address ? ` · ${provider().address}` : ""}</dd>
           <dt>{t("客户名称")}</dt><dd>{shown.customer}</dd>
           <dt>{t("地址")}</dt><dd>{shown.address || "—"}</dd>
           <dt>{t("联系人")}</dt><dd>{shown.contact || "—"}{shown.title ? ` · ${shown.title}` : ""}</dd>

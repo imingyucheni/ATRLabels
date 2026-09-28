@@ -4,7 +4,7 @@
  */
 import { db, getSettings, saveSettings, type Customer } from "./db";
 
-export const DEFAULT_TERMS_ZH = `本服务条款由 {brand}（以下简称“我们”）与 {customer}（以下简称“您”）签订。请仔细阅读以下条款，填写签署人并勾选同意后即可开始使用。
+export const DEFAULT_TERMS_ZH = `本服务条款由 {company}（{brand} 平台运营方，以下简称“我们”）与 {customer}（以下简称“您”）签订。请仔细阅读以下条款，填写签署人并勾选同意后即可开始使用。
 
 一、账户使用
 1. 账户仅限您本人或贵公司使用，请妥善保管登录密码；通过您的账户下的订单均视为您本人的操作。
@@ -37,9 +37,16 @@ export const DEFAULT_TERMS_ZH = `本服务条款由 {brand}（以下简称“我
 2. 收件人信息仅用于出单和派送，我们不会用于其他用途。
 3. 条款如有重要修改，会在您登录时提示，需要重新同意后继续使用。
 
-如有疑问，请联系客服。`;
+如有疑问，请联系客服。
 
-export const DEFAULT_TERMS_EN = `These Terms of Service are between {brand} ("we") and {customer} ("you"). Please read them carefully, enter the signer's details and accept to start using your account.
+八、签约双方
+服务方：{company}（{brand} 平台运营方）
+地址：{companyAddress}
+客户：{customer}
+地址：{address}
+本条款以电子方式签署：客户填写签署人姓名、职位并勾选同意，即视为客户签署本条款，与书面签字具有同等效力。签署时间、签署人及条款原文由系统存档。`;
+
+export const DEFAULT_TERMS_EN = `These Terms of Service are between {company}, operator of the {brand} platform ("we"), and {customer} ("you"). Please read them carefully, enter the signer's details and accept to start using your account.
 
 1. Your account
 1.1 Your account is for you or your company only. Keep your password safe; orders placed through your account are treated as placed by you.
@@ -72,7 +79,14 @@ export const DEFAULT_TERMS_EN = `These Terms of Service are between {brand} ("we
 7.2 Recipient information is used only for creating labels and delivery.
 7.3 If these terms change materially, you will be asked to accept them again when you sign in.
 
-If you have any questions, please contact support.`;
+If you have any questions, please contact support.
+
+8. Parties
+Provider: {company} (operator of the {brand} platform)
+Address: {companyAddress}
+Customer: {customer}
+Address: {address}
+These terms are signed electronically: entering the signer's name and title and checking the acceptance box constitutes the customer's signature, with the same effect as a handwritten signature. The signing time, signer and the exact text are archived by the system.`;
 
 export interface Terms {
   zh: string;
@@ -102,14 +116,22 @@ export function partyOf(c: Customer): TermsParty {
   return { customer: c.name, address: c.address, contact: c.contact, title: c.contactTitle, phone: c.phone, email: c.portalEmail ?? c.email };
 }
 
-/** 把 {brand}、{cancelHours}、{customer} 等换成当前设置和客户信息 */
+/** 服务方（我们公司）：法人名称和地址，来自“设置 → 官网与联系方式” */
+export function provider() {
+  const s = getSettings();
+  return { company: s.site?.company?.trim() || s.brandName, address: s.site?.address?.trim() || "", brand: s.brandName };
+}
+
+/** 把 {company}、{brand}、{cancelHours}、{customer} 等换成当前设置和客户信息 */
 export function renderTerms(text: string, party?: TermsParty) {
   const s = getSettings();
   return text
+    .replace(/\{company\}/g, provider().company)
+    .replace(/\{companyAddress\}/g, provider().address || "—")
     .replace(/\{brand\}/g, s.brandName)
     .replace(/\{cancelHours\}/g, String(s.cancelWindowHours ?? 48))
     .replace(/\{customer\}/g, party?.customer ?? "")
-    .replace(/\{address\}/g, party?.address ?? "")
+    .replace(/\{address\}/g, party?.address || "—")
     .replace(/\{contact\}/g, party?.contact ?? "")
     .replace(/\{title\}/g, party?.title ?? "");
 }
