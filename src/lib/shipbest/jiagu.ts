@@ -23,6 +23,7 @@ export const DEFAULT_JG_WAREHOUSES: Record<string, string> = {
   "307699": "196845", // uniuni-LAX-917(不预上网) · GALAX
   "581808": "196845", // Swiftx-LAX-917 · GALAX
   "580914": "196845", // USPS-D价-GA-917不预上网 · GALAX
+  "580469": "230759", // Ontrac-SG-B-XT · Ontrac-91710-230490（4820 Dorina Ct, Chino CA 91710）
 };
 
 export interface JiaguConfig {

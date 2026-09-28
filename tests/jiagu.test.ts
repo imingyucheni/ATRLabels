@@ -52,6 +52,7 @@ describe("嘉谷万邑接口", () => {
     expect(b.WarehouseID).toBe(196845); // 默认表里 GOFO 的仓库
     expect(jg.buildJiaguBody(cfg, req, 580914).WarehouseID).toBe(196845); // USPS
     expect(jg.buildJiaguBody(cfg, req, 590297).WarehouseID).toBe(229615); // UPS
+    expect(jg.buildJiaguBody(cfg, req, 580469).WarehouseID).toBe(230759); // OnTrac
     expect(jg.buildJiaguBody(cfg, req, 111).WarehouseID).toBe(999); // 后台设置的
     expect(b.OrderType).toBe(20120);
     expect(b.NeedSignService).toBe("10"); // 成人签名
@@ -149,6 +150,7 @@ describe("嘉谷万邑接口", () => {
     expect(defaultPublicName("Fedex NG末端-N · GDE")).toBe("FedEx");
     expect(defaultPublicName("uniuni-LAX-917(不预上网) · GDE")).toBe("UniUni Express");
     expect(defaultPublicName("UPS-D价-GROUND-923 · GDE")).toBe("UPS");
+    expect(defaultPublicName("Ontrac-SG-B-XT · GDE")).toBe("OnTrac");
     // ShipBest 的名称照旧（带不带“· SB”标记都一样）
     expect(defaultPublicName("GOFO-（91710）")).toBe("Gofo Express");
     expect(defaultPublicName("GOFO-（91710） · SB")).toBe("Gofo Express");
