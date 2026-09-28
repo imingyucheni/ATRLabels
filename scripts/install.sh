@@ -223,10 +223,18 @@ else
         tmp=$(mktemp -d)
         echo "下载中（约 30MB）…"
         if [ -n "$purl" ] && fetch_asset "$purl" "$tmp/app.tgz"; then
-          rm -rf "$REL.tmp" && mkdir -p "$REL.tmp" && tar -xzf "$tmp/app.tgz" -C "$REL.tmp" && rm -rf "$REL" && mv "$REL.tmp" "$REL"
+          rm -rf "$REL.tmp" && mkdir -p "$REL.tmp" && tar -xzf "$tmp/app.tgz" -C "$REL.tmp"
           rm -rf "$tmp"
-          MODE=prebuilt
-          break
+          # 包里自带版本号：和要更新的版本一致才用（防止下载时 GitHub 正好在上传下一个版本的包）
+          if [ "$(tr -d '[:space:]' < "$REL.tmp/VERSION" 2>/dev/null)" = "$SHA" ]; then
+            rm -rf "$REL" && mv "$REL.tmp" "$REL"
+            MODE=prebuilt
+            break
+          fi
+          rm -rf "$REL.tmp"
+          warn "下载到的包版本不对（GitHub 可能正在上传新版本），稍后重试…"
+          sleep 15
+          continue
         fi
         rm -rf "$tmp"
         warn "下载失败，重试…"
@@ -284,6 +292,8 @@ else
 fi
 chown -R atr:atr "$RUN_DIR" "$DATA_DIR"
 [ "$MODE" = local ] && chown -R atr:atr "$APP_DIR"
+# 配了域名（经 Caddy HTTPS 访问）时，程序只监听本机，外网不能绕过 HTTPS 直接访问 :3000 端口
+if [ -n "$DOMAIN" ] || [ -n "$OMS_DOMAIN" ]; then BIND=127.0.0.1; else BIND=0.0.0.0; fi
 cat > /etc/systemd/system/$SERVICE.service <<EOF
 [Unit]
 Description=ATR Labels ($SITE_NAME)
@@ -295,7 +305,9 @@ WorkingDirectory=$WORKDIR
 EnvironmentFile=$ENV_FILE
 Environment=NODE_ENV=production
 Environment=PORT=$PORT
-Environment=HOSTNAME=0.0.0.0
+Environment=HOSTNAME=$BIND
+# 新建的文件（数据库、备份、面单）只有程序自己能读
+UMask=0077
 Environment=NEXT_TELEMETRY_DISABLED=1
 # 报表按美西日期统计，和页面显示的时间一致
 Environment=TZ=America/Los_Angeles
@@ -308,6 +320,11 @@ WantedBy=multi-user.target
 EOF
 systemctl daemon-reload
 systemctl enable "$SERVICE" >/dev/null 2>&1
+# 已有的数据目录也收紧权限：只有程序账号能读（里面有数据库、API 密钥和客户资料）
+chmod 700 "$DATA_DIR" 2>/dev/null || true
+chmod -R go-rwx "$DATA_DIR" 2>/dev/null || true
+# 仓库地址里带 GitHub 令牌，git 配置文件只让 root 读
+for g in /opt/atrlabels/.git/config /opt/atrlabels-sandbox/.git/config; do [ -f "$g" ] && chmod 600 "$g"; done
 systemctl restart "$SERVICE"
 
 # 更新命令：atr-update
@@ -332,7 +349,7 @@ chmod +x /usr/local/bin/atr-update
 
 say "每天凌晨 3 点备份数据（保留 30 天）"
 cat > /etc/cron.d/atrlabels$SFX-backup <<EOF
-0 3 * * * root sqlite3 $DATA_DIR/atrlabels.db ".backup '$DATA_DIR/backups/atrlabels-\$(date +\%F).db'" && tar -czf $DATA_DIR/backups/files-\$(date +\%F).tgz -C $DATA_DIR labels topup samples assets 2>/dev/null; find $DATA_DIR/backups -mtime +30 -delete
+0 3 * * * root sqlite3 $DATA_DIR/atrlabels.db ".backup '$DATA_DIR/backups/atrlabels-\$(date +\%F).db'" && tar -czf $DATA_DIR/backups/files-\$(date +\%F).tgz -C $DATA_DIR labels topup samples assets 2>/dev/null; find $DATA_DIR/backups -maxdepth 1 \\( -name 'atrlabels-*.db' -o -name 'files-*.tgz' \\) -mtime +30 -delete
 EOF
 
 # Caddy 同时配置正式站和沙盒站的域名

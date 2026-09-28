@@ -43,9 +43,12 @@ export function checkPassword(input: string): boolean {
   return safeEqual(mac("pw:" + input), mac("pw:" + pw));
 }
 
+/** 管理员会话里带上密码指纹：改了 ADMIN_PASSWORD 之后，旧的登录全部失效 */
+const adminMac = (exp: string | number) => mac(`admin.${exp}.${mac("pw:" + (process.env.ADMIN_PASSWORD ?? "")).slice(0, 16)}`);
+
 export async function createSession() {
   const exp = Math.floor(Date.now() / 1000) + MAX_AGE;
-  const token = `${exp}.${mac(`admin.${exp}`)}`;
+  const token = `${exp}.${adminMac(exp)}`;
   (await cookies()).set(COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
@@ -64,7 +67,7 @@ export async function isLoggedIn(): Promise<boolean> {
   if (!token) return false;
   const [exp, sig] = token.split(".");
   if (!exp || !sig || Number(exp) < Date.now() / 1000) return false;
-  return safeEqual(sig, mac(`admin.${exp}`));
+  return safeEqual(sig, adminMac(exp));
 }
 
 /** 页面和 Server Action 开头调用：未登录则跳转到登录页。 */
@@ -76,16 +79,28 @@ export async function requireAdmin() {
 
 const failures = new Map<string, { count: number; until: number }>();
 
-/** 同一个 key 15 分钟内失败 10 次后锁定 15 分钟 */
-export function checkRateLimit(key: string): string | null {
+/**
+ * 访客 IP：取 X-Forwarded-For 的最后一段（Caddy 反向代理加上的真实来源），
+ * 第一段是访客自己可以随便填的，不能用来限流。
+ */
+export async function clientIp(): Promise<string> {
+  const h = await headers();
+  const parts = (h.get("x-forwarded-for") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  return parts[parts.length - 1] || h.get("x-real-ip") || "local";
+}
+
+/** 同一个 key 15 分钟内失败 max 次（默认 10）后锁定 15 分钟 */
+export function checkRateLimit(key: string, max = 10): string | null {
   const f = failures.get(key);
-  if (f && f.count >= 10 && f.until > Date.now()) return "尝试次数过多，请 15 分钟后再试";
+  if (f && f.count >= max && f.until > Date.now()) return "尝试次数过多，请 15 分钟后再试";
   return null;
 }
 
 export function recordFailure(key: string) {
   const f = failures.get(key);
   const now = Date.now();
+  // 过期的记录定期清掉，避免被大量不同的 key 撑大内存
+  if (failures.size > 5000) for (const [k, v] of failures) if (v.until < now) failures.delete(k);
   if (!f || f.until < now) failures.set(key, { count: 1, until: now + 15 * 60_000 });
   else f.count++;
 }
@@ -125,6 +140,8 @@ export async function destroyCustomerSession() {
 const AS_COOKIE = "atr_portal_as" + SFX;
 const AS_MAX_AGE = 4 * 3600;
 
+const usedEnterTokens = new Map<string, number>();
+
 /** 后台生成的一次性进入凭证（60 秒有效），放在跳转链接里，OMS 可以在另一个域名 */
 export function makeEnterToken(customerId: number) {
   const exp = Math.floor(Date.now() / 1000) + 60;
@@ -138,6 +155,11 @@ export async function enterAsCustomer(token: string): Promise<number | null> {
   const exp = Number(expStr);
   if (!id || !exp || !sig || exp < Date.now() / 1000 || !safeEqual(sig, mac(`enter.${id}.${exp}`))) return null;
   if (!getCustomer(id)) return null;
+  // 一次性：用过的凭证不能再用
+  const now = Date.now() / 1000;
+  for (const [k, e] of usedEnterTokens) if (e < now) usedEnterTokens.delete(k);
+  if (usedEnterTokens.has(sig)) return null;
+  usedEnterTokens.set(sig, exp);
   const asExp = Math.floor(Date.now() / 1000) + AS_MAX_AGE;
   (await cookies()).set(AS_COOKIE, `${id}.${asExp}.${mac(`as.${id}.${asExp}`)}`, {
     httpOnly: true,

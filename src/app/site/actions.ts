@@ -1,6 +1,6 @@
 "use server";
 
-import { headers } from "next/headers";
+import { clientIp } from "@/lib/auth";
 import { createLead } from "@/lib/leads";
 import { getLang } from "@/lib/prefs";
 
@@ -25,8 +25,7 @@ export async function applyAction(_: ApplyState, fd: FormData): Promise<ApplySta
   if (!values.company || !values.contact) return { error: "请填写公司 / 店铺名称和联系人", values };
   if (!values.wechat && !values.phone && !values.email) return { error: "微信、电话、邮箱至少填一个", values };
   if (values.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email)) return { error: "邮箱格式不对", values };
-  const h = await headers();
-  const ip = (h.get("x-forwarded-for") ?? "").split(",")[0].trim() || h.get("x-real-ip") || null;
+  const ip = await clientIp();
   try {
     createLead({ ...values, wechat: values.wechat || null, phone: values.phone || null, email: values.email || null, volume: values.volume || null, note: values.note || null, lang: await getLang() }, ip);
   } catch (e) {

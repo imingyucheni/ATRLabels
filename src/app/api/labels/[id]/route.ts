@@ -10,6 +10,9 @@ import { getT } from "@/lib/prefs";
 const TEXT = { "Content-Type": "text/plain; charset=utf-8" };
 
 /** 面单文件：后台可以看全部，客户只能看自己的 */
+
+/** 文件名只留安全字符（运单号来自服务商，防止引号等破坏响应头） */
+const fileSafe = (v: string) => v.replace(/[^\w.-]+/g, "_").slice(0, 80);
 export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const t = await getT();
   const s = getShipment(Number((await ctx.params).id));
@@ -27,7 +30,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
     if (!admin) return new Response(t("这张面单已取消作废，不能再打印"), { status: 410, headers: TEXT });
     const v = await voidLabel(s);
     return new Response(new Uint8Array(v!), {
-      headers: { "Content-Type": "application/pdf", "Content-Disposition": `inline; filename="VOID-${s.trackingNo || s.customNo}.pdf"`, "Cache-Control": "private, no-store" },
+      headers: { "Content-Type": "application/pdf", "Content-Disposition": `inline; filename="VOID-${fileSafe(s.trackingNo || s.customNo)}.pdf"`, "Cache-Control": "private, no-store" },
     });
   }
   // 默认返回加印 SKU 的版本；?raw=1 返回 ShipBest 原始面单
@@ -47,7 +50,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
   return new Response(new Uint8Array(buf), {
     headers: {
       "Content-Type": mime || "application/octet-stream",
-      "Content-Disposition": `${download ? "attachment" : "inline"}; filename="${s.trackingNo || s.customNo}.${ext}"`,
+      "Content-Disposition": `${download ? "attachment" : "inline"}; filename="${fileSafe(s.trackingNo || s.customNo)}.${ext}"`,
       "Cache-Control": "private, no-store",
     },
   });

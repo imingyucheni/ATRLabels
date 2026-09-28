@@ -14,7 +14,7 @@ export default async function ResubmitPage({ params, searchParams }: { params: P
   const s = getShipment(Number((await params).id));
   // 从批量下单页过来的：出单后回到那个批次（只接受站内地址）
   const back = (await searchParams).back;
-  const returnTo = back && back.startsWith("/") && !back.startsWith("//") ? back : undefined;
+  const returnTo = back && back.startsWith("/") && !back.startsWith("//") && !back.includes("\\") ? back : undefined;
   if (!s) notFound();
   const lang = await getLang();
   const t = makeT(lang);

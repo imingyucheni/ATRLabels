@@ -241,10 +241,11 @@ export function saveTerms(zh: string, en: string, bump: boolean, changeNote = ""
   });
 }
 
-let ready = false;
+// 按数据库连接记：切换正式 / 测试环境、恢复备份后换了数据库文件，要重新建表
+let ready: unknown = null;
 function conn() {
   const c = db();
-  if (!ready) {
+  if (ready !== c) {
     c.exec(`CREATE TABLE IF NOT EXISTS terms_acceptances (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       customer_id INTEGER NOT NULL,
@@ -262,7 +263,7 @@ function conn() {
     // 签署时条款原文的 SHA-256：以后可以核对存档没有被改过
     const cols = (c.prepare("PRAGMA table_info(terms_acceptances)").all() as { name: string }[]).map((x) => x.name);
     if (!cols.includes("text_sha256")) c.exec("ALTER TABLE terms_acceptances ADD COLUMN text_sha256 TEXT");
-    ready = true;
+    ready = c;
   }
   return c;
 }

@@ -15,6 +15,7 @@ import {
 import { postAdjustment } from "./ledger";
 import type { MarkupRule } from "./pricing";
 import { describeRow, guessHeaderRow } from "./sheetGuess";
+import { assertZipSize } from "./zip";
 
 /* ---------------- 读取表格 ---------------- */
 
@@ -44,6 +45,7 @@ export function cellText(v: ExcelJS.CellValue): string {
 
 async function parseXlsx(buf: Buffer, sheet: "largest" | "first"): Promise<string[][]> {
   const wb = new ExcelJS.Workbook();
+  assertZipSize(buf);
   await wb.xlsx.load(buf as unknown as ArrayBuffer);
   // 取数据最多的工作表
   // 补差表取数据最多的工作表；批量下单模板取第一个（第二个是说明）

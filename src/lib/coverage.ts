@@ -11,6 +11,7 @@ import { cellText } from "./adjustments";
 import { db, getSettings, listChannels } from "./db";
 import { extractRates, importRates, type RateRow } from "./rates";
 import { isJiaguCode } from "./shipbest/jiagu";
+import { assertZipSize } from "./zip";
 
 export interface CoverageSheet {
   sheet: string;
@@ -113,6 +114,7 @@ export async function parseCoverageWorkbook(filename: string, buf: Buffer, gatew
   if (!filename.toLowerCase().endsWith(".xlsx")) throw new Error("请上传 .xlsx 文件");
   const gw = (gateway || getSettings().originGateway || "LAX").trim().toUpperCase();
   const wb = new ExcelJS.Workbook();
+  assertZipSize(buf);
   await wb.xlsx.load(buf as unknown as ArrayBuffer);
   const sheets: Parsed["sheets"] = [];
   for (const ws of wb.worksheets) {

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { checkPassword, checkRateLimit, clearFailures, createSession, destroySession, hashPassword, recordFailure, requireAdmin } from "@/lib/auth";
+import { checkPassword, checkRateLimit, clearFailures, clientIp, createSession, destroySession, hashPassword, recordFailure, requireAdmin } from "@/lib/auth";
 import { randomBytes } from "node:crypto";
 import { headers } from "next/headers";
 import {
@@ -89,11 +89,13 @@ import {
 /* ---------------- 登录 ---------------- */
 
 export async function loginAction(_: unknown, fd: FormData) {
-  const key = "admin:" + ((await headers()).get("x-forwarded-for") ?? "local").split(",")[0].trim();
-  const limited = checkRateLimit(key);
+  const key = "admin:" + (await clientIp());
+  // 除了按 IP，还有一个全站的总次数限制：换 IP 也不能无限试密码
+  const limited = checkRateLimit(key) ?? checkRateLimit("admin:*", 50);
   if (limited) return { error: limited };
   if (!checkPassword(String(fd.get("password") ?? ""))) {
     recordFailure(key);
+    recordFailure("admin:*");
     return { error: "密码错误" };
   }
   clearFailures(key);

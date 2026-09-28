@@ -80,7 +80,8 @@ export class HttpShipBestClient implements ShipBestClient {
     try {
       json = JSON.parse(text);
     } catch {
-      throw new ShipBestError(res.status, `非 JSON 响应: ${text.slice(0, 200)}`);
+      // 网关超时（502/504 的 HTML 页）等：不是服务商的明确拒绝，按“结果未知”处理，不能当作下单失败删单退款
+      throw new Error(`ShipBest 接口返回异常（HTTP ${res.status}）${text.slice(0, 120)}`);
     }
     if (json.code !== 0) throw new ShipBestError(json.code, json.message, json.requestId);
     return json.data;

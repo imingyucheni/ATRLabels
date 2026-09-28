@@ -454,9 +454,14 @@ export async function refreshShipment(id: number): Promise<Shipment> {
   };
   if (d.feePrice !== null && d.feePrice !== undefined && Number(d.feePrice) > 0) patch.actualCost = Number(d.feePrice);
 
+  // 查询要等服务商返回，期间可能已经取消 / 确认取消：用最新的状态判断，不能用查询前的旧快照
+  const cur = getShipment(id) ?? s;
   if (d.status === 6) {
-    if (s.status !== "cancelled") Object.assign(patch, cancelPatch(s, wasLabeled(s)));
-  } else if (s.status !== "cancel_requested") {
+    if (cur.status !== "cancelled") Object.assign(patch, cancelPatch(cur, wasLabeled(cur)));
+  } else if (cur.status === "cancelled") {
+    // 本地已经取消并退款的单不能被刷新“复活”；服务商那边却显示已出面单的，提示管理员核实
+    if (d.status === 4) patch.errorMsg = "本地已取消并退款，但服务商显示已出面单，请和服务商核实是否已作废";
+  } else if (cur.status !== "cancel_requested") {
     patch.status = d.status === 4 ? "labeled" : d.status === 3 ? "exception" : "pending";
     // 嘉谷：下单 5 分钟还没有面单基本就是出问题了 → 标异常，让客户联系我们或先换渠道重新下单，我们再找嘉谷处理
     if (patch.status === "pending" && !patch.labelUrl && isJiaguCode(s.channelCode) && labelOverdue(s.createdAt)) {
@@ -480,7 +485,7 @@ export async function refreshShipment(id: number): Promise<Shipment> {
   updateShipment(id, patch);
   settleCancel(id);
   // 刚变成异常：通知客户
-  if (patch.status === "exception" && s.status !== "exception") {
+  if (patch.status === "exception" && cur.status !== "exception") {
     const ref = s.customerRef || s.customNo;
     // 通知邮件给客户看：去掉服务商名称等内部信息
     const reason = patch.errorMsg ? publicError(patch.errorMsg) : "";
@@ -531,7 +536,8 @@ function cancelPatch(s: Shipment, charged: boolean, fees?: { cancelFee: number; 
   const st = getSettings();
   const cost = s.actualCost ?? s.quotedCost;
   // 向客户收的取消费有零头时向上取到分
-  const cancelFee = fees?.cancelFee ?? (charged ? roundUp((s.price * st.cancelFeePercent) / 100, 0.01) : 0);
+  // 公司自用账号不向自己收取消费（钱包本来就不扣），记 0，报表里才不会算成收入
+  const cancelFee = isInternalCustomer(s.customerId) ? 0 : fees?.cancelFee ?? (charged ? roundUp((s.price * st.cancelFeePercent) / 100, 0.01) : 0);
   const sbCancelFee = fees?.sbCancelFee ?? (charged ? round2((cost * st.sbCancelFeePercent) / 100) : 0);
   return {
     status: "cancelled",
@@ -580,6 +586,9 @@ export async function requestCancel(
 export function confirmCancelled(id: number, cancelFee: number, sbCancelFee: number) {
   const s = getShipment(id);
   if (!s) throw new Error("记录不存在");
+  if (s.status !== "cancel_requested") throw new Error("这张面单不在取消处理中");
+  if (!Number.isFinite(cancelFee) || cancelFee < 0 || cancelFee > s.price) throw new Error("客户取消手续费要在 0 到客户价之间");
+  if (!Number.isFinite(sbCancelFee) || sbCancelFee < 0) throw new Error("服务商取消费不能是负数");
   updateShipment(id, { ...cancelPatch(s, true, { cancelFee, sbCancelFee }), errorMsg: null });
   settleCancel(id);
 }
@@ -597,7 +606,7 @@ export function defaultCancelFees(s: Shipment) {
   if (!wasLabeled(s)) return { cancelFee: 0, sbCancelFee: 0 };
   const st = getSettings();
   return {
-    cancelFee: round2((s.price * st.cancelFeePercent) / 100),
+    cancelFee: isInternalCustomer(s.customerId) ? 0 : roundUp((s.price * st.cancelFeePercent) / 100, 0.01),
     sbCancelFee: round2(((s.actualCost ?? s.quotedCost) * st.sbCancelFeePercent) / 100),
   };
 }
@@ -616,20 +625,29 @@ export interface ResubmitResult {
  * 2. 新单出单成功后关闭原异常单：先向服务商取消；服务商那边本身就是异常、没出过面单的，直接取消并全额退回；
  *    其他情况（例如嘉谷超时、可能稍后又出面单）标记“取消处理中”，和服务商确认后再点“确认已取消”。
  */
+const resubmitting = new Set<number>();
+
 export async function resubmitShipment(input: Omit<CreateInput, "customerId" | "createdBy"> & { oldId: number }): Promise<ResubmitResult> {
   const old = getShipment(input.oldId);
   if (!old) throw new Error("记录不存在");
   if (old.status !== "exception") throw new Error("只有出单异常的订单可以修改后重新下单");
   if (old.replacedBy) throw new Error("这张订单已经修改后重新下过单了");
-
-  const id = await createLabel({
-    ...input,
-    customerId: old.customerId,
-    customerRef: input.customerRef ?? old.customerRef ?? undefined,
-    createdBy: "admin",
-  });
+  // 防止连点两次：同一张单正在重新下单时，第二次直接拒绝（不会下出两张新单）
+  if (resubmitting.has(old.id)) throw new Error("这张订单正在重新下单，请稍候");
+  resubmitting.add(old.id);
+  let id: number;
+  try {
+    id = await createLabel({
+      ...input,
+      customerId: old.customerId,
+      customerRef: input.customerRef ?? old.customerRef ?? undefined,
+      createdBy: "admin",
+    });
+    updateShipment(old.id, { replacedBy: id });
+  } finally {
+    resubmitting.delete(old.id);
+  }
   const fresh = getShipment(id)!;
-  updateShipment(old.id, { replacedBy: id });
   // 原单属于某个批量导入批次的，批次里这一行改成新单，整批打印、导出都跟着新单走
   db()
     .prepare("UPDATE batch_job_rows SET shipment_id = ?, channel_code = ?, channel_name = ?, price = ? WHERE shipment_id = ?")
@@ -666,12 +684,12 @@ export async function resubmitShipment(input: Omit<CreateInput, "customerId" | "
  * 已扣款但面单还没生成的订单（最近 3 天），定时向 ShipBest 刷新一次。
  * 避免客户离开页面后面单一直停在“等待出单”，需要逐单点“刷新”。
  */
-export async function refreshPendingShipments(limit = 30) {
+export async function refreshPendingShipments(limit = 60) {
   const ids = (
     db()
       .prepare(
         `SELECT id FROM shipments WHERE status = 'pending' AND created_at >= datetime('now', '-3 days')
-         AND created_at <= datetime('now', '-20 seconds') ORDER BY id LIMIT ?`,
+         AND created_at <= datetime('now', '-20 seconds') ORDER BY id DESC LIMIT ?`,
       )
       .all(limit) as { id: number }[]
   ).map((r) => r.id);

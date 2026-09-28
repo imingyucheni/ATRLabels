@@ -17,10 +17,11 @@ export interface ProviderEvent {
   lastAt: string;
 }
 
-let ready = false;
+// 按数据库连接记：切换正式 / 测试环境、恢复备份后换了数据库文件，要重新建表
+let ready: unknown = null;
 function conn() {
   const c = db();
-  if (!ready) {
+  if (ready !== c) {
     c.exec(`CREATE TABLE IF NOT EXISTS provider_events (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       custom_no TEXT NOT NULL,
@@ -33,7 +34,7 @@ function conn() {
       last_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS provider_events_no ON provider_events (custom_no, id);`);
-    ready = true;
+    ready = c;
   }
   return c;
 }

@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import {
   checkRateLimit,
   clearFailures,
+  clientIp,
   createCustomerSession,
   destroyCustomerSession,
   hashPassword,
@@ -36,22 +37,24 @@ import { NOTIFY_EVENTS, saveNotifyPrefs, type NotifyPrefs } from "@/lib/notify";
 import { checkAddress, needsAck, type AddressCheck } from "@/lib/addressCheck";
 import { acceptTerms, hasAcceptedTerms, partyOf } from "@/lib/terms";
 
-async function clientIp() {
-  const h = await headers();
-  return (h.get("x-forwarded-for") ?? "").split(",")[0].trim() || h.get("x-real-ip") || "local";
-}
 
 /* ---------------- 登录 ---------------- */
+
+const DUMMY_HASH = hashPassword("dummy-password-for-timing");
 
 export async function portalLoginAction(_: unknown, fd: FormData) {
   const email = str(fd.get("email")).toLowerCase();
   const password = String(fd.get("password") ?? "");
   const key = `portal:${email}:${await clientIp()}`;
-  const limited = checkRateLimit(key);
+  // 按 IP + 按账号各限一次：换 IP 也不能无限试同一个账号的密码
+  const limited = checkRateLimit(key) ?? checkRateLimit(`portal:${email}`, 30);
   if (limited) return { error: await tMsg(limited), email };
   const c = email ? getCustomerLogin(email) : null;
-  if (!c || !c.enabled || !verifyPassword(password, c.passwordHash)) {
+  // 账号不存在时也算一次密码，响应时间一样，不能借此试出哪些邮箱开了账号
+  const ok = verifyPassword(password, c?.passwordHash ?? DUMMY_HASH);
+  if (!c || !c.enabled || !c.passwordHash || !ok) {
     recordFailure(key);
+    recordFailure(`portal:${email}`);
     return { error: await tMsg("邮箱或密码错误，或账号未开通"), email };
   }
   clearFailures(key);
@@ -76,7 +79,7 @@ export async function acceptTermsAction(input: { signer: string; signerTitle: st
     signer,
     signerTitle,
     lang: await getLang(),
-    ip: h.get("x-forwarded-for")?.split(",")[0].trim() || h.get("x-real-ip"),
+    ip: await clientIp(),
     userAgent: h.get("user-agent"),
   });
   redirect("/portal");
@@ -302,8 +305,9 @@ export async function portalForgotAction(_: unknown, fd: FormData) {
   if (limited) return { error: await tMsg(limited) };
   recordFailure(key); // 每次申请都计数，防止被刷
   if (!email) return { error: await tMsg("请填写登录邮箱") };
+  // 链接地址用服务器配置的网址，不信任请求头（防止被伪造成别的域名骗取重置链接）
   const h = await headers();
-  const base = `${h.get("x-forwarded-proto") ?? "http"}://${h.get("x-forwarded-host") ?? h.get("host")}`;
+  const base = process.env.APP_URL || process.env.OMS_URL || `${h.get("x-forwarded-proto") ?? "http"}://${h.get("host")}`;
   const r = await requestReset(email, base);
   const t = await getT();
   return {

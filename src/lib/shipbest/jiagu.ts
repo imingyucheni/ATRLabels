@@ -225,7 +225,8 @@ export class JiaguClient {
     try {
       j = JSON.parse(text);
     } catch {
-      throw new JiaguError(res.status, `接口返回异常（HTTP ${res.status}）${text.slice(0, 120)}`);
+      // 网关超时等不是嘉谷的明确拒绝：按“结果未知”处理（普通错误），不能当作下单失败删单退款
+      throw new Error(`嘉谷接口返回异常（HTTP ${res.status}）${text.slice(0, 120)}`);
     }
     return {
       ok: !!(j.IsSuccess ?? j.isSuccess),
@@ -281,6 +282,8 @@ export class JiaguClient {
 
   async createOrder(customNo: string, code: string, req: ShipmentRequest, productName = code) {
     const id = Number(code.slice(JG_PREFIX.length));
+    // 提交前先记下这是嘉谷的单：万一提交超时、结果未知，之后刷新也知道去嘉谷查（查不到面单 5 分钟后转异常）
+    if (!jgOrders.get(customNo)) jgOrders.save({ customNo, productCode: code, productName, status: 2 });
     const r = await this.call<{ Identifier?: string; MasterTrackingNbr?: string; TrackingNbr?: string; MasterLabelUrl?: string; labels?: { labelUri?: string }[] }>(
       "/api/gts/ShippingLabel",
       { ...buildJiaguBody(this.cfg, req, id), OrderNbr: customNo, ProductID: id },

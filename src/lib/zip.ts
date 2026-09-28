@@ -88,3 +88,30 @@ export function zipStore(files: { name: string; data: Uint8Array }[], date = new
   end.writeUInt32LE(offset, 16);
   return Buffer.concat([...locals, ...centrals, end]);
 }
+
+/**
+ * 解压前检查 ZIP（xlsx 就是 ZIP）：按中央目录里记录的解压后大小，
+ * 总量超过 maxBytes 或文件数太多就拒绝，防止“压缩炸弹”把服务器内存撑爆。
+ */
+export function assertZipSize(buf: Buffer, maxBytes = 200 * 1024 * 1024, maxEntries = 2000) {
+  // 找中央目录结尾记录（EOCD，签名 0x06054b50），在文件最后 64KB 内
+  let eocd = -1;
+  for (let i = buf.length - 22; i >= Math.max(0, buf.length - 65557); i--) {
+    if (buf.readUInt32LE(i) === 0x06054b50) { eocd = i; break; }
+  }
+  if (eocd < 0) throw new Error("文件格式不对，请上传 .xlsx 文件");
+  const count = buf.readUInt16LE(eocd + 10);
+  let p = buf.readUInt32LE(eocd + 16);
+  if (count > maxEntries) throw new Error("文件内容太多，请拆分后再上传");
+  let total = 0;
+  for (let n = 0; n < count; n++) {
+    if (p + 46 > buf.length || buf.readUInt32LE(p) !== 0x02014b50) throw new Error("文件格式不对，请上传 .xlsx 文件");
+    const compressed = buf.readUInt32LE(p + 20);
+    const size = buf.readUInt32LE(p + 24);
+    // ZIP64（大小记成 0xFFFFFFFF）或压缩比异常大（超过 200 倍），都当作可疑文件
+    if (size === 0xffffffff || compressed === 0xffffffff || (compressed > 0 && size / compressed > 200 && size > 10 * 1024 * 1024)) throw new Error("文件内容太多，请拆分后再上传");
+    total += size;
+    if (total > maxBytes) throw new Error("文件内容太多，请拆分后再上传");
+    p += 46 + buf.readUInt16LE(p + 28) + buf.readUInt16LE(p + 30) + buf.readUInt16LE(p + 32);
+  }
+}

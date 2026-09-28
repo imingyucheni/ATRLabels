@@ -10,7 +10,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
   const id = Number((await ctx.params).id);
   if (!getCustomer(id)) return new Response((await getT())("客户不存在"), { status: 404, headers: { "Content-Type": "text/plain; charset=utf-8" } });
   const url = new URL(req.url);
-  const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? url.host;
+  const host = req.headers.get("host") ?? url.host;
   const proto = req.headers.get("x-forwarded-proto") ?? url.protocol.replace(":", "");
   const origin = omsOrigin() || `${proto}://${host}`;
   return NextResponse.redirect(`${origin}/portal/enter?t=${encodeURIComponent(makeEnterToken(id))}`);

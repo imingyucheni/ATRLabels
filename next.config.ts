@@ -5,6 +5,20 @@ const nextConfig: NextConfig = {
   ...(process.env.BUILD_STANDALONE === "1" ? { output: "standalone" as const } : {}),
   // 数据目录和测试不要打进发布包
   outputFileTracingExcludes: { "*": ["data/**", "data-demo/**", "tests/**", "scripts/**", ".env*"] },
+  // 基本安全响应头：禁止别的网站用 iframe 嵌入（防点击劫持）、禁止浏览器猜文件类型、HTTPS 下强制 HTTPS
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          { key: "Strict-Transport-Security", value: "max-age=15552000" },
+        ],
+      },
+    ];
+  },
   serverExternalPackages: ["better-sqlite3", "exceljs", "pdf-lib", "nodemailer", "unpdf"],
   experimental: {
     serverActions: {
