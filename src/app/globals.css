@@ -1312,3 +1312,7 @@ tr.row-disabled td:first-child { opacity: 0.55; }
 .recon-days summary { cursor: pointer; font-size: 13.5px; color: var(--muted); }
 .recon-days .table-wrap { margin-top: 8px; }
 @media (max-width: 900px) { .recon-sum { grid-template-columns: repeat(2, minmax(0, 1fr)); } .recon-sum .total { grid-column: 1 / -1; } }
+
+/* 异常单：修改后重新下单 */
+.resubmit-cta { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; border-color: color-mix(in srgb, var(--accent) 35%, var(--line)); background: var(--accent-soft); }
+.resubmit-cta b { font-size: 15px; }

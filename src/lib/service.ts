@@ -592,13 +592,68 @@ export function withdrawCancel(id: number) {
   updateShipment(id, { status: s.labelPath ? "labeled" : "pending", errorMsg: null });
 }
 
-/** 取消费默认值（给页面预填用） */
+/** 取消费默认值（给页面预填用）：没出过面单的不收取消费 */
 export function defaultCancelFees(s: Shipment) {
+  if (!wasLabeled(s)) return { cancelFee: 0, sbCancelFee: 0 };
   const st = getSettings();
   return {
     cancelFee: round2((s.price * st.cancelFeePercent) / 100),
     sbCancelFee: round2(((s.actualCost ?? s.quotedCost) * st.sbCancelFeePercent) / 100),
   };
+}
+
+/* ---------------- 异常单修改后重新下单 ---------------- */
+
+export interface ResubmitResult {
+  id: number;
+  /** 原异常单：cancelled 已取消并退回 / requested 服务商取消未成功，等人工确认 */
+  old: "cancelled" | "requested";
+}
+
+/**
+ * 出单异常的订单（例如体积重量不对被服务商拒绝），修改信息后重新下单：
+ * 1. 用改好的信息给同一个客户下一张新单（可以换渠道，价格按这个客户的规则）；
+ * 2. 新单出单成功后关闭原异常单：先向服务商取消；服务商那边本身就是异常、没出过面单的，直接取消并全额退回；
+ *    其他情况（例如嘉谷超时、可能稍后又出面单）标记“取消处理中”，和服务商确认后再点“确认已取消”。
+ */
+export async function resubmitShipment(input: Omit<CreateInput, "customerId" | "createdBy"> & { oldId: number }): Promise<ResubmitResult> {
+  const old = getShipment(input.oldId);
+  if (!old) throw new Error("记录不存在");
+  if (old.status !== "exception") throw new Error("只有出单异常的订单可以修改后重新下单");
+  if (old.replacedBy) throw new Error("这张订单已经修改后重新下过单了");
+
+  const id = await createLabel({
+    ...input,
+    customerId: old.customerId,
+    customerRef: input.customerRef ?? old.customerRef ?? undefined,
+    createdBy: "admin",
+  });
+  const fresh = getShipment(id)!;
+  updateShipment(old.id, { replacedBy: id });
+  logProviderEvent(old.customNo, "系统", "修改后重新下单", null, `新单 ${fresh.customNo}`);
+
+  const provider = providerOf(old.channelCode);
+  try {
+    await getShipBestClient().cancelOrder(old.orderNo ? { orderNo: old.orderNo } : { customNo: old.customNo });
+    logProviderEvent(old.customNo, provider, "申请取消", null, "成功");
+    updateShipment(old.id, { ...cancelPatch(old, wasLabeled(old)), sbStatus: 6, errorMsg: `已修改后重新下单（新单 ${fresh.customNo}），原单已取消` });
+    settleCancel(old.id);
+    return { id, old: "cancelled" };
+  } catch (e) {
+    const msg = (e as Error).message;
+    logProviderEvent(old.customNo, provider, "申请取消", e instanceof ShipBestError ? e.code : null, `失败：${msg}`);
+    if (old.sbStatus === 3 && !wasLabeled(old)) {
+      // 服务商那边就是异常单、没有出面单，不会扣费：本地取消并全额退回
+      updateShipment(old.id, { ...cancelPatch(old, false), errorMsg: `已修改后重新下单（新单 ${fresh.customNo}）。服务商那边是异常单、没有出面单，原单已取消并全额退回` });
+      settleCancel(old.id);
+      return { id, old: "cancelled" };
+    }
+    updateShipment(old.id, {
+      status: "cancel_requested",
+      errorMsg: `已修改后重新下单（新单 ${fresh.customNo}）。原单向服务商取消未成功：${msg}。请和服务商确认没有扣费后点“确认已取消”（没出面单的取消费填 0）`,
+    });
+    return { id, old: "requested" };
+  }
 }
 
 /* ---------------- 后台自动取回面单 ---------------- */

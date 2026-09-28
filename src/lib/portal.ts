@@ -67,6 +67,8 @@ export interface PortalShipment {
   hasLabel: boolean;
   labelMime: string | null;
   problem: string | null;
+  /** 客服修改后重新下单的新单（这张原单已取消） */
+  replacedBy: number | null;
   sender: Address;
   recipient: Address;
   pkg: PackageInfo;
@@ -100,6 +102,7 @@ export function toPortalShipment(s: Shipment): PortalShipment {
     hasLabel: !!s.labelPath && s.status !== "cancelled",
     labelMime: s.labelMime,
     problem: s.status === "exception" ? publicError(s.errorMsg ?? undefined) : null,
+    replacedBy: s.replacedBy,
     sender: s.sender,
     recipient: s.recipient,
     pkg: s.pkg,

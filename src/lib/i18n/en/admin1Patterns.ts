@@ -12,6 +12,10 @@ export const admin1Patterns: [RegExp, string][] = [
   [/^已经有 (\d+) 张正式订单，不能清空（只能在上线前使用）$/, "There are already $1 live orders, so test data can't be cleared (only available before go-live)"],
   // 对账单说明（按“ · ”拆开逐段翻译）：已取消的面单
   [/^已取消（原价 ([\d.]+)，已退 ([\d.]+)）$/, "Cancelled (orig. $1, refunded $2)"],
+  // 异常单修改后重新下单
+  [/^已修改后重新下单（新单 (\S+)），原单已取消$/, "Fixed and re-shipped as $1; this order was cancelled"],
+  [/^已修改后重新下单（新单 (\S+)）。服务商那边是异常单、没有出面单，原单已取消并全额退回$/, "Fixed and re-shipped as $1. The provider never issued a label for this order, so it was cancelled and fully refunded"],
+  [/^已修改后重新下单（新单 (\S+)）。原单向服务商取消未成功：(.+)。请和服务商确认没有扣费后点“确认已取消”（没出面单的取消费填 0）$/, "Fixed and re-shipped as $1. Cancelling this order with the provider failed: $2. Confirm with the provider that it wasn't charged, then click “Confirm cancelled” (cancel fee 0 if no label was issued)"],
   // 嘉谷万邑
   [/^嘉谷返回“(.+)”，邮编 (\S+) 不在派送范围$/, "Jiagu returned “$1”: ZIP $2 is outside the service area"],
   [/^嘉谷返回“(.+)”，邮编 (\S+) 不在派送范围；ShipBest 同承运商渠道能送这个邮编，可能是嘉谷的分区表或仓库设置问题，建议找嘉谷核对$/, "Jiagu returned “$1”: ZIP $2 is outside the service area. The same carrier via ShipBest delivers to this ZIP, so this may be a Jiagu zone-table or warehouse setup issue; check with Jiagu"],

@@ -58,6 +58,9 @@ export default async function PortalShipmentDetail({ params }: { params: Promise
         <h1 style={{ margin: 0 }}>{s.customerRef || s.customNo} <StatusBadge status={s.status} test={s.isTest} /></h1>
         <Link href="/portal/shipments">{t("← 返回列表")}</Link>
       </div>
+      {s.replacedBy && (
+        <div className="alert ok">{t("这张订单已由客服修改后重新下单，原单已取消")}{t("：")}<Link href={`/portal/shipments/${s.replacedBy}`}>{t("查看新单 →")}</Link></div>
+      )}
       {s.problem && <div className="alert err">{t("订单异常：{problem}。请联系客服处理{contact}，未出面单的订单运费会全额退回。", { problem: tm(s.problem), contact: contact ? t("（{contact}）", { contact }) : "" })}</div>}
       {s.status === "exception" && (
         <div className="alert warn">

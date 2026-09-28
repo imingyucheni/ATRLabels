@@ -2,7 +2,7 @@ import LabelActions from "@/components/LabelActions";
 import { fmtTime, TZ_LABEL } from "@/lib/time";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getCustomer, getSettings, getShipment, listAdjustments, shipmentProfit, STATUS_LABEL } from "@/lib/db";
+import { getCustomer, getSettings, getShipment, listAdjustments, replacedFrom, shipmentProfit, STATUS_LABEL } from "@/lib/db";
 import { isPaperSize } from "@/lib/labelLayout";
 import { money } from "@/lib/pricing";
 import { defaultCancelFees, JG_LABEL_TIMEOUT_MIN, JG_LABEL_TIMEOUT_MSG, providerOf } from "@/lib/service";
@@ -85,7 +85,25 @@ export default async function ShipmentDetail({ params }: { params: Promise<{ id:
         <Link href="/shipments">{t("← 返回列表")}</Link>
       </div>
 
-      {s.errorMsg && <div className={`alert ${s.status === "exception" ? "err" : "warn"}`}>{tm(s.errorMsg)}</div>}
+      {/* 已经修改后重新下单、原单也取消了：下面那条“新单”提示就够了 */}
+      {s.errorMsg && !(s.replacedBy && s.status === "cancelled") && <div className={`alert ${s.status === "exception" ? "err" : "warn"}`}>{tm(s.errorMsg)}</div>}
+      {s.status === "exception" && !s.replacedBy && (
+        <div className="card resubmit-cta">
+          <div>
+            <b>{t("知道异常原因了？")}</b>
+            <p className="small muted" style={{ margin: "2px 0 0" }}>{t("比如体积、重量填错了：修改后重新下单，原订单的信息会自动带过去。新单出单成功后，这张异常单自动取消，费用退回。")}</p>
+          </div>
+          <Link className="btn primary" href={`/shipments/${s.id}/resubmit`}>{t("修改后重新下单")}</Link>
+        </div>
+      )}
+      {s.replacedBy && (() => {
+        const n = getShipment(s.replacedBy);
+        return <div className="alert ok">{t("这张订单已经修改后重新下单")}{t("：")}<Link href={`/shipments/${s.replacedBy}`}>{t("新单 {no} →", { no: n?.customNo ?? String(s.replacedBy) })}</Link></div>;
+      })()}
+      {(() => {
+        const from = replacedFrom(s.id);
+        return from ? <div className="alert">{t("由异常单修改后重新下单")}{t("：")}<Link href={`/shipments/${from.id}`}>{t("原单 {no}", { no: from.customNo })}</Link></div> : null;
+      })()}
 
       <div className="grid2">
         <div className="card">

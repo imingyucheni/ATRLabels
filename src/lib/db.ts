@@ -229,6 +229,8 @@ function migrate(conn: Database.Database) {
   if (!cols.includes("zone")) conn.exec("ALTER TABLE shipments ADD COLUMN zone TEXT");
   // 面单上是否已经印了 SKU（下载面单时自动检查）：yes 有 / no 没有 / image 图片面单，看不出来
   if (!cols.includes("label_sku")) conn.exec("ALTER TABLE shipments ADD COLUMN label_sku TEXT");
+  // 异常单修改后重新下单：原单记下新单的 id
+  if (!cols.includes("replaced_by")) conn.exec("ALTER TABLE shipments ADD COLUMN replaced_by INTEGER");
   const bcols = (conn.prepare("PRAGMA table_info(adjustment_batches)").all() as { name: string }[]).map((c) => c.name);
   if (!bcols.includes("header_json")) conn.exec("ALTER TABLE adjustment_batches ADD COLUMN header_json TEXT");
   const acols = (conn.prepare("PRAGMA table_info(adjustments)").all() as { name: string }[]).map((c) => c.name);
@@ -858,6 +860,8 @@ export interface Shipment {
   labelMime: string | null;
   /** 面单自带 SKU 检查结果：yes 有 / no 没有 / image 图片面单无法判断 / null 还没检查 */
   labelSku: LabelSku | null;
+  /** 修改后重新下单的新单 id（这张原单已被替代） */
+  replacedBy: number | null;
   cancelFee: number | null;
   sbCancelFee: number | null;
   refundAmount: number | null;
@@ -906,6 +910,7 @@ interface ShipmentRow {
   label_path: string | null;
   label_mime: string | null;
   label_sku: string | null;
+  replaced_by: number | null;
   cancel_fee: number | null;
   sb_cancel_fee: number | null;
   refund_amount: number | null;
@@ -948,6 +953,7 @@ function toShipment(r: ShipmentRow): Shipment {
     labelPath: r.label_path,
     labelMime: r.label_mime,
     labelSku: (r.label_sku as LabelSku | null) ?? null,
+    replacedBy: r.replaced_by ?? null,
     cancelFee: r.cancel_fee,
     sbCancelFee: r.sb_cancel_fee,
     refundAmount: r.refund_amount,
@@ -1026,6 +1032,7 @@ const COLUMN_MAP: Record<string, string> = {
   labelPath: "label_path",
   labelMime: "label_mime",
   labelSku: "label_sku",
+  replacedBy: "replaced_by",
   cancelFee: "cancel_fee",
   sbCancelFee: "sb_cancel_fee",
   refundAmount: "refund_amount",
@@ -1044,6 +1051,7 @@ export type ShipmentPatch = Partial<
     | "labelPath"
     | "labelMime"
     | "labelSku"
+    | "replacedBy"
     | "cancelFee"
     | "sbCancelFee"
     | "refundAmount"
@@ -1152,6 +1160,11 @@ export function normalizeTrackingKey(key: string): string {
   const k = key.replace(/[\s-]/g, "").toUpperCase();
   const m = /^420(?:\d{5}|\d{9})(9\d{21})$/.exec(k);
   return m ? m[1] : k;
+}
+
+/** 由哪张异常单修改后重新下单而来（原单） */
+export function replacedFrom(id: number): { id: number; customNo: string } | undefined {
+  return db().prepare("SELECT id, custom_no AS customNo FROM shipments WHERE replaced_by = ? ORDER BY id DESC LIMIT 1").get(id) as { id: number; customNo: string } | undefined;
 }
 
 /** 同一客户、同一订单号还有效的面单；取消了的、出单异常（没有面单）的可以重新下单 */

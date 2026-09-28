@@ -52,7 +52,7 @@ import { checkAddress, needsAck, type AddressCheck } from "@/lib/addressCheck";
 import { updateLead } from "@/lib/leads";
 import { getJiaguClient, jiaguConfig, JG_PREFIX, JG_SUFFIX, warehouseFor } from "@/lib/shipbest/jiagu";
 import { createBackup, deleteBackup, restoreBackup } from "@/lib/backup";
-import { resetTestEnv, setStoredMode } from "@/lib/db";
+import { getShipment, resetTestEnv, setStoredMode } from "@/lib/db";
 import { sendMail } from "@/lib/mailer";
 import { checkFinancePin, setFinancePin } from "@/lib/financePin";
 import { testAddressService } from "@/lib/addressCheck";
@@ -72,6 +72,7 @@ import type { StampConfig, StampOverride, StampSettings } from "@/lib/stampConfi
 import {
   confirmCancelled,
   createLabel,
+  resubmitShipment,
   PriceChangedError,
   quoteAll,
   quoteForProspect,
@@ -180,6 +181,56 @@ export async function houseCreateAction(input: {
 }
 
 // 客户的单在客户 OMS 里出（后台可以“进入客户 OMS”代客户操作）；管理员自己的单用上面的“管理员下单”
+
+/* ---------------- 异常单修改后重新下单 ---------------- */
+
+/** 按原订单客户的价格和渠道比价（公司自用账户就是成本价） */
+export async function resubmitQuoteAction(oldId: number, raw: ShipmentRequest): Promise<{ errors?: string[]; quotes?: ChannelQuote[]; address?: AddressCheck }> {
+  await requireAdmin();
+  const old = getShipment(Number(oldId));
+  if (!old || old.status !== "exception" || old.replacedBy) return { errors: ["只有出单异常、还没重新下过单的订单可以修改后重新下单"] };
+  const req = cleanRequest(raw);
+  const errors = validateRequest(req);
+  if (errors.length) return { errors };
+  try {
+    const [quotes, address] = await Promise.all([quoteAll(old.customerId, req), checkAddress(req.recipient)]);
+    return { quotes, address };
+  } catch (e) {
+    return { errors: [(e as Error).message] };
+  }
+}
+
+export async function resubmitCreateAction(input: {
+  oldId: number;
+  channelCode: string;
+  req: ShipmentRequest;
+  expectedPrice: number;
+  customerRef?: string;
+  remark?: string;
+  addressAck?: boolean;
+}): Promise<{ id?: number; error?: string; quote?: ChannelQuote }> {
+  await requireAdmin();
+  try {
+    const req = cleanRequest(input.req);
+    const address = await checkAddress(req.recipient);
+    if (needsAck(address) && !input.addressAck) return { error: "收件地址可能有问题，请检查地址，或勾选“我确认地址无误”后再下单" };
+    const r = await resubmitShipment({
+      oldId: Number(input.oldId),
+      channelCode: str(input.channelCode),
+      req,
+      expectedPrice: n(input.expectedPrice),
+      customerRef: str(input.customerRef, 50) || undefined,
+      remark: str(input.remark, 200) || undefined,
+      addressCheck: needsAck(address) ? ({ ...address, acknowledged: true } as AddressCheck) : address,
+    });
+    revalidatePath("/shipments");
+    revalidatePath(`/shipments/${input.oldId}`);
+    return { id: r.id };
+  } catch (e) {
+    if (e instanceof PriceChangedError) return { error: e.message, quote: e.quote };
+    return { error: (e as Error).message };
+  }
+}
 
 /* ---------------- 订单操作 ---------------- */
 
