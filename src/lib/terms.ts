@@ -119,7 +119,7 @@ export function partyOf(c: Customer): TermsParty {
 /** 服务方（我们公司）：法人名称和地址，来自“设置 → 官网与联系方式” */
 export function provider() {
   const s = getSettings();
-  return { company: s.site?.company?.trim() || s.brandName, address: s.site?.address?.trim() || "", brand: s.brandName };
+  return { company: s.site?.company?.trim() || s.brandName, address: s.site?.contractAddress?.trim() || s.site?.address?.trim() || "", brand: s.brandName };
 }
 
 /** 把 {company}、{brand}、{cancelHours}、{customer} 等换成当前设置和客户信息 */

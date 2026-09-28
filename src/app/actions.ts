@@ -1034,6 +1034,7 @@ export async function saveSiteAction(_: FlashState, fd: FormData): Promise<Flash
     site: {
       company: str(fd.get("company"), 80),
       address: str(fd.get("address"), 120),
+      contractAddress: str(fd.get("contractAddress"), 160),
       phone: str(fd.get("phone"), 40),
       wechat: str(fd.get("wechat"), 40),
       email: str(fd.get("email"), 80),

@@ -128,6 +128,7 @@ export default async function SettingsPage() {
               <div className="grid" style={{ margin: "12px 0" }}>
                 <label className="f">{t("公司名称")}<input name="company" defaultValue={site.company} maxLength={80} /></label>
                 <label className="f">{t("地址")}<input name="address" defaultValue={site.address} maxLength={120} placeholder="Chino, CA 91710" /></label>
+                <label className="f">{t("签约地址（服务条款用，官网不显示）")}<input name="contractAddress" defaultValue={site.contractAddress ?? ""} maxLength={160} placeholder="3134 Friendswood Ave, El Monte, CA 91733" /></label>
                 <label className="f">{t("微信")}<input name="wechat" defaultValue={site.wechat} maxLength={40} /></label>
                 <label className="f">{t("电话")}<input name="phone" defaultValue={site.phone} maxLength={40} /></label>
                 <label className="f">{t("邮箱")}<input name="email" type="email" defaultValue={site.email} maxLength={80} /></label>
