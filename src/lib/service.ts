@@ -423,6 +423,7 @@ export async function createLabel(input: CreateInput): Promise<number> {
     updateShipment(id, { errorMsg: `提交结果未知（${(e as Error).message}），请稍后点“刷新状态”` });
     return id;
   }
+  if (ref) await closeSupersededExceptions(customerId, ref, id).catch(() => null);
 
   if (input.waitForLabel === false) return id;
   // 面单一般是异步生成，轮询几次
@@ -456,6 +457,7 @@ export async function refreshShipment(id: number): Promise<Shipment> {
 
   // 查询要等服务商返回，期间可能已经取消 / 确认取消：用最新的状态判断，不能用查询前的旧快照
   const cur = getShipment(id) ?? s;
+  let justTimedOut = false;
   if (d.status === 6) {
     if (cur.status !== "cancelled") Object.assign(patch, cancelPatch(cur, wasLabeled(cur)));
   } else if (cur.status === "cancelled") {
@@ -467,7 +469,10 @@ export async function refreshShipment(id: number): Promise<Shipment> {
     if (patch.status === "pending" && !patch.labelUrl && isJiaguCode(s.channelCode) && labelOverdue(s.createdAt)) {
       patch.status = "exception";
       patch.errorMsg = JG_LABEL_TIMEOUT_MSG;
-      if (s.status !== "exception") logProviderEvent(s.customNo, "系统", "系统判断", null, `下单 ${JG_LABEL_TIMEOUT_MIN} 分钟仍没有面单，标记为异常`);
+      if (cur.status !== "exception") {
+        logProviderEvent(s.customNo, "系统", "系统判断", null, `下单 ${JG_LABEL_TIMEOUT_MIN} 分钟仍没有面单，标记为异常`);
+        justTimedOut = true;
+      }
     }
   }
 
@@ -484,6 +489,29 @@ export async function refreshShipment(id: number): Promise<Shipment> {
   }
   updateShipment(id, patch);
   settleCancel(id);
+
+  // 嘉谷超时：马上向嘉谷作废这张单并全额退款，客户直接换渠道重下，不会出现“后来面单又出来了、两张都扣费”
+  if (justTimedOut && (await autoVoid(getShipment(id)!, JG_TIMEOUT_VOIDED_MSG))) {
+    const ref = s.customerRef || s.customNo;
+    notifyLater(s.customerId, "exception", { zh: `订单 ${ref} 出单超时，已自动取消`, en: `Order ${ref} timed out and was cancelled` }, {
+      zh: [`订单 ${ref} 的渠道出单超时，系统已自动取消并全额退回余额，请换其他渠道重新下单。`],
+      en: [`Order ${ref} timed out on this service. It has been cancelled and fully refunded; please ship it again with another service.`],
+    });
+    return getShipment(id)!;
+  }
+  // 超时后客户已经换单重下，但这张单的面单后来又生成了：自动作废这张迟到的面单，不让客户付两次（客户不收取消费）
+  if (cur.status === "exception" && cur.replacedBy && patch.status === "labeled") {
+    const fresh = getShipment(cur.replacedBy);
+    const note = `客户已换单重新下单（新单 ${fresh?.customNo ?? cur.replacedBy}），这张单的面单延迟生成，系统已自动作废并全额退款`;
+    if (!(await autoVoid(getShipment(id)!, note, true))) {
+      updateShipment(id, {
+        status: "cancel_requested",
+        errorMsg: `客户已换单重新下单（新单 ${fresh?.customNo ?? cur.replacedBy}），这张单的面单延迟生成、自动作废没有成功。请联系服务商作废后点“确认已取消”（客户取消费填 0）`,
+      });
+    }
+    return getShipment(id)!;
+  }
+
   // 刚变成异常：通知客户
   if (patch.status === "exception" && cur.status !== "exception") {
     const ref = s.customerRef || s.customNo;
@@ -505,6 +533,52 @@ export function providerOf(channelCode: string) {
 /** 嘉谷下单后多久还没有面单算出问题 */
 export const JG_LABEL_TIMEOUT_MIN = 5;
 export const JG_LABEL_TIMEOUT_MSG = `嘉谷 ${JG_LABEL_TIMEOUT_MIN} 分钟内未出面单：请客户联系我们或换其他渠道重新下单，并联系嘉谷处理；处理完在这里取消（未出面单全额退款）`;
+
+export const JG_TIMEOUT_VOIDED_MSG = `嘉谷 ${JG_LABEL_TIMEOUT_MIN} 分钟内未出面单，系统已自动向嘉谷取消并全额退款：请换其他渠道重新下单`;
+
+/**
+ * 系统自动向服务商作废一张单（不收客户取消费）并退款。
+ * sbCharged = 服务商那边已经出过面单，可能收我们取消费（按设置的比例记下来，对账用）。
+ */
+async function autoVoid(s: Shipment, note: string, sbCharged = false): Promise<boolean> {
+  const provider = providerOf(s.channelCode);
+  try {
+    await getShipBestClient().cancelOrder(s.orderNo ? { orderNo: s.orderNo } : { customNo: s.customNo });
+  } catch (e) {
+    logProviderEvent(s.customNo, provider, "系统自动取消", e instanceof ShipBestError ? e.code : null, `失败：${(e as Error).message}`);
+    return false;
+  }
+  logProviderEvent(s.customNo, provider, "系统自动取消", null, "成功");
+  const latest = getShipment(s.id) ?? s;
+  if (latest.status === "cancelled") return true;
+  const sbCancelFee = sbCharged ? defaultCancelFees({ ...latest, sbStatus: 4 }).sbCancelFee : 0;
+  updateShipment(s.id, { ...cancelPatch(latest, false, { cancelFee: 0, sbCancelFee }), sbStatus: 6, errorMsg: note });
+  settleCancel(s.id);
+  return true;
+}
+
+/**
+ * 客户用同一个订单号重新下单成功后，关闭之前出单异常的那张：
+ * 能向服务商作废的直接取消并全额退款；服务商那边本来就是异常、没出面单的，本地取消退款；
+ * 作废不了的先关联到新单，之后如果面单迟到了，刷新时会自动作废。
+ */
+async function closeSupersededExceptions(customerId: number, ref: string, newId: number) {
+  const olds = db()
+    .prepare("SELECT id FROM shipments WHERE customer_id = ? AND customer_ref = ? AND status = 'exception' AND replaced_by IS NULL AND id <> ?")
+    .all(customerId, ref, newId) as { id: number }[];
+  const fresh = getShipment(newId)!;
+  for (const { id } of olds) {
+    const old = getShipment(id)!;
+    updateShipment(id, { replacedBy: newId });
+    logProviderEvent(old.customNo, "系统", "同一订单号重新下单", null, `新单 ${fresh.customNo}`);
+    const note = `已用同一订单号重新下单（新单 ${fresh.customNo}），原单已取消并全额退款`;
+    if (await autoVoid(old, note)) continue;
+    if (old.sbStatus === 3 && !wasLabeled(old)) {
+      updateShipment(id, { ...cancelPatch(old, false), errorMsg: `已用同一订单号重新下单（新单 ${fresh.customNo}）。服务商那边是异常单、没有出面单，原单已取消并全额退款` });
+      settleCancel(id);
+    }
+  }
+}
 
 function labelOverdue(createdAt: string, now = Date.now()) {
   const t = Date.parse(createdAt.includes("T") ? createdAt : createdAt.replace(" ", "T") + "Z");
@@ -653,6 +727,8 @@ export async function resubmitShipment(input: Omit<CreateInput, "customerId" | "
     .prepare("UPDATE batch_job_rows SET shipment_id = ?, channel_code = ?, channel_name = ?, price = ? WHERE shipment_id = ?")
     .run(id, fresh.channelCode, fresh.channelName, fresh.price, old.id);
   logProviderEvent(old.customNo, "系统", "修改后重新下单", null, `新单 ${fresh.customNo}`);
+  // 同一订单号的：下新单时已经顺带把原单关掉了
+  if (getShipment(old.id)!.status === "cancelled") return { id, old: "cancelled" };
 
   const provider = providerOf(old.channelCode);
   try {
@@ -693,7 +769,16 @@ export async function refreshPendingShipments(limit = 60) {
       )
       .all(limit) as { id: number }[]
   ).map((r) => r.id);
-  for (const id of ids) await refreshShipment(id).catch(() => null);
+  // 嘉谷超时转异常、自动作废没成功的单：继续盯 2 天，面单迟到了能及时处理（换单重下的自动作废）
+  const watched = (
+    db()
+      .prepare(
+        `SELECT id FROM shipments WHERE status = 'exception' AND channel_code LIKE 'JG-%' AND COALESCE(sb_status, 2) = 2
+         AND created_at >= datetime('now', '-2 days') ORDER BY id DESC LIMIT 30`,
+      )
+      .all() as { id: number }[]
+  ).map((r) => r.id);
+  for (const id of [...ids, ...watched]) await refreshShipment(id).catch(() => null);
   return ids.length;
 }
 

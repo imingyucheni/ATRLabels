@@ -39,6 +39,7 @@ export function publicError(msg?: string | null): string {
   // 地址不在派送范围：统一说成“地址未覆盖”
   if (/不通邮|派送范围/.test(raw)) return "地址未覆盖：这个渠道送不到该邮编";
   // 服务商超时未出面单
+  if (/分钟内未出面单/.test(raw) && /已自动.*取消/.test(raw)) return "该渠道出单超时，系统已自动取消并全额退回余额，请换其他渠道重新下单";
   if (/分钟内未出面单/.test(raw)) return "该渠道出单超时，还没有生成面单。请联系客服，或换其他渠道重新下单";
   if (raw.includes("还没有开通任何物流渠道")) return "您的账户还没有开通物流渠道，请联系客服开通";
   if (raw.includes("未开通此渠道")) return "您的账户未开通此渠道，请联系客服";

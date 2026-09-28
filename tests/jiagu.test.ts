@@ -143,6 +143,56 @@ describe("嘉谷万邑接口", () => {
     expect(db.activeShipmentByRef(cid, "R-FRESH")).toBeDefined();
   });
 
+  it("超时自动作废：能作废的直接取消退款；作废不了的，客户换单重下后面单迟到了自动作废，不会两张都扣费", async () => {
+    let voidOk = true;
+    let labelReady = false;
+    fakeServer({
+      "/api/gts/GetMailNoByOrderNbr": () => ({ IsSuccess: true, Result: labelReady ? { TrackingNbr: "9400LATE", WaybillUrl: "mock://late.pdf" } : {} }),
+      "/api/gts/GetLabelAsync": () => ({ IsSuccess: true, Result: {} }),
+      "/api/gts/VoidShipment": () => (voidOk ? { IsSuccess: true, Result: true } : { IsSuccess: false, ErrorCode: "11203", Message: "该订单不支持取消" }),
+    });
+    const svc = await import("@/lib/service");
+    const { publicError } = await import("@/lib/portal");
+    const cid = db.saveCustomer(null, { name: "作废客户", contact: null, phone: null, email: null, note: null, markup: {} });
+    const mk = (customNo: string, ref: string, minsAgo = 6) => {
+      const id = db.insertShipment({
+        customNo, customerId: cid, channelCode: "JG-579181", channelName: "GOFO", sender: req.sender, recipient: req.recipient, pkg: req.pkg, skuList: req.skuList,
+        quotedCost: 3, currency: "USD", zone: null, price: 4, rule: { percent: 0, fixed: 1, minProfit: 0 }, remark: null, customerRef: ref, createdBy: "admin", env: "live", addressCheck: null,
+      });
+      jg.jgOrders.save({ customNo, productCode: "JG-579181", productName: "GOFO", status: 2 });
+      db.db().prepare(`UPDATE shipments SET created_at = datetime('now', '-${minsAgo} minutes') WHERE id = ?`).run(id);
+      return id;
+    };
+    // 1. 超时 → 自动向嘉谷作废成功 → 取消、全额退款、不收取消费
+    const a = mk("V-A", "R-A");
+    const sa = await svc.refreshShipment(a);
+    expect(sa).toMatchObject({ status: "cancelled", cancelFee: 0, refundAmount: 4 });
+    expect(publicError(sa.errorMsg)).toContain("已自动取消并全额退回");
+
+    // 2. 超时 → 作废失败 → 保持异常；客户用同一订单号换渠道重下（这里直接插一张新单并关联）
+    voidOk = false;
+    const b = mk("V-B", "R-B");
+    expect((await svc.refreshShipment(b)).status).toBe("exception");
+    const nb = mk("V-B2", "R-B", 0);
+    db.updateShipment(b, { replacedBy: nb });
+    // 面单后来又出来了：自动作废迟到的面单
+    labelReady = true;
+    voidOk = true;
+    const sb2 = await svc.refreshShipment(b);
+    expect(sb2).toMatchObject({ status: "cancelled", cancelFee: 0, refundAmount: 4 });
+    expect(sb2.errorMsg).toContain("延迟生成");
+    // 作废也失败：转“取消处理中”，提示管理员找服务商作废
+    labelReady = false;
+    voidOk = false;
+    const c = mk("V-C", "R-C");
+    await svc.refreshShipment(c);
+    db.updateShipment(c, { replacedBy: nb });
+    labelReady = true;
+    const sc = await svc.refreshShipment(c);
+    expect(sc.status).toBe("cancel_requested");
+    expect(sc.errorMsg).toContain("确认已取消");
+  });
+
   it("客户看到的名称：只显示物流商全称，不露出服务商和内部说明", async () => {
     const { defaultPublicName } = await import("@/lib/carriers");
     expect(defaultPublicName("USPS-D价-GA-917不预上网 · GDE")).toBe("USPS");

@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 import { getCustomer, getSettings, getShipment, listAdjustments, replacedFrom, shipmentProfit, STATUS_LABEL } from "@/lib/db";
 import { isPaperSize } from "@/lib/labelLayout";
 import { money } from "@/lib/pricing";
-import { defaultCancelFees, JG_LABEL_TIMEOUT_MIN, JG_LABEL_TIMEOUT_MSG, providerOf } from "@/lib/service";
+import { defaultCancelFees, JG_LABEL_TIMEOUT_MIN, JG_LABEL_TIMEOUT_MSG, JG_TIMEOUT_VOIDED_MSG, providerOf } from "@/lib/service";
 import { listProviderEvents } from "@/lib/providerLog";
 import { isJiaguCode, jgOrders, jiaguConfig, warehouseFor } from "@/lib/shipbest/jiagu";
 import { stripProviderTag } from "@/lib/carriers";
@@ -60,7 +60,7 @@ export default async function ShipmentDetail({ params }: { params: Promise<{ id:
   const jgCfg = jg ? jiaguConfig() : null;
   const warehouse = jgCfg ? warehouseFor(jgCfg, Number(productId)) : null;
   const problem =
-    s.errorMsg === JG_LABEL_TIMEOUT_MSG ? `下单 ${JG_LABEL_TIMEOUT_MIN} 分钟后仍没有面单`
+    s.errorMsg === JG_LABEL_TIMEOUT_MSG || s.errorMsg === JG_TIMEOUT_VOIDED_MSG ? `下单 ${JG_LABEL_TIMEOUT_MIN} 分钟后仍没有面单`
     : s.errorMsg ? s.errorMsg
     : STATUS_LABEL[s.status];
   const troubled = ["pending", "exception", "cancel_requested"].includes(s.status);
