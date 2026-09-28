@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { currentCustomerId, impersonatedCustomerId } from "@/lib/auth";
 import { getCustomer, getSettings } from "@/lib/db";
-import { getTerms, hasAcceptedTerms, lastAcceptance, partyOf, provider, renderTerms } from "@/lib/terms";
+import { getTerms, hasAcceptedTerms, lastAcceptance, partyOf, renderTerms } from "@/lib/terms";
 import { fmtTime } from "@/lib/time";
 import { getLang, getT } from "@/lib/prefs";
 import PrefToggles from "@/components/PrefToggles";
@@ -28,7 +28,6 @@ export default async function PortalTermsPage() {
   const signed = accepted ? lastAcceptance(id) : null;
   // 已签署的显示签署时存档的原文
   const text = signed?.text ?? renderTerms(lang === "en" ? terms.en : terms.zh, party);
-  const shown = signed?.party ?? party;
   return (
     <div className="terms-page">
       <div className="terms-card">
@@ -45,17 +44,9 @@ export default async function PortalTermsPage() {
             {terms.changeNote && <div style={{ marginTop: 4 }}><b>{t("本次修改")}</b>{t("：")}{terms.changeNote}</div>}
           </div>
         )}
-        <dl className="terms-party">
-          <dt>{t("服务方")}</dt><dd>{provider().company}{provider().address ? ` · ${provider().address}` : ""}</dd>
-          <dt>{t("客户名称")}</dt><dd>{shown.customer}</dd>
-          <dt>{t("地址")}</dt><dd>{shown.address || "—"}</dd>
-          <dt>{t("联系人")}</dt><dd>{shown.contact || "—"}{shown.title ? ` · ${shown.title}` : ""}</dd>
-          <dt>{t("电话")}</dt><dd>{shown.phone || "—"}</dd>
-          <dt>{t("邮箱")}</dt><dd>{shown.email || "—"}</dd>
-          {signed && (<><dt>{t("签署")}</dt><dd>{signed.signer}{signed.signerTitle ? ` · ${signed.signerTitle}` : ""} · {fmtTime(signed.acceptedAt)}</dd></>)}
-        </dl>
-        {!accepted && <p className="small muted" style={{ marginTop: 0 }}>{t("以上客户信息如有错误，请联系客服修改后再签署。")}</p>}
         <div className="terms-body" tabIndex={0}>{text}</div>
+        {signed && <p className="small muted">{t("签署")}{t("：")}{signed.signer}{signed.signerTitle ? ` · ${signed.signerTitle}` : ""} · {fmtTime(signed.acceptedAt)}</p>}
+        {!accepted && <p className="small muted" style={{ marginBottom: 0 }}>{t("条款中的客户信息如有错误，请联系客服修改后再签署。")}</p>}
         {accepted ? (
           <p className="small muted">{t("您已同意这份条款。")} <a href="/portal">{t("返回客户中心")}</a></p>
         ) : acting ? (

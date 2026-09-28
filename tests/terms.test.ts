@@ -32,7 +32,7 @@ describe("客户服务条款", () => {
     const c = db.getCustomer(cid)!;
     const text = terms.renderTerms(terms.getTerms().zh, terms.partyOf(c));
     expect(text).toContain("Atronia Innovations Inc.（ATRShip 平台运营方，以下简称“我们”）与 Acme Trading LLC（以下简称“您”）");
-    expect(text).toContain("客户：Acme Trading LLC\n地址：100 Main St, Los Angeles, CA 90001");
+    expect(text).toContain("客户：Acme Trading LLC\n地址：100 Main St, Los Angeles, CA 90001\n联系人：Amy Chen · 物流主管\n电话：626-555-0100");
     expect(text).toContain("服务方：Atronia Innovations Inc.（ATRShip 平台运营方）\n地址：3134 Friendswood Ave, El Monte, CA 91733");
     expect(text).toContain("下单后 48 小时内可以申请取消");
     expect(text).not.toMatch(/\{(brand|company|companyAddress|customer|address|cancelHours)\}/);

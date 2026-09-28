@@ -302,7 +302,7 @@ export const admin3: Record<string, string> = {
   "管理员代操作时不能替客户同意条款，客户下次登录时会看到这份条款。": "Admins acting as a customer can't accept the terms on their behalf; the customer will see them at next sign-in.",
   "客户名称": "Customer",
   "签署": "Signed",
-  "以上客户信息如有错误，请联系客服修改后再签署。": "If any of the details above are wrong, please contact support to correct them before signing.",
+  "条款中的客户信息如有错误，请联系客服修改后再签署。": "If any of your details in the terms are wrong, please contact support to correct them before signing.",
   "签署人姓名": "Signer name",
   "签署人职位": "Signer title",
   "我已阅读并同意以上服务条款，保证如实申报货物信息，并同意重量尺寸复核后按承运商账单补差。": "I have read and agree to the Terms of Service above, will declare shipments accurately, and agree to pay adjustments billed by the carrier after weight and size re-measurement.",

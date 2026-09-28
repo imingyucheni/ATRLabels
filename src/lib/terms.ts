@@ -44,6 +44,9 @@ export const DEFAULT_TERMS_ZH = `本服务条款由 {company}（{brand} 平台�
 地址：{companyAddress}
 客户：{customer}
 地址：{address}
+联系人：{contactLine}
+电话：{phone}
+邮箱：{email}
 本条款以电子方式签署：客户填写签署人姓名、职位并勾选同意，即视为客户签署本条款，与书面签字具有同等效力。签署时间、签署人及条款原文由系统存档。`;
 
 export const DEFAULT_TERMS_EN = `These Terms of Service are between {company}, operator of the {brand} platform ("we"), and {customer} ("you"). Please read them carefully, enter the signer's details and accept to start using your account.
@@ -86,6 +89,9 @@ Provider: {company} (operator of the {brand} platform)
 Address: {companyAddress}
 Customer: {customer}
 Address: {address}
+Contact: {contactLine}
+Phone: {phone}
+Email: {email}
 These terms are signed electronically: entering the signer's name and title and checking the acceptance box constitutes the customer's signature, with the same effect as a handwritten signature. The signing time, signer and the exact text are archived by the system.`;
 
 export interface Terms {
@@ -132,6 +138,9 @@ export function renderTerms(text: string, party?: TermsParty) {
     .replace(/\{cancelHours\}/g, String(s.cancelWindowHours ?? 48))
     .replace(/\{customer\}/g, party?.customer ?? "")
     .replace(/\{address\}/g, party?.address || "—")
+    .replace(/\{contactLine\}/g, [party?.contact, party?.title].filter(Boolean).join(" · ") || "—")
+    .replace(/\{phone\}/g, party?.phone || "—")
+    .replace(/\{email\}/g, party?.email || "—")
     .replace(/\{contact\}/g, party?.contact ?? "")
     .replace(/\{title\}/g, party?.title ?? "");
 }
