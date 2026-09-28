@@ -15,7 +15,7 @@ describe("客户服务条款", () => {
   beforeAll(async () => {
     db = await import("@/lib/db");
     terms = await import("@/lib/terms");
-    db.saveSettings({ brandName: "ATR Logistics", cancelWindowHours: 48 });
+    db.saveSettings({ brandName: "ATRShip", cancelWindowHours: 48 });
     cid = db.saveCustomer(null, {
       name: "Acme Trading LLC", contact: "Amy Chen", contactTitle: "物流主管", address: "100 Main St, Los Angeles, CA 90001",
       phone: "626-555-0100", email: "amy@acme.com", note: null, markup: {},
@@ -31,7 +31,7 @@ describe("客户服务条款", () => {
   it("条款自动带出公司、客户名称和可取消小时数", () => {
     const c = db.getCustomer(cid)!;
     const text = terms.renderTerms(terms.getTerms().zh, terms.partyOf(c));
-    expect(text).toContain("ATR Logistics（以下简称“我们”）与 Acme Trading LLC（以下简称“您”）");
+    expect(text).toContain("ATRShip（以下简称“我们”）与 Acme Trading LLC（以下简称“您”）");
     expect(text).toContain("下单后 48 小时内可以申请取消");
     expect(text).not.toMatch(/\{(brand|customer|cancelHours)\}/);
   });

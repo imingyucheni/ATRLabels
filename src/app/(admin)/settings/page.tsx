@@ -487,7 +487,7 @@ export default async function SettingsPage() {
           <p className="small muted">{t("客户在客户端“充值”页选择 Zelle（美元）或支付宝（人民币）付款，上传凭证后提交申请；你们在“财务”页确认到账后自动加到客户余额。余额以美元记账。")}</p>
           <div className="grid2">
             <label className="f">{t("Zelle 收款信息（显示给客户）")}
-              <textarea name="zelleInfo" rows={3} defaultValue={s.zelleInfo} placeholder={t("邮箱 / 电话：pay@example.com\n户名：ATR Logistics LLC")} />
+              <textarea name="zelleInfo" rows={3} defaultValue={s.zelleInfo} placeholder={t("邮箱 / 电话：pay@example.com\n户名：Atronia Innovations Inc.")} />
             </label>
             <label className="f">{t("支付宝收款信息（显示给客户）")}
               <textarea name="alipayInfo" rows={3} defaultValue={s.alipayInfo} placeholder={t("支付宝账号：xxx@xxx.com\n户名：某某")} />

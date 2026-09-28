@@ -25,7 +25,7 @@ export const dynamic = "force-dynamic";
 
 export async function generateMetadata() {
   const t = await getT();
-  return { title: t("ATR 面单系统 · 后台") };
+  return { title: t("ATRShip · 后台") };
 }
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -37,7 +37,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   return (
     <div className="shell">
       <Sidebar
-        brand="ATR Labels"
+        brand="ATRShip"
         brandSub={version() ? t("管理后台 · 版本 {v}", { v: version() }) : "管理后台"}
         siteLink={(() => {
           const sw = siteSwitch();

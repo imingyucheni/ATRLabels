@@ -18,11 +18,11 @@ export function seedDemo(conn: Database.Database) {
   const settings: Record<string, unknown> = {
     markup: { percent: 5, fixed: 0, minProfit: 0.3 },
     roundingStep: 0.01,
-    brandName: "ATR Logistics (Demo)",
+    brandName: "ATRShip (Demo)",
     // 演示数据默认用模拟模式（不连 ShipBest）
     shipbest: { mode: "mock", apiId: "", token: "" },
     supportContact: "演示环境 · 客服微信 atr-demo",
-    zelleInfo: "Zelle：pay@atr-demo.com\n户名：ATR Logistics LLC（演示）",
+    zelleInfo: "Zelle：pay@atr-demo.com\n户名：Atronia Innovations Inc.（演示）",
     alipayInfo: "支付宝账号：atr-demo@example.com\n户名：演示公司",
     topupInstructions: "转账备注请写公司名称；工作日 2 小时内确认到账。",
     sender: { nameFirst: "ATR", nameLast: "Warehouse", country: "US", province: "CA", city: "Chino", address1: "13950 Central Ave", zipCode: "91710", phone: "9095550100" },

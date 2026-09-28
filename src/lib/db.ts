@@ -227,6 +227,8 @@ CREATE INDEX IF NOT EXISTS idx_shipments_created ON shipments(created_at);
 function migrate(conn: Database.Database) {
   const cols = (conn.prepare("PRAGMA table_info(shipments)").all() as { name: string }[]).map((c) => c.name);
   if (!cols.includes("zone")) conn.exec("ALTER TABLE shipments ADD COLUMN zone TEXT");
+  // 品牌改名为 ATRShip：之前保存的是旧的默认名称时一起改掉（自己改过的名称不动）
+  conn.exec(`UPDATE settings SET value = '"ATRShip"' WHERE key = 'brandName' AND value IN ('"ATR Logistics"', '"ATR Labels"')`);
   // 面单上是否已经印了 SKU（下载面单时自动检查）：yes 有 / no 没有 / image 图片面单，看不出来
   if (!cols.includes("label_sku")) conn.exec("ALTER TABLE shipments ADD COLUMN label_sku TEXT");
   // 异常单修改后重新下单：原单记下新单的 id
@@ -482,7 +484,7 @@ const DEFAULT_SETTINGS: Settings = {
   defaultCurrency: "USD",
   sender: null,
   adjustmentPolicy: "with_markup",
-  brandName: "ATR Logistics",
+  brandName: "ATRShip",
   supportContact: "",
   stamp: { ...DEFAULT_STAMP, enabled: false },
   balanceRule: "positive",

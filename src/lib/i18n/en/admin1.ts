@@ -1,7 +1,7 @@
 /** 后台：布局 / 概览 / 设置 / 客户 / 运费试算 / 登录 / 加印设置等 */
 export const admin1: Record<string, string> = {
   /* ---------- 布局 / 菜单 ---------- */
-  "ATR 面单系统 · 后台": "ATR Labels · Admin",
+  "ATRShip · 后台": "ATRShip · Admin",
   "管理后台": "Admin",
   "管理后台 · 版本 {v}": "Admin · v{v}",
   "模拟模式 · 按报价表计算（{n} 个渠道）": "Demo (mock) mode · priced from rate tables ({n} services)",
@@ -101,7 +101,7 @@ export const admin1: Record<string, string> = {
   "客户在客户端“充值”页选择 Zelle（美元）或支付宝（人民币）付款，上传凭证后提交申请；你们在“财务”页确认到账后自动加到客户余额。余额以美元记账。":
     "Customers pay via Zelle (USD) or Alipay (CNY) on the portal “Top Up” page and submit a request with proof; once you confirm receipt on the “Finance” page, it's added to their balance. Balances are kept in USD.",
   "Zelle 收款信息（显示给客户）": "Zelle payment details (shown to customers)",
-  "邮箱 / 电话：pay@example.com\n户名：ATR Logistics LLC": "Email / phone: pay@example.com\nName: ATR Logistics LLC",
+  "邮箱 / 电话：pay@example.com\n户名：Atronia Innovations Inc.": "Email / phone: pay@example.com\nName: Atronia Innovations Inc.",
   "支付宝收款信息（显示给客户）": "Alipay payment details (shown to customers)",
   "支付宝账号：xxx@xxx.com\n户名：某某": "Alipay account: xxx@xxx.com\nName: ...",
   "支付宝收款码图片（PNG / JPG，可选）": "Alipay QR code image (PNG / JPG, optional)",
@@ -301,7 +301,7 @@ export const admin1: Record<string, string> = {
   "没有启用的渠道，请先到": "No services enabled. Go to",
 
   /* ---------- 后台登录 ---------- */
-  "登录 · ATR 面单系统": "Log in · ATR Labels",
+  "登录 · ATRShip 后台": "Log in · ATRShip Admin",
   "尾程面单，一处管理": "Last-mile labels, all in one place",
   "报价、出单、补差、客户钱包与报表。": "Quotes, labels, adjustments, customer wallets and reports.",
   "多渠道实时比价，按规则自动加价": "Live rate comparison across services with rule-based markup",

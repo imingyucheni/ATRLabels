@@ -4,14 +4,14 @@ import { getT } from "@/lib/prefs";
 
 export async function generateMetadata() {
   const t = await getT();
-  return { title: t("登录 · ATR 面单系统") };
+  return { title: t("登录 · ATRShip 后台") };
 }
 
 export default async function LoginPage() {
   const t = await getT();
   return (
     <AuthShell showLang
-      brand="ATR Labels"
+      brand="ATRShip"
       headline={t("尾程面单，一处管理")}
       sub={t("报价、出单、补差、客户钱包与报表。")}
       points={["多渠道实时比价，按规则自动加价", "批量导入 ShipBest 导单表，一键合并打印", "官方账单补差自动对应到客户"].map((p) => t(p))}

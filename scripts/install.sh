@@ -53,6 +53,8 @@ if [ -f "$CONF" ] && [ "$RECONF" = 0 ]; then
 else
   # shellcheck disable=SC1090
   [ -f "$CONF" ] && . "$CONF"
+  # 换域名时记住原来的域名，之后自动跳转到新域名（旧链接、书签还能用）
+  PREV_DOMAIN="${DOMAIN:-}"; PREV_OMS_DOMAIN="${OMS_DOMAIN:-}"
   # 沙盒站第一次安装：仓库地址和分支默认跟正式站一样
   if [ "$SITE" = sandbox ] && [ ! -f "$CONF" ] && [ -f "$PROD_CONF" ]; then
     # shellcheck disable=SC1090
@@ -69,8 +71,12 @@ else
   fi
   REPO=$(ask "代码仓库地址（私有仓库请用 https://<GitHub令牌>@github.com/... 的格式）" "${REPO:-$REPO_DEFAULT}")
   BRANCH=$(ask "代码分支" "${BRANCH:-$BRANCH_DEFAULT}")
+  # 旧域名 → 新域名的跳转（可以累积多次换名）
+  OLD_REDIRECTS="${OLD_REDIRECTS:-}"
+  if [ -n "$PREV_DOMAIN" ] && [ "$PREV_DOMAIN" != "$DOMAIN" ] && [ -n "$DOMAIN" ]; then OLD_REDIRECTS="$OLD_REDIRECTS $PREV_DOMAIN=$DOMAIN"; fi
+  if [ -n "$PREV_OMS_DOMAIN" ] && [ "$PREV_OMS_DOMAIN" != "$OMS_DOMAIN" ] && [ -n "$OMS_DOMAIN" ]; then OLD_REDIRECTS="$OLD_REDIRECTS $PREV_OMS_DOMAIN=$OMS_DOMAIN"; fi
   umask 077
-  printf 'DOMAIN=%q\nOMS_DOMAIN=%q\nREPO=%q\nBRANCH=%q\n' "$DOMAIN" "$OMS_DOMAIN" "$REPO" "$BRANCH" > "$CONF"
+  printf 'DOMAIN=%q\nOMS_DOMAIN=%q\nREPO=%q\nBRANCH=%q\nOLD_REDIRECTS=%q\n' "$DOMAIN" "$OMS_DOMAIN" "$REPO" "$BRANCH" "${OLD_REDIRECTS# }" > "$CONF"
   umask 022
 fi
 
@@ -329,13 +335,20 @@ EOF
 
 # Caddy 同时配置正式站和沙盒站的域名
 caddy_sites() {
-  local c port d od x
+  local c port d od x olds
   for c in /etc/atrlabels.conf /etc/atrlabels-sandbox.conf; do
     [ -f "$c" ] || continue
     port=3000; [ "$c" = /etc/atrlabels-sandbox.conf ] && port=3001
     # shellcheck disable=SC1090
-    d=$(. "$c"; echo "${DOMAIN:-}"); od=$(. "$c"; echo "${OMS_DOMAIN:-}")
+    d=$(. "$c"; echo "${DOMAIN:-}"); od=$(. "$c"; echo "${OMS_DOMAIN:-}"); olds=$(. "$c"; echo "${OLD_REDIRECTS:-}")
     for x in $d $od; do printf '%s {\n  encode gzip\n  reverse_proxy 127.0.0.1:%s\n}\n\n' "$x" "$port"; done
+    # 客户网址是主域名（例如 atrship.com）时，www.atrship.com 跳到 atrship.com
+    case "$od" in ""|www.*|*.*.*) ;; *) printf 'www.%s {\n  redir https://%s{uri} permanent\n}\n\n' "$od" "$od" ;; esac
+    # 换过域名：旧网址跳到新网址
+    for x in $olds; do
+      local from="${x%%=*}" to="${x#*=}"
+      [ -n "$from" ] && [ -n "$to" ] && [ "$from" != "$d" ] && [ "$from" != "$od" ] && printf '%s {\n  redir https://%s{uri} permanent\n}\n\n' "$from" "$to"
+    done
   done
 }
 if [ -n "$(caddy_sites)" ]; then
