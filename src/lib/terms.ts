@@ -3,96 +3,123 @@
  * 每次同意都记下版本、时间、IP，后台客户详情里可以查。
  */
 import { db, getSettings, saveSettings, type Customer } from "./db";
+import { localDate } from "./reports";
 
-export const DEFAULT_TERMS_ZH = `本服务条款由 {company}（{brand} 平台运营方，以下简称“我们”）与 {customer}（以下简称“您”）签订。请仔细阅读以下条款，填写签署人并勾选同意后即可开始使用。
+export const DEFAULT_TERMS_ZH = `{brand} 物流服务协议
 
-一、账户使用
-1. 账户仅限您本人或贵公司使用，请妥善保管登录密码；通过您的账户下的订单均视为您本人的操作。
-2. 账户采用预付余额，按单扣费；余额不足时不能下单。充值在我们确认到账后入账。
-
-二、如实申报货物
-1. 请如实、准确填写收件人信息、包裹重量、尺寸、品名、数量和申报价值。
-2. 禁止寄送违禁品及承运商禁运物品，包括但不限于：易燃易爆品、危险化学品、未按规定包装的锂电池、武器及仿真武器、毒品、现金及有价证券、活体动植物等。
-3. 因申报不实、违禁品或包装不当造成的扣件、退件、销毁、罚款及其他费用，由您承担；造成承运商或我们损失的，您需承担赔偿责任。
-
-三、重量、尺寸与补差
-1. 运费按下单时您填写的重量和尺寸计算。
-2. 承运商会复核包裹的实际重量和体积重量（以两者较大者计费）。复核结果与填写不一致、或分区有差异时，我们会按承运商账单向您补收（或退还）差价，按您账户的价格规则计算。
-3. 每一笔补差都会在账户“补差明细”中逐单列明，并从账户余额中扣除或退回。
-
-四、收件地址
-1. 请确保收件地址完整、准确（包括公寓号 / 单元号）。系统的地址核对仅供参考。
-2. 因地址错误或不完整产生的改派、退件等费用由您承担。
-
-五、取消与退款
-1. 下单后 {cancelHours} 小时内可以申请取消：未出面单的全额退回余额；已出面单的按规定收取取消手续费。
-2. 超过取消时限、已经使用或已被承运商扫描的面单不能取消退款。
-
-六、时效与理赔
-1. 页面显示的派送时效为承运商的参考时效，不作保证；承运商延误、天气、节假日等造成的延迟不属于我们的责任。
-2. 包裹丢失或损坏，按承运商的理赔规定处理，我们协助您向承运商申请理赔；除另行购买保险外，赔偿以承运商实际赔付为准。
-
-七、其他
-1. 运费价格和可用渠道可能随承运商调整而变化，以下单时显示的价格为准。
-2. 收件人信息仅用于出单和派送，我们不会用于其他用途。
-3. 条款如有重要修改，会在您登录时提示，需要重新同意后继续使用。
-
-如有疑问，请联系客服。
-
-八、签约双方
-服务方：{company}（{brand} 平台运营方）
+甲方（服务方）：{company}
 地址：{companyAddress}
-客户：{customer}
+
+乙方（客户）：{customer}
 地址：{address}
 联系人：{contactLine}
 电话：{phone}
 邮箱：{email}
-本条款以电子方式签署：客户填写签署人姓名、职位并勾选同意，即视为客户签署本条款，与书面签字具有同等效力。签署时间、签署人及条款原文由系统存档。`;
 
-export const DEFAULT_TERMS_EN = `These Terms of Service are between {company}, operator of the {brand} platform ("we"), and {customer} ("you"). Please read them carefully, enter the signer's details and accept to start using your account.
+鉴于甲方运营 {brand} 物流面单服务平台，乙方希望通过该平台购买承运商面单及相关物流服务。双方经友好协商，就乙方使用甲方服务的相关事宜达成如下协议，共同遵守。
 
-1. Your account
-1.1 Your account is for you or your company only. Keep your password safe; orders placed through your account are treated as placed by you.
-1.2 Accounts are prepaid and charged per label. You cannot ship when your balance is insufficient. Top-ups are credited once we confirm receipt.
+第一条　账户使用
+1.1 甲方为乙方开设 {brand} 客户账户，该账户仅限乙方及其员工使用。乙方应妥善保管登录密码，通过乙方账户提交的订单均视为乙方的行为。
+1.2 账户采用预付余额、按单扣费的方式；余额不足时不能下单。乙方的充值在甲方确认到账后入账。
 
-2. Accurate declarations
-2.1 Provide accurate recipient details, package weight, dimensions, item descriptions, quantities and declared values.
-2.2 Prohibited and carrier-restricted items may not be shipped, including but not limited to flammable or explosive items, hazardous chemicals, improperly packed lithium batteries, weapons and replicas, drugs, cash and securities, and live animals or plants.
-2.3 You are responsible for all costs from inaccurate declarations, prohibited items or improper packing, including holds, returns, disposal, fines and other charges, and for any losses caused to the carrier or to us.
+第二条　如实申报货物
+2.1 乙方应如实、准确填写收件人信息、包裹重量、尺寸、品名、数量和申报价值。
+2.2 乙方不得寄送违禁品及承运商禁运物品，包括但不限于：易燃易爆品、危险化学品、未按规定包装的锂电池、武器及仿真武器、毒品、现金及有价证券、活体动植物等。
+2.3 因申报不实、违禁品或包装不当造成的扣件、退件、销毁、罚款及其他费用，由乙方承担；造成承运商或甲方损失的，乙方应承担赔偿责任。
 
-3. Weight, dimensions and adjustments
-3.1 Postage is calculated from the weight and dimensions you enter when ordering.
-3.2 Carriers re-measure packages and bill the greater of actual and dimensional weight. If their measurement or zone differs from your order, we will charge (or refund) the difference based on the carrier's bill, using your account's pricing.
-3.3 Every adjustment is itemized under "Adjustments" in your account and charged to or refunded from your balance.
+第三条　重量、尺寸与补差
+3.1 运费按乙方下单时填写的重量和尺寸计算。
+3.2 承运商会复核包裹的实际重量和体积重量（以两者较大者计费）。复核结果与填写不一致、或分区有差异时，甲方按承运商账单向乙方补收（或退还）差价，按乙方账户的价格规则计算。
+3.3 每一笔补差都会在乙方账户的“补差明细”中逐单列明，并从账户余额中扣除或退回。
 
-4. Addresses
-4.1 Make sure addresses are complete and accurate, including apartment/unit numbers. Our address check is for reference only.
-4.2 Reroute and return costs caused by wrong or incomplete addresses are your responsibility.
+第四条　收件地址
+4.1 乙方应确保收件地址完整、准确（包括公寓号 / 单元号）。系统的地址核对仅供参考。
+4.2 因地址错误或不完整产生的改派、退件等费用由乙方承担。
 
-5. Cancellations and refunds
-5.1 You can request cancellation within {cancelHours} hours of ordering. Orders without a label are fully refunded; labels already issued incur a cancellation fee.
-5.2 Labels past the cancellation window, used, or scanned by the carrier cannot be cancelled or refunded.
+第五条　取消与退款
+5.1 乙方可在下单后 {cancelHours} 小时内申请取消：未出面单的全额退回余额；已出面单的按规定收取取消手续费。
+5.2 超过取消时限、已经使用或已被承运商扫描的面单不能取消退款。
 
-6. Delivery times and claims
-6.1 Delivery times shown are carrier estimates, not guarantees. We are not responsible for delays caused by carriers, weather, holidays and similar events.
-6.2 Lost or damaged packages are handled under the carrier's claims rules; we will help you file a claim. Unless extra insurance is purchased, compensation is limited to what the carrier pays.
+第六条　时效与理赔
+6.1 页面显示的派送时效为承运商的参考时效，甲方不作保证；承运商延误、天气、节假日等原因造成的延迟不属于甲方责任。
+6.2 包裹丢失或损坏的，按承运商的理赔规定处理，甲方协助乙方向承运商申请理赔；除乙方另行购买保险外，赔偿以承运商实际赔付为准。
 
-7. Other
-7.1 Rates and available services may change with carrier pricing; the price shown when you order applies.
-7.2 Recipient information is used only for creating labels and delivery.
-7.3 If these terms change materially, you will be asked to accept them again when you sign in.
+第七条　价格与信息保护
+7.1 运费价格和可用渠道可能随承运商调整而变化，以乙方下单时页面显示的价格为准。
+7.2 乙方提供的收件人信息仅用于出单和派送，甲方不会用于其他用途。
 
-If you have any questions, please contact support.
+第八条　协议的生效与变更
+8.1 本协议以电子方式签署：乙方授权签署人填写姓名、职位并勾选同意，即视为乙方签署本协议，与书面签字具有同等效力。签署时间、签署人及协议原文由系统存档。
+8.2 本协议自乙方签署之日起生效，在乙方使用甲方服务期间持续有效。
+8.3 甲方对本协议作重要修改时，将在乙方登录时提示，乙方重新签署后继续使用；乙方不同意修改的，可停止使用服务，并申请退还账户剩余余额。
+8.4 因本协议产生的任何争议，双方应首先友好协商解决。
 
-8. Parties
-Provider: {company} (operator of the {brand} platform)
+（以下为签署栏）
+
+甲方（服务方）：{company}
+
+乙方（客户）：{customer}
+授权签署人：{signer}
+职位：{signerTitle}
+签署日期：{signDate}`;
+
+export const DEFAULT_TERMS_EN = `{brand} Shipping Services Agreement
+
+Party A (Provider): {company}
 Address: {companyAddress}
-Customer: {customer}
+
+Party B (Customer): {customer}
 Address: {address}
 Contact: {contactLine}
 Phone: {phone}
 Email: {email}
-These terms are signed electronically: entering the signer's name and title and checking the acceptance box constitutes the customer's signature, with the same effect as a handwritten signature. The signing time, signer and the exact text are archived by the system.`;
+
+Whereas Party A operates the {brand} shipping label platform and Party B wishes to purchase carrier labels and related shipping services through it, the parties agree as follows.
+
+Article 1. Account
+1.1 Party A opens a {brand} customer account for Party B, for use by Party B and its staff only. Party B shall keep its password safe; orders placed through Party B's account are treated as placed by Party B.
+1.2 The account is prepaid and charged per label. Orders cannot be placed when the balance is insufficient. Top-ups are credited once Party A confirms receipt.
+
+Article 2. Accurate declarations
+2.1 Party B shall provide accurate recipient details, package weight, dimensions, item descriptions, quantities and declared values.
+2.2 Party B shall not ship prohibited or carrier-restricted items, including but not limited to flammable or explosive items, hazardous chemicals, improperly packed lithium batteries, weapons and replicas, drugs, cash and securities, and live animals or plants.
+2.3 Party B is responsible for all costs arising from inaccurate declarations, prohibited items or improper packing, including holds, returns, disposal, fines and other charges, and for any losses caused to the carrier or to Party A.
+
+Article 3. Weight, dimensions and adjustments
+3.1 Postage is calculated from the weight and dimensions Party B enters when ordering.
+3.2 Carriers re-measure packages and bill the greater of actual and dimensional weight. If their measurement or zone differs from the order, Party A will charge (or refund) the difference based on the carrier's bill, using Party B's account pricing.
+3.3 Every adjustment is itemized under "Adjustments" in Party B's account and charged to or refunded from the balance.
+
+Article 4. Addresses
+4.1 Party B shall make sure addresses are complete and accurate, including apartment/unit numbers. The system's address check is for reference only.
+4.2 Reroute and return costs caused by wrong or incomplete addresses are borne by Party B.
+
+Article 5. Cancellations and refunds
+5.1 Party B may request cancellation within {cancelHours} hours of ordering. Orders without a label are fully refunded; labels already issued incur a cancellation fee.
+5.2 Labels past the cancellation window, used, or scanned by the carrier cannot be cancelled or refunded.
+
+Article 6. Delivery times and claims
+6.1 Delivery times shown are carrier estimates and are not guaranteed by Party A. Party A is not responsible for delays caused by carriers, weather, holidays and similar events.
+6.2 Lost or damaged packages are handled under the carrier's claims rules, and Party A will help Party B file a claim. Unless Party B purchases extra insurance, compensation is limited to what the carrier pays.
+
+Article 7. Pricing and data protection
+7.1 Rates and available services may change with carrier pricing; the price shown when Party B places an order applies.
+7.2 Recipient information provided by Party B is used only for creating labels and delivery.
+
+Article 8. Effect and amendments
+8.1 This Agreement is signed electronically: Party B's authorized signer entering their name and title and checking the acceptance box constitutes Party B's signature, with the same effect as a handwritten signature. The signing time, signer and the exact text are archived by the system.
+8.2 This Agreement takes effect on the date Party B signs it and remains in effect while Party B uses Party A's services.
+8.3 If Party A materially amends this Agreement, Party B will be asked to sign again when signing in; if Party B does not agree, it may stop using the services and request a refund of its remaining balance.
+8.4 The parties shall first seek to resolve any dispute arising from this Agreement through friendly negotiation.
+
+(Signatures)
+
+Party A (Provider): {company}
+
+Party B (Customer): {customer}
+Authorized signer: {signer}
+Title: {signerTitle}
+Date signed: {signDate}`;
 
 export interface Terms {
   zh: string;
@@ -129,7 +156,8 @@ export function provider() {
 }
 
 /** 把 {company}、{brand}、{cancelHours}、{customer} 等换成当前设置和客户信息 */
-export function renderTerms(text: string, party?: TermsParty) {
+/** sign = 签署栏（签署时填入）；没签时留空白横线 */
+export function renderTerms(text: string, party?: TermsParty, sign?: { signer: string; title: string; date: string }) {
   const s = getSettings();
   return text
     .replace(/\{company\}/g, provider().company)
@@ -142,7 +170,10 @@ export function renderTerms(text: string, party?: TermsParty) {
     .replace(/\{phone\}/g, party?.phone || "—")
     .replace(/\{email\}/g, party?.email || "—")
     .replace(/\{contact\}/g, party?.contact ?? "")
-    .replace(/\{title\}/g, party?.title ?? "");
+    .replace(/\{title\}/g, party?.title ?? "")
+    .replace(/\{signer\}/g, sign?.signer || "________________")
+    .replace(/\{signerTitle\}/g, sign?.title || "________________")
+    .replace(/\{signDate\}/g, sign?.date || "________________");
 }
 
 /** 后台保存条款；bump = 要求所有客户重新同意（版本号 +1），changeNote = 这次改了什么 */
@@ -186,7 +217,7 @@ function conn() {
 export function acceptTerms(input: { customerId: number; party: TermsParty; signer: string; signerTitle: string; lang: string; ip: string | null; userAgent: string | null }) {
   if (hasAcceptedTerms(input.customerId)) return;
   const t = getTerms();
-  const text = renderTerms(input.lang === "en" ? t.en : t.zh, input.party);
+  const text = renderTerms(input.lang === "en" ? t.en : t.zh, input.party, { signer: input.signer.slice(0, 60), title: input.signerTitle.slice(0, 60), date: localDate() });
   conn()
     .prepare("INSERT INTO terms_acceptances (customer_id, version, signer, signer_title, party_json, lang, text, ip, user_agent) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
     .run(input.customerId, t.version, input.signer.slice(0, 60), input.signerTitle.slice(0, 60), JSON.stringify(input.party), input.lang, text, input.ip?.slice(0, 80) ?? null, input.userAgent?.slice(0, 300) ?? null);
