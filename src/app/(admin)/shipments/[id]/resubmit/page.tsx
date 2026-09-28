@@ -10,8 +10,11 @@ import { makeT, translateMessage } from "@/lib/i18n";
 export const dynamic = "force-dynamic";
 
 /** 异常单修改后重新下单：表单预填原订单的信息，改好体积、重量等再比价出单 */
-export default async function ResubmitPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function ResubmitPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ back?: string }> }) {
   const s = getShipment(Number((await params).id));
+  // 从批量下单页过来的：出单后回到那个批次（只接受站内地址）
+  const back = (await searchParams).back;
+  const returnTo = back && back.startsWith("/") && !back.startsWith("//") ? back : undefined;
   if (!s) notFound();
   const lang = await getLang();
   const t = makeT(lang);
@@ -41,7 +44,7 @@ export default async function ResubmitPage({ params }: { params: Promise<{ id: s
             {t("原订单的地址、包裹和商品已经填好。改好尺寸、重量等信息后重新查询运费出单（也可以换渠道）。新单出单成功后，原异常单会自动取消，费用退回。")}
           </p>
         </div>
-        <Link href={`/shipments/${s.id}`}>{t("← 返回订单")}</Link>
+        <Link href={returnTo ?? `/shipments/${s.id}`}>{returnTo ? t("← 返回批次") : t("← 返回订单")}</Link>
       </div>
       <div className="alert err">
         <b>{t("原订单异常")}</b>{t("：")}{tm(s.errorMsg) || t("服务商没有返回具体原因")}
@@ -57,6 +60,7 @@ export default async function ResubmitPage({ params }: { params: Promise<{ id: s
           request: { sender: s.sender, recipient: s.recipient, pkg: s.pkg, skuList: s.skuList },
           remark: s.remark,
           customerRef: s.customerRef,
+          returnTo,
         }}
         defaultSender={s.sender}
         defaultUnit={s.pkg.displayUnitSystem}

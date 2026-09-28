@@ -22,10 +22,14 @@ export async function GET(req: Request) {
   const pref = getCustomer(own ?? list[0].customerId)?.labelPaper;
   const paper: PaperSize = isPaperSize(q) ? q : isPaperSize(pref) ? pref : "4x6";
   const pdf = await layoutLabels(await mergeLabels(list), paper);
+  // ?download=1 直接下载（文件名可以用 ?name= 指定，例如批次名）；默认在浏览器里打开打印
+  const sp = new URL(req.url).searchParams;
+  const base = (sp.get("name") || `labels-${new Date().toISOString().slice(0, 10)}`).replace(/[\\/:*?"<>|\s]+/g, "_").slice(0, 80);
+  const fname = `${base}-${list.length}.pdf`;
   return new Response(new Uint8Array(pdf), {
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `inline; filename="labels-${new Date().toISOString().slice(0, 10)}-${list.length}.pdf"`,
+      "Content-Disposition": `${sp.has("download") ? "attachment" : "inline"}; filename="labels-${list.length}.pdf"; filename*=UTF-8''${encodeURIComponent(fname)}`,
       "Cache-Control": "private, no-store",
     },
   });

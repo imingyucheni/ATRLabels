@@ -288,4 +288,10 @@ export const admin3: Record<string, string> = {
   "只有出单异常的订单可以修改后重新下单": "Only failed orders can be fixed and re-shipped",
   "这张订单已经修改后重新下过单了": "This order has already been fixed and re-shipped",
   "这张订单已由客服修改后重新下单，原单已取消": "Support fixed and re-shipped this order; the original was cancelled",
+  "下载合并 PDF": "Download merged PDF",
+  "打包下载（每单一个 PDF）": "Download ZIP (one PDF per order)",
+  "出单异常": "Label failed",
+  "面单没有生成，请联系客服处理，未出面单的运费会全额退回。": "No label was created. Please contact support; postage for orders without a label is fully refunded.",
+  "← 返回批次": "← Back to batch",
+  "问题": "Issue",
 };

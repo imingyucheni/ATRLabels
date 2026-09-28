@@ -6,7 +6,7 @@
 import { publicChannel, stripProviderTag } from "./carriers";
 import { checkAddress, needsAck, type AddressCheck } from "./addressCheck";
 import ExcelJS from "exceljs";
-import { activeShipmentByRef, customerChannels, db, duplicateRefMessage, getChannel, getCustomer, getSettings, getShipment, listChannels } from "./db";
+import { activeShipmentByRef, customerChannels, db, duplicateRefMessage, getChannel, getCustomer, getSettings, getShipment, listChannels, type ShipmentStatus } from "./db";
 import { InsufficientBalanceError } from "./ledger";
 import { createLabel, PriceChangedError, quoteChannel, refreshShipment, validateRequest } from "./service";
 import type { Address, ShipmentRequest, SkuItem, UnitSystem } from "./shipbest/types";
@@ -451,6 +451,8 @@ export interface BatchRow {
   hasLabel: boolean;
   /** 已扣款、面单还在生成中 */
   labelPending: boolean;
+  /** 下单后面单的状态（出单异常 / 已取消等） */
+  shipmentStatus: ShipmentStatus | null;
 }
 
 export function createJob(input: {
@@ -524,6 +526,21 @@ function jobRows(jobId: number): JobRowDb[] {
   return db().prepare("SELECT * FROM batch_job_rows WHERE job_id = ? ORDER BY row_no").all(jobId) as JobRowDb[];
 }
 
+/** 导出用：每一行的原始订单信息 + 下单后的面单 */
+export function jobExportRows(jobId: number) {
+  return jobRows(jobId).map((r) => ({
+    rowNo: r.row_no,
+    customerRef: r.customer_ref,
+    status: r.status as RowStatus,
+    error: r.error,
+    channelCode: r.channel_code,
+    channelName: r.channel_name,
+    price: r.price,
+    req: JSON.parse(r.req_json) as ShipmentRequest,
+    shipment: r.shipment_id ? getShipment(r.shipment_id) : null,
+  }));
+}
+
 function setJob(jobId: number, status: JobStatus, error: string | null = null) {
   db().prepare("UPDATE batch_jobs SET status = ?, error = ?, updated_at = datetime('now') WHERE id = ?").run(status, error, jobId);
 }
@@ -582,6 +599,7 @@ export function getJob(jobId: number): BatchJob | null {
         trackingNo: s?.trackingNo ?? null,
         hasLabel: !!s?.labelPath,
         labelPending: s?.status === "pending",
+        shipmentStatus: s?.status ?? null,
       };
     }),
   };

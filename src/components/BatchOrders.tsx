@@ -202,14 +202,15 @@ export default function BatchOrders(props: {
   const total = chosen.reduce((a, r) => a + (r.price ?? 0), 0);
   const created = job.rows.filter((r) => r.status === "created");
   const createdTotal = created.reduce((a, r) => a + (r.price ?? 0), 0);
-  const labeled = created.filter((r) => r.hasLabel);
-  const problems = job.rows.filter((r) => r.status === "error" || r.status === "failed").length;
+  // 能打印的面单：出单异常、已取消的不打
+  const labeled = created.filter((r) => r.hasLabel && r.shipmentStatus !== "cancelled" && r.shipmentStatus !== "exception");
+  const problems = job.rows.filter((r) => r.status === "error" || r.status === "failed" || r.shipmentStatus === "exception").length;
   const dupes = quoted.filter((r) => r.warning).length;
   const addrBad = (r: { address: { status: string } | null }) => !!r.address && ["missing_unit", "bad_unit", "not_found"].includes(r.address.status);
   const addrIssues = quoted.filter(addrBad).length;
   const processed = job.rows.filter((r) => r.status !== "pending").length;
   const allSelected = quoted.length > 0 && quoted.every((r) => r.selected);
-  const rows = job.rows.filter((r) => !onlyProblems || r.status === "error" || r.status === "failed" || r.error || ((r.warning || addrBad(r)) && r.status === "quoted"));
+  const rows = job.rows.filter((r) => !onlyProblems || r.status === "error" || r.status === "failed" || r.shipmentStatus === "exception" || r.error || ((r.warning || addrBad(r)) && r.status === "quoted"));
   const cheapestTotal = chosen.reduce((a, r) => a + Math.min(...r.quotes.filter((q) => q.ok).map((q) => q.price!)), 0);
 
   function onSubmit() {
@@ -304,10 +305,17 @@ export default function BatchOrders(props: {
             </button>
           )}
           {labeled.length > 0 && (
-            <a className="btn primary" href={`/api/labels/merge?ids=${labeled.map((r) => r.shipmentId).join(",")}`} target="_blank">
-              {t("合并打印 {n} 张面单", { n: labeled.length })}
-            </a>
+            <>
+              <a className="btn primary" href={`/api/labels/merge?ids=${labeled.map((r) => r.shipmentId).join(",")}`} target="_blank">
+                {t("合并打印 {n} 张面单", { n: labeled.length })}
+              </a>
+              <a className="btn" href={`/api/labels/merge?download=1&name=${encodeURIComponent(`${t("批次")}${job.id}`)}&ids=${labeled.map((r) => r.shipmentId).join(",")}`}>
+                {t("下载合并 PDF")}
+              </a>
+              <a className="btn" href={`/api/batch/${job.id}/labels`}>{t("打包下载（每单一个 PDF）")}</a>
+            </>
           )}
+          {job.rows.length > 0 && <a className="btn" href={`/api/batch/${job.id}/export`}>{t("导出 CSV")}</a>}
           {editable && created.length === 0 && (
             <button className="danger" disabled={busy} onClick={() => {
               if (!window.confirm(t("放弃这个批次？"))) return;
@@ -357,7 +365,11 @@ export default function BatchOrders(props: {
           </thead>
           <tbody>
             {rows.map((r) => {
-              const [label, cls] = r.labelPending ? [t("已扣款 · 面单生成中"), "pending"] : [t(ROW_STATUS[r.status][0]), ROW_STATUS[r.status][1]];
+              const [label, cls] = r.shipmentStatus === "exception"
+                ? [t("出单异常"), "exception"]
+                : r.shipmentStatus === "cancelled"
+                  ? [t("已取消"), ""]
+                  : r.labelPending ? [t("已扣款 · 面单生成中"), "pending"] : [t(ROW_STATUS[r.status][0]), ROW_STATUS[r.status][1]];
               const rowEditable = editable && r.status === "quoted";
               return (
                 <tr key={r.id} className={(r.warning || addrBad(r)) && r.status === "quoted" ? "row-warn" : undefined}>
@@ -435,9 +447,18 @@ export default function BatchOrders(props: {
                     {r.shipmentId ? (
                       <div>
                         <a href={`${props.mode === "portal" ? "/portal" : ""}/shipments/${r.shipmentId}`}>{r.trackingNo ?? t("查看")}</a>
-                        {r.hasLabel && <> · <a href={`/api/labels/${r.shipmentId}`} target="_blank">{t("面单")}</a></>}
+                        {r.hasLabel && r.shipmentStatus !== "cancelled" && <> · <a href={`/api/labels/${r.shipmentId}`} target="_blank">{t("面单")}</a></>}
                       </div>
                     ) : null}
+                    {r.shipmentStatus === "exception" && r.shipmentId && (
+                      props.mode === "portal" ? (
+                        <div style={{ color: "var(--err)", maxWidth: 260 }}>{t("面单没有生成，请联系客服处理，未出面单的运费会全额退回。")}</div>
+                      ) : (
+                        <div style={{ marginTop: 4 }}>
+                          <a className="btn small primary" href={`/shipments/${r.shipmentId}/resubmit?back=${encodeURIComponent(`${props.basePath}?job=${job.id}`)}`}>{t("修改后重新下单")}</a>
+                        </div>
+                      )
+                    )}
                     {r.error && <div style={{ color: r.status === "quoted" ? "var(--warn)" : "var(--err)", maxWidth: 260 }}>{tr(r.error)}</div>}
                     {r.warning && r.status !== "created" && <div style={{ color: "var(--warn)", maxWidth: 260 }}>⚠ {tr(r.warning)}</div>}
                   </td>

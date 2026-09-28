@@ -49,6 +49,10 @@ describe("异常单修改后重新下单", () => {
 
   it("用改好的重量下新单；原单向服务商取消成功，全额退回；新旧两单互相关联；同一订单号可以重下", async () => {
     const old = await failedOrder(3, "114-4632749-7321005");
+    // 原单属于一个批量导入批次
+    db.db().prepare("INSERT INTO batch_jobs (customer_id, created_by, filename, channel_mode, status) VALUES (?, 'admin', 'b.xlsx', 'cheapest', 'done')").run(cid);
+    const job = (db.db().prepare("SELECT MAX(id) AS id FROM batch_jobs").get() as { id: number }).id;
+    db.db().prepare("INSERT INTO batch_job_rows (job_id, row_no, customer_ref, req_json, status, shipment_id, price) VALUES (?, 2, ?, '{}', 'created', ?, ?)").run(job, old.customerRef, old.id, old.price);
     const before = ledger.balanceOf(cid);
     const r = await resubmit(old.id);
     expect(r.old).toBe("cancelled");
@@ -60,6 +64,8 @@ describe("异常单修改后重新下单", () => {
     expect(o).toMatchObject({ status: "cancelled", replacedBy: r.id, cancelFee: 0, refundAmount: old.price });
     expect(o.errorMsg).toContain(fresh.customNo);
     expect(db.replacedFrom(r.id)).toMatchObject({ id: old.id });
+    // 批次里这一行跟着换成新单
+    expect(db.db().prepare("SELECT shipment_id, price FROM batch_job_rows WHERE job_id = ?").get(job)).toEqual({ shipment_id: r.id, price: fresh.price });
     // 余额：扣新单、退原单
     expect(ledger.balanceOf(cid)).toBeCloseTo(before - fresh.price + old.price, 2);
     // 不能重复重下，也不能重下正常的单

@@ -1,7 +1,7 @@
 import { fmtTime, TZ_LABEL } from "@/lib/time";
 import { isLoggedIn } from "@/lib/auth";
 import { csvResponse } from "@/lib/csv";
-import { listShipments, shipmentProfit, STATUS_LABEL } from "@/lib/db";
+import { isInternalCustomer, listShipments, shipmentProfit, STATUS_LABEL } from "@/lib/db";
 import { getT } from "@/lib/prefs";
 import { isJiaguCode, jgOrders } from "@/lib/shipbest/jiagu";
 
@@ -20,12 +20,13 @@ export async function GET(req: Request) {
     q: p.get("q") || undefined,
   });
   // 第一列是客户导入 / 下单时填的“自定义单号”（客户自己的订单号），和客户的导入表格一致；系统单号是我们生成的 ATR 单号
-  const header = [
-    cap(t("自定义单号")), t("创建时间({tz})", { tz: t(TZ_LABEL) }), ...[
-    "客户", "系统单号", "服务商", "服务商单号", "运单号", "渠道", "状态", "SKU",
-    "收件人", "收件国家", "收件邮编", "分区", "币种", "试算成本", "实扣成本(预报)", "客户价",
-    "取消手续费", "ShipBest取消费", "退款", "补差成本", "补差向客户", "利润",
-  ].map((h) => cap(t(h)))];
+  const base = ["客户", "系统单号", "服务商", "服务商单号", "运单号", "渠道", "状态", "SKU", "收件人", "收件国家", "收件邮编", "分区", "币种"];
+  // 全是管理员自用（成本价）的单：成本 = 客户价、没有利润，只留一列运费
+  const houseOnly = rows.length > 0 && rows.every((s) => isInternalCustomer(s.customerId));
+  const money = houseOnly
+    ? ["运费", "取消费", "补差"]
+    : ["试算成本", "实扣成本(预报)", "客户价", "取消手续费", "ShipBest取消费", "退款", "补差成本", "补差向客户", "利润"];
+  const header = [cap(t("自定义单号")), t("创建时间({tz})", { tz: t(TZ_LABEL) }), ...[...base, ...money].map((h) => cap(t(h)))];
   return csvResponse(
     `shipments-${new Date().toISOString().slice(0, 10)}.csv`,
     header,
@@ -35,8 +36,9 @@ export async function GET(req: Request) {
       s.trackingNo, s.channelName, t(STATUS_LABEL[s.status]),
       s.skuList.map((k) => (k.quantity > 1 ? `${k.sku} x${k.quantity}` : k.sku)).filter(Boolean).join("; "),
       `${s.recipient.nameFirst} ${s.recipient.nameLast}`, s.recipient.country, s.recipient.zipCode, s.zone, s.currency,
-      s.quotedCost, s.actualCost, s.price, s.cancelFee, s.sbCancelFee, s.refundAmount,
-      s.costAdj || "", s.customerAdj || "", shipmentProfit(s)?.toFixed(2),
+      ...(houseOnly
+        ? [s.status === "cancelled" || s.status === "exception" ? "" : s.actualCost ?? s.quotedCost, s.sbCancelFee || "", s.costAdj || ""]
+        : [s.quotedCost, s.actualCost, s.price, s.cancelFee, s.sbCancelFee, s.refundAmount, s.costAdj || "", s.customerAdj || "", shipmentProfit(s)?.toFixed(2)]),
     ]),
   );
 }

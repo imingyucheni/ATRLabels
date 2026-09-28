@@ -630,6 +630,10 @@ export async function resubmitShipment(input: Omit<CreateInput, "customerId" | "
   });
   const fresh = getShipment(id)!;
   updateShipment(old.id, { replacedBy: id });
+  // 原单属于某个批量导入批次的，批次里这一行改成新单，整批打印、导出都跟着新单走
+  db()
+    .prepare("UPDATE batch_job_rows SET shipment_id = ?, channel_code = ?, channel_name = ?, price = ? WHERE shipment_id = ?")
+    .run(id, fresh.channelCode, fresh.channelName, fresh.price, old.id);
   logProviderEvent(old.customNo, "系统", "修改后重新下单", null, `新单 ${fresh.customNo}`);
 
   const provider = providerOf(old.channelCode);

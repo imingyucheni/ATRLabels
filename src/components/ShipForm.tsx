@@ -60,6 +60,8 @@ export interface ResubmitSource {
   request: ShipmentRequest;
   remark: string | null;
   customerRef: string | null;
+  /** 出单成功后回到哪里（例如批量下单的批次页）；不填就打开新单 */
+  returnTo?: string;
 }
 
 /** 数字转成输入框里的文字（0 / 空显示为空） */
@@ -242,7 +244,7 @@ export default function ShipForm(props: {
       const args = { channelCode: q.channelCode, req: buildRequest(), expectedPrice: q.price!, remark, customerRef, addressAck: addrAck };
       const r = re ? await resubmitCreateAction({ ...args, oldId: re.id }) : house ? await houseCreateAction(args) : await portalCreateAction(args);
       if (r.id) {
-        router.push(house || re ? `/shipments/${r.id}` : `/portal/shipments/${r.id}`);
+        router.push(re?.returnTo ?? (house || re ? `/shipments/${r.id}` : `/portal/shipments/${r.id}`));
         return;
       }
       if (r.quote) {
