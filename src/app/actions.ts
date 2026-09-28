@@ -53,6 +53,7 @@ import { updateLead } from "@/lib/leads";
 import { getJiaguClient, jiaguConfig, JG_PREFIX, JG_SUFFIX, warehouseFor } from "@/lib/shipbest/jiagu";
 import { createBackup, deleteBackup, restoreBackup } from "@/lib/backup";
 import { getShipment, resetTestEnv, setStoredMode } from "@/lib/db";
+import { getTerms, saveTerms } from "@/lib/terms";
 import { sendMail } from "@/lib/mailer";
 import { checkFinancePin, setFinancePin } from "@/lib/financePin";
 import { testAddressService } from "@/lib/addressCheck";
@@ -311,11 +312,17 @@ export async function saveCustomerAction(_: FlashState, fd: FormData): Promise<F
   if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return { error: "邮箱格式不正确" };
   // 新客户：邮箱就是 OMS 登录账号，保存时直接开通登录并生成初始密码
   if (isNew && email && portalEmailTaken(email)) return { error: "这个邮箱已经被其他客户用作登录账号" };
+  // 联系人、职位、电话、地址会写进客户签署的服务条款，必须填写
+  for (const [k, label] of [["contact", "联系人"], ["contactTitle", "联系人职位"], ["phone", "电话"], ["address", "地址"]] as const) {
+    if (!str(fd.get(k), 200)) return { error: `请填写${label}` };
+  }
   const neg = negativeRule(ruleFromForm(fd));
   if (neg) return { error: neg };
   const savedId = saveCustomer(isNew ? null : idRaw, {
     name,
     contact: str(fd.get("contact")) || null,
+    contactTitle: str(fd.get("contactTitle"), 60) || null,
+    address: str(fd.get("address"), 200) || null,
     phone: str(fd.get("phone")) || null,
     email,
     note: str(fd.get("note"), 1000) || null,
@@ -516,6 +523,18 @@ export async function testAddrAction(_: FlashState): Promise<FlashState> {
   } catch (e) {
     return { error: (e as Error).message };
   }
+}
+
+/** 服务条款：保存中英文内容；勾选“要求重新同意”时版本号 +1，所有客户下次登录都要重新签署 */
+export async function saveTermsAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  await requireAdmin();
+  const zh = String(fd.get("zh") ?? "").slice(0, 30000);
+  const en = String(fd.get("en") ?? "").slice(0, 30000);
+  if (!zh.trim()) return { error: "中文条款不能为空" };
+  const bump = fd.get("bump") === "on";
+  saveTerms(zh, en, bump);
+  revalidatePath("/settings");
+  return { ok: bump ? `已保存为第 ${getTerms().version} 版，所有客户下次登录时需要重新签署` : "服务条款已保存" };
 }
 
 export async function setFinancePinAction(_: FlashState, fd: FormData): Promise<FlashState> {

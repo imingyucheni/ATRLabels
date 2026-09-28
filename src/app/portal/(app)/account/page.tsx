@@ -12,7 +12,10 @@ export default async function PortalAccount() {
   const t = await getT();
   return (
     <>
-      <h1>{t("账户设置")}</h1>
+      <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+        <h1>{t("账户设置")}</h1>
+        <a href="/portal/terms" className="small">{t("查看我签署的服务条款")}</a>
+      </div>
       <div className="card">
         <dl className="kv">
           <dt>{t("公司 / 名称")}</dt><dd>{me.name}</dd>

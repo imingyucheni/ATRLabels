@@ -1,7 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { currentCustomerId, isLoggedIn, portalActor } from "@/lib/auth";
+import { currentCustomerId, impersonatedCustomerId, isLoggedIn, portalActor } from "@/lib/auth";
+import { hasAcceptedTerms } from "@/lib/terms";
 import { readSheetRows } from "@/lib/adjustments";
 import {
   chooseAll,
@@ -56,6 +57,7 @@ export async function createBatchJobAction(fd: FormData): Promise<{ jobId?: numb
     if (!a.admin && !a.customerId) return { error: "请先登录" };
     const customerId = house ? houseCustomerId() : a.admin ? Number(fd.get("customerId")) : a.customerId;
     if (!getCustomer(customerId)) return { error: "请选择客户" };
+    if (!a.admin && !(await impersonatedCustomerId()) && !hasAcceptedTerms(customerId)) return { error: "请先阅读并同意服务条款" };
     const file = fd.get("file");
     if (!(file instanceof File) || !file.size) return { error: "请选择文件" };
     if (file.size > 10 * 1024 * 1024) return { error: "文件不能超过 10MB" };
@@ -114,7 +116,8 @@ export async function getBatchJobAction(jobId: number): Promise<{ job?: BatchJob
 
 export async function confirmBatchJobAction(jobId: number): Promise<{ error?: string }> {
   try {
-    await ownJob(jobId);
+    const { a, job } = await ownJob(jobId);
+    if (!a.admin && !(await impersonatedCustomerId()) && !hasAcceptedTerms(job.customerId)) return { error: "请先阅读并同意服务条款" };
     confirmJob(jobId);
     refreshCounts();
     return {};

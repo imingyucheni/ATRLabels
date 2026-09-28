@@ -1316,3 +1316,24 @@ tr.row-disabled td:first-child { opacity: 0.55; }
 /* 异常单：修改后重新下单 */
 .resubmit-cta { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; border-color: color-mix(in srgb, var(--accent) 35%, var(--line)); background: var(--accent-soft); }
 .resubmit-cta b { font-size: 15px; }
+
+/* ---------------- 服务条款 ---------------- */
+.terms-page { min-height: 100vh; background: var(--bg); display: flex; justify-content: center; padding: 40px 16px; }
+.terms-card { width: 100%; max-width: 860px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 28px 32px; box-shadow: var(--shadow-xs); align-self: flex-start; }
+.terms-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+.terms-head h1 { margin: 0 0 4px; }
+.terms-party { display: grid; grid-template-columns: 90px 1fr; gap: 6px 14px; margin: 16px 0; padding: 14px 16px; border-radius: 12px; background: var(--bg); border: 1px solid var(--line); font-size: 14px; }
+.terms-party dt { color: var(--muted); }
+.terms-party dd { margin: 0; font-weight: 500; }
+.terms-body { white-space: pre-wrap; line-height: 1.75; font-size: 14.5px; max-height: 52vh; overflow: auto; padding: 16px 18px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); }
+.terms-body.print-full { max-height: none; }
+.terms-accept { margin-top: 18px; display: grid; gap: 12px; }
+.terms-check { display: flex; gap: 8px; align-items: flex-start; font-size: 14.5px; line-height: 1.6; }
+.terms-check input { margin-top: 4px; }
+@media (max-width: 640px) { .terms-card { padding: 20px 16px; } .terms-party { grid-template-columns: 76px 1fr; } }
+@media print {
+  .sidebar, .no-print, .site-ribbon, .acting-bar { display: none !important; }
+  .main { margin: 0 !important; padding: 0 !important; }
+  .terms-body { max-height: none; overflow: visible; border: 0; padding: 0; }
+  .terms-archive { border: 0; box-shadow: none; }
+}

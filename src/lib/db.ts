@@ -238,6 +238,9 @@ function migrate(conn: Database.Database) {
   if (!cols.includes("customer_ref")) conn.exec("ALTER TABLE shipments ADD COLUMN customer_ref TEXT");
   if (!cols.includes("created_by")) conn.exec("ALTER TABLE shipments ADD COLUMN created_by TEXT");
   const ccols = (conn.prepare("PRAGMA table_info(customers)").all() as { name: string }[]).map((c) => c.name);
+  // 客户地址、联系人职位（服务条款里自动带出）
+  if (!ccols.includes("address")) conn.exec("ALTER TABLE customers ADD COLUMN address TEXT");
+  if (!ccols.includes("contact_title")) conn.exec("ALTER TABLE customers ADD COLUMN contact_title TEXT");
   // 公司自用账户（管理员按成本价下单用，不在客户列表里显示）
   if (!ccols.includes("internal")) conn.exec("ALTER TABLE customers ADD COLUMN internal INTEGER NOT NULL DEFAULT 0");
   const jcols = (conn.prepare("PRAGMA table_info(batch_jobs)").all() as { name: string }[]).map((c) => c.name);
@@ -430,6 +433,8 @@ export interface Settings {
   shipbest: { mode: "env" | "mock" | "sandbox" | "live"; apiId: string; token: string; baseUrl?: string };
   /** 官网（客户 OMS 网址的首页）上的公司信息和联系方式 */
   site: { company: string; address: string; phone: string; wechat: string; email: string; hours: string };
+  /** 客户服务条款：留空用系统默认；version 变了客户要重新同意 */
+  terms?: { zh: string; en: string; version: number; updatedAt: string } | null;
   /** 嘉谷万邑（Dragon Open API）尾程面单：第二个服务商 */
   jiagu: { enabled: boolean; clientId: string; secret: string; ownershipId: string; customerId: string; warehouseId: string; warehouses?: Record<string, string>; authUrl?: string; apiUrl?: string };
   /** USPS 地址核对（Addresses API v3） */
@@ -645,6 +650,10 @@ export interface Customer {
   id: number;
   name: string;
   contact: string | null;
+  /** 联系人职位 */
+  contactTitle: string | null;
+  /** 公司地址 */
+  address: string | null;
   phone: string | null;
   email: string | null;
   note: string | null;
@@ -672,6 +681,8 @@ interface CustomerRow {
   id: number;
   name: string;
   contact: string | null;
+  contact_title: string | null;
+  address: string | null;
   phone: string | null;
   email: string | null;
   note: string | null;
@@ -695,6 +706,8 @@ function toCustomer(r: CustomerRow): Customer {
     id: r.id,
     name: r.name,
     contact: r.contact,
+    contactTitle: r.contact_title ?? null,
+    address: r.address ?? null,
     phone: r.phone,
     email: r.email,
     note: r.note,
@@ -782,7 +795,13 @@ export function setCustomerSender(id: number, sender: Address | null) {
   db().prepare("UPDATE customers SET sender_json = ? WHERE id = ?").run(sender ? JSON.stringify(sender) : null, id);
 }
 
-export type CustomerInput = Pick<Customer, "name" | "contact" | "phone" | "email" | "note" | "markup">;
+export type CustomerInput = Pick<Customer, "name" | "contact" | "phone" | "email" | "note" | "markup"> & Partial<Pick<Customer, "contactTitle" | "address">>;
+
+/** 地址、联系人职位：传了才改（没传的保持原样） */
+function saveProfile(id: number, c: CustomerInput) {
+  if (c.address !== undefined) db().prepare("UPDATE customers SET address = ? WHERE id = ?").run(c.address, id);
+  if (c.contactTitle !== undefined) db().prepare("UPDATE customers SET contact_title = ? WHERE id = ?").run(c.contactTitle, id);
+}
 
 export function saveCustomer(id: number | null, c: CustomerInput): number {
   const vals = [
@@ -802,6 +821,7 @@ export function saveCustomer(id: number | null, c: CustomerInput): number {
          markup_percent=?, markup_fixed=?, markup_min_profit=? WHERE id=?`,
       )
       .run(...vals, id);
+    saveProfile(id, c);
     return id;
   }
   const r = db()
@@ -810,6 +830,7 @@ export function saveCustomer(id: number | null, c: CustomerInput): number {
        VALUES (?,?,?,?,?,?,?,?)`,
     )
     .run(...vals);
+  saveProfile(Number(r.lastInsertRowid), c);
   return Number(r.lastInsertRowid);
 }
 

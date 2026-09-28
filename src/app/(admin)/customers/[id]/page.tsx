@@ -7,6 +7,7 @@ import CredentialsCard from "@/components/CredentialsCard";
 import { notFound } from "next/navigation";
 import { customerChannelCodes, getCustomer, getSettings, listChannels } from "@/lib/db";
 import FlashForm from "@/components/FlashForm";
+import { hasAcceptedTerms, lastAcceptance } from "@/lib/terms";
 import RuleInputs from "@/components/RuleInputs";
 import AddressFields from "@/components/AddressFields";
 import { LEDGER_TYPE_LABEL, listLedger } from "@/lib/ledger";
@@ -52,9 +53,11 @@ export default async function CustomerEdit({ params }: { params: Promise<{ id: s
         <input type="hidden" name="id" value={c?.id ?? ""} />
         <div className="grid">
           <label className="f"><span className="req">{t("名称")}</span><input name="name" required defaultValue={c?.name} /></label>
-          <label className="f">{t("联系人")}<input name="contact" defaultValue={c?.contact ?? ""} /></label>
-          <label className="f">{t("电话")}<input name="phone" defaultValue={c?.phone ?? ""} /></label>
+          <label className="f"><span className="req">{t("联系人")}</span><input name="contact" required defaultValue={c?.contact ?? ""} /></label>
+          <label className="f"><span className="req">{t("联系人职位")}</span><input name="contactTitle" required maxLength={60} defaultValue={c?.contactTitle ?? ""} placeholder={t("例如：总经理 / 物流主管")} /></label>
+          <label className="f"><span className="req">{t("电话")}</span><input name="phone" required defaultValue={c?.phone ?? ""} /></label>
           <label className="f">{c ? t("邮箱") : <span className="req">{t("邮箱（客户 OMS 登录账号）")}</span>}<input name="email" type="email" required={!c} defaultValue={c?.email ?? ""} /></label>
+          <label className="f" style={{ gridColumn: "1 / -1" }}><span className="req">{t("地址")}</span><input name="address" required maxLength={200} defaultValue={c?.address ?? ""} placeholder={t("公司地址，会显示在服务条款的客户信息里")} /></label>
         </div>
         <h3>{t("专属加价（留空 = 沿用渠道 / 全局设置）")}</h3>
         <div className="grid">
@@ -62,6 +65,18 @@ export default async function CustomerEdit({ params }: { params: Promise<{ id: s
         </div>
         <label className="f" style={{ margin: "12px 0" }}>{t("备注")}<textarea name="note" rows={2} defaultValue={c?.note ?? ""} /></label>
       </FlashForm>
+      {c && !c.internal && (() => {
+        const signed = lastAcceptance(c.id);
+        const current = hasAcceptedTerms(c.id);
+        return (
+          <div className={`alert ${current ? "ok" : "warn"}`}>
+            <b>{t("服务条款")}</b>{t("：")}
+            {signed
+              ? <>{t("{who} 于 {time} 签署第 {v} 版", { who: [signed.signer, signed.signerTitle].filter(Boolean).join(" · "), time: fmtTime(signed.acceptedAt), v: signed.version })}{!current && ` · ${t("条款已更新，客户下次登录时需要重新签署")}`} · <Link href={`/customers/${c.id}/terms`}>{t("查看签署存档")}</Link></>
+              : t("还没有签署，客户第一次登录客户中心时需要签署")}
+          </div>
+        );
+      })()}
       {c && (
         <>
           <div className="stats">

@@ -12,6 +12,7 @@ export const admin1Patterns: [RegExp, string][] = [
   [/^已经有 (\d+) 张正式订单，不能清空（只能在上线前使用）$/, "There are already $1 live orders, so test data can't be cleared (only available before go-live)"],
   // 对账单说明（按“ · ”拆开逐段翻译）：已取消的面单
   [/^已取消（原价 ([\d.]+)，已退 ([\d.]+)）$/, "Cancelled (orig. $1, refunded $2)"],
+  [/^已保存为第 (\d+) 版，所有客户下次登录时需要重新签署$/, "Saved as version $1; all customers must sign again at next sign-in"],
   // 异常单修改后重新下单
   [/^已修改后重新下单（新单 (\S+)），原单已取消$/, "Fixed and re-shipped as $1; this order was cancelled"],
   [/^已修改后重新下单（新单 (\S+)）。服务商那边是异常单、没有出面单，原单已取消并全额退回$/, "Fixed and re-shipped as $1. The provider never issued a label for this order, so it was cancelled and fully refunded"],

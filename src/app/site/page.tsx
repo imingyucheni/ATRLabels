@@ -368,7 +368,7 @@ export default async function SitePage() {
             <Link href="/portal">{t("客户登录")}</Link>
           </div>
         </div>
-        <div className="site-wrap us-footer-bottom">© {new Date().getFullYear()} {site.company || brand}</div>
+        <div className="site-wrap us-footer-bottom">© {new Date().getFullYear()} {site.company || brand} · <Link href="/site/terms">{t("服务条款")}</Link></div>
       </footer>
     </div>
   );

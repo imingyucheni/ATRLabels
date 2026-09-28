@@ -24,7 +24,7 @@ export default async function PortalLoginPage() {
       <p className="sub">{t("使用我们为你开通的邮箱和密码登录")}</p>
       <PortalLoginForm />
       <p className="small muted" style={{ marginTop: 18 }}>
-        <a href="/portal/forgot">{t("忘记密码？")}</a>
+        <a href="/portal/forgot">{t("忘记密码？")}</a> · <a href="/site/terms" target="_blank">{t("服务条款")}</a>
         {supportContact ? <> · {t("开通账号请联系：{contact}", { contact: supportContact })}</> : null}
       </p>
     </AuthShell>

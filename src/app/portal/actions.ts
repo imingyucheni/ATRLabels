@@ -15,12 +15,13 @@ import {
   portalActor,
   impersonatedCustomerId,
   leaveCustomer,
+  currentCustomerId,
 } from "@/lib/auth";
 import { adminOrigin } from "@/lib/sites";
 import { usStateCode } from "@/lib/geo";
 import { isPaperSize, PAPER_LABEL } from "@/lib/labelLayout";
 import { deleteSender, listSenders, saveSender, setDefaultSender } from "@/lib/senders";
-import { activeShipmentByRef, duplicateRefMessage, getCustomerLogin, getPasswordHash, getSettings, getShipment, setCustomerLabelPaper, setCustomerPassword, setCustomerSender, setLabelNote } from "@/lib/db";
+import { activeShipmentByRef, duplicateRefMessage, getCustomer, getCustomerLogin, getPasswordHash, getSettings, getShipment, setCustomerLabelPaper, setCustomerPassword, setCustomerSender, setLabelNote } from "@/lib/db";
 import { InsufficientBalanceError } from "@/lib/ledger";
 import { cancelWindowHours, cancelWindowPassed, ownsShipment, publicError, toPublicQuote, type PublicQuote } from "@/lib/portal";
 import { cleanAddress, cleanRequest, n, str } from "@/lib/sanitize";
@@ -30,9 +31,10 @@ import { createTopup, getTopup } from "@/lib/topup";
 import { requestReset, resetWithToken } from "@/lib/passwordReset";
 import type { Address, ShipmentRequest } from "@/lib/shipbest/types";
 import type { FlashState } from "@/app/actions";
-import { getT, tMsg } from "@/lib/prefs";
+import { getLang, getT, tMsg } from "@/lib/prefs";
 import { NOTIFY_EVENTS, saveNotifyPrefs, type NotifyPrefs } from "@/lib/notify";
 import { checkAddress, needsAck, type AddressCheck } from "@/lib/addressCheck";
+import { acceptTerms, hasAcceptedTerms, partyOf } from "@/lib/terms";
 
 async function clientIp() {
   const h = await headers();
@@ -54,6 +56,29 @@ export async function portalLoginAction(_: unknown, fd: FormData) {
   }
   clearFailures(key);
   await createCustomerSession(c.id, c.passwordHash!);
+  redirect("/portal");
+}
+
+/** 客户同意服务条款：填写签署人姓名和职位（管理员代操作时不能替客户同意） */
+export async function acceptTermsAction(input: { signer: string; signerTitle: string; agree: boolean }): Promise<{ error?: string }> {
+  const id = await currentCustomerId();
+  if (!id) redirect("/portal/login");
+  if (await impersonatedCustomerId()) return { error: "管理员代操作时不能替客户同意条款" };
+  const signer = str(input.signer, 60);
+  const signerTitle = str(input.signerTitle, 60);
+  if (!input.agree) return { error: "请勾选同意服务条款" };
+  if (!signer || !signerTitle) return { error: "请填写签署人姓名和职位" };
+  const h = await headers();
+  const c = getCustomer(id)!;
+  acceptTerms({
+    customerId: id,
+    party: partyOf(c),
+    signer,
+    signerTitle,
+    lang: await getLang(),
+    ip: h.get("x-forwarded-for")?.split(",")[0].trim() || h.get("x-real-ip"),
+    userAgent: h.get("user-agent"),
+  });
   redirect("/portal");
 }
 
@@ -101,6 +126,8 @@ export async function portalCreateAction(input: {
   addressAck?: boolean;
 }): Promise<{ id?: number; error?: string; quote?: PublicQuote; needAddressAck?: boolean }> {
   const me = await requireCustomer();
+  // 还没同意服务条款的客户不能下单（管理员代操作除外）
+  if (!(await impersonatedCustomerId()) && !hasAcceptedTerms(me.id)) return { error: "请先阅读并同意服务条款" };
   try {
     // 订单号重复的先拦下（不用再去核对地址）
     const ref = str(input.customerRef, 50);

@@ -1,5 +1,6 @@
 import { fmtTime } from "@/lib/time";
 import { labelSkuStats } from "@/lib/labelSku";
+import { acceptedCount, getTerms } from "@/lib/terms";
 import { ADJUSTMENT_POLICY_LABEL, channelCustomerCounts, getSettings, listChannels } from "@/lib/db";
 import { BALANCE_RULE_LABEL } from "@/lib/ledger";
 import { computePrice, money, resolveRule, type MarkupRule } from "@/lib/pricing";
@@ -9,7 +10,7 @@ import SettingsSection, { SettingsToggleAll } from "@/components/SettingsSection
 import FlashForm from "@/components/FlashForm";
 import RuleInputs from "@/components/RuleInputs";
 import { DEFAULT_JG_WAREHOUSES, isJiaguCode, JG_PREFIX, JG_SUFFIX } from "@/lib/shipbest/jiagu";
-import { saveSiteAction, saveJiaguAction, testJiaguAction, resetTestEnvAction, saveSmtpAction, testMailAction, setFinancePinAction, clearTestDataAction, saveAddrCheckAction, testAddrAction, refreshFxAction, saveChannelsAction, savePaymentSettingsAction, saveSettingsAction, saveShipBestAction, syncChannelsAction, verifyAction } from "@/app/actions";
+import { saveTermsAction, saveSiteAction, saveJiaguAction, testJiaguAction, resetTestEnvAction, saveSmtpAction, testMailAction, setFinancePinAction, clearTestDataAction, saveAddrCheckAction, testAddrAction, refreshFxAction, saveChannelsAction, savePaymentSettingsAction, saveSettingsAction, saveShipBestAction, syncChannelsAction, verifyAction } from "@/app/actions";
 import { cnyToPay, usdCnyQuote } from "@/lib/fx";
 import FilePick from "@/components/FilePick";
 import { CarrierMark } from "@/components/ChannelLabel";
@@ -327,6 +328,32 @@ export default async function SettingsPage() {
                 </table>
               </details>
             )}
+          </SettingsSection>
+        );
+      })()}
+
+      {(() => {
+        const terms = getTerms();
+        return (
+          <SettingsSection
+            id="terms"
+            title={t("客户服务条款")}
+            badge={<span className="badge ok">{t("第 {v} 版", { v: terms.version })}</span>}
+            summary={t("{n} 位客户已签署当前版本", { n: acceptedCount() })}
+          >
+            <p className="small muted" style={{ marginTop: 0 }}>
+              {t("客户第一次登录客户中心时，必须填写签署人、勾选同意这份条款才能使用；系统会存档签署时的客户信息和条款原文，在客户详情里可以查看。")}
+              {t("可以用的占位：{brand} 公司名称、{customer} 客户名称、{cancelHours} 可取消小时数，签署时自动换成实际内容。")}
+            </p>
+            <FlashForm action={saveTermsAction} submitLabel="保存条款" locked="修改后客户看到的服务条款会变化">
+              <div className="grid2" style={{ margin: "12px 0" }}>
+                <label className="f">{t("中文条款")}<textarea name="zh" rows={16} defaultValue={terms.zh} /></label>
+                <label className="f">{t("英文条款（客户端切换英文时显示）")}<textarea name="en" rows={16} defaultValue={terms.en} /></label>
+              </div>
+              <label className="small" style={{ display: "block", marginBottom: 10 }}>
+                <input type="checkbox" name="bump" /> {t("这是重要修改：要求所有客户重新签署（版本号 +1）")}
+              </label>
+            </FlashForm>
           </SettingsSection>
         );
       })()}

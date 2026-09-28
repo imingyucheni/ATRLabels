@@ -1,6 +1,8 @@
 import { impersonatedCustomerId, requireCustomer } from "@/lib/auth";
 import { isSandboxSite, shipbestMode } from "@/lib/shipbest/client";
 import { getSettings } from "@/lib/db";
+import { redirect } from "next/navigation";
+import { hasAcceptedTerms } from "@/lib/terms";
 import { money, usd } from "@/lib/pricing";
 import Sidebar from "@/components/Sidebar";
 import { listDraftRows } from "@/lib/batch";
@@ -21,6 +23,8 @@ export default async function PortalLayout({ children }: { children: React.React
   // 角标只数能直接提交的（已试算成功）；出错 / 失败 / 还在试算的不算
   const drafts = listDraftRows(me.id).filter((r) => r.status === "quoted").length;
   const acting = !!(await impersonatedCustomerId());
+  // 还没同意（当前版本的）服务条款：先去同意；管理员代操作不拦
+  if (!acting && !hasAcceptedTerms(me.id)) redirect("/portal/terms");
   const t = await getT();
   return (
     <ChannelNamesProvider map={channelNameMap()}>
