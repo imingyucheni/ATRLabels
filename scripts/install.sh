@@ -75,8 +75,10 @@ else
   OLD_REDIRECTS="${OLD_REDIRECTS:-}"
   if [ -n "$PREV_DOMAIN" ] && [ "$PREV_DOMAIN" != "$DOMAIN" ] && [ -n "$DOMAIN" ]; then OLD_REDIRECTS="$OLD_REDIRECTS $PREV_DOMAIN=$DOMAIN"; fi
   if [ -n "$PREV_OMS_DOMAIN" ] && [ "$PREV_OMS_DOMAIN" != "$OMS_DOMAIN" ] && [ -n "$OMS_DOMAIN" ]; then OLD_REDIRECTS="$OLD_REDIRECTS $PREV_OMS_DOMAIN=$OMS_DOMAIN"; fi
+  # 去掉重复，也去掉“跳到自己”的记录（例如又换回原来的域名）
+  OLD_REDIRECTS=$(for x in $OLD_REDIRECTS; do f="${x%%=*}"; [ "$f" != "$DOMAIN" ] && [ "$f" != "$OMS_DOMAIN" ] && echo "$x"; done | awk '!seen[$0]++' | tr '\n' ' ' | sed 's/ *$//')
   umask 077
-  printf 'DOMAIN=%q\nOMS_DOMAIN=%q\nREPO=%q\nBRANCH=%q\nOLD_REDIRECTS=%q\n' "$DOMAIN" "$OMS_DOMAIN" "$REPO" "$BRANCH" "${OLD_REDIRECTS# }" > "$CONF"
+  printf 'DOMAIN=%q\nOMS_DOMAIN=%q\nREPO=%q\nBRANCH=%q\nOLD_REDIRECTS=%q\n' "$DOMAIN" "$OMS_DOMAIN" "$REPO" "$BRANCH" "$OLD_REDIRECTS" > "$CONF"
   umask 022
 fi
 
@@ -335,19 +337,21 @@ EOF
 
 # Caddy 同时配置正式站和沙盒站的域名
 caddy_sites() {
-  local c port d od x olds
+  local c port d od x olds seen=" "
+  # 同一个网址只写一次（Caddy 遇到重复的网址会拒绝启动）
+  site() { case "$seen" in *" $1 "*) return 1 ;; esac; seen="$seen$1 "; }
   for c in /etc/atrlabels.conf /etc/atrlabels-sandbox.conf; do
     [ -f "$c" ] || continue
     port=3000; [ "$c" = /etc/atrlabels-sandbox.conf ] && port=3001
     # shellcheck disable=SC1090
     d=$(. "$c"; echo "${DOMAIN:-}"); od=$(. "$c"; echo "${OMS_DOMAIN:-}"); olds=$(. "$c"; echo "${OLD_REDIRECTS:-}")
-    for x in $d $od; do printf '%s {\n  encode gzip\n  reverse_proxy 127.0.0.1:%s\n}\n\n' "$x" "$port"; done
+    for x in $d $od; do site "$x" && printf '%s {\n  encode gzip\n  reverse_proxy 127.0.0.1:%s\n}\n\n' "$x" "$port"; done
     # 客户网址是主域名（例如 atrship.com）时，www.atrship.com 跳到 atrship.com
-    case "$od" in ""|www.*|*.*.*) ;; *) printf 'www.%s {\n  redir https://%s{uri} permanent\n}\n\n' "$od" "$od" ;; esac
+    case "$od" in ""|www.*|*.*.*) ;; *) site "www.$od" && printf 'www.%s {\n  redir https://%s{uri} permanent\n}\n\n' "$od" "$od" ;; esac
     # 换过域名：旧网址跳到新网址
     for x in $olds; do
       local from="${x%%=*}" to="${x#*=}"
-      [ -n "$from" ] && [ -n "$to" ] && [ "$from" != "$d" ] && [ "$from" != "$od" ] && printf '%s {\n  redir https://%s{uri} permanent\n}\n\n' "$from" "$to"
+      [ -n "$from" ] && [ -n "$to" ] && site "$from" && printf '%s {\n  redir https://%s{uri} permanent\n}\n\n' "$from" "$to"
     done
   done
 }
