@@ -26,7 +26,7 @@ export const CARRIERS: Carrier[] = [
   { id: "ups", name: "UPS", fullName: "UPS", color: "#5a3a1a" },
   { id: "fedex", name: "FedEx", fullName: "FedEx", color: "#4d148c" },
   { id: "dhl", name: "DHL", fullName: "DHL", color: "#d40511" },
-  { id: "ontrac", name: "OnTrac", fullName: "OnTrac", color: "#004b87" },
+  { id: "ontrac", name: "OnTrac", fullName: "OnTrac", logo: "/carriers/ontrac.svg", color: "#111827" },
   { id: "other", name: "其他", fullName: "", color: "#5f6368" },
 ];
 

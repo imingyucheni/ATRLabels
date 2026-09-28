@@ -32,8 +32,8 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
 
   const head = [
     "行", "自定义单号", "状态", "运单号", "渠道",
-    ...(admin ? ["服务商", "服务商单号", "系统单号", "渠道代码"] : []),
-    ...(admin && !house ? ["客户价", "成本"] : ["运费"]),
+    // 公司自用（成本价）的批次：只要打单信息；客户的批次后台多看服务商和成本；客户自己只看运费
+    ...(house ? [] : admin ? ["服务商", "服务商单号", "系统单号", "渠道代码", "客户价", "成本"] : ["运费"]),
     "问题",
     "收件联系人姓", "收件联系人名", "收件人联系电话", "收件国家", "收件省州", "收件市府", "收件邮编", "收件地址1", "收件地址2", "公司名称",
     "包裹长", "包裹宽", "包裹高", "包裹重量", "包裹单位", "SKU", "品名(英文)", "数量", "下单时间",
@@ -49,10 +49,11 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
     return [
       r.rowNo, r.customerRef ?? "", status, s?.trackingNo ?? "",
       admin ? s?.channelName ?? r.channelName ?? "" : code ? displayChannel(code).name : "",
-      ...(admin
-        ? [code ? (isJiaguCode(code) ? "GDE" : "SB") : "", s ? (isJiaguCode(s.channelCode) ? jgOrders.get(s.customNo)?.identifier ?? "" : s.orderNo ?? "") : "", s?.customNo ?? "", code ?? ""]
-        : []),
-      ...(admin && !house ? [price, s ? s.actualCost ?? s.quotedCost : ""] : [price]),
+      ...(house
+        ? []
+        : admin
+          ? [code ? (isJiaguCode(code) ? "GDE" : "SB") : "", s ? (isJiaguCode(s.channelCode) ? jgOrders.get(s.customNo)?.identifier ?? "" : s.orderNo ?? "") : "", s?.customNo ?? "", code ?? "", price, s ? s.actualCost ?? s.quotedCost : ""]
+          : [price]),
       problem ? (admin ? problem : publicError(problem)) : "",
       rc.nameLast, rc.nameFirst, rc.phone, rc.country, rc.province, rc.city, rc.zipCode, rc.address1, rc.address2, rc.corporateName,
       r.req.pkg.length, r.req.pkg.width, r.req.pkg.height, r.req.pkg.weight, UNIT[r.req.pkg.displayUnitSystem] ?? "",
