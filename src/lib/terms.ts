@@ -9,6 +9,7 @@ export const DEFAULT_TERMS_ZH = `{brand} 物流服务协议
 
 甲方（服务方）：{company}
 地址：{companyAddress}
+联系邮箱：{companyEmail}
 
 乙方（客户）：{customer}
 地址：{address}
@@ -57,8 +58,12 @@ export const DEFAULT_TERMS_ZH = `{brand} 物流服务协议
 （以下为签署栏）
 
 甲方（服务方）：{company}
+联系邮箱：{companyEmail}
 
 乙方（客户）：{customer}
+联系人：{contactLine}
+联系电话：{phone}
+联系邮箱：{email}
 授权签署人：{signer}
 职位：{signerTitle}
 签署日期：{signDate}`;
@@ -67,6 +72,7 @@ export const DEFAULT_TERMS_EN = `{brand} Shipping Services Agreement
 
 Party A (Provider): {company}
 Address: {companyAddress}
+Email: {companyEmail}
 
 Party B (Customer): {customer}
 Address: {address}
@@ -115,8 +121,12 @@ Article 8. Effect and amendments
 (Signatures)
 
 Party A (Provider): {company}
+Email: {companyEmail}
 
 Party B (Customer): {customer}
+Contact: {contactLine}
+Phone: {phone}
+Email: {email}
 Authorized signer: {signer}
 Title: {signerTitle}
 Date signed: {signDate}`;
@@ -152,7 +162,7 @@ export function partyOf(c: Customer): TermsParty {
 /** 服务方（我们公司）：法人名称和地址，来自“设置 → 官网与联系方式” */
 export function provider() {
   const s = getSettings();
-  return { company: s.site?.company?.trim() || s.brandName, address: s.site?.contractAddress?.trim() || s.site?.address?.trim() || "", brand: s.brandName };
+  return { company: s.site?.company?.trim() || s.brandName, address: s.site?.contractAddress?.trim() || s.site?.address?.trim() || "", email: s.site?.contractEmail?.trim() || s.site?.email?.trim() || "", brand: s.brandName };
 }
 
 /** 把 {company}、{brand}、{cancelHours}、{customer} 等换成当前设置和客户信息 */
@@ -162,6 +172,7 @@ export function renderTerms(text: string, party?: TermsParty, sign?: { signer: s
   return text
     .replace(/\{company\}/g, provider().company)
     .replace(/\{companyAddress\}/g, provider().address || "—")
+    .replace(/\{companyEmail\}/g, provider().email || "—")
     .replace(/\{brand\}/g, s.brandName)
     .replace(/\{cancelHours\}/g, String(s.cancelWindowHours ?? 48))
     .replace(/\{customer\}/g, party?.customer ?? "")

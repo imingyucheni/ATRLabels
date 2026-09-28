@@ -31,10 +31,10 @@ describe("客户服务条款", () => {
   it("条款自动带出公司、客户名称和可取消小时数", () => {
     const c = db.getCustomer(cid)!;
     const text = terms.renderTerms(terms.getTerms().zh, terms.partyOf(c));
-    expect(text.startsWith("ATRShip 物流服务协议\n\n甲方（服务方）：Atronia Innovations Inc.\n地址：3134 Friendswood Ave, El Monte, CA 91733\n\n乙方（客户）：Acme Trading LLC\n地址：100 Main St, Los Angeles, CA 90001\n联系人：Amy Chen · 物流主管\n电话：626-555-0100\n邮箱：amy@acme.com")).toBe(true);
-    expect(text).toContain("授权签署人：________________"); // 没签时签署栏留空
+    expect(text.startsWith("ATRShip 物流服务协议\n\n甲方（服务方）：Atronia Innovations Inc.\n地址：3134 Friendswood Ave, El Monte, CA 91733\n联系邮箱：info@innotronia.com\n\n乙方（客户）：Acme Trading LLC\n地址：100 Main St, Los Angeles, CA 90001\n联系人：Amy Chen · 物流主管\n电话：626-555-0100\n邮箱：amy@acme.com")).toBe(true);
+    expect(text).toContain("乙方（客户）：Acme Trading LLC\n联系人：Amy Chen · 物流主管\n联系电话：626-555-0100\n联系邮箱：amy@acme.com\n授权签署人：________________"); // 没签时签署栏留空
     expect(text).toContain("乙方可在下单后 48 小时内申请取消");
-    expect(text).not.toMatch(/\{(brand|company|companyAddress|customer|address|cancelHours|contactLine|phone|email)\}/);
+    expect(text).not.toMatch(/\{(brand|company|companyAddress|customer|address|cancelHours|companyEmail|contactLine|phone|email)\}/);
   });
 
   it("签署后存档客户信息、签署人和条款原文；条款重要修改后要重新签署", () => {

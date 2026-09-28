@@ -129,6 +129,7 @@ export default async function SettingsPage() {
                 <label className="f">{t("公司名称")}<input name="company" defaultValue={site.company} maxLength={80} /></label>
                 <label className="f">{t("地址")}<input name="address" defaultValue={site.address} maxLength={120} placeholder="Chino, CA 91710" /></label>
                 <label className="f">{t("签约地址（服务条款用，官网不显示）")}<input name="contractAddress" defaultValue={site.contractAddress ?? ""} maxLength={160} placeholder="3134 Friendswood Ave, El Monte, CA 91733" /></label>
+                <label className="f">{t("签约联系邮箱（服务条款用，官网不显示）")}<input name="contractEmail" type="email" defaultValue={site.contractEmail ?? ""} maxLength={80} placeholder="info@innotronia.com" /></label>
                 <label className="f">{t("微信")}<input name="wechat" defaultValue={site.wechat} maxLength={40} /></label>
                 <label className="f">{t("电话")}<input name="phone" defaultValue={site.phone} maxLength={40} /></label>
                 <label className="f">{t("邮箱")}<input name="email" type="email" defaultValue={site.email} maxLength={80} /></label>
@@ -344,7 +345,7 @@ export default async function SettingsPage() {
           >
             <p className="small muted" style={{ marginTop: 0 }}>
               {t("客户第一次登录客户中心时，必须填写签署人、勾选同意这份条款才能使用；系统会存档签署时的客户信息和条款原文，在客户详情里可以查看。")}
-              {t("可以用的占位：{company} 我们的公司名称、{companyAddress} 公司地址（都来自“官网与联系方式”）、{brand} 平台名称、{customer} 客户名称、{address} 客户地址、{contactLine} 联系人及职位、{phone} 电话、{email} 邮箱、{cancelHours} 可取消小时数、{signer} {signerTitle} {signDate} 签署人、职位、签署日期，签署时自动换成实际内容。")}
+              {t("可以用的占位：{company} 我们的公司名称、{companyAddress} 公司地址、{companyEmail} 公司联系邮箱（都来自“官网与联系方式”）、{brand} 平台名称、{customer} 客户名称、{address} 客户地址、{contactLine} 联系人及职位、{phone} 电话、{email} 邮箱、{cancelHours} 可取消小时数、{signer} {signerTitle} {signDate} 签署人、职位、签署日期，签署时自动换成实际内容。")}
             </p>
             <FlashForm action={saveTermsAction} submitLabel="保存条款" locked="修改后客户看到的服务条款会变化">
               <div className="grid2" style={{ margin: "12px 0" }}>

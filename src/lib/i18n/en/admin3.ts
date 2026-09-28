@@ -351,6 +351,7 @@ export const admin3: Record<string, string> = {
   "签署记录": "Signing history",
   "正在查看": "Viewing",
   "服务方": "Provider",
+  "签约联系邮箱（服务条款用，官网不显示）": "Contract email (used in the terms, not shown on the website)",
   "签约地址（服务条款用，官网不显示）": "Contract address (used in the terms, not shown on the website)",
-  "可以用的占位：{company} 我们的公司名称、{companyAddress} 公司地址（都来自“官网与联系方式”）、{brand} 平台名称、{customer} 客户名称、{address} 客户地址、{contactLine} 联系人及职位、{phone} 电话、{email} 邮箱、{cancelHours} 可取消小时数、{signer} {signerTitle} {signDate} 签署人、职位、签署日期，签署时自动换成实际内容。": "Placeholders: {company} our company name, {companyAddress} company address (both from “Website & contact”), {brand} platform name, {customer} customer name, {address} customer address, {contactLine} contact and title, {phone} phone, {email} email, {cancelHours} cancellation window, {signer} {signerTitle} {signDate} signer, title and date; replaced automatically when signing.",
+  "可以用的占位：{company} 我们的公司名称、{companyAddress} 公司地址、{companyEmail} 公司联系邮箱（都来自“官网与联系方式”）、{brand} 平台名称、{customer} 客户名称、{address} 客户地址、{contactLine} 联系人及职位、{phone} 电话、{email} 邮箱、{cancelHours} 可取消小时数、{signer} {signerTitle} {signDate} 签署人、职位、签署日期，签署时自动换成实际内容。": "Placeholders: {company} our company name, {companyAddress} company address, {companyEmail} company email (all from “Website & contact”), {brand} platform name, {customer} customer name, {address} customer address, {contactLine} contact and title, {phone} phone, {email} email, {cancelHours} cancellation window, {signer} {signerTitle} {signDate} signer, title and date; replaced automatically when signing.",
 };

@@ -444,7 +444,7 @@ export interface Settings {
   /** ShipBest 接口：在后台“设置”里填写；mode = env 时按服务器环境变量 */
   shipbest: { mode: "env" | "mock" | "sandbox" | "live"; apiId: string; token: string; baseUrl?: string };
   /** 官网（客户 OMS 网址的首页）上的公司信息和联系方式 */
-  site: { company: string; address: string; /** 服务条款上的公司签约地址（官网不显示） */ contractAddress?: string; phone: string; wechat: string; email: string; hours: string };
+  site: { company: string; address: string; /** 服务条款上的公司签约地址（官网不显示） */ contractAddress?: string; /** 服务条款上的公司联系邮箱 */ contractEmail?: string; phone: string; wechat: string; email: string; hours: string };
   /** 客户服务条款：留空用系统默认；version 变了客户要重新同意 */
   terms?: { zh: string; en: string; version: number; updatedAt: string; changeNote?: string } | null;
   /** 嘉谷万邑（Dragon Open API）尾程面单：第二个服务商 */
@@ -501,7 +501,7 @@ const DEFAULT_SETTINGS: Settings = {
   originGateway: "LAX",
   shipbest: { mode: "env", apiId: "", token: "" },
   jiagu: { enabled: false, clientId: "", secret: "", ownershipId: "", customerId: "", warehouseId: "" },
-  site: { company: "Atronia Innovations Inc.", address: "Chino, CA 91710", contractAddress: "3134 Friendswood Ave, El Monte, CA 91733", phone: "", wechat: "", email: "", hours: "周一至周六 9:00–18:00（美西时间）" },
+  site: { company: "Atronia Innovations Inc.", address: "Chino, CA 91710", contractAddress: "3134 Friendswood Ave, El Monte, CA 91733", contractEmail: "info@innotronia.com", phone: "", wechat: "", email: "", hours: "周一至周六 9:00–18:00（美西时间）" },
   usps: { enabled: true, consumerKey: "", consumerSecret: "" },
   addrCheck: { enabled: true, provider: "google", googleKey: "", monthlyCap: 5000 },
   financePin: null,
