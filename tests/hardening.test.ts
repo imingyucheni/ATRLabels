@@ -115,3 +115,30 @@ describe("客户看到的报错不含服务商信息", () => {
     expect(m).not.toMatch(/SB|JG-|嘉谷|万邑/);
   });
 });
+
+describe("批量导入、补差金额解析", () => {
+  it("没填单号但有收件人的行报错（不会并到上一单）；Excel 丢了前导 0 的邮编补回；州全称换成代码", async () => {
+    const { parseOrders } = await import("@/lib/batch");
+    const head = ["自定义单号", "收件联系人姓", "收件联系人名", "收件国家", "收件省州", "收件市府", "收件地址1", "收件邮编", "包裹长", "包裹宽", "包裹高", "包裹重量", "包裹单位", "SKU", "品名(英文)", "数量", "申报单价"];
+    const sender = { nameFirst: "W", nameLast: "H", country: "US", city: "Chino", address1: "1 Main", zipCode: "91710", province: "CA", phone: "9095550100" };
+    const r = parseOrders([
+      head,
+      ["A-1", "Roe", "Jane", "US", "Massachusetts", "Boston", "1 Elm", "2134", "10", "8", "4", "1", "in/lb", "S1", "Shirt", "1", "5"],
+      ["", "", "", "", "", "", "", "", "", "", "", "", "", "S2", "Cap", "1", "3"],
+      ["", "Doe", "John", "US", "CA", "LA", "2 Oak", "90001", "10", "8", "4", "1", "in/lb", "S3", "Hat", "1", "4"],
+    ], sender);
+    expect(r.orders).toHaveLength(2);
+    expect(r.orders[0].req.skuList.map((s) => s.sku)).toEqual(["S1", "S2"]);
+    expect(r.orders[0].req.recipient).toMatchObject({ zipCode: "02134", province: "MA" });
+    expect(r.orders[1].errors[0]).toMatch(/没有填自定义单号/);
+  });
+
+  it("补差金额：-$3.20、+$1.00、(¥5) 都能识别", async () => {
+    const { parseAmount } = await import("@/lib/adjustments");
+    expect(parseAmount("-$3.20")).toBe(-3.2);
+    expect(parseAmount("+$1.00")).toBe(1);
+    expect(parseAmount("$-3.20")).toBe(-3.2);
+    expect(parseAmount("(¥5)")).toBe(-5);
+    expect(parseAmount("USD 12.5")).toBe(12.5);
+  });
+});

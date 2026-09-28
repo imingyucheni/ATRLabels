@@ -258,6 +258,10 @@ async function quoteRemote(customerId: number, channelCode: string, channelName:
     if (!q) return { channelCode, channelName, ok: false, error: "该渠道无报价" } satisfies ChannelQuote;
     // 以“优惠后总运费”作为我们的成本
     const cost = q.totalDiscountShippingFee || q.totalShippingFee;
+    // 服务商返回的运费是 0 / 负数 / 看不懂：当作这个渠道没报价，不能按 0 成本卖出去
+    if (!Number.isFinite(cost) || cost <= 0) return { channelCode, channelName, ok: false, error: "该渠道暂时无法报价" } satisfies ChannelQuote;
+    // 钱包是美元：服务商报的不是美元时不能直接当美元收
+    if (q.currency && q.currency.toUpperCase() !== "USD") return { channelCode, channelName, ok: false, error: "该渠道报价币种不是美元，暂不支持" } satisfies ChannelQuote;
     const rule = ruleOverride ?? ruleFor(customerId, channelCode);
     // 公司自用账户按成本价：不做价格取整
     const price = computePrice(cost, rule, isInternalCustomer(customerId) ? 0.01 : roundingStep);

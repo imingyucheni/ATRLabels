@@ -10,6 +10,7 @@ import { activeShipmentByRef, customerChannels, db, duplicateRefMessage, getChan
 import { InsufficientBalanceError } from "./ledger";
 import { createLabel, PriceChangedError, quoteChannel, refreshShipment, validateRequest } from "./service";
 import type { Address, ShipmentRequest, SkuItem, UnitSystem } from "./shipbest/types";
+import { usStateCode } from "./geo";
 import { JOB_STATUS_LABEL, type JobStatus } from "./batchLabels";
 
 export { JOB_STATUS_LABEL, type JobStatus };
@@ -199,9 +200,9 @@ const isOz = (v: string) => /oz|盎司/i.test(v ?? "");
 function parseUnit(v: string, def: UnitSystem): UnitSystem {
   const s = (v ?? "").toLowerCase().replace(/\s/g, "");
   if (!s) return def;
-  if (/in|lb|oz|英|盎司/.test(s)) return 3;
-  if (/kg/.test(s)) return 2;
-  if (/g/.test(s)) return 1;
+  if (/in|lb|oz|英|盎司|磅/.test(s)) return 3;
+  if (/kg|千克|公斤/.test(s)) return 2;
+  if (/g|克/.test(s)) return 1;
   return def;
 }
 
@@ -291,19 +292,28 @@ export function parseOrders(rows: string[][], defaultSender: Address | null): { 
       const v = g(n);
       if (v) a[k] = v as never;
     }
+    if (a.country === "US") {
+      // Excel 把 02134 这类邮编存成数字，前导 0 会丢：补回 5 位
+      const z = a.zipCode.match(/^(\d{3,4})(-\d{4})?$/);
+      if (z) a.zipCode = z[1].padStart(5, "0") + (z[2] ?? "");
+      // 州写全称（California）时换成代码（CA）
+      if (a.province) a.province = usStateCode(a.province) ?? a.province;
+    }
     return a;
   };
 
   const get = (r: string[], i: number) => (i >= 0 ? (r[i] ?? "").trim() : "");
   const orders: ParsedOrder[] = [];
   let current: ParsedOrder | null = null;
+  let currentUnitText = "";
 
   for (let i = headerIdx + 1; i < rows.length; i++) {
     const r = rows[i];
     if (!r.some((c) => c && c.trim())) continue;
     const ref = get(r, col.ref);
     const skuCode = get(r, col.sku);
-    const skuUnitText = get(r, col.skuUnit) || get(r, col.unit);
+    // SKU 续行没写单位时，跟它所属那一单的包裹单位走（不是系统默认单位）
+    const skuUnitText = get(r, col.skuUnit) || get(r, col.unit) || (!ref && current ? currentUnitText : "");
     const skuUnit = parseUnit(skuUnitText, st.defaultUnit);
     const sku: SkuItem = {
       sku: skuCode,
@@ -327,10 +337,21 @@ export function parseOrders(rows: string[][], defaultSender: Address | null): { 
       continue;
     }
     // 自定义单号为空、只有 SKU 的行：属于上一单
+    // 但如果这一行填了收件人（地址 / 邮编 / 姓名），多半是忘了填单号的新订单：报错，不能悄悄并到上一单里
+    const hasRecipient = !!(get(r, inRecip("收件地址1")) || get(r, inRecip("收件邮编")) || get(r, inRecip("收件联系人名")));
+    if (!ref && hasRecipient) {
+      current = null;
+      orders.push({
+        rowNo: i + 1, customerRef: "", fileChannel: get(r, col.channel), errors: ["没有填自定义单号（没有单号的行会被当作上一单的 SKU），请补上单号后重新上传"],
+        req: { sender: defaultSender ?? ({} as Address), recipient: addr(r, inRecip, "收件"), pkg: { length: 0, width: 0, height: 0, weight: 0, displayUnitSystem: st.defaultUnit, signServiceType: 0, insuranceService: 0, currency: st.defaultCurrency }, skuList: [] },
+      });
+      continue;
+    }
     if (!ref) {
       if (current && skuCode) current.req.skuList.push(sku);
       continue;
     }
+    currentUnitText = get(r, col.unit);
     const fileSender = senderStart >= 0 ? addr(r, inSender, "寄件") : null;
     const sender = fileSender && fileSender.nameFirst && fileSender.address1 && fileSender.zipCode ? fileSender : defaultSender;
     const insurance = /^需要|^是|yes|^1$/i.test(get(r, col.ins)) ? 1 : 0;
@@ -361,6 +382,7 @@ export function parseOrders(rows: string[][], defaultSender: Address | null): { 
   }
 
   for (const o of orders) {
+    if (!o.customerRef) continue; // 缺单号的行已经报错，不用再逐项校验
     const { pkg } = o.req;
     // SKU 尺寸没填时用包裹尺寸（接口要求必填）；单件重量没填时按包裹重量均摊
     const totalQty = o.req.skuList.reduce((a, s) => a + (s.quantity || 1), 0) || 1;
@@ -374,8 +396,8 @@ export function parseOrders(rows: string[][], defaultSender: Address | null): { 
     o.errors.push(...validateRequest(o.req).filter((e) => o.req.sender.nameFirst || !e.startsWith("寄件人")));
   }
   const refs = new Map<string, number>();
-  for (const o of orders) refs.set(o.customerRef, (refs.get(o.customerRef) ?? 0) + 1);
-  for (const o of orders) if (refs.get(o.customerRef)! > 1) o.errors.push("表格里自定义单号重复");
+  for (const o of orders) if (o.customerRef) refs.set(o.customerRef, (refs.get(o.customerRef) ?? 0) + 1);
+  for (const o of orders) if (o.customerRef && refs.get(o.customerRef)! > 1) o.errors.push("表格里自定义单号重复");
   if (!orders.length) return { orders, error: "表格里没有订单数据" };
   if (orders.length > 500) return { orders: [], error: "一次最多 500 单，请分批上传" };
   return { orders };
@@ -842,7 +864,11 @@ async function createJobLabels(jobId: number) {
         priceChanged++;
         setRow(r.id, { price: e.quote.price!, error: `运费已更新为 ${e.quote.price!.toFixed(2)}，请确认后再提交` });
       } else {
-        setRow(r.id, { status: "failed", error: (e as Error).message });
+        // 服务器在“扣款建单”和“记下这一行已下单”之间重启过：同一订单号的单其实已经建好了，直接关联上，不算失败
+        const done = r.customer_ref ? activeShipmentByRef(job.customerId, r.customer_ref) : undefined;
+        const linked = done && (db().prepare("SELECT 1 FROM batch_job_rows WHERE shipment_id = ?").get(done.id) as unknown);
+        if (done && !linked && done.created_at >= job.createdAt) setRow(r.id, { status: "created", shipment_id: done.id, error: null });
+        else setRow(r.id, { status: "failed", error: (e as Error).message });
       }
     }
   }
@@ -874,9 +900,8 @@ async function refreshCreatedLabels(jobId: number, timeoutMs = 180_000) {
 
 async function waitLabels(jobId: number) {
   await refreshCreatedLabels(jobId, 120_000);
-  // 还有没提交的订单时回到“待确认”，可以继续提交；剩下的订单重新默认勾选（有重复提醒的除外）
+  // 还有没提交的订单时回到“待确认”，可以继续提交；客户取消勾选的保持不勾（不能替客户重新勾上）
   const left = jobRows(jobId).filter((r) => r.status === "quoted");
-  for (const r of left) if (!r.selected && !r.warning && !needsAck(r.addr_json ? JSON.parse(r.addr_json) : null)) setRow(r.id, { selected: 1 });
   setJob(jobId, left.length ? "ready" : "done");
 }
 

@@ -142,16 +142,21 @@ describe("模拟模式完整流程", () => {
     // 再次预览会提示可能重复
     const again = adj.buildPreview(sheet.rows, mapping);
     expect(again.rows.find((r) => r.shipmentId)!.possibleDuplicate).toBe(true);
-    // 换一个文件、同一个单号：直接跳过，不会重复扣款；表格内重复的单号只导第一行
-    const other = [["跟踪号", "补差金额"], [s.trackingNo!, "2.00"], ["NEW-KEY-1", "1.00"], ["NEW-KEY-1", "1.00"]];
+    // 换一个文件、同一个单号、同样金额：直接跳过，不会重复扣款；表格内完全重复的行只导第一行
+    const other = [["跟踪号", "补差金额"], [s.trackingNo!, "1.25"], ["NEW-KEY-1", "1.00"], ["NEW-KEY-1", "1.00"]];
     const m2 = { headerRow: 0, keyCol: 0, altKeyCol: -1, amountCol: 1, reasonCol: -1, positiveMeans: "charge" as const };
     const p3 = adj.buildPreview(other, m2);
     expect(p3.rows[0].error).toBe(adj.DUP_BEFORE);
     expect(p3.rows[2].error).toBe(adj.DUP_IN_FILE);
     expect(p3.duplicates).toBe(2);
     expect(p3.byCustomer).toEqual([]);
+    // 同一单、金额不同（例如承运商后来退回 -$1.25）：可以导入，但提醒核对
+    const refund = adj.buildPreview([["跟踪号", "补差金额"], [s.trackingNo!, "-$1.25"]], m2);
+    expect(refund.rows[0]).toMatchObject({ costAmount: -1.25, possibleDuplicate: true });
+    expect(refund.rows[0].error).toBeUndefined();
+    expect(refund.rows[0].warning).toContain("金额不同");
     // NOT-IN-SYSTEM 之前导入过（未匹配），再出现也跳过
-    expect(adj.buildPreview([["跟踪号", "补差金额"], ["not-in-system", "1"]], m2).rows[0].error).toBe(adj.DUP_BEFORE);
+    expect(adj.buildPreview([["跟踪号", "补差金额"], ["not-in-system", "-0.4"]], m2).rows[0].error).toBe(adj.DUP_BEFORE);
     const b2 = adj.importAdjustments("other.xlsx", other, m2, null);
     expect(db.listAdjustments({ batchId: b2 }).length).toBe(1);
     expect(ledger.balanceOf(custId)).toBeCloseTo(50 - s.price - 1.32, 2); // 没有再扣
@@ -166,7 +171,7 @@ describe("模拟模式完整流程", () => {
     const t = s.trackingNo!;
     const spaced = t.toLowerCase().replace(/(.{4})/g, "$1 ").trim();
     const withZip = /^9\d{21}$/.test(t) ? "42091710" + t : spaced;
-    const rows2 = [["跟踪号", "补差金额"], [spaced, "0.50"], [withZip, "0.30"], ["9.4001E+21", "0.20"]];
+    const rows2 = [["跟踪号", "补差金额"], [spaced, "0.50"], [withZip, "0.50"], ["9.4001E+21", "0.20"]];
     const p2 = adj.buildPreview(rows2, { headerRow: 0, keyCol: 0, altKeyCol: -1, amountCol: 1, reasonCol: -1, positiveMeans: "charge" });
     expect(p2.rows[0].shipmentId).toBe(id);
     expect(p2.rows[1].shipmentId).toBe(id);

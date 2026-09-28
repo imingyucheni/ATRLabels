@@ -178,6 +178,7 @@ export default function ImportAdjustments() {
                     <td className="num">{money(r.costAmount)}</td>
                     <td>
                       {r.error ? <span className="profit-neg">{tm(r.error)}</span> : r.shipmentId ? <>{r.customNo}<div className="small muted">{r.customerName}</div></> : <span className="profit-neg">{t("未找到面单")}</span>}
+                      {!r.error && r.warning && <div className="small warn-text">{t(r.warning)}</div>}
                     </td>
                     <td className="num">{money(r.customerAmount)}{r.markupPercent !== null && <div className="small muted">+{r.markupPercent}%</div>}</td>
                     <td className="small">{r.reason ? r.reason.split(" · ").map((x) => tm(x)).join(" · ") : r.reason}</td>

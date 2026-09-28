@@ -145,7 +145,11 @@ export function parseAmount(raw: string): number | null {
     neg = true;
     s = s.slice(1, -1);
   }
-  s = s.replace(/[,，\s]/g, "").replace(/^[A-Za-z$¥￥€£]+|[A-Za-z$¥￥€£元]+$/g, "");
+  s = s.replace(/[,，\s]/g, "");
+  // 符号写在货币符号前面（-$3.20、+$1.00）：先把符号拿出来
+  const sign = s.match(/^[-+]/)?.[0] ?? "";
+  if (sign) s = s.slice(1);
+  s = sign + s.replace(/^[A-Za-z$¥￥€£]+|[A-Za-z$¥￥€£元]+$/g, "");
   if (!/^[-+]?\d*\.?\d+$/.test(s)) return null;
   const n = parseFloat(s);
   return Math.round((neg ? -n : n) * 100) / 100;
@@ -192,6 +196,8 @@ export interface PreviewRow {
   customerName: string | null;
   /** 这一单之前已导入过补差，或在表格里重复出现：跳过，不会重复扣款 */
   possibleDuplicate: boolean;
+  /** 不挡导入、但要人工确认的提醒（例如这一单之前补过一笔不同金额的） */
+  warning?: string;
   error?: string;
 }
 
@@ -205,15 +211,23 @@ export interface Preview {
   costTotal: number;
 }
 
-export const DUP_BEFORE = "这一单之前已经导入过补差，跳过（不会重复扣款）";
-export const DUP_IN_FILE = "单号在表格里重复出现，只导入第一行";
+export const DUP_BEFORE = "这一单之前已经导入过同样金额的补差，跳过（不会重复扣款）";
+export const DUP_IN_FILE = "同一单号、同样金额在表格里重复出现，只导入第一行";
 
 /** 之前导入过补差的单号（统一写法）和面单 */
+/**
+ * 判断重复用“单号 + 金额”：同一单可以有多笔不同金额的补差（例如超重费和偏远费分两行，
+ * 或者上个月补收、这个月承运商又退回），金额一样才算重复导入（原因各家账单写法不同，不参与判断）。
+ */
+const sig = (key: string, amount: number, _reason?: string | null) => `${key}|${amount.toFixed(2)}`;
+
 function importedBefore() {
-  const rows = db().prepare("SELECT match_key, shipment_id FROM adjustments").all() as { match_key: string; shipment_id: number | null }[];
+  const rows = db().prepare("SELECT match_key, shipment_id, cost_amount, reason FROM adjustments").all() as { match_key: string; shipment_id: number | null; cost_amount: number; reason: string | null }[];
   return {
-    keys: new Set(rows.map((r) => normalizeTrackingKey(r.match_key))),
-    shipments: new Set(rows.filter((r) => r.shipment_id).map((r) => r.shipment_id!)),
+    keys: new Set(rows.map((r) => sig(normalizeTrackingKey(r.match_key), r.cost_amount, r.reason))),
+    anyKeys: new Set(rows.map((r) => normalizeTrackingKey(r.match_key))),
+    anyShipments: new Set(rows.filter((r) => r.shipment_id).map((r) => r.shipment_id!)),
+    shipments: new Set(rows.filter((r) => r.shipment_id).map((r) => sig(`#${r.shipment_id}`, r.cost_amount, r.reason))),
   };
 }
 
@@ -228,7 +242,7 @@ export function buildPreview(rows: string[][], m: Mapping): Preview {
   const cache = new Map<string, ReturnType<typeof findShipmentByKey>>();
   const before = importedBefore();
   const seenKeys = new Set<string>();
-  const seenShipments = new Set<number>();
+  const seenShipments = new Set<string>();
   for (let i = m.headerRow + 1; i < rows.length; i++) {
     const r = rows[i];
     const matchKey = (r[m.keyCol] ?? "").trim();
@@ -275,13 +289,19 @@ export function buildPreview(rows: string[][], m: Mapping): Preview {
         row.customerAmount = isInternalCustomer(s.customerId) ? 0 : customerAmountFor(row.costAmount, policy, s.rule);
         row.markupPercent = policy === "with_markup" ? s.rule.percent : null;
       }
-      // 同一个单号只能补差一次：之前导入过的、表格里重复出现的都跳过
-      const nk = normalizeTrackingKey(matchKey);
-      if (before.keys.has(nk) || (row.shipmentId && before.shipments.has(row.shipmentId))) row.error = DUP_BEFORE;
-      else if (seenKeys.has(nk) || (row.shipmentId && seenShipments.has(row.shipmentId))) row.error = DUP_IN_FILE;
+      // 同一单号、同样金额的补差只导入一次：之前导入过的、表格里重复出现的都跳过
+      const nk = sig(normalizeTrackingKey(matchKey), row.costAmount!, reason);
+      const sk = row.shipmentId ? sig(`#${row.shipmentId}`, row.costAmount!, reason) : null;
+      if (before.keys.has(nk) || (sk && before.shipments.has(sk))) row.error = DUP_BEFORE;
+      else if (seenKeys.has(nk) || (sk && seenShipments.has(sk))) row.error = DUP_IN_FILE;
       if (row.error) row.possibleDuplicate = true;
+      else if (before.anyKeys.has(normalizeTrackingKey(matchKey)) || (row.shipmentId && before.anyShipments.has(row.shipmentId))) {
+        // 同一单之前补过一笔金额 / 原因不同的：照常导入（例如承运商后来退回、或另一项附加费），但提醒核对
+        row.possibleDuplicate = true;
+        row.warning = "这一单之前导入过一笔金额不同的补差，请确认不是同一笔费用";
+      }
       seenKeys.add(nk);
-      if (row.shipmentId) seenShipments.add(row.shipmentId);
+      if (sk) seenShipments.add(sk);
     }
     out.push(row);
   }
@@ -301,7 +321,7 @@ export function buildPreview(rows: string[][], m: Mapping): Preview {
     byCustomer: [...groups.values()].sort((a, b) => b.customerTotal - a.customerTotal),
     unmatched: out.filter((r) => !r.error && !r.shipmentId).length,
     invalid: out.filter((r) => r.error && !r.possibleDuplicate).length,
-    duplicates: out.filter((r) => r.possibleDuplicate).length,
+    duplicates: out.filter((r) => r.error === DUP_BEFORE || r.error === DUP_IN_FILE).length,
     costTotal: out.reduce((a, r) => a + (r.error ? 0 : (r.costAmount ?? 0)), 0),
   };
 }

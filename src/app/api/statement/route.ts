@@ -32,6 +32,9 @@ export async function GET(req: Request) {
   const opening = from ? balanceAt(customerId, { before: from }) : 0;
   const closing = to ? balanceAt(customerId, { through: to }) : balanceOf(customerId);
   const sumRow = (label: string, v: number) => ["", "", "", "", "", t(label), v.toFixed(2)];
+  const topups = topupsBetween(customerId, from, to);
+  // 让“期初 + 充值 − 本期费用 = 期末”对得上：手动调账、之前月份的单在本期取消退款等，单独列一行
+  const other = Math.round((closing - opening - topups + st.totals.total) * 100) / 100;
   rows.push(
     [],
     sumRow("面单合计", st.totals.labels),
@@ -40,7 +43,8 @@ export async function GET(req: Request) {
     sumRow(admin ? "应收合计" : "本期应付合计", st.totals.total),
     [],
     sumRow("期初余额", opening),
-    sumRow("本期充值", topupsBetween(customerId, from, to)),
+    sumRow("本期充值", topups),
+    ...(Math.abs(other) >= 0.01 ? [sumRow("其他调整（手动调账、跨期取消退款等）", other)] : []),
     sumRow("期末余额", closing),
   );
   return csvResponse(
