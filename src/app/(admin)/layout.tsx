@@ -54,7 +54,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         }
         logout={logoutAction}
         groups={[
-          { items: [{ href: "/", label: "概览", icon: "dashboard", exact: true }, { href: "/reports", label: "报表", icon: "reports" }] },
+          { items: [{ href: "/", label: "概览", icon: "dashboard", exact: true }, { href: "/reports", label: "报表", icon: "reports" }, { href: "/reconcile", label: "服务商对账", icon: "billing" }] },
           {
             title: "客户",
             items: [
