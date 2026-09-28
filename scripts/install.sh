@@ -282,6 +282,13 @@ fi
 
 # ---------- 系统服务 ----------
 say "注册系统服务"
+# 更新前先备份数据库（后台“数据备份”里可以看到“系统更新前”，出问题可以一键恢复）；只保留最近 5 份
+if [ -f "$DATA_DIR/atrlabels.db" ]; then
+  say "更新前备份数据"
+  sqlite3 "$DATA_DIR/atrlabels.db" ".backup '$DATA_DIR/backups/before-update-$(date +%F-%H%M%S)-${SHA:0:7}.db'" && echo "已备份" || warn "备份失败（不影响更新）"
+  { ls -1t "$DATA_DIR"/backups/before-update-*.db 2>/dev/null | tail -n +6 | xargs -r rm -f; } || true
+fi
+PREV_REL=$(readlink -f "$RUN_DIR/current" 2>/dev/null || true)
 if [ "$MODE" = prebuilt ]; then
   ln -sfn "$REL" "$RUN_DIR/current"
   # 只保留最近 3 个版本
@@ -418,5 +425,15 @@ EOF
 else
   warn "服务没有正常启动，下面是最近的日志，请截图发给技术支持："
   journalctl -u "$SERVICE" -n 30 --no-pager || true
+  # 新版本起不来：自动切回上一个版本，网站先恢复正常
+  if [ "$MODE" = prebuilt ] && [ -n "$PREV_REL" ] && [ -f "$PREV_REL/server.js" ] && [ "$PREV_REL" != "$(readlink -f "$REL")" ]; then
+    warn "正在自动恢复到上一个版本…"
+    ln -sfn "$PREV_REL" "$RUN_DIR/current"
+    systemctl restart "$SERVICE"
+    for i in $(seq 1 30); do
+      if curl -fs -o /dev/null -m 3 "http://127.0.0.1:$PORT/login" 2>/dev/null; then echo "已恢复到上一个版本，网站正常运行。请把上面的日志截图发给技术支持。"; break; fi
+      sleep 2
+    done
+  fi
   exit 1
 fi

@@ -32,7 +32,10 @@ const UNIT = /^(apt|apartment|suite|ste|unit|#|bldg|building|fl|floor|rm|room|de
 const STREET_HINT = /\b(st|street|ave|avenue|rd|road|blvd|boulevard|dr|drive|ln|lane|ct|court|way|pl|place|pkwy|parkway|hwy|highway|cir|circle|ter|terrace|trl|trail|loop|sq|square)\b\.?/i;
 
 // “City, ST 12345” / “City ST 12345-6789” / “City, Texas 12345” / “ST 12345”
-const CITY_LINE = new RegExp(`^(?:(.*?)[,\\s]+)?(${STATE_NAMES}|[A-Za-z]{2})\\.?[,\\s]+(\\d{5}(?:-\\d{4})?)$`, "i");
+// 城市部分用“尽量不要”（??）：先试整行开头就是州名（West Virginia 25301），避免把州名的前半截当成城市
+const CITY_LINE = new RegExp(`^(?:(.*?)[,\\s]+)??(${STATE_NAMES}|[A-Za-z]{2})\\.?[,\\s]+(\\d{5}(?:-?\\d{4})?)$`, "i");
+/** 9 位邮编没写横杠（972011234）时补成 97201-1234 */
+const zip9 = (z: string) => (/^\d{9}$/.test(z) ? `${z.slice(0, 5)}-${z.slice(5)}` : z);
 
 function stateCode(s: string): string | null {
   const t = s.trim().toLowerCase();
@@ -111,7 +114,7 @@ export function parseAddress(text: string): Partial<Address> {
         }
         out.city = city;
         out.province = stateCode(m[2])!;
-        out.zipCode = m[3];
+        out.zipCode = zip9(m[3]);
         out.country ??= "US";
         lines.splice(start, i - start + 1);
         cityIdx = start;
@@ -121,9 +124,9 @@ export function parseAddress(text: string): Partial<Address> {
   }
   if (cityIdx < 0) {
     // 只有邮编：单独一行 5 位数字
-    const zi = lines.findIndex((l) => /^\d{5}(-\d{4})?$/.test(l));
+    const zi = lines.findIndex((l) => /^\d{5}(-?\d{4})?$/.test(l));
     if (zi >= 0) {
-      out.zipCode = lines[zi];
+      out.zipCode = zip9(lines[zi]);
       lines.splice(zi, 1);
     }
   }

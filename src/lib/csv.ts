@@ -13,7 +13,8 @@ export function csvResponse(filename: string, header: string[], rows: unknown[][
   return new Response(body, {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,
+      // 老浏览器 / 部分下载工具不认 filename*：先给一个英文文件名兜底
+      "Content-Disposition": `attachment; filename="${filename.replace(/[^\w.-]+/g, "_").replace(/^_+/, "") || "export.csv"}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
     },
   });
 }

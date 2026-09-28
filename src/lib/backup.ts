@@ -9,17 +9,18 @@ import fs from "node:fs";
 import path from "node:path";
 import { closeLiveDb, liveDb, rootDir } from "./db";
 
-export type BackupKind = "daily" | "manual" | "before-clear" | "before-restore";
+export type BackupKind = "daily" | "manual" | "before-clear" | "before-restore" | "before-update";
 
 export const BACKUP_KIND_LABEL: Record<BackupKind, string> = {
   daily: "每日自动",
   manual: "手动备份",
   "before-clear": "清除测试数据前",
   "before-restore": "恢复备份前",
+  "before-update": "系统更新前",
 };
 
 const FILE_DIRS = ["labels", "topup", "samples", "assets"];
-const NAME_RE = /^(atrlabels-\d{4}-\d{2}-\d{2}|manual-[\w-]+|before-clear-[\w-]+|before-restore-[\w-]+)\.db$/;
+const NAME_RE = /^(atrlabels-\d{4}-\d{2}-\d{2}|manual-[\w-]+|before-clear-[\w-]+|before-restore-[\w-]+|before-update-[\w-]+)\.db$/;
 
 export const backupDir = () => path.join(rootDir(), "backups");
 
@@ -27,6 +28,7 @@ function kindOf(name: string): BackupKind {
   if (name.startsWith("manual-")) return "manual";
   if (name.startsWith("before-clear-")) return "before-clear";
   if (name.startsWith("before-restore-")) return "before-restore";
+  if (name.startsWith("before-update-")) return "before-update";
   return "daily";
 }
 

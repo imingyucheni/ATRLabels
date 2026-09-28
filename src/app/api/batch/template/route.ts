@@ -16,7 +16,7 @@ export async function GET() {
   return new Response(new Uint8Array(buf), {
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent((await getT())("导单模板.xlsx"))}`,
+      "Content-Disposition": `attachment; filename="template.xlsx"; filename*=UTF-8''${encodeURIComponent((await getT())("导单模板.xlsx"))}`,
     },
   });
 }

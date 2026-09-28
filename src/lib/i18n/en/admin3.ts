@@ -351,6 +351,7 @@ export const admin3: Record<string, string> = {
   "签署记录": "Signing history",
   "正在查看": "Viewing",
   "服务方": "Provider",
+  "系统更新前": "Before system update",
   "内部测试账号（客户页面里标记的）下的模拟单也在这里一起清除。": "Simulated orders from internal test accounts (marked on the customer page) are cleared here too.",
   "内部测试": "Internal test",
   "内部测试账号": "Internal test account",

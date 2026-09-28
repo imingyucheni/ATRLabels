@@ -142,3 +142,13 @@ describe("批量导入、补差金额解析", () => {
     expect(parseAmount("USD 12.5")).toBe(12.5);
   });
 });
+
+describe("地址识别边角情况", () => {
+  it("9 位邮编不带横杠、州名是两个词", async () => {
+    const { parseAddress } = await import("@/lib/addressParse");
+    expect(parseAddress("John Doe\n1 Main St\nPortland, OR 972011234")).toMatchObject({ city: "Portland", province: "OR", zipCode: "97201-1234" });
+    expect(parseAddress("Jane Roe\n10 Elm St\nCharleston\nWest Virginia 25301")).toMatchObject({ city: "Charleston", province: "WV", zipCode: "25301" });
+    expect(parseAddress("Amy\n500 Congress Ave\nNew York, NY 10001")).toMatchObject({ city: "New York", province: "NY", zipCode: "10001" });
+    expect(parseAddress("Bob\n2 Oak Rd\nAustin, TX 78701-1234")).toMatchObject({ city: "Austin", province: "TX", zipCode: "78701-1234" });
+  });
+});
