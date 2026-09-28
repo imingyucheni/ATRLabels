@@ -179,6 +179,8 @@ if [ "$SITE" = sandbox ]; then
   fi
 else
   set_env SANDBOX_URL "$SANDBOX_URL"
+  # 正式站：固定正式数据、真实出单，不能切测试模式（测试用沙盒站）
+  set_env APP_ENV production
 fi
 
 # ---------- 程序：优先下载 GitHub 上构建好的发布包 ----------

@@ -69,3 +69,23 @@ export function clearTestData(): { backup: string; removed: ReturnType<typeof te
   }
   return { backup, removed };
 }
+
+/**
+ * 沙盒站：清空全部测试业务数据（订单、流水、充值、批量导入、补差、签署记录、服务商日志、面单文件等），
+ * 保留客户账号、渠道、价格和设置，可以马上接着测试。只在沙盒站可用，正式站调用会直接报错。
+ */
+export function resetSandboxData(): { shipments: number } {
+  if (process.env.APP_ENV !== "sandbox") throw new Error("只有沙盒站可以清空全部数据");
+  const conn = db();
+  const shipments = (conn.prepare("SELECT COUNT(*) AS n FROM shipments").get() as { n: number }).n;
+  const tables = [
+    "ledger", "adjustments", "adjustment_batches", "batch_job_rows", "batch_jobs", "topup_requests",
+    "provider_events", "provider_orders", "mock_orders", "password_resets", "terms_acceptances", "email_log", "leads", "shipments",
+  ];
+  conn.transaction(() => {
+    for (const t of tables) if (hasTable(t)) conn.exec(`DELETE FROM ${t}`);
+  })();
+  const root = path.resolve(dataDir());
+  for (const d of ["labels", "topup"]) fs.rmSync(path.join(root, d), { recursive: true, force: true });
+  return { shipments };
+}

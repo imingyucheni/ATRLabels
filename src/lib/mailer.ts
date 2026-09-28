@@ -19,6 +19,8 @@ export function smtpConfigured() {
 }
 
 export async function sendMail(to: string, subject: string, text: string, html?: string) {
+  // 沙盒站的客户资料是从正式站复制的真实邮箱：测试时一律不发邮件，免得打扰客户
+  if (process.env.APP_ENV === "sandbox") throw new Error("沙盒站不发送邮件（避免测试时打扰真实客户）");
   const c = smtpConfig();
   if (!c.host || !c.from) throw new Error("还没有配置发件邮箱（SMTP）");
   const t = nodemailer.createTransport({

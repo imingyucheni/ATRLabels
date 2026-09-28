@@ -47,7 +47,8 @@ import { getShipBestClient, shipbestMode } from "@/lib/shipbest/client";
 import { saveDimRule } from "@/lib/rates";
 import { CARRIERS } from "@/lib/carriers";
 import { clearChannelNameCache, sameNameChannels } from "@/lib/channelDisplay";
-import { clearTestData } from "@/lib/cleanup";
+import { clearTestData, resetSandboxData } from "@/lib/cleanup";
+import { isProductionSite } from "@/lib/sites";
 import { checkAddress, needsAck, type AddressCheck } from "@/lib/addressCheck";
 import { updateLead } from "@/lib/leads";
 import { getJiaguClient, jiaguConfig, JG_PREFIX, JG_SUFFIX, warehouseFor } from "@/lib/shipbest/jiagu";
@@ -585,6 +586,7 @@ export async function testMailAction(_: FlashState, fd: FormData): Promise<Flash
 
 export async function resetTestEnvAction(_: FlashState): Promise<FlashState> {
   await requireAdmin();
+  if (isProductionSite()) return { error: "正式站没有测试环境，测试请到沙盒站" };
   resetTestEnv();
   clearChannelNameCache();
   revalidatePath("/", "layout");
@@ -984,13 +986,28 @@ export async function lookupZipAction(zip: string) {
   return lookupZip(str(zip, 10));
 }
 
+/* ---------------- 沙盒站：清空测试数据 ---------------- */
+
+export async function resetSandboxAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  await requireAdmin();
+  if (str(fd.get("confirm"), 20) !== "清空沙盒" && str(fd.get("confirm"), 20).toUpperCase() !== "RESET") return { error: "请输入“清空沙盒”确认" };
+  try {
+    const r = resetSandboxData();
+    revalidatePath("/", "layout");
+    return { ok: `沙盒数据已清空（订单 ${r.shipments} 张及相关流水、充值、批量导入、面单文件）。客户、渠道、价格和设置保留。` };
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+}
+
 /* ---------------- ShipBest 接口账号 ---------------- */
 
 export async function saveShipBestAction(_: FlashState, fd: FormData): Promise<FlashState> {
   await requireAdmin();
   const cur = getSettings().shipbest ?? { mode: "env", apiId: "", token: "" };
   const raw = fd.get("mode");
-  const mode = raw === "live" || raw === "mock" || raw === "sandbox" ? raw : "env";
+  // 正式站只能是正式模式（测试请到沙盒站）
+  const mode = isProductionSite() ? "live" : raw === "live" || raw === "mock" || raw === "sandbox" ? raw : "env";
   const apiId = str(fd.get("apiId"), 100) || cur.apiId;
   const token = str(fd.get("token"), 200) || cur.token; // 留空 = 不修改
   const baseUrl = str(fd.get("baseUrl"), 200);

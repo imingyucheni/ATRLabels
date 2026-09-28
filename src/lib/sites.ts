@@ -23,3 +23,8 @@ export function siteSwitch(): { toSandbox: boolean; url: string } | null {
   const url = trim(sandbox ? process.env.PRODUCTION_URL : process.env.SANDBOX_URL);
   return url ? { toSandbox: !sandbox, url } : null;
 }
+
+/** 正式站（安装脚本写入 APP_ENV=production）：永远只用正式数据、真实出单，不能切到测试模式 */
+export const isProductionSite = () => process.env.APP_ENV === "production";
+/** 沙盒站：独立的一套数据，专门给内部测试用，永远不会真实出单，可以随时清空 */
+export const isSandboxSiteEnv = () => process.env.APP_ENV === "sandbox";

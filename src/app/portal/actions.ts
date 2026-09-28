@@ -43,6 +43,10 @@ import { acceptTerms, hasAcceptedTerms, partyOf } from "@/lib/terms";
 const DUMMY_HASH = hashPassword("dummy-password-for-timing");
 
 export async function portalLoginAction(_: unknown, fd: FormData) {
+  // 沙盒站只给内部测试：客户不能用账号密码登录（管理员从后台“进入客户账号”测试客户端）
+  if (process.env.APP_ENV === "sandbox" && process.env.SANDBOX_PORTAL_LOGIN !== "1") {
+    return { error: await tMsg("这里是内部测试站，客户不能登录。请到正式网址登录。"), email: str(fd.get("email")).toLowerCase() };
+  }
   const email = str(fd.get("email")).toLowerCase();
   const password = String(fd.get("password") ?? "");
   const key = `portal:${email}:${await clientIp()}`;

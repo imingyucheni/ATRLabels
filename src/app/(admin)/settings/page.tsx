@@ -5,12 +5,13 @@ import { ADJUSTMENT_POLICY_LABEL, channelCustomerCounts, getSettings, listChanne
 import { BALANCE_RULE_LABEL } from "@/lib/ledger";
 import { computePrice, money, resolveRule, type MarkupRule } from "@/lib/pricing";
 import { isSandboxSite, shipbestConfig, type ShipBestMode } from "@/lib/shipbest/client";
+import { isProductionSite, siteSwitch } from "@/lib/sites";
 import StampSettings from "@/components/StampSettings";
 import SettingsSection, { SettingsToggleAll } from "@/components/SettingsSection";
 import FlashForm from "@/components/FlashForm";
 import RuleInputs from "@/components/RuleInputs";
 import { DEFAULT_JG_WAREHOUSES, isJiaguCode, JG_PREFIX, JG_SUFFIX } from "@/lib/shipbest/jiagu";
-import { saveTermsAction, saveSiteAction, saveJiaguAction, testJiaguAction, resetTestEnvAction, saveSmtpAction, testMailAction, setFinancePinAction, clearTestDataAction, saveAddrCheckAction, testAddrAction, refreshFxAction, saveChannelsAction, savePaymentSettingsAction, saveSettingsAction, saveShipBestAction, syncChannelsAction, verifyAction } from "@/app/actions";
+import { saveTermsAction, saveSiteAction, saveJiaguAction, testJiaguAction, resetTestEnvAction, resetSandboxAction, saveSmtpAction, testMailAction, setFinancePinAction, clearTestDataAction, saveAddrCheckAction, testAddrAction, refreshFxAction, saveChannelsAction, savePaymentSettingsAction, saveSettingsAction, saveShipBestAction, syncChannelsAction, verifyAction } from "@/app/actions";
 import { cnyToPay, usdCnyQuote } from "@/lib/fx";
 import FilePick from "@/components/FilePick";
 import { CarrierMark } from "@/components/ChannelLabel";
@@ -69,9 +70,17 @@ export default async function SettingsPage() {
         {isSandboxSite() && (
           <div className="alert warn" style={{ marginTop: 12 }}>{t("这里是沙盒站：数据和正式站分开，永远不会真实出单。选“正式”也会按沙盒处理。")}</div>
         )}
+        {isProductionSite() && (
+          <div className="alert" style={{ marginTop: 12 }}>
+            {t("正式站只使用正式数据、真实出单，客户永远看不到任何测试数据。需要测试新功能或渠道时，请到沙盒站：沙盒站是完全独立的一套数据，不会真实出单、不发邮件、客户不能登录，可以随时清空。")}
+            {siteSwitch()?.toSandbox && <> <a href={siteSwitch()!.url} target="_blank">{t("打开沙盒站")}</a></>}
+          </div>
+        )}
+        {!isProductionSite() && (
         <p className="small muted" style={{ marginTop: 10 }}>
           {t("模拟和沙盒模式使用单独的测试数据（第一次切换时复制正式环境的客户、渠道和设置，订单、充值、余额从零开始），测试时的操作不会进入正式数据。")}
         </p>
+        )}
         {currentEnv() === "test" && !isSandboxSite() && (
           <div className="row" style={{ marginBottom: 8 }}>
             <FlashForm action={resetTestEnvAction} submitLabel="用正式数据重置测试环境" submitClass="small" inline confirm="清空所有测试订单、充值和余额，并重新复制正式环境的客户、渠道和设置？" />
@@ -87,6 +96,12 @@ export default async function SettingsPage() {
         </div>
         <FlashForm action={saveShipBestAction} submitLabel="保存并测试连接" locked="切换模式或更换账号会影响所有客户的报价和出单" confirm="确定修改 ShipBest 连接吗？切到“正式”后所有客户下单都会真实出单扣费；切到“模拟 / 沙盒”后客户下的单都是测试单，面单不能用。">
           <div className="grid" style={{ margin: "12px 0" }}>
+            {isProductionSite() ? (
+              <label className="f">{t("模式")}
+                <input type="hidden" name="mode" value="live" />
+                <input value={t("正式（正式站固定，测试请到沙盒站）")} disabled />
+              </label>
+            ) : (
             <label className="f">{t("模式")}
               <select name="mode" defaultValue={sbSaved.mode === "env" ? sb.mode : sbSaved.mode}>
                 <option value="mock">{t("模拟（不连 ShipBest，按报价表估算）")}</option>
@@ -94,6 +109,7 @@ export default async function SettingsPage() {
                 <option value="live" disabled={isSandboxSite()}>{t("正式（真实报价、真实出单扣费）")}{isSandboxSite() ? t("（沙盒站不可用）") : ""}</option>
               </select>
             </label>
+            )}
             <label className="f">API ID
               <input name="apiId" defaultValue={sbSaved.apiId || (sb.source === "env" ? sb.apiId : "")} placeholder={t("OMS 后台 → API 配置里的 ID")} autoComplete="off" />
             </label>
@@ -591,6 +607,17 @@ export default async function SettingsPage() {
         <div style={{ height: 12 }} />
       </FlashForm>
       </SettingsSection>
+
+      {isSandboxSite() && (
+        <SettingsSection id="sandbox-reset" className="danger-card" title={t("清空沙盒数据")} summary={t("沙盒站的测试数据可以随时清空，不影响正式站")}>
+          <p className="small muted">{t("删除沙盒站里的全部订单、扣款退款流水、充值、批量导入、补差、签署记录、服务商日志和面单文件；客户账号、渠道、价格和设置保留，可以马上接着测试。正式站的数据完全不受影响。")}</p>
+          <FlashForm action={resetSandboxAction} submitLabel="清空沙盒数据" submitClass="danger" confirm="确定清空沙盒站的全部测试数据吗？">
+            <label className="f" style={{ maxWidth: 320, marginBottom: 10 }}>{t("输入“清空沙盒”确认")}
+              <input name="confirm" autoComplete="off" placeholder={lang === "en" ? "RESET" : "清空沙盒"} />
+            </label>
+          </FlashForm>
+        </SettingsSection>
+      )}
 
       {currentEnv() === "live" && (() => {
         const st = testDataStats();

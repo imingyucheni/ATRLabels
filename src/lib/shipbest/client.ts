@@ -375,6 +375,8 @@ export function shipbestConfig() {
   const stored = process.env.ATR_SINGLE_DB === "1" ? null : storedMode();
   const saved = stored ?? (sb.mode === "mock" || sb.mode === "sandbox" || sb.mode === "live" ? sb.mode : null);
   let mode: ShipBestMode = saved ?? (process.env.SHIPBEST_MOCK === "1" ? "mock" : "live");
+  // 正式站：只能是正式模式（客户永远看不到测试数据，测试请到沙盒站）；还没填任何服务商账号时才用模拟，方便刚装好时试看
+  if (process.env.APP_ENV === "production") mode = (apiId && token) || getSettings().jiagu?.enabled ? "live" : "mock";
   // 沙盒站不允许真实出单：设置里是“正式”也按沙盒处理
   if (mode === "live" && isSandboxSite()) mode = "sandbox";
   // 沙盒站还没填 API 账号时先用模拟模式（能正常试用，不会报错）

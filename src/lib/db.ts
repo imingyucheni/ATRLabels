@@ -52,8 +52,8 @@ export function setStoredMode(mode: StoredMode) {
 
 /** 当前用的是正式数据还是测试数据 */
 export function currentEnv(): "live" | "test" {
-  // 单库运行（测试用例、沙盒站自己就是一整套独立数据）
-  if (process.env.ATR_SINGLE_DB === "1" || process.env.APP_ENV === "sandbox" || process.env.DB_FILE) return "live";
+  // 单库运行（测试用例、沙盒站自己就是一整套独立数据）；正式站永远只用正式数据（测试请到沙盒站）
+  if (process.env.ATR_SINGLE_DB === "1" || process.env.APP_ENV === "sandbox" || process.env.APP_ENV === "production" || process.env.DB_FILE) return "live";
   const m = storedMode();
   return m === "mock" || m === "sandbox" ? "test" : "live";
 }
