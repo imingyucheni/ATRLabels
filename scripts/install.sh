@@ -354,6 +354,7 @@ caddy_sites() {
       [ -n "$from" ] && [ -n "$to" ] && site "$from" && printf '%s {\n  redir https://%s{uri} permanent\n}\n\n' "$from" "$to"
     done
   done
+  return 0 # 跳过重复网址不算出错（脚本开了 set -e，函数返回非 0 会直接退出）
 }
 if [ -n "$(caddy_sites)" ]; then
   say "配置 HTTPS（Caddy）"
