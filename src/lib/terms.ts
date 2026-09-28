@@ -23,7 +23,7 @@ export const DEFAULT_TERMS_ZH = `{brand} 物流服务协议
 
 第一条　账户使用
 1.1 甲方为乙方开设 {brand} 客户账户，该账户仅限乙方及其员工使用。乙方应妥善保管登录密码，通过乙方账户提交的订单均视为乙方的行为。
-1.2 账户采用预付余额、按单扣费的方式；余额不足时不能下单。乙方的充值在甲方确认到账后入账。
+1.2 账户按单扣费：预付账户从余额中扣除，月结账户在甲方给予的信用额度内记账并按约定结算；可用余额（含信用额度）不足时不能下单。乙方的充值或付款在甲方确认到账后入账。
 
 第二条　如实申报货物
 2.1 乙方应如实、准确填写收件人信息、包裹重量、尺寸、品名、数量和申报价值。
@@ -105,7 +105,7 @@ Whereas Party A operates the {brand} shipping label platform and Party B wishes 
 
 Article 1. Account
 1.1 Party A opens a {brand} customer account for Party B, for use by Party B and its staff only. Party B shall keep its password safe; orders placed through Party B's account are treated as placed by Party B.
-1.2 The account is prepaid and charged per label. Orders cannot be placed when the balance is insufficient. Top-ups are credited once Party A confirms receipt.
+1.2 Labels are charged per order: prepaid accounts are charged from their balance, and monthly accounts are billed within the credit limit granted by Party A and settled as agreed. Orders cannot be placed when the available balance (including any credit limit) is insufficient. Top-ups and payments are credited once Party A confirms receipt.
 
 Article 2. Accurate declarations
 2.1 Party B shall provide accurate recipient details, package weight, dimensions, item descriptions, quantities and declared values.

@@ -138,7 +138,7 @@ export default async function ShipmentDetail({ params }: { params: Promise<{ id:
               ) : null}
             </>
           ) : (
-            <p className="muted">{t("面单尚未生成。ShipBest 一般几秒内出单，可点“刷新状态”。")}</p>
+            <p className="muted">{s.status === "cancelled" ? t("这张单已取消，没有面单。") : s.status === "exception" ? t("出单异常，没有面单。") : t("面单尚未生成。ShipBest 一般几秒内出单，可点“刷新状态”。")}</p>
           )}
           {s.labelSku && (
             <p className="small muted" style={{ margin: "8px 0" }}>

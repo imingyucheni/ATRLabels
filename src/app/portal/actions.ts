@@ -197,11 +197,12 @@ export async function portalCancelAction(_: FlashState, fd: FormData): Promise<F
     return { error: contact ? t("取消失败，请联系客服：{contact}", { contact }) : t("取消失败，请联系客服") };
   };
   try {
-    // 接口取消成功才算取消；失败就告诉客户联系客服（面单保持有效）
-    const r = await requestCancel(id, { markOnFail: false });
+    // 接口能直接取消的马上取消退款；服务商要人工取消的（已出面单的一般都是）转“取消处理中”，
+    // 我们找服务商作废后在后台确认，费用再退回
+    const r = await requestCancel(id);
     revalidatePath(`/portal/shipments/${id}`);
     revalidatePath("/portal", "layout");
-    if (!r.done) return failed();
+    if (!r.done) return { ok: await tMsg("已提交取消申请，客服处理完成后费用会退回账户余额。请不要再使用这张面单。") };
     return { ok: await tMsg("已取消，费用已退回账户余额") };
   } catch {
     return failed();
