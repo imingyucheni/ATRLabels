@@ -49,11 +49,30 @@ export const DEFAULT_TERMS_ZH = `{brand} 物流服务协议
 7.1 运费价格和可用渠道可能随承运商调整而变化，以乙方下单时页面显示的价格为准。
 7.2 乙方提供的收件人信息仅用于出单和派送，甲方不会用于其他用途。
 
-第八条　协议的生效与变更
-8.1 本协议以电子方式签署：乙方授权签署人填写姓名、职位并勾选同意，即视为乙方签署本协议，与书面签字具有同等效力。签署时间、签署人及协议原文由系统存档。
-8.2 本协议自乙方签署之日起生效，在乙方使用甲方服务期间持续有效。
-8.3 甲方对本协议作重要修改时，将在乙方登录时提示，乙方重新签署后继续使用；乙方不同意修改的，可停止使用服务，并申请退还账户剩余余额。
-8.4 因本协议产生的任何争议，双方应首先友好协商解决。
+第八条　甲方的权利
+8.1 乙方存在以下情形之一的，甲方有权不经事先通知暂停或终止乙方账户、拒绝或取消相关订单：申报不实、寄送违禁品、拖欠费用、恶意取消或滥用服务、违反承运商规定或法律法规，以及其他可能给甲方或承运商造成损失或风险的行为。
+8.2 甲方有权根据承运商政策、成本变化和运营需要，调整服务价格、可用渠道、取消规则和其他服务内容，调整后的内容自页面公布或通知之日起适用于新订单。
+8.3 订单、扣费、补差、余额等数据以甲方系统记录为准。乙方对账单有异议的，应在费用产生之日起 30 日内书面提出，逾期视为确认。
+8.4 乙方账户余额为负数或有未结清费用的，乙方应在甲方通知后 7 日内付清；甲方有权从乙方后续充值中直接扣除。
+
+第九条　责任限制
+9.1 甲方提供的是承运商面单代购及相关技术服务，包裹的揽收、运输和派送由承运商负责。承运商的延误、丢失、损坏、错派、拒收、退件、系统故障等，甲方不承担责任，但会协助乙方向承运商交涉。
+9.2 在法律允许的最大范围内，甲方就任何一张订单承担的全部责任，以乙方为该订单实际支付给甲方的运费为上限。
+9.3 甲方不承担任何间接损失，包括但不限于利润损失、商誉损失、平台罚款、店铺评分下降、客户流失等。
+9.4 因不可抗力（包括自然灾害、疫情、罢工、政府行为、战争、网络或电力中断、承运商或第三方系统故障等）导致服务中断或延误的，甲方不承担责任。
+
+第十条　乙方的保证与赔偿
+10.1 乙方保证其提供的信息真实、准确，寄送的货物合法，并有权使用其提供的收件人信息。
+10.2 因乙方违反本协议、违反法律法规或承运商规定，导致甲方被第三方（包括承运商、政府部门、收件人）索赔、罚款或产生其他损失的，乙方应赔偿甲方由此产生的全部损失和合理费用（包括律师费）。
+
+第十一条　协议的生效、变更与解释
+11.1 本协议以电子方式签署：乙方授权签署人填写姓名、职位并勾选同意，即视为乙方签署本协议，与书面签字具有同等效力。签署时间、签署人及协议原文由系统存档。
+11.2 本协议自乙方签署之日起生效，在乙方使用甲方服务期间持续有效。
+11.3 甲方对本协议作重要修改时，将在乙方登录时提示，乙方重新签署后继续使用；乙方不同意修改的，可停止使用服务，并申请退还账户剩余余额（扣除未结清费用后）。
+11.4 在法律允许的范围内，本协议及甲方平台上公布的各项服务规则的解释权归甲方所有。
+11.5 本协议适用美国加利福尼亚州法律。因本协议产生的争议，双方应首先友好协商；协商不成的，提交加利福尼亚州洛杉矶县有管辖权的法院解决。
+11.6 本协议任何条款被认定为无效或不可执行的，不影响其他条款的效力。
+11.7 本协议中文版与英文版具有同等效力；两者不一致时，以英文版为准。
 
 （以下为签署栏）
 
@@ -112,11 +131,30 @@ Article 7. Pricing and data protection
 7.1 Rates and available services may change with carrier pricing; the price shown when Party B places an order applies.
 7.2 Recipient information provided by Party B is used only for creating labels and delivery.
 
-Article 8. Effect and amendments
-8.1 This Agreement is signed electronically: Party B's authorized signer entering their name and title and checking the acceptance box constitutes Party B's signature, with the same effect as a handwritten signature. The signing time, signer and the exact text are archived by the system.
-8.2 This Agreement takes effect on the date Party B signs it and remains in effect while Party B uses Party A's services.
-8.3 If Party A materially amends this Agreement, Party B will be asked to sign again when signing in; if Party B does not agree, it may stop using the services and request a refund of its remaining balance.
-8.4 The parties shall first seek to resolve any dispute arising from this Agreement through friendly negotiation.
+Article 8. Party A's rights
+8.1 Party A may, without prior notice, suspend or terminate Party B's account and refuse or cancel related orders if Party B makes inaccurate declarations, ships prohibited items, fails to pay amounts due, cancels maliciously or abuses the service, violates carrier rules or applicable law, or engages in any other conduct that may cause loss or risk to Party A or the carriers.
+8.2 Party A may adjust prices, available services, cancellation rules and other service terms based on carrier policies, cost changes and operational needs. Changes apply to new orders from the date they are published on the platform or notified.
+8.3 Party A's system records are the basis for orders, charges, adjustments and balances. Any dispute over charges must be raised in writing within 30 days of the charge; otherwise the charge is deemed accepted.
+8.4 If Party B's balance is negative or has unpaid amounts, Party B shall pay within 7 days of Party A's notice, and Party A may deduct such amounts from Party B's subsequent top-ups.
+
+Article 9. Limitation of liability
+9.1 Party A provides carrier label purchasing and related technology services; pickup, transport and delivery are performed by the carriers. Party A is not liable for carrier delays, loss, damage, misdelivery, refusal, returns or system failures, but will assist Party B in dealing with the carrier.
+9.2 To the maximum extent permitted by law, Party A's total liability for any single order is limited to the postage Party B actually paid to Party A for that order.
+9.3 Party A is not liable for any indirect or consequential losses, including lost profits, loss of goodwill, marketplace penalties, seller rating drops or loss of customers.
+9.4 Party A is not liable for service interruption or delay caused by force majeure, including natural disasters, epidemics, strikes, government actions, war, network or power outages, and failures of carrier or third-party systems.
+
+Article 10. Party B's warranties and indemnity
+10.1 Party B warrants that the information it provides is true and accurate, that the goods it ships are lawful, and that it has the right to use the recipient information it provides.
+10.2 Party B shall indemnify Party A for all losses and reasonable expenses (including attorneys' fees) arising from any claim, fine or loss imposed on Party A by third parties (including carriers, government authorities and recipients) as a result of Party B's breach of this Agreement, applicable law or carrier rules.
+
+Article 11. Effect, amendments and interpretation
+11.1 This Agreement is signed electronically: Party B's authorized signer entering their name and title and checking the acceptance box constitutes Party B's signature, with the same effect as a handwritten signature. The signing time, signer and the exact text are archived by the system.
+11.2 This Agreement takes effect on the date Party B signs it and remains in effect while Party B uses Party A's services.
+11.3 If Party A materially amends this Agreement, Party B will be asked to sign again when signing in; if Party B does not agree, it may stop using the services and request a refund of its remaining balance (after deducting any unpaid amounts).
+11.4 To the extent permitted by law, Party A reserves the right to interpret this Agreement and the service rules published on its platform.
+11.5 This Agreement is governed by the laws of the State of California, USA. The parties shall first seek to resolve any dispute through friendly negotiation; failing that, the dispute shall be submitted to a court of competent jurisdiction in Los Angeles County, California.
+11.6 If any provision of this Agreement is held invalid or unenforceable, the remaining provisions remain in effect.
+11.7 The Chinese and English versions of this Agreement have equal effect; in case of any inconsistency, the English version prevails.
 
 (Signatures)
 
