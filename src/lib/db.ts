@@ -239,8 +239,18 @@ function migrate(conn: Database.Database) {
   if (!cols.includes("created_by")) conn.exec("ALTER TABLE shipments ADD COLUMN created_by TEXT");
   const ccols = (conn.prepare("PRAGMA table_info(customers)").all() as { name: string }[]).map((c) => c.name);
   // 客户地址、联系人职位（服务条款里自动带出）
-  if (!ccols.includes("address")) conn.exec("ALTER TABLE customers ADD COLUMN address TEXT");
-  if (!ccols.includes("contact_title")) conn.exec("ALTER TABLE customers ADD COLUMN contact_title TEXT");
+  if (!ccols.includes("address")) {
+    conn.exec("ALTER TABLE customers ADD COLUMN address TEXT");
+    conn.exec("ALTER TABLE customers ADD COLUMN contact_title TEXT");
+    // 升级时已有的客户：空着的资料先填上明显的示例内容，方便看服务条款的效果，之后在客户详情里改成真实信息（只在加字段这一次执行）
+    const notHouse = ccols.includes("internal") ? "AND COALESCE(internal, 0) = 0" : "";
+    conn.exec(`UPDATE customers SET
+      address = '示例地址（请修改）：1 Main St, Los Angeles, CA 90001',
+      contact_title = '负责人（示例，请修改）',
+      contact = COALESCE(NULLIF(TRIM(contact), ''), name),
+      phone = COALESCE(NULLIF(TRIM(phone), ''), '示例电话（请修改）')
+      WHERE 1 = 1 ${notHouse}`);
+  } else if (!ccols.includes("contact_title")) conn.exec("ALTER TABLE customers ADD COLUMN contact_title TEXT");
   // 公司自用账户（管理员按成本价下单用，不在客户列表里显示）
   if (!ccols.includes("internal")) conn.exec("ALTER TABLE customers ADD COLUMN internal INTEGER NOT NULL DEFAULT 0");
   const jcols = (conn.prepare("PRAGMA table_info(batch_jobs)").all() as { name: string }[]).map((c) => c.name);
