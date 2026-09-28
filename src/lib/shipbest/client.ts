@@ -400,6 +400,18 @@ export function shipbestMode(): ShipBestMode {
 }
 
 let live: { key: string; jg: JiaguClient | null; client: ShipBestClient } | null = null;
+let testWrap: { base: ShipBestClient; client: ShipBestClient } | null = null;
+
+/**
+ * 内部测试账号用的接口：报价照常取真实价格，下单 / 查询 / 取消全部模拟（不连服务商、不产生费用）。
+ * 正式模式下包一层沙盒；本来就是模拟 / 沙盒模式时直接用。
+ */
+export function getTestAccountClient(): ShipBestClient {
+  const base = getShipBestClient();
+  if (shipbestConfig().mode !== "live") return base;
+  if (testWrap?.base !== base) testWrap = { base, client: new SandboxShipBestClient(base) };
+  return testWrap.client;
+}
 
 export function getShipBestClient(): ShipBestClient {
   const c = shipbestConfig();

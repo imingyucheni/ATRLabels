@@ -16,6 +16,8 @@ import {
   type ShipmentPatch,
   activeShipmentByRef,
   isInternalCustomer,
+  isTestAccount,
+  TEST_ACCOUNT_ENV,
   duplicateRefMessage,
 } from "./db";
 import { precheck, rememberQuote } from "./coverage";
@@ -26,7 +28,7 @@ import { displayChannel } from "./channelDisplay";
 import { notifyLater } from "./notify";
 import type { AddressCheck } from "./addressCheck";
 import { computePrice, resolveRule, roundUp, type MarkupRule, type PartialRule } from "./pricing";
-import { getShipBestClient, shipbestMode, ShipBestError } from "./shipbest/client";
+import { getShipBestClient, getTestAccountClient, shipbestMode, ShipBestError } from "./shipbest/client";
 import { isJiaguCode } from "./shipbest/jiagu";
 import { guessCarrier } from "./carriers";
 import { publicError } from "./portal";
@@ -383,6 +385,8 @@ export async function createLabel(input: CreateInput): Promise<number> {
 
   const customNo = newCustomNo();
   const createdBy = input.createdBy ?? "admin";
+  // 内部测试账号：模拟出单，不连服务商
+  const testAccount = isTestAccount(customerId);
   // 建本地记录和扣款放在同一个事务里：余额不足时什么都不留下
   const id = db().transaction(() => {
     // 试算期间可能已经有同号的单提交了（重复点击 / 两个页面同时下单），入库前再查一次
@@ -405,7 +409,7 @@ export async function createLabel(input: CreateInput): Promise<number> {
     remark: input.remark || null,
     customerRef: ref || null,
     createdBy,
-    env: shipbestMode(),
+    env: testAccount ? TEST_ACCOUNT_ENV : shipbestMode(),
     addressCheck: input.addressCheck && input.addressCheck.status !== "unavailable" && input.addressCheck.status !== "skipped" ? JSON.stringify(input.addressCheck) : null,
     });
     chargeLabel(customerId, newId, quote.price!, createdBy, `运费 · ${displayChannel(channelCode).name || quote.channelName}${quote.zone ? ` · ${quote.zone}` : ""}`);
@@ -413,7 +417,7 @@ export async function createLabel(input: CreateInput): Promise<number> {
   })();
 
   try {
-    await getShipBestClient().createOrder(customNo, channelCode, req, input.remark);
+    await (testAccount ? getTestAccountClient() : getShipBestClient()).createOrder(customNo, channelCode, req, input.remark);
     if (!isJiaguCode(channelCode)) logProviderEvent(customNo, "ShipBest", "提交订单", null, "成功");
   } catch (e) {
     if (e instanceof ShipBestError) {
@@ -444,7 +448,7 @@ export async function createLabel(input: CreateInput): Promise<number> {
 export async function refreshShipment(id: number): Promise<Shipment> {
   const s = getShipment(id);
   if (!s) throw new Error("记录不存在");
-  const d = await getShipBestClient().getOrder(s.orderNo ? { orderNo: s.orderNo } : { customNo: s.customNo });
+  const d = await clientFor(s).getOrder(s.orderNo ? { orderNo: s.orderNo } : { customNo: s.customNo });
   // 嘉谷的查询在接口层已经逐个记下；ShipBest 这里记一条状态
   if (!isJiaguCode(s.channelCode)) {
     logProviderEvent(s.customNo, "ShipBest", "查询状态", d.status, [SB_STATUS[d.status] ?? "", d.errorMsg, d.trackingNo ? `运单号 ${d.trackingNo}` : ""].filter(Boolean).join(" · "));
@@ -529,6 +533,11 @@ export async function refreshShipment(id: number): Promise<Shipment> {
   return getShipment(id)!;
 }
 
+/** 这张单该用哪个接口：内部测试账号 / 模拟、沙盒时下的单用模拟接口，正式单用正式接口 */
+function clientFor(s: { isTest: boolean }) {
+  return s.isTest ? getTestAccountClient() : getShipBestClient();
+}
+
 /** 这张面单走的是哪家服务商 */
 export function providerOf(channelCode: string) {
   return isJiaguCode(channelCode) ? "嘉谷" : "ShipBest";
@@ -547,7 +556,7 @@ export const JG_TIMEOUT_VOIDED_MSG = `嘉谷 ${JG_LABEL_TIMEOUT_MIN} 分钟内�
 async function autoVoid(s: Shipment, note: string, sbCharged = false): Promise<boolean> {
   const provider = providerOf(s.channelCode);
   try {
-    await getShipBestClient().cancelOrder(s.orderNo ? { orderNo: s.orderNo } : { customNo: s.customNo });
+    await clientFor(s).cancelOrder(s.orderNo ? { orderNo: s.orderNo } : { customNo: s.customNo });
   } catch (e) {
     logProviderEvent(s.customNo, provider, "系统自动取消", e instanceof ShipBestError ? e.code : null, `失败：${(e as Error).message}`);
     return false;
@@ -641,13 +650,19 @@ export async function requestCancel(
   if (!s) throw new Error("记录不存在");
   if (s.status === "cancelled") return { done: true, message: "已经是取消状态" };
   try {
-    await getShipBestClient().cancelOrder(s.orderNo ? { orderNo: s.orderNo } : { customNo: s.customNo });
+    await clientFor(s).cancelOrder(s.orderNo ? { orderNo: s.orderNo } : { customNo: s.customNo });
     logProviderEvent(s.customNo, providerOf(s.channelCode), "申请取消", null, "成功");
     updateShipment(id, { ...cancelPatch(s, wasLabeled(s)), sbStatus: 6 });
     settleCancel(id);
     return { done: true, message: "已取消，费用已退回账户余额" };
   } catch (e) {
     logProviderEvent(s.customNo, providerOf(s.channelCode), "申请取消", e instanceof ShipBestError ? e.code : null, `失败：${(e as Error).message}`);
+    // 内部测试账号的单是模拟面单，没有真实面单要作废：直接取消，按规则退款
+    if (s.isTest && isTestAccount(s.customerId)) {
+      updateShipment(id, { ...cancelPatch(s, wasLabeled(s)), sbStatus: 6, errorMsg: null });
+      settleCancel(id);
+      return { done: true, message: "已取消，费用已退回账户余额" };
+    }
     // 客户自己申请：接口取消失败时不改状态（面单照常有效），只留一条记录给后台看
     if (opts.markOnFail === false) {
       updateShipment(id, { errorMsg: `客户申请取消，接口取消未成功：${(e as Error).message}` });
@@ -736,7 +751,7 @@ export async function resubmitShipment(input: Omit<CreateInput, "customerId" | "
 
   const provider = providerOf(old.channelCode);
   try {
-    await getShipBestClient().cancelOrder(old.orderNo ? { orderNo: old.orderNo } : { customNo: old.customNo });
+    await clientFor(old).cancelOrder(old.orderNo ? { orderNo: old.orderNo } : { customNo: old.customNo });
     logProviderEvent(old.customNo, provider, "申请取消", null, "成功");
     updateShipment(old.id, { ...cancelPatch(old, wasLabeled(old)), sbStatus: 6, errorMsg: `已修改后重新下单（新单 ${fresh.customNo}），原单已取消` });
     settleCancel(old.id);

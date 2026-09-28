@@ -15,7 +15,7 @@ import { money } from "@/lib/pricing";
 import { getT, getLang } from "@/lib/prefs";
 import { translateMessage } from "@/lib/i18n";
 import PinField from "@/components/PinField";
-import { ledgerEntryAction, hideCredentialsAction, saveCustomerAction, saveCustomerChannelsAction, saveCustomerPortalAction, saveCustomerSenderAction, saveCustomerStampAction, setCustomerPasswordAction } from "@/app/actions";
+import { ledgerEntryAction, hideCredentialsAction, saveCustomerAction, saveCustomerChannelsAction, saveCustomerPortalAction, saveCustomerSenderAction, saveCustomerStampAction, setCustomerPasswordAction, setTestAccountAction } from "@/app/actions";
 
 export default async function CustomerEdit({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -77,6 +77,18 @@ export default async function CustomerEdit({ params }: { params: Promise<{ id: s
           </div>
         );
       })()}
+      {c && !c.internal && (
+        <FlashForm action={setTestAccountAction} submitLabel={c.testAccount ? "取消内部测试账号" : "设为内部测试账号"} submitClass="small" className={`alert ${c.testAccount ? "warn" : ""}`}>
+          <input type="hidden" name="id" value={c.id} />
+          <input type="hidden" name="on" value={c.testAccount ? "0" : "1"} />
+          <div style={{ marginBottom: 8 }}>
+            <b>{t("内部测试账号")}</b>{t("：")}
+            {c.testAccount
+              ? t("是。这个账号下的单都是模拟面单：报价是真实的，但不向服务商下单、不产生费用，不计入营收和对账，可以在“设置 → 清除测试数据”里一键清掉。")
+              : t("否。自己人测试用的账号可以设为内部测试账号：下单变成模拟面单，不花钱、不计入营收，测完可以一键清除。")}
+          </div>
+        </FlashForm>
+      )}
       {c && (
         <>
           <div className="stats">

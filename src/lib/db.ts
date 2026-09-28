@@ -255,6 +255,8 @@ function migrate(conn: Database.Database) {
   } else if (!ccols.includes("contact_title")) conn.exec("ALTER TABLE customers ADD COLUMN contact_title TEXT");
   // 公司自用账户（管理员按成本价下单用，不在客户列表里显示）
   if (!ccols.includes("internal")) conn.exec("ALTER TABLE customers ADD COLUMN internal INTEGER NOT NULL DEFAULT 0");
+  // 内部测试账号：在正式站测试用，下单走模拟面单、不连服务商，不计入营收，可以随时清除
+  if (!ccols.includes("test_account")) conn.exec("ALTER TABLE customers ADD COLUMN test_account INTEGER NOT NULL DEFAULT 0");
   const jcols = (conn.prepare("PRAGMA table_info(batch_jobs)").all() as { name: string }[]).map((c) => c.name);
   if (!jcols.includes("channels_json")) conn.exec("ALTER TABLE batch_jobs ADD COLUMN channels_json TEXT");
   if (!jcols.includes("pick_mode")) conn.exec("ALTER TABLE batch_jobs ADD COLUMN pick_mode TEXT NOT NULL DEFAULT 'cheapest'");
@@ -688,6 +690,8 @@ export interface Customer {
   labelPaper: string;
   /** 公司自用账户：按成本价、可用所有渠道、不扣余额 */
   internal: boolean;
+  /** 内部测试账号：下单是模拟面单（不连服务商、不产生费用），不计入营收，可随时清除 */
+  testAccount: boolean;
 }
 
 interface CustomerRow {
@@ -712,6 +716,7 @@ interface CustomerRow {
   stamp_mode: "inherit" | "on" | "off" | null;
   label_paper: string | null;
   internal?: number | null;
+  test_account?: number | null;
 }
 
 function toCustomer(r: CustomerRow): Customer {
@@ -735,6 +740,7 @@ function toCustomer(r: CustomerRow): Customer {
     stampMode: r.stamp_mode ?? "inherit",
     labelPaper: r.label_paper ?? "4x6",
     internal: !!r.internal,
+    testAccount: !!r.test_account,
   };
 }
 
@@ -754,6 +760,19 @@ export function houseCustomerId(): number {
   if (r) return r.id;
   return Number(db().prepare("INSERT INTO customers (name, note, internal) VALUES (?, ?, 1)").run(HOUSE_CUSTOMER_NAME, "管理员下单用：成本价、所有渠道、不扣余额").lastInsertRowid);
 }
+
+/** 是不是内部测试账号 */
+export function isTestAccount(id: number | null | undefined): boolean {
+  if (!id) return false;
+  return !!(db().prepare("SELECT test_account FROM customers WHERE id = ?").get(id) as { test_account: number } | undefined)?.test_account;
+}
+
+export function setTestAccount(id: number, on: boolean) {
+  db().prepare("UPDATE customers SET test_account = ? WHERE id = ?").run(on ? 1 : 0, id);
+}
+
+/** 内部测试账号下的单在订单表里记的接口模式 */
+export const TEST_ACCOUNT_ENV = "test-account";
 
 export function isInternalCustomer(id: number | null | undefined): boolean {
   if (!id) return false;

@@ -63,6 +63,7 @@ export default async function PortalLayout({ children }: { children: React.React
       <main className="main">
         {isSandboxSite() && <div className="site-ribbon">{t("沙盒站 · 测试专用，数据和正式站分开，不会真实出单")}</div>}
         {shipbestMode() === "mock" && <div className="acting-bar">{t("演示模式：运费是按报价表模拟的，面单也是模拟的，不会真实出单。")}</div>}
+        {me.testAccount && shipbestMode() === "live" && <div className="acting-bar">{t("内部测试账号：运费是实时报价，面单是模拟的，不会真实出单扣费。")}</div>}
         {shipbestMode() === "sandbox" && <div className="acting-bar">{t("测试模式：运费是实时报价，面单是模拟的，不会真实出单扣费。")}</div>}
         {acting && (
           <form action={leaveCustomerAction} className="acting-bar">

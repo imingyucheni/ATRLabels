@@ -53,7 +53,7 @@ import { checkAddress, needsAck, type AddressCheck } from "@/lib/addressCheck";
 import { updateLead } from "@/lib/leads";
 import { getJiaguClient, jiaguConfig, JG_PREFIX, JG_SUFFIX, warehouseFor } from "@/lib/shipbest/jiagu";
 import { createBackup, deleteBackup, restoreBackup } from "@/lib/backup";
-import { getShipment, resetTestEnv, setStoredMode } from "@/lib/db";
+import { getShipment, resetTestEnv, setStoredMode, setTestAccount } from "@/lib/db";
 import { getTerms, saveTerms } from "@/lib/terms";
 import { sendMail } from "@/lib/mailer";
 import { checkFinancePin, setFinancePin } from "@/lib/financePin";
@@ -303,6 +303,18 @@ function negativeRule(r: PartialRule, who = ""): string | null {
   return [r.percent, r.fixed, r.minProfit].some((v) => v !== null && v !== undefined && v < 0)
     ? `${who}加价、固定加价、最低利润不能为负数（会低于成本出单）`
     : null;
+}
+
+export async function setTestAccountAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  await requireAdmin();
+  const id = Number(fd.get("id"));
+  const c = getCustomer(id);
+  if (!c || c.internal) return { error: "客户不存在" };
+  const on = fd.get("on") === "1";
+  setTestAccount(id, on);
+  revalidatePath(`/customers/${id}`);
+  revalidatePath("/customers");
+  return { ok: on ? "已设为内部测试账号：之后这个账号下的单都是模拟面单，不产生费用" : "已取消内部测试账号：之后这个账号下单会真实出单扣费" };
 }
 
 export async function saveCustomerAction(_: FlashState, fd: FormData): Promise<FlashState> {

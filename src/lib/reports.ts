@@ -122,6 +122,7 @@ export function buildReport(from: string, to: string, customerId?: number): Repo
     db()
       .prepare(
         `SELECT COALESCE(SUM(amount), 0) AS s FROM ledger WHERE type = 'topup'
+         AND customer_id NOT IN (SELECT id FROM customers WHERE COALESCE(test_account, 0) = 1)
          AND date(created_at, 'localtime') BETWEEN ? AND ? ${customerId ? "AND customer_id = ?" : ""}`,
       )
       .get(from, to, ...(customerId ? [customerId] : [])) as { s: number }
