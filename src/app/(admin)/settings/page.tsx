@@ -359,6 +359,10 @@ export default async function SettingsPage() {
                 <input name="changeNote" maxLength={500} placeholder={t("例如：补差规则调整为按承运商账单实际金额收取")} />
               </label>
             </FlashForm>
+            <p className="small" style={{ marginTop: 12 }}>
+              <a href="/api/terms/export">{t("下载全部客户的签署存档（ZIP）")}</a>
+              <span className="muted"> · {t("每份签署都自动存档（协议原文、签署人、时间、IP），客户资料或条款以后修改也不会影响已签的存档；服务器每天自动备份。")}</span>
+            </p>
             {(() => {
               const unsigned = unsignedCustomers();
               return unsigned.length ? (

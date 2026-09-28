@@ -45,7 +45,7 @@ export default async function PortalTermsPage() {
           </div>
         )}
         <div className="terms-body" tabIndex={0}>{text}</div>
-        {signed && <p className="small muted">{t("签署")}{t("：")}{signed.signer}{signed.signerTitle ? ` · ${signed.signerTitle}` : ""} · {fmtTime(signed.acceptedAt)}</p>}
+        {signed && <p className="small muted">{t("签署")}{t("：")}{signed.signer}{signed.signerTitle ? ` · ${signed.signerTitle}` : ""} · {fmtTime(signed.acceptedAt)} · <a href={`/api/terms/${signed.id}`}>{t("下载我签署的协议")}</a></p>}
         {!accepted && <p className="small muted" style={{ marginBottom: 0 }}>{t("条款中的客户信息如有错误，请联系客服修改后再签署。")}</p>}
         {accepted ? (
           <p className="small muted">{t("您已同意这份条款。")} <a href="/portal">{t("返回客户中心")}</a></p>

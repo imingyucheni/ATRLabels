@@ -47,6 +47,16 @@ describe("客户服务条款", () => {
     expect(a.text).toContain("Acme Trading LLC");
     expect(a.text).toMatch(/授权签署人：Amy Chen\n职位：物流主管\n签署日期：\d{4}-\d{2}-\d{2}$/);
     expect(terms.acceptedCount()).toBe(1);
+    // 存档校验码和独立存档文件
+    expect(a.sha256).toMatch(/^[0-9a-f]{64}$/);
+    expect(terms.archiveIntact(a)).toBe(true);
+    expect(terms.archiveIntact({ ...a, text: a.text + "x" })).toBe(false);
+    const doc = terms.acceptanceDocument(a);
+    expect(doc).toContain("电子签署记录");
+    expect(doc).toContain(a.sha256!);
+    expect(doc).toContain("授权签署人：Amy Chen");
+    expect(terms.acceptanceFilename(a)).toMatch(/^Acme_Trading_LLC-v1-\d{4}-\d{2}-\d{2}-\d+\.html$/);
+    expect(terms.allAcceptances()).toHaveLength(1);
 
     // 普通修改：不用重新签
     terms.saveTerms(terms.getTerms().zh + "\n补充说明", terms.getTerms().en, false);

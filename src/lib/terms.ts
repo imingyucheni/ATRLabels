@@ -3,7 +3,9 @@
  * 每次同意都记下版本、时间、IP，后台客户详情里可以查。
  */
 import { db, getSettings, saveSettings, type Customer } from "./db";
+import { createHash } from "node:crypto";
 import { localDate } from "./reports";
+import { fmtTime, TZ_LABEL } from "./time";
 
 export const DEFAULT_TERMS_ZH = `{brand} 物流服务协议
 
@@ -257,6 +259,9 @@ function conn() {
       accepted_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS terms_acc_customer ON terms_acceptances (customer_id, version);`);
+    // 签署时条款原文的 SHA-256：以后可以核对存档没有被改过
+    const cols = (c.prepare("PRAGMA table_info(terms_acceptances)").all() as { name: string }[]).map((x) => x.name);
+    if (!cols.includes("text_sha256")) c.exec("ALTER TABLE terms_acceptances ADD COLUMN text_sha256 TEXT");
     ready = true;
   }
   return c;
@@ -268,9 +273,11 @@ export function acceptTerms(input: { customerId: number; party: TermsParty; sign
   const t = getTerms();
   const text = renderTerms(input.lang === "en" ? t.en : t.zh, input.party, { signer: input.signer.slice(0, 60), title: input.signerTitle.slice(0, 60), date: localDate() });
   conn()
-    .prepare("INSERT INTO terms_acceptances (customer_id, version, signer, signer_title, party_json, lang, text, ip, user_agent) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
-    .run(input.customerId, t.version, input.signer.slice(0, 60), input.signerTitle.slice(0, 60), JSON.stringify(input.party), input.lang, text, input.ip?.slice(0, 80) ?? null, input.userAgent?.slice(0, 300) ?? null);
+    .prepare("INSERT INTO terms_acceptances (customer_id, version, signer, signer_title, party_json, lang, text, text_sha256, ip, user_agent) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+    .run(input.customerId, t.version, input.signer.slice(0, 60), input.signerTitle.slice(0, 60), JSON.stringify(input.party), input.lang, text, sha256(text), input.ip?.slice(0, 80) ?? null, input.userAgent?.slice(0, 300) ?? null);
 }
+
+export const sha256 = (s: string) => createHash("sha256").update(s, "utf8").digest("hex");
 
 export function hasAcceptedTerms(customerId: number): boolean {
   return !!conn().prepare("SELECT 1 FROM terms_acceptances WHERE customer_id = ? AND version = ?").get(customerId, getTerms().version);
@@ -285,12 +292,16 @@ export interface TermsAcceptance {
   lang: string | null;
   text: string | null;
   ip: string | null;
+  userAgent: string | null;
+  /** 签署时存下的原文校验码（旧记录没有） */
+  sha256: string | null;
+  customerId: number;
   acceptedAt: string;
 }
 
-type AcceptRow = { id: number; version: number; signer: string | null; signer_title: string | null; party_json: string | null; lang: string | null; text: string | null; ip: string | null; accepted_at: string };
+type AcceptRow = { id: number; version: number; signer: string | null; signer_title: string | null; party_json: string | null; lang: string | null; text: string | null; ip: string | null; user_agent: string | null; text_sha256: string | null; customer_id: number; accepted_at: string };
 const toAcceptance = (r: AcceptRow): TermsAcceptance => ({
-  id: r.id, version: r.version, signer: r.signer, signerTitle: r.signer_title, party: r.party_json ? JSON.parse(r.party_json) : null, lang: r.lang, text: r.text, ip: r.ip, acceptedAt: r.accepted_at,
+  id: r.id, version: r.version, signer: r.signer, signerTitle: r.signer_title, party: r.party_json ? JSON.parse(r.party_json) : null, lang: r.lang, text: r.text, ip: r.ip, userAgent: r.user_agent, sha256: r.text_sha256, customerId: r.customer_id, acceptedAt: r.accepted_at,
 });
 
 /** 这个客户最近一次同意的记录（含签署时的条款原文） */
@@ -308,6 +319,38 @@ export function getAcceptance(customerId: number, id: number): TermsAcceptance |
   const r = conn().prepare("SELECT * FROM terms_acceptances WHERE customer_id = ? AND id = ?").get(customerId, id) as AcceptRow | undefined;
   return r ? toAcceptance(r) : null;
 }
+
+export function acceptanceById(id: number): TermsAcceptance | null {
+  const r = conn().prepare("SELECT * FROM terms_acceptances WHERE id = ?").get(id) as AcceptRow | undefined;
+  return r ? toAcceptance(r) : null;
+}
+
+/** 全部签署记录（导出存档用，按签署时间） */
+export function allAcceptances(): TermsAcceptance[] {
+  return (conn().prepare("SELECT * FROM terms_acceptances ORDER BY id").all() as AcceptRow[]).map(toAcceptance);
+}
+
+/** 存档原文是否和签署时一致 */
+export const archiveIntact = (a: TermsAcceptance) => (a.sha256 && a.text != null ? sha256(a.text) === a.sha256 : null);
+
+const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+/** 一份签署存档的独立文件（HTML，浏览器打开可打印 / 另存 PDF）：签署记录 + 协议原文 */
+export function acceptanceDocument(a: TermsAcceptance): string {
+  const en = a.lang === "en";
+  const rows: [string, string][] = en
+    ? [["Customer", a.party?.customer ?? ""], ["Signer", [a.signer, a.signerTitle].filter(Boolean).join(" · ")], ["Signed at", `${fmtTime(a.acceptedAt)} (${TZ_LABEL === "美西时间" ? "US Pacific" : TZ_LABEL})`], ["Version", String(a.version)], ["IP", a.ip ?? "—"], ["Browser", a.userAgent ?? "—"], ["SHA-256 of text", a.sha256 ?? "—"]]
+    : [["客户", a.party?.customer ?? ""], ["签署人", [a.signer, a.signerTitle].filter(Boolean).join(" · ")], ["签署时间", `${fmtTime(a.acceptedAt)}（${TZ_LABEL}）`], ["协议版本", `第 ${a.version} 版`], ["签署 IP", a.ip ?? "—"], ["浏览器", a.userAgent ?? "—"], ["原文校验码 SHA-256", a.sha256 ?? "—"]];
+  const title = `${en ? "Signed agreement" : "签署存档"} · ${a.party?.customer ?? ""} · ${a.acceptedAt.slice(0, 10)}`;
+  return `<!doctype html><html lang="${en ? "en" : "zh"}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}</title>
+<style>body{font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;color:#1a1a1a;background:#fff;max-width:820px;margin:0 auto;padding:32px 20px;line-height:1.75}table{border-collapse:collapse;width:100%;font-size:13px;margin-bottom:24px}td{border:1px solid #ddd;padding:6px 10px;vertical-align:top;word-break:break-all}td:first-child{width:160px;color:#555;background:#f7f7f7}pre{white-space:pre-wrap;font-family:inherit;font-size:15px;margin:0}h1{font-size:16px;color:#555;font-weight:500}</style></head><body>
+<h1>${esc(en ? "Electronic signing record" : "电子签署记录")}</h1><table>${rows.map(([k, v]) => `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join("")}</table>
+<pre>${esc(a.text ?? "")}</pre></body></html>`;
+}
+
+/** 存档文件名：客户名-第N版-日期.html */
+export const acceptanceFilename = (a: TermsAcceptance) =>
+  `${(a.party?.customer ?? `customer-${a.customerId}`).replace(/[\\/:*?"<>|\s]+/g, "_").slice(0, 60)}-v${a.version}-${a.acceptedAt.slice(0, 10)}-${a.id}.html`;
 
 /** 已开通客户端登录、还没签当前版本的客户 */
 export function unsignedCustomers(): { id: number; name: string; email: string | null; signedVersion: number | null }[] {

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getCustomer } from "@/lib/db";
-import { getAcceptance, lastAcceptance, listAcceptances, provider } from "@/lib/terms";
+import { archiveIntact, getAcceptance, lastAcceptance, listAcceptances, provider } from "@/lib/terms";
 import { fmtTime, TZ_LABEL } from "@/lib/time";
 import { getT } from "@/lib/prefs";
 import PrintButton from "@/components/PrintButton";
@@ -19,6 +19,7 @@ export default async function CustomerTermsPage({ params, searchParams }: { para
       <div className="row no-print" style={{ justifyContent: "space-between", marginBottom: 12 }}>
         <h1 style={{ margin: 0 }}>{t("服务条款签署存档")} · {c.name}</h1>
         <div className="row">
+          {a && <a className="btn" href={`/api/terms/${a.id}`}>{t("下载存档文件")}</a>}
           {a && <PrintButton />}
           <Link href={`/customers/${c.id}`}>{t("← 返回客户")}</Link>
         </div>
@@ -54,6 +55,7 @@ export default async function CustomerTermsPage({ params, searchParams }: { para
             <dt>{t("签署人")}</dt><dd>{a.signer}{a.signerTitle ? ` · ${a.signerTitle}` : ""}</dd>
             <dt>{t("签署时间")}</dt><dd>{fmtTime(a.acceptedAt)}（{t(TZ_LABEL)}）</dd>
             <dt>{t("条款版本")}</dt><dd>{t("第 {v} 版", { v: a.version })}{a.ip ? ` · IP ${a.ip}` : ""}</dd>
+            {a.sha256 && (<><dt>{t("原文校验")}</dt><dd>{archiveIntact(a) ? <span className="badge ok">{t("与签署时一致")}</span> : <span className="badge exception">{t("与签署时不一致")}</span>} <span className="small muted">SHA-256 {a.sha256.slice(0, 16)}…</span></dd></>)}
           </dl>
           <div className="terms-body print-full">{a.text}</div>
         </div>
