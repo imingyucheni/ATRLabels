@@ -38,7 +38,6 @@ export default function Sidebar(props: {
   const all = props.groups.flatMap((g) => g.items);
   const match = (i: NavItem) => (i.exact ? path === i.href : path === i.href || path.startsWith(i.href + "/"));
   const active = all.filter(match).sort((a, b) => b.href.length - a.href.length)[0]?.href;
-  const initials = props.brand.replace(/[^A-Za-z]/g, "").slice(0, 3).toUpperCase() || props.brand.slice(0, 2);
   // 手机上菜单默认收起，点右上角按钮展开；切换页面后自动收起
   const [open, setOpen] = useState(false);
   useEffect(() => setOpen(false), [path]);
@@ -57,7 +56,8 @@ export default function Sidebar(props: {
   return (
     <aside className={`sidebar ${open ? "open" : ""}`}>
       <div className="brand">
-        <div className="brand-mark">{initials}</div>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img className="brand-mark brand-logo" src="/app-icon.svg" alt="" aria-hidden="true" />
         <div>
           <div className="brand-name">{props.brand}</div>
           <div className="brand-sub">{t(props.brandSub)}</div>

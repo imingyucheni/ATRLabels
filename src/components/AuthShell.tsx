@@ -3,12 +3,12 @@ import PrefToggles from "./PrefToggles";
 
 /** 登录页布局：左侧品牌区，右侧表单 */
 export default function AuthShell({ brand, headline, sub, points, children, showLang = false }: { brand: string; headline: string; sub: string; points: string[]; children: React.ReactNode; showLang?: boolean }) {
-  const initials = brand.replace(/[^A-Za-z]/g, "").slice(0, 3).toUpperCase() || brand.slice(0, 2);
   return (
     <div className="auth">
       <div className="auth-side">
         <div className="brand" style={{ padding: 0 }}>
-          <div className="brand-mark">{initials}</div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img className="brand-mark brand-logo" src="/app-icon.svg" alt="" aria-hidden="true" />
           <div className="brand-name">{brand}</div>
         </div>
         <div>

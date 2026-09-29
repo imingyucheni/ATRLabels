@@ -127,6 +127,9 @@ code { font: 12.5px ui-monospace, SFMono-Regular, Menlo, monospace; background: 
   display: grid; place-items: center;
   font-weight: 700; font-size: 12px; letter-spacing: 0.02em;
 }
+/* 系统 logo（和手机桌面图标同一个图案） */
+.brand-mark.brand-logo { background: none; padding: 0; object-fit: cover; box-shadow: 0 1px 3px rgba(2, 8, 22, 0.25); }
+.auth-side .brand-mark.brand-logo, .site-brand .brand-mark.brand-logo { background: none; }
 .brand-name { font-weight: 650; font-size: 14.5px; line-height: 1.2; }
 .brand-sub { font-size: 11.5px; color: var(--muted); }
 /* 菜单分组标题：小色条 + 标题 + 细分隔线 */

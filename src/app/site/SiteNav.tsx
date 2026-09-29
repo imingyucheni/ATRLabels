@@ -10,7 +10,6 @@ import { useT } from "@/components/I18n";
 export default function SiteNav({ brand, home = true }: { brand: string; home?: boolean }) {
   const t = useT();
   const [open, setOpen] = useState(false);
-  const initials = brand.replace(/[^A-Za-z]/g, "").slice(0, 3).toUpperCase() || brand.slice(0, 2);
   const anchor = (id: string) => (home ? `#${id}` : `/site#${id}`);
   const links = [
     { href: anchor("product"), label: t("产品") },
@@ -24,7 +23,8 @@ export default function SiteNav({ brand, home = true }: { brand: string; home?: 
     <nav className={`site-nav${open ? " open" : ""}`}>
       <div className="site-wrap site-nav-in">
         <Link href="/site" className="site-brand" onClick={() => setOpen(false)}>
-          <span className="brand-mark">{initials}</span>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img className="brand-mark brand-logo" src="/app-icon.svg" alt="" aria-hidden="true" />
           <span>{brand}</span>
         </Link>
         <div className="site-links">
