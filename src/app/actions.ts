@@ -552,6 +552,14 @@ export async function saveTermsAction(_: FlashState, fd: FormData): Promise<Flas
   return { ok: bump ? `已保存为第 ${getTerms().version} 版，所有客户下次登录时需要重新签署` : "服务条款已保存" };
 }
 
+export async function resetTermsAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  await requireAdmin();
+  const bump = fd.get("bump") === "on";
+  saveTerms("", "", bump, String(fd.get("changeNote") ?? ""));
+  revalidatePath("/settings");
+  return { ok: bump ? `已恢复为系统默认条款（第 ${getTerms().version} 版），所有客户下次登录时需要重新签署` : "已恢复为系统默认条款" };
+}
+
 export async function setFinancePinAction(_: FlashState, fd: FormData): Promise<FlashState> {
   await requireAdmin();
   // 设置 / 修改都要管理员登录密码

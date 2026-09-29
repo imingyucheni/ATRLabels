@@ -180,9 +180,42 @@ export interface Terms {
   changeNote: string;
 }
 
+/** 统一换行：浏览器文本框提交的是 \r\n，和系统默认文本比较前要先统一 */
+const normText = (t: string | null | undefined) => (t ?? "").replace(/\r\n?/g, "\n").trim();
+
+/**
+ * 以前各个版本的系统默认条款（原文的 SHA-256 前 16 位）。
+ * 以前在后台点“保存”时，因为换行符不同，没改过的默认条款也被存成了“自定义”，之后系统默认条款更新了也显示不出来；
+ * 存的内容如果就是以前的某个默认版本，当作没有自定义，直接用最新的默认条款。
+ */
+const OLD_DEFAULTS = new Set([
+  "92d896d6aa6db8cb", "7a6fbbec4b8afff1", "bd748ddb61a4fb04", "b47db10231f69605", "c64e45f90b51c0e8", "8de42b865874515a",
+  "738161870b666681", "287e4933fff31a4d", "4dcf5e17ea09e9ca", "4094eef49137b52f", "07e65995ce644b28", "62684574de183fbf",
+]);
+const isOldDefault = (t: string) => OLD_DEFAULTS.has(createHash("sha256").update(t, "utf8").digest("hex").slice(0, 16));
+
+/** 后台存的自定义条款；空的、或者其实是某个版本的默认条款，都返回 null（用系统默认） */
+function customText(saved: string | null | undefined, def: string): string | null {
+  const t = normText(saved);
+  if (!t || t === normText(def) || isOldDefault(t)) return null;
+  return t;
+}
+
 export function getTerms(): Terms {
   const t = getSettings().terms;
-  return { zh: t?.zh?.trim() || DEFAULT_TERMS_ZH, en: t?.en?.trim() || DEFAULT_TERMS_EN, version: t?.version || 1, updatedAt: t?.updatedAt ?? null, changeNote: t?.changeNote ?? "" };
+  return {
+    zh: customText(t?.zh, DEFAULT_TERMS_ZH) ?? DEFAULT_TERMS_ZH,
+    en: customText(t?.en, DEFAULT_TERMS_EN) ?? DEFAULT_TERMS_EN,
+    version: t?.version || 1,
+    updatedAt: t?.updatedAt ?? null,
+    changeNote: t?.changeNote ?? "",
+  };
+}
+
+/** 后台现在用的是不是系统默认条款 */
+export function usingDefaultTerms() {
+  const t = getSettings().terms;
+  return !customText(t?.zh, DEFAULT_TERMS_ZH) && !customText(t?.en, DEFAULT_TERMS_EN);
 }
 
 /** 签署时记下的客户信息 */
@@ -232,8 +265,8 @@ export function saveTerms(zh: string, en: string, bump: boolean, changeNote = ""
   const cur = getTerms();
   saveSettings({
     terms: {
-      zh: zh.trim() === DEFAULT_TERMS_ZH.trim() ? "" : zh.trim(),
-      en: en.trim() === DEFAULT_TERMS_EN.trim() ? "" : en.trim(),
+      zh: customText(zh, DEFAULT_TERMS_ZH) ?? "",
+      en: customText(en, DEFAULT_TERMS_EN) ?? "",
       version: bump ? cur.version + 1 : cur.version,
       updatedAt: new Date().toISOString(),
       changeNote: bump ? changeNote.trim().slice(0, 500) : cur.changeNote,

@@ -76,3 +76,17 @@ describe("客户服务条款", () => {
     expect(terms.unsignedCustomers()).toHaveLength(0);
   });
 });
+
+describe("服务条款：换行符和旧版默认条款", () => {
+  it("后台保存时带 \\r\\n 的默认条款不会被当成自定义；存着旧版默认条款的直接换成最新默认", async () => {
+    const terms = await import("@/lib/terms");
+    const db = await import("@/lib/db");
+    terms.saveTerms(terms.DEFAULT_TERMS_ZH.replace(/\n/g, "\r\n"), terms.DEFAULT_TERMS_EN.replace(/\n/g, "\r\n"), false);
+    expect(terms.usingDefaultTerms()).toBe(true);
+    // 旧版（第一版）默认条款被存成了自定义
+    const old = "本服务条款由 {company}（{brand} 平台运营方，以下简称“我们”）与 {customer}（以下简称“您”）签订。";
+    db.saveSettings({ terms: { zh: old, en: "", version: 3, updatedAt: "", changeNote: "" } });
+    expect(terms.usingDefaultTerms()).toBe(false); // 这段不是任何版本的完整默认条款：算自定义
+    expect(terms.getTerms().zh).toBe(old);
+  });
+});

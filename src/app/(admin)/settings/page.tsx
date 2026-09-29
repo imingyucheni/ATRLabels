@@ -1,6 +1,6 @@
 import { fmtTime } from "@/lib/time";
 import { labelSkuStats } from "@/lib/labelSku";
-import { acceptedCount, getTerms, unsignedCustomers } from "@/lib/terms";
+import { acceptedCount, getTerms, unsignedCustomers, usingDefaultTerms } from "@/lib/terms";
 import { ADJUSTMENT_POLICY_LABEL, channelCustomerCounts, getSettings, listChannels } from "@/lib/db";
 import { BALANCE_RULE_LABEL } from "@/lib/ledger";
 import { computePrice, money, resolveRule, type MarkupRule } from "@/lib/pricing";
@@ -11,7 +11,7 @@ import SettingsSection, { SettingsToggleAll } from "@/components/SettingsSection
 import FlashForm from "@/components/FlashForm";
 import RuleInputs from "@/components/RuleInputs";
 import { DEFAULT_JG_WAREHOUSES, isJiaguCode, JG_PREFIX, JG_SUFFIX } from "@/lib/shipbest/jiagu";
-import { saveTermsAction, saveSiteAction, saveJiaguAction, testJiaguAction, resetTestEnvAction, resetSandboxAction, saveSmtpAction, testMailAction, setFinancePinAction, clearTestDataAction, saveAddrCheckAction, testAddrAction, refreshFxAction, saveChannelsAction, savePaymentSettingsAction, saveSettingsAction, saveShipBestAction, syncChannelsAction, verifyAction } from "@/app/actions";
+import { saveTermsAction, saveSiteAction, saveJiaguAction, testJiaguAction, resetTestEnvAction, resetSandboxAction, resetTermsAction, saveSmtpAction, testMailAction, setFinancePinAction, clearTestDataAction, saveAddrCheckAction, testAddrAction, refreshFxAction, saveChannelsAction, savePaymentSettingsAction, saveSettingsAction, saveShipBestAction, syncChannelsAction, verifyAction } from "@/app/actions";
 import { cnyToPay, usdCnyQuote } from "@/lib/fx";
 import FilePick from "@/components/FilePick";
 import { CarrierMark } from "@/components/ChannelLabel";
@@ -363,6 +363,17 @@ export default async function SettingsPage() {
               {t("客户第一次登录客户中心时，必须填写签署人、勾选同意这份条款才能使用；系统会存档签署时的客户信息和条款原文，在客户详情里可以查看。")}
               {t("可以用的占位：{company} 我们的公司名称、{companyAddress} 公司地址、{companyEmail} 公司联系邮箱（都来自“官网与联系方式”）、{brand} 平台名称、{customer} 客户名称、{address} 客户地址、{contactLine} 联系人及职位、{phone} 电话、{email} 邮箱、{cancelHours} 可取消小时数、{signer} {signerTitle} {signDate} 签署人、职位、签署日期，签署时自动换成实际内容。")}
             </p>
+            <div className={`alert ${usingDefaultTerms() ? "ok" : "warn"} small`} style={{ marginBottom: 8 }}>
+              {usingDefaultTerms()
+                ? t("现在用的是系统默认条款（正式合同格式），系统更新条款后会自动用最新版。")
+                : t("现在用的是你修改过的自定义条款，系统默认条款更新后不会自动替换。需要用最新的系统默认条款，请点下面的“恢复系统默认条款”。")}
+            </div>
+            {!usingDefaultTerms() && (
+              <FlashForm action={resetTermsAction} submitLabel="恢复系统默认条款" submitClass="small" confirm="用最新的系统默认条款替换现在的自定义条款？" className="row" >
+                <label className="small"><input type="checkbox" name="bump" defaultChecked /> {t("同时要求所有客户重新签署（版本号 +1）")}</label>
+                <input name="changeNote" maxLength={500} defaultValue={t("服务条款更新为正式协议格式，签约主体为 Atronia Innovations Inc.")} style={{ flex: 1, minWidth: 240 }} />
+              </FlashForm>
+            )}
             <FlashForm action={saveTermsAction} submitLabel="保存条款" locked="修改后客户看到的服务条款会变化">
               <div className="grid2" style={{ margin: "12px 0" }}>
                 <label className="f">{t("中文条款")}<textarea name="zh" rows={16} defaultValue={terms.zh} /></label>
