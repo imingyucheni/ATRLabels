@@ -656,7 +656,7 @@ export default async function SettingsPage() {
         const limited = list.filter((c) => limitsFor(c.code)).length;
         return (
           <SettingsSection id="limits" title={t("渠道重量 / 尺寸限制")} summary={t("{n} 个渠道有限制", { n: limited })}>
-            <p className="small muted" style={{ marginTop: 0 }}>{t("报价前先检查包裹：超出限制的，这个渠道直接不报价（客户看到“不支持该重量或地区 / 超出尺寸范围”），免得出单后被服务商拒收或补收。计费重 = 实重和体积重取大，体积重 = 长×宽×高（英寸）÷ 材积系数。留空 = 不检查这一项。灰字是默认值（来自嘉谷万邑 2026.9.24 渠道说明）。")}</p>
+            <p className="small muted" style={{ marginTop: 0 }}>{t("报价前先检查包裹：超出限制的，这个渠道直接不报价（客户看到“不支持该重量或地区 / 超出尺寸范围”），免得出单后被服务商拒收或补收。计费重 = 实重和体积重取大，体积重 = 长×宽×高（英寸）÷ 材积系数。留空 = 不检查这一项。灰字是默认值（来自嘉谷万邑 2026.9.24 渠道说明，只填了超过就拒收的最大限制；附加费接口报价里会算）。")}</p>
             <FlashForm action={saveChannelLimitsAction} submitLabel="保存限制" review>
               <div className="table-wrap">
                 <table>

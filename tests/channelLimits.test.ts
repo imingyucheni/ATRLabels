@@ -23,10 +23,11 @@ describe("渠道重量 / 尺寸限制", () => {
     db.upsertChannels([{ code: "JG-579181", name: "GOFO-LAX-917(不预上网) · GDE" }, { code: "JG-580914", name: "USPS-D价 · GDE" }, { code: "LP-GOFO", name: "GOFO-（91710） · SB" }]);
   });
 
-  it("GDE 的 GOFO：默认计费重 20 磅、最长边 90cm、三边和 150cm；按 DIM 166 算体积重", () => {
+  it("GDE 的 GOFO：默认计费重最多 30 磅、最长边 90cm、三边和 150cm；按 DIM 166 算体积重", () => {
     expect(lim.checkLimits("JG-579181", pkg(12, 10, 8, 5))).toBeNull();
-    expect(lim.checkLimits("JG-579181", pkg(12, 10, 8, 21))).toMatch(/重量限制.*上限 20 lb/);
-    expect(lim.checkLimits("JG-579181", pkg(20, 16, 12, 3))).toMatch(/计费重量 23.1 lb.*材积系数 166/); // 体积重 23.1 lb
+    expect(lim.checkLimits("JG-579181", pkg(12, 10, 8, 21))).toBeNull(); // 20–30 磅：接口报价含附加费
+    expect(lim.checkLimits("JG-579181", pkg(12, 10, 8, 31))).toMatch(/重量限制.*上限 30 lb/);
+    expect(lim.checkLimits("JG-579181", pkg(22, 20, 12, 3))).toMatch(/计费重量 31.8 lb.*材积系数 166/); // 体积重 31.8 lb
     expect(lim.checkLimits("JG-579181", pkg(95, 20, 10, 1, 1))).toMatch(/最长边/); // 95cm
     expect(lim.checkLimits("JG-579181", pkg(60, 50, 45, 1, 1))).toMatch(/长宽高之和/);
     // 没有默认限制的渠道、ShipBest 的渠道不检查
@@ -35,11 +36,11 @@ describe("渠道重量 / 尺寸限制", () => {
   });
 
   it("后台可以改；客户只看到简短原因", async () => {
-    lim.saveLimits("JG-579181", { maxLb: 25, divisor: 166 });
-    expect(lim.checkLimits("JG-579181", pkg(12, 10, 8, 21))).toBeNull();
+    lim.saveLimits("JG-579181", { maxLb: 20, divisor: 166 });
+    expect(lim.checkLimits("JG-579181", pkg(12, 10, 8, 21))).toMatch(/上限 20 lb/);
     lim.saveLimits("JG-579181", null);
     const { publicQuoteError } = await import("@/lib/portal");
-    expect(publicQuoteError(lim.checkLimits("JG-579181", pkg(12, 10, 8, 21)))).toBe("不支持该重量或地区");
+    expect(publicQuoteError(lim.checkLimits("JG-579181", pkg(12, 10, 8, 31)))).toBe("不支持该重量或地区");
     expect(publicQuoteError(lim.checkLimits("JG-579181", pkg(95, 20, 10, 1, 1)))).toBe("超出尺寸范围：这个渠道不支持该包裹尺寸");
   });
 });

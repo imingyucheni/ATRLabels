@@ -23,13 +23,13 @@ export interface ChannelLimits {
 const CM = 1 / 2.54;
 
 /**
- * 默认限制（嘉谷万邑 2026.9.24 渠道说明）：只写说明里明确“限制”的项，其余留空不检查。
- * GOFO：DIM 166，计费重 20 磅以内，最长边 ≤ 90cm，三边和 ≤ 150cm；SwiftX：DIM 166，20 磅以内；
+ * 默认限制（嘉谷万邑 2026.9.24 渠道说明）：只写“最大限制”（超过就拒收），附加费不管（接口报价已经包含）。
+ * GOFO：DIM 166，计费重最多 30 磅（20–30 磅的附加费接口报价里会算），最长边 ≤ 90cm，三边和 ≤ 150cm；SwiftX：DIM 166，20 磅以内；
  * UniUni：DIM 166，单边 ≤ 50cm，三边和 ≤ 120cm。
  */
 export function defaultLimits(code: string, name = getChannel(code)?.name ?? ""): ChannelLimits | null {
   if (!isJiaguCode(code)) return null;
-  if (/GOFO/i.test(name)) return { maxLb: 20, maxLongestIn: round1(90 * CM), maxSumIn: round1(150 * CM), divisor: 166 };
+  if (/GOFO/i.test(name)) return { maxLb: 30, maxLongestIn: round1(90 * CM), maxSumIn: round1(150 * CM), divisor: 166 };
   if (/SWIFT\s*X/i.test(name)) return { maxLb: 20, divisor: 166 };
   if (/UNI\s*UNI/i.test(name)) return { maxLongestIn: round1(50 * CM), maxSumIn: round1(120 * CM), divisor: 166 };
   return null;
