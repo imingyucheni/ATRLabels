@@ -187,3 +187,12 @@ describe("地址识别：街道和城市在同一行", () => {
     expect(parseAddress("Amy, 12 Pine Rd NW Seattle, WA 98101")).toMatchObject({ address1: "12 Pine Rd NW", city: "Seattle", province: "WA" });
   });
 });
+
+describe("地址识别：街道后缀和城市粘在一起", () => {
+  it("529 S 8th AveWest Bend, WI 53095", async () => {
+    const { parseAddress } = await import("@/lib/addressParse");
+    expect(parseAddress("test\n529 S 8th AveWest Bend, WI 53095")).toMatchObject({ address1: "529 S 8th Ave", city: "West Bend", province: "WI", zipCode: "53095" });
+    expect(parseAddress("Bob\n10 Main StLos Angeles, CA 90001")).toMatchObject({ address1: "10 Main St", city: "Los Angeles" });
+    expect(parseAddress("Amy\n5 Stanley Ave\nAustin, TX 78701")).toMatchObject({ address1: "5 Stanley Ave", city: "Austin" }); // 不误拆 Stanley
+  });
+});

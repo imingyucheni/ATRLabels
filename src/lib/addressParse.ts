@@ -29,6 +29,7 @@ const EMAIL = /[\w.+-]+@[\w-]+(\.[\w-]+)+/;
 const PHONE = /(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}(?:\s*(?:ext\.?|x|#)\s*\d{1,6})?/i;
 const LABEL = /^\s*(ship\s*to|shipping\s*address|recipient|sender|name|full\s*name|contact|address(\s*line)?\s*\d?|addr|phone(\s*number)?|tel(ephone)?|mobile|email|e-mail|收件人|寄件人|联系人|姓名|名字|电话|手机|联系电话|地址|详细地址|邮箱|邮编|城市|州)\s*[:：]\s*/i;
 const UNIT = /^(apt|apartment|suite|ste|unit|#|bldg|building|fl|floor|rm|room|dept|po box|p\.o\. box)\b\.?/i;
+const GLUED_SUFFIX = /\b(St|Ave|Rd|Blvd|Dr|Ln|Ct|Way|Pl|Pkwy|Hwy|Cir|Ter|Trl|Street|Avenue|Road|Drive|Lane|Court|Place|Boulevard)(?=[A-Z][a-z])/g;
 const STREET_HINT = /\b(st|street|ave|avenue|rd|road|blvd|boulevard|dr|drive|ln|lane|ct|court|way|pl|place|pkwy|parkway|hwy|highway|cir|circle|ter|terrace|trl|trail|loop|sq|square)\b\.?/i;
 
 // “City, ST 12345” / “City ST 12345-6789” / “City, Texas 12345” / “ST 12345”
@@ -91,6 +92,8 @@ export function parseAddress(text: string): Partial<Address> {
   // 2) 分行，每行再按逗号 / 分号拆开（城市、州、邮编后面会重新拼起来识别）
   let lines = raw
     .split(/\n+/)
+    // 从网页复制时换行丢了，街道后缀和城市粘在一起（“8th AveWest Bend”）：在中间补一个空格
+    .map((l) => l.replace(GLUED_SUFFIX, "$1 "))
     .map((l) => l.replace(LABEL, ""))
     .flatMap((l) => l.split(/[,;，；]\s*/))
     .map((l) => l.replace(LABEL, "").trim())
