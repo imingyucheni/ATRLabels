@@ -1,6 +1,7 @@
 import { fmtTime } from "@/lib/time";
 import { labelSkuStats } from "@/lib/labelSku";
 import { describeRule, listMarkupLog, MARKUP_SCOPE_LABEL } from "@/lib/markup";
+import { defaultLimits, limitsFor, savedLimits } from "@/lib/channelLimits";
 import { acceptedCount, getTerms, unsignedCustomers, usingDefaultTerms } from "@/lib/terms";
 import { ADJUSTMENT_POLICY_LABEL, channelCustomerCounts, getSettings, listChannels } from "@/lib/db";
 import { BALANCE_RULE_LABEL } from "@/lib/ledger";
@@ -12,7 +13,7 @@ import SettingsSection, { SettingsToggleAll } from "@/components/SettingsSection
 import FlashForm from "@/components/FlashForm";
 import RuleInputs from "@/components/RuleInputs";
 import { DEFAULT_JG_WAREHOUSES, isJiaguCode, JG_PREFIX, JG_SUFFIX } from "@/lib/shipbest/jiagu";
-import { saveTermsAction, saveSiteAction, saveJiaguAction, testJiaguAction, resetTestEnvAction, resetSandboxAction, resetTermsAction, saveSmtpAction, testMailAction, setFinancePinAction, clearTestDataAction, saveAddrCheckAction, testAddrAction, refreshFxAction, saveChannelsAction, savePaymentSettingsAction, saveSettingsAction, saveShipBestAction, syncChannelsAction, verifyAction } from "@/app/actions";
+import { saveTermsAction, saveSiteAction, saveJiaguAction, testJiaguAction, resetTestEnvAction, resetSandboxAction, resetTermsAction, saveChannelLimitsAction, saveSmtpAction, testMailAction, setFinancePinAction, clearTestDataAction, saveAddrCheckAction, testAddrAction, refreshFxAction, saveChannelsAction, savePaymentSettingsAction, saveSettingsAction, saveShipBestAction, syncChannelsAction, verifyAction } from "@/app/actions";
 import { cnyToPay, usdCnyQuote } from "@/lib/fx";
 import FilePick from "@/components/FilePick";
 import { CarrierMark } from "@/components/ChannelLabel";
@@ -648,6 +649,40 @@ export default async function SettingsPage() {
         <div style={{ height: 12 }} />
       </FlashForm>
       </SettingsSection>
+
+      {(() => {
+        const list = channels.filter((c) => c.enabled);
+        const fields = [["maxLb", "最大计费重 (lb)"], ["maxLongestIn", "最长边 (in)"], ["maxSumIn", "长宽高之和 (in)"], ["maxGirthIn", "长 + 周长 (in)"], ["divisor", "材积系数"]] as const;
+        const limited = list.filter((c) => limitsFor(c.code)).length;
+        return (
+          <SettingsSection id="limits" title={t("渠道重量 / 尺寸限制")} summary={t("{n} 个渠道有限制", { n: limited })}>
+            <p className="small muted" style={{ marginTop: 0 }}>{t("报价前先检查包裹：超出限制的，这个渠道直接不报价（客户看到“不支持该重量或地区 / 超出尺寸范围”），免得出单后被服务商拒收或补收。计费重 = 实重和体积重取大，体积重 = 长×宽×高（英寸）÷ 材积系数。留空 = 不检查这一项。灰字是默认值（来自嘉谷万邑 2026.9.24 渠道说明）。")}</p>
+            <FlashForm action={saveChannelLimitsAction} submitLabel="保存限制" review>
+              <div className="table-wrap">
+                <table>
+                  <thead><tr><th>{t("渠道")}</th>{fields.map(([, l]) => <th key={l}>{t(l)}</th>)}<th>{t("恢复默认")}</th></tr></thead>
+                  <tbody>
+                    {list.map((c) => {
+                      const saved = savedLimits(c.code);
+                      const def = defaultLimits(c.code, c.name);
+                      const v = (x: number | null | undefined) => (x === null || x === undefined ? "" : String(x));
+                      return (
+                        <tr key={c.code}>
+                          <td className="small">{c.name}<div className="muted">{saved ? t("已自定义") : def ? t("默认") : t("不限制")}</div></td>
+                          {fields.map(([k]) => (
+                            <td key={k}><input name={`${c.code}.${k}`} type="number" step="0.1" min="0" defaultValue={saved ? v(saved[k]) : v(def?.[k])} placeholder={v(def?.[k])} style={{ width: 90 }} /></td>
+                          ))}
+                          <td>{saved && def ? <input type="checkbox" name={`${c.code}.reset`} aria-label={t("恢复默认")} /> : null}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </FlashForm>
+          </SettingsSection>
+        );
+      })()}
 
       {isSandboxSite() && (
         <SettingsSection id="sandbox-reset" className="danger-card" title={t("清空沙盒数据")} summary={t("沙盒站的测试数据可以随时清空，不影响正式站")}>

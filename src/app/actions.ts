@@ -50,6 +50,7 @@ import { CARRIERS } from "@/lib/carriers";
 import { clearChannelNameCache, sameNameChannels } from "@/lib/channelDisplay";
 import { clearTestData, resetSandboxData } from "@/lib/cleanup";
 import { logMarkupChange, setCustomerChannelMarkups } from "@/lib/markup";
+import { defaultLimits, saveLimits, type ChannelLimits } from "@/lib/channelLimits";
 import { isProductionSite } from "@/lib/sites";
 import { checkAddress, needsAck, type AddressCheck } from "@/lib/addressCheck";
 import { updateLead } from "@/lib/leads";
@@ -1161,6 +1162,30 @@ async function jiaguStatus(prefix: string): Promise<FlashState> {
   } catch (e) {
     return { error: `${prefix}，但连接测试失败：${(e as Error).message}` };
   }
+}
+
+export async function saveChannelLimitsAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  await requireAdmin();
+  const keys = ["maxLb", "maxLongestIn", "maxSumIn", "maxGirthIn", "divisor"] as const;
+  let n = 0;
+  for (const c of listChannels(true)) {
+    if (fd.get(`${c.code}.reset`) === "on") {
+      saveLimits(c.code, null);
+      continue;
+    }
+    const l = Object.fromEntries(keys.map((k) => [k, optNum(fd.get(`${c.code}.${k}`))])) as ChannelLimits;
+    if (keys.some((k) => (l[k] ?? 0) < 0)) return { error: `${c.name}：限制不能是负数` };
+    const def = defaultLimits(c.code, c.name);
+    const same = (a: ChannelLimits | null) => keys.every((k) => (a?.[k] ?? null) === (l[k] ?? null));
+    // 和默认值一样就不存（以后默认值更新了也跟着更新）；全空且没有默认值 = 不限制
+    if (same(def) || (!def && keys.every((k) => l[k] == null))) saveLimits(c.code, null);
+    else {
+      saveLimits(c.code, l);
+      n++;
+    }
+  }
+  revalidatePath("/settings");
+  return { ok: `已保存${n ? `（${n} 个渠道自定义）` : ""}，之后的报价按新的限制检查` };
 }
 
 export async function saveDimRuleAction(_: FlashState, fd: FormData): Promise<FlashState> {

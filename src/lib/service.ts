@@ -29,6 +29,7 @@ import { notifyLater } from "./notify";
 import type { AddressCheck } from "./addressCheck";
 import { computePrice, resolveRule, roundUp, type MarkupRule, type PartialRule } from "./pricing";
 import { effectiveRule } from "./markup";
+import { checkLimits } from "./channelLimits";
 import { getShipBestClient, getTestAccountClient, shipbestMode, ShipBestError } from "./shipbest/client";
 import { isJiaguCode } from "./shipbest/jiagu";
 import { guessCarrier } from "./carriers";
@@ -244,6 +245,9 @@ export async function quoteChannel(customerId: number, channelCode: string, req:
 async function quoteOne(customerId: number, channelCode: string, channelName: string, req: ShipmentRequest, rule?: MarkupRule) {
   // 最近查过“不通邮”的邮编（或打开了邮编表预筛）直接判定送不到，不再调接口
   const zip = req.recipient?.zipCode ?? "";
+  // 渠道的重量 / 尺寸限制（例如 GOFO 计费重 20 磅以内）：超出的直接不报价
+  const over = checkLimits(channelCode, req);
+  if (over) return { channelCode, channelName, ok: false, error: over } satisfies ChannelQuote;
   const pre = precheck(channelCode, zip);
   if (pre) return { channelCode, channelName, ok: false, error: pre } satisfies ChannelQuote;
   const res = await quoteRemote(customerId, channelCode, channelName, req, rule);
