@@ -33,7 +33,7 @@ export function proxy(req: NextRequest) {
       headers.set("x-atr-oms-home", "1");
       return NextResponse.next({ request: { headers } });
     }
-    if (isPortal || path === "/site" || path.startsWith("/site/") || path.startsWith("/api/")) return NextResponse.next();
+    if (isPortal || path === "/site" || path.startsWith("/site/") || path.startsWith("/api/") || path === "/manifest.webmanifest") return NextResponse.next();
     return NextResponse.redirect(new URL("/portal", omsUrl));
   }
   if (adminHost && host === adminHost && isPortal) {
