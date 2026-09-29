@@ -351,6 +351,7 @@ export const admin3: Record<string, string> = {
   "签署记录": "Signing history",
   "正在查看": "Viewing",
   "服务方": "Provider",
+  "点击二维码可以放大": "Tap the QR code to enlarge",
   "Zelle 收款码图片（银行 App 扫码付款，PNG / JPG，可选）": "Zelle QR code image (scan to pay in a banking app, PNG / JPG, optional)",
   "Zelle 收款码": "Zelle QR code",
   "删除这张收款码": "Remove this QR code",
