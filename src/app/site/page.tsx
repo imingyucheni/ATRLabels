@@ -359,8 +359,8 @@ export default async function SitePage() {
             <a href="#coverage">{t("覆盖范围")}</a>
           </div>
           <div>
-            <h4>{t("公司")}</h4>
-            <span>{site.company}</span>
+            <h4>{t("联系我们")}</h4>
+            <span>{brand}</span>
             <span>{site.address || "Chino, CA 91710"}</span>
             {site.phone && <span>{site.phone}</span>}
             {site.wechat && <span>{t("微信")}{t("：")}{site.wechat}</span>}
@@ -368,7 +368,7 @@ export default async function SitePage() {
             <Link href="/portal">{t("客户登录")}</Link>
           </div>
         </div>
-        <div className="site-wrap us-footer-bottom">© {new Date().getFullYear()} {site.company || brand} · <Link href="/site/terms">{t("服务条款")}</Link></div>
+        <div className="site-wrap us-footer-bottom">© {new Date().getFullYear()} {brand} · <Link href="/site/terms">{t("服务条款")}</Link></div>
       </footer>
     </div>
   );
