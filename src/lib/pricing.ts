@@ -5,17 +5,19 @@ export interface MarkupRule {
   fixed: number;
   /** 每单最低利润 */
   minProfit: number;
+  /** 加价比例来自哪一级（记在订单里给后台看；老订单没有） */
+  source?: string;
 }
 
 /** 可部分覆盖的规则：null/undefined 表示沿用上一级。 */
-export type PartialRule = { [K in keyof MarkupRule]?: number | null };
+export type PartialRule = { [K in "percent" | "fixed" | "minProfit"]?: number | null };
 
 /**
  * 逐字段合并：客户设置 > 渠道设置 > 全局默认。
  * 例如客户只设置了百分比，那么固定加价和最低利润仍然沿用渠道或全局的值。
  */
 export function resolveRule(global: MarkupRule, channel?: PartialRule | null, customer?: PartialRule | null): MarkupRule {
-  const pick = (k: keyof MarkupRule) => customer?.[k] ?? channel?.[k] ?? global[k];
+  const pick = (k: "percent" | "fixed" | "minProfit") => customer?.[k] ?? channel?.[k] ?? global[k];
   return { percent: pick("percent"), fixed: pick("fixed"), minProfit: pick("minProfit") };
 }
 

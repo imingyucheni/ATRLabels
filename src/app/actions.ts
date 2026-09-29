@@ -24,6 +24,7 @@ import {
   linkAdjustment,
   listChannels,
   setCustomerChannels,
+  customerChannels,
   portalEmailTaken,
   unlinkAdjustment,
   saveCustomer,
@@ -48,6 +49,7 @@ import { saveDimRule } from "@/lib/rates";
 import { CARRIERS } from "@/lib/carriers";
 import { clearChannelNameCache, sameNameChannels } from "@/lib/channelDisplay";
 import { clearTestData, resetSandboxData } from "@/lib/cleanup";
+import { logMarkupChange, setCustomerChannelMarkups } from "@/lib/markup";
 import { isProductionSite } from "@/lib/sites";
 import { checkAddress, needsAck, type AddressCheck } from "@/lib/addressCheck";
 import { updateLead } from "@/lib/leads";
@@ -333,6 +335,7 @@ export async function saveCustomerAction(_: FlashState, fd: FormData): Promise<F
   }
   const neg = negativeRule(ruleFromForm(fd));
   if (neg) return { error: neg };
+  const beforeMarkup = isNew ? null : getCustomer(idRaw)?.markup ?? null;
   const savedId = saveCustomer(isNew ? null : idRaw, {
     name,
     contact: str(fd.get("contact")) || null,
@@ -343,6 +346,7 @@ export async function saveCustomerAction(_: FlashState, fd: FormData): Promise<F
     note: str(fd.get("note"), 1000) || null,
     markup: ruleFromForm(fd),
   });
+  logMarkupChange({ scope: "customer", customerId: savedId, label: name, before: beforeMarkup, after: ruleFromForm(fd) });
   revalidatePath("/customers");
   if (isNew) {
     if (email) {
@@ -475,6 +479,7 @@ export async function saveSettingsAction(_: FlashState, fd: FormData): Promise<F
   const sender = cleanAddress(Object.fromEntries([...fd.entries()].filter(([k]) => k.startsWith("sender.")).map(([k, v]) => [k.slice(7), v])) as Partial<Address>);
   // 设置页已不再编辑发货仓地址：表单里没有这些字段时保留原值
   if ([...fd.keys()].some((k) => k.startsWith("sender."))) patch.sender = sender.nameFirst || sender.address1 ? sender : null;
+  logMarkupChange({ scope: "global", label: "全局默认", before: cur.markup, after: patch.markup });
   saveSettings(patch);
   revalidatePath("/settings");
   return { ok: "设置已保存" };
@@ -487,6 +492,7 @@ export async function saveChannelsAction(_: FlashState, fd: FormData): Promise<F
     if (neg) return { error: neg };
   }
   for (const c of listChannels()) {
+    logMarkupChange({ scope: "channel", channelCode: c.code, label: c.name, before: c.markup, after: ruleFromForm(fd, `${c.code}.`) });
     updateChannel(c.code, fd.get(`enabled.${c.code}`) === "on", ruleFromForm(fd, `${c.code}.`));
     // 客户看到的名称 / 物流商（空 = 自动）
     if (fd.has(`display.${c.code}`)) {
@@ -845,6 +851,22 @@ export async function saveCustomerChannelsAction(_: FlashState, fd: FormData): P
   revalidatePath(`/customers/${id}`);
   revalidatePath("/customers");
   return { ok: codes.length ? `已保存，开通 ${codes.length} 个渠道` : "已保存：这个客户现在没有可用渠道，无法下单" };
+}
+
+export async function saveCustomerChannelMarkupAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  await requireAdmin();
+  const id = Number(fd.get("id"));
+  if (!getCustomer(id)) return { error: "客户不存在" };
+  const rules: Record<string, PartialRule> = {};
+  for (const c of customerChannels(id)) {
+    const r = ruleFromForm(fd, `${c.code}.`);
+    const neg = negativeRule(r, `${c.name}：`);
+    if (neg) return { error: neg };
+    rules[c.code] = r;
+  }
+  setCustomerChannelMarkups(id, rules);
+  revalidatePath(`/customers/${id}`);
+  return { ok: "按渠道加价已保存，之后的报价和下单按新的比例计算" };
 }
 
 export async function saveLabelNoteAction(_: FlashState, fd: FormData): Promise<FlashState> {

@@ -1,5 +1,6 @@
 import { fmtTime } from "@/lib/time";
 import { labelSkuStats } from "@/lib/labelSku";
+import { describeRule, listMarkupLog, MARKUP_SCOPE_LABEL } from "@/lib/markup";
 import { acceptedCount, getTerms, unsignedCustomers, usingDefaultTerms } from "@/lib/terms";
 import { ADJUSTMENT_POLICY_LABEL, channelCustomerCounts, getSettings, listChannels } from "@/lib/db";
 import { BALANCE_RULE_LABEL } from "@/lib/ledger";
@@ -455,6 +456,27 @@ export default async function SettingsPage() {
         <p className="small muted">
           {t("示例：")}{example.map((c) => t("成本 {cost} → 客户价 {price}", { cost: money(c), price: money(computePrice(c, s.markup, s.roundingStep)) })).join(t("；"))}
         </p>
+        <p className="small muted">{t("加价按这个顺序取第一个设置了的：客户在该渠道的专属加价（客户页面“按渠道加价”）→ 客户专属加价 → 渠道加价（下面“物流渠道”表格）→ 这里的全局默认。每张订单都会记下下单时用的比例，面单记录里可以看到。")}</p>
+        {(() => {
+          const log = listMarkupLog({ limit: 50 });
+          return log.length ? (
+            <details style={{ margin: "8px 0 12px" }}>
+              <summary className="small"><b>{t("加价修改记录（最近 {n} 条）", { n: log.length })}</b></summary>
+              <table className="list" style={{ marginTop: 8 }}>
+                <tbody>
+                  {log.map((l) => (
+                    <tr key={l.id}>
+                      <td className="small muted" style={{ whiteSpace: "nowrap" }}>{fmtTime(l.createdAt)}</td>
+                      <td className="small">{t(MARKUP_SCOPE_LABEL[l.scope])}</td>
+                      <td className="small">{l.label}</td>
+                      <td className="small">{describeRule(l.before)} → <b>{describeRule(l.after)}</b></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </details>
+          ) : null;
+        })()}
 
         <h3>{t("取消订单")}</h3>
         <div className="grid">

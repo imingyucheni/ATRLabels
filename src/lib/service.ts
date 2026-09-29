@@ -28,6 +28,7 @@ import { displayChannel } from "./channelDisplay";
 import { notifyLater } from "./notify";
 import type { AddressCheck } from "./addressCheck";
 import { computePrice, resolveRule, roundUp, type MarkupRule, type PartialRule } from "./pricing";
+import { effectiveRule } from "./markup";
 import { getShipBestClient, getTestAccountClient, shipbestMode, ShipBestError } from "./shipbest/client";
 import { isJiaguCode } from "./shipbest/jiagu";
 import { guessCarrier } from "./carriers";
@@ -183,10 +184,8 @@ export interface ChannelQuote {
 }
 
 function ruleFor(customerId: number, channelCode: string): MarkupRule {
-  // 公司自用账户：成本价，不加价
-  if (isInternalCustomer(customerId)) return { percent: 0, fixed: 0, minProfit: 0 };
-  const s = getSettings();
-  return resolveRule(s.markup, getChannel(channelCode)?.markup, getCustomer(customerId)?.markup);
+  // 客户在该渠道的专属加价 > 客户专属加价 > 渠道加价 > 全局默认；公司自用账户按成本价
+  return effectiveRule(customerId, channelCode);
 }
 
 /* ---------------- 分区 ---------------- */

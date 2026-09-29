@@ -1,5 +1,6 @@
 import { fmtTime } from "@/lib/time";
 import Link from "next/link";
+import { describeRule, MARKUP_SOURCE_LABEL, type MarkupSource } from "@/lib/markup";
 import { listCustomers, listShipments, shipmentCost, shipmentProfit, shipmentReceivable, STATUS_LABEL } from "@/lib/db";
 import { money } from "@/lib/pricing";
 import StatusBadge from "@/components/StatusBadge";
@@ -67,7 +68,7 @@ export default async function ShipmentsPage({ searchParams }: { searchParams: Pr
           <thead>
             <tr>
               <th>{t("单号")} / {t("时间")}</th><th>{t("客户")}</th><th>{t("收件人")}</th><th>{t("渠道")}</th><th>{t("运单号")}</th><th>{t("状态")}</th>
-              <th className="num">{t("成本")}</th><th className="num">{t("客户价")}</th><th className="num">{t("补差(客户)")}</th><th className="num">{t("利润")}</th><th>{t("面单")}</th>
+              <th className="num">{t("成本")}</th><th className="num">{t("客户价")}</th><th className="num">{t("加价")}</th><th className="num">{t("补差(客户)")}</th><th className="num">{t("利润")}</th><th>{t("面单")}</th>
             </tr>
           </thead>
           <tbody>
@@ -81,12 +82,15 @@ export default async function ShipmentsPage({ searchParams }: { searchParams: Pr
                 <td><StatusBadge status={s.status} test={s.isTest} /></td>
                 <td className="num">{money(s.actualCost ?? s.quotedCost)}{s.actualCost === null && <div className="small muted">{t("试算")}</div>}</td>
                 <td className="num">{money(s.price, s.currency)}</td>
+                <td className="num small" title={`${describeRule(s.rule)}${s.rule.source ? ` · ${t(MARKUP_SOURCE_LABEL[s.rule.source as MarkupSource] ?? s.rule.source)}` : ""}`}>
+                  +{s.rule.percent}%{s.rule.fixed ? <div className="muted">+{money(s.rule.fixed)}</div> : null}
+                </td>
                 <td className="num">{s.costAdj || s.customerAdj ? <>{money(s.customerAdj)}<div className="small muted">{t("成本")} {money(s.costAdj)}</div></> : "-"}</td>
                 <td className="num"><Profit value={shipmentProfit(s)} /></td>
                 <td className="nowrap">{s.labelPath && s.status !== "cancelled" ? <a href={`/api/labels/${s.id}`} target="_blank">{t("打印")}</a> : s.status === "cancelled" ? <span className="muted small">{t("已作废")}</span> : "-"}</td>
               </tr>
             ))}
-            {!rows.length && <tr><td colSpan={11} className="muted">{t("没有符合条件的记录")}</td></tr>}
+            {!rows.length && <tr><td colSpan={12} className="muted">{t("没有符合条件的记录")}</td></tr>}
           </tbody>
         </table>
       </div>

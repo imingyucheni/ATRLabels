@@ -5,17 +5,18 @@ import { omsLoginUrl } from "@/lib/sites";
 import { pendingCredentials } from "@/lib/credentials";
 import CredentialsCard from "@/components/CredentialsCard";
 import { notFound } from "next/navigation";
-import { customerChannelCodes, getCustomer, getSettings, listChannels } from "@/lib/db";
+import { customerChannelCodes, customerChannels, getCustomer, getSettings, listChannels } from "@/lib/db";
+import { customerChannelMarkups, describeRule, effectiveRule, listMarkupLog, MARKUP_SOURCE_LABEL } from "@/lib/markup";
 import FlashForm from "@/components/FlashForm";
 import { hasAcceptedTerms, lastAcceptance } from "@/lib/terms";
 import RuleInputs from "@/components/RuleInputs";
 import AddressFields from "@/components/AddressFields";
 import { LEDGER_TYPE_LABEL, listLedger } from "@/lib/ledger";
-import { money } from "@/lib/pricing";
+import { computePrice, money, resolveRule } from "@/lib/pricing";
 import { getT, getLang } from "@/lib/prefs";
 import { translateMessage } from "@/lib/i18n";
 import PinField from "@/components/PinField";
-import { ledgerEntryAction, hideCredentialsAction, saveCustomerAction, saveCustomerChannelsAction, saveCustomerPortalAction, saveCustomerSenderAction, saveCustomerStampAction, setCustomerPasswordAction, setTestAccountAction } from "@/app/actions";
+import { ledgerEntryAction, hideCredentialsAction, saveCustomerAction, saveCustomerChannelsAction, saveCustomerChannelMarkupAction, saveCustomerPortalAction, saveCustomerSenderAction, saveCustomerStampAction, setCustomerPasswordAction, setTestAccountAction } from "@/app/actions";
 
 export default async function CustomerEdit({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -118,6 +119,62 @@ export default async function CustomerEdit({ params }: { params: Promise<{ id: s
               {!allChannels.length && <span className="small muted">{t("还没有渠道，请先到")} <Link href="/settings">{t("设置")}</Link> {t("同步渠道。")}</span>}
             </div>
           </FlashForm>
+
+          {!c.internal && (() => {
+            const open = customerChannels(c.id);
+            const own = customerChannelMarkups(c.id);
+            const st = getSettings();
+            const log = listMarkupLog({ customerId: c.id, limit: 20 });
+            return (
+              <>
+                <FlashForm action={saveCustomerChannelMarkupAction} submitLabel="保存按渠道加价" className="card" id="channel-markup" review>
+                  <h2 style={{ marginTop: 0 }}>{t("按渠道加价")}</h2>
+                  <p className="small muted">{t("这个客户在某个渠道要加多一点或少一点时，在这里单独填；留空沿用上一级（客户专属加价 → 渠道加价 → 全局默认），灰字就是沿用的数值。")}</p>
+                  <input type="hidden" name="id" value={c.id} />
+                  <div className="table-wrap">
+                    <table>
+                      <thead><tr><th>{t("渠道")}</th><th>{t("加价 %")}</th><th>{t("固定加价")}</th><th>{t("最低利润")}</th><th>{t("实际生效")}</th><th className="num">{t("示例：成本 $10")}</th></tr></thead>
+                      <tbody>
+                        {open.map((ch) => {
+                          const inherit = resolveRule(st.markup, ch.markup, c.markup);
+                          const eff = effectiveRule(c.id, ch.code);
+                          const mine = own[ch.code] ?? {};
+                          const v = (x: number | null | undefined) => (x === null || x === undefined ? "" : String(x));
+                          return (
+                            <tr key={ch.code}>
+                              <td>{ch.name}</td>
+                              {(["percent", "fixed", "minProfit"] as const).map((k) => (
+                                <td key={k}><input name={`${ch.code}.${k}`} type="number" step="0.01" min="0" defaultValue={v(mine[k])} placeholder={String(inherit[k])} style={{ width: 90 }} /></td>
+                              ))}
+                              <td className="small">+{eff.percent}%{eff.fixed ? ` + ${money(eff.fixed)}` : ""}<div className="muted">{t(MARKUP_SOURCE_LABEL[eff.source])}</div></td>
+                              <td className="num">{money(computePrice(10, eff, st.roundingStep))}</td>
+                            </tr>
+                          );
+                        })}
+                        {!open.length && <tr><td colSpan={6} className="muted">{t("还没有开通渠道")}</td></tr>}
+                      </tbody>
+                    </table>
+                  </div>
+                </FlashForm>
+                {log.length > 0 && (
+                  <details className="card">
+                    <summary><b>{t("加价修改记录（{n}）", { n: log.length })}</b></summary>
+                    <table className="list" style={{ marginTop: 8 }}>
+                      <tbody>
+                        {log.map((l) => (
+                          <tr key={l.id}>
+                            <td className="small muted" style={{ whiteSpace: "nowrap" }}>{fmtTime(l.createdAt)}</td>
+                            <td className="small">{l.label}</td>
+                            <td className="small">{t(describeRule(l.before))} → <b>{t(describeRule(l.after))}</b></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </details>
+                )}
+              </>
+            );
+          })()}
 
           <div className="grid2">
             <FlashForm action={ledgerEntryAction} submitLabel="确认" className="card" resetOnSuccess confirm="确认提交这笔充值 / 调账？提交后会立即计入客户余额。">
