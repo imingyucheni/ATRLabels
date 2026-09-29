@@ -23,11 +23,32 @@ export function toPublicQuote(q: ChannelQuote): PublicQuote {
     channelCode: q.channelCode,
     channelName: displayChannel(q.channelCode).name || q.channelName,
     ok: q.ok,
-    error: q.ok ? undefined : publicError(q.error),
+    error: q.ok ? undefined : publicQuoteError(q.error),
     zone: q.zone,
     price: q.price,
     currency: q.currency,
   };
+}
+
+/**
+ * 报价失败给客户看的原因：只说大类，不给服务商的原始说明（例如“重量段基础费为0，请查看重量段配置……”）。
+ * 后台看到的还是完整原因。
+ */
+export function publicQuoteError(msg?: string | null): string {
+  const raw = msg ?? "";
+  if (/不通邮|派送范围|未覆盖|not (be )?deliver|no service|邮编.*(不支持|不派|无法)/i.test(raw)) return "地址未覆盖：这个渠道送不到该邮编";
+  if (/尺寸|长度|周长|体积|边长|size|length|girth|dimension/i.test(raw)) return "超出尺寸范围：这个渠道不支持该包裹尺寸";
+  if (/重量段|分区价格|分区代码|重量|超重|weight|\boz\b|\blb/i.test(raw)) return "不支持该重量或地区";
+  if (/余额不足/.test(raw) && !/账户余额不足|balance sufficient/i.test(raw)) return publicError(raw);
+  return "该渠道暂时无法报价";
+}
+
+/** 批量导入某一行的报错（客户看）：报价失败只说大类，其他按 publicError 过滤 */
+export function publicRowError(msg: string): string {
+  if (msg.startsWith("余额不足")) return msg;
+  const m = msg.match(/^所有渠道都无法报价[：:]\s*([\s\S]*)$/);
+  if (m) return `所有渠道都无法报价：${publicQuoteError(m[1])}`;
+  return publicError(msg);
 }
 
 /** ShipBest 的报错里可能带内部信息，客户端只保留对客户有用的部分 */

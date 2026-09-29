@@ -351,6 +351,8 @@ export const admin3: Record<string, string> = {
   "签署记录": "Signing history",
   "正在查看": "Viewing",
   "服务方": "Provider",
+  "超出尺寸范围：这个渠道不支持该包裹尺寸": "Over size limit: this service doesn't support this package size",
+  "不支持该重量或地区": "Weight or area not supported",
   "合同": "Agreement",
   "未签": "Not signed",
   "已签": "Signed",

@@ -165,3 +165,15 @@ describe("收款码", () => {
     expect(readQr("zelle")).toBeNull();
   });
 });
+
+describe("客户看到的报价失败原因", () => {
+  it("只说大类，不给服务商的原始说明", async () => {
+    const { publicQuoteError, publicRowError } = await import("@/lib/portal");
+    expect(publicQuoteError("重量段基础费为0，请查看重量段配置是否缺失或者分区价格设置为0，重量为524 oz,分区代码为8")).toBe("不支持该重量或地区");
+    expect(publicQuoteError("国家[US],邮编[99501]不通邮")).toBe("地址未覆盖：这个渠道送不到该邮编");
+    expect(publicQuoteError("[10024] 包裹重量不在该渠道的下单重量范围内")).toBe("不支持该重量或地区");
+    expect(publicQuoteError("单边长度超过限制")).toBe("超出尺寸范围：这个渠道不支持该包裹尺寸");
+    expect(publicQuoteError("Logistics product not exist!")).toBe("该渠道暂时无法报价");
+    expect(publicRowError("所有渠道都无法报价：重量段基础费为0，分区代码为8")).toBe("所有渠道都无法报价：不支持该重量或地区");
+  });
+});

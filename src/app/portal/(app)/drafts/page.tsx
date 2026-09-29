@@ -2,7 +2,7 @@ import Link from "next/link";
 import ChannelLabel from "@/components/ChannelLabel";
 import { requireCustomer } from "@/lib/auth";
 import { listDraftRows } from "@/lib/batch";
-import { publicError } from "@/lib/portal";
+import { publicRowError } from "@/lib/portal";
 import { money } from "@/lib/pricing";
 import { makeT, translateMessage } from "@/lib/i18n";
 import { getLang } from "@/lib/prefs";
@@ -60,7 +60,7 @@ export default async function DraftsPage() {
                       <td className="small">{r.recipient}</td>
                       <td>{r.channel_code ? <ChannelLabel code={r.channel_code} /> : "-"}</td>
                       <td className="num">{r.price !== null ? money(r.price) : "-"}</td>
-                      <td><span className={`badge ${cls}`}>{t(label)}</span>{r.error && <div className="small neg">{tr(r.error.startsWith("余额不足") ? r.error : publicError(r.error))}</div>}</td>
+                      <td><span className={`badge ${cls}`}>{t(label)}</span>{r.error && <div className="small neg">{tr(publicRowError(r.error))}</div>}</td>
                     </tr>
                   );
                 })}

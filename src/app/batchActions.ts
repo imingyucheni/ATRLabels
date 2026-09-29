@@ -20,7 +20,7 @@ import {
   type BatchJob,
 } from "@/lib/batch";
 import { getCustomer, getSettings, houseCustomerId } from "@/lib/db";
-import { publicError } from "@/lib/portal";
+import { publicError, publicQuoteError, publicRowError } from "@/lib/portal";
 import { displayChannel } from "@/lib/channelDisplay";
 import { str } from "@/lib/sanitize";
 
@@ -105,8 +105,8 @@ export async function getBatchJobAction(jobId: number): Promise<{ job?: BatchJob
             ...r,
             // 客户只拿到对外的渠道名（不含服务商标记、仓库代码）
             channelName: r.channelCode ? displayChannel(r.channelCode).name : r.channelName,
-            error: r.error ? publicError(r.error) : null,
-            quotes: r.quotes.map(({ cost: _cost, ...q }) => ({ ...q, name: displayChannel(q.code).name, ...(q.error ? { error: publicError(q.error) } : {}) })),
+            error: r.error ? publicRowError(r.error) : null,
+            quotes: r.quotes.map(({ cost: _cost, ...q }) => ({ ...q, name: displayChannel(q.code).name, ...(q.error ? { error: publicQuoteError(q.error) } : {}) })),
           })),
         };
     return { job: { ...view, balance: c.balance, available: c.balance + c.creditLimit, balanceRule: getSettings().balanceRule } };
