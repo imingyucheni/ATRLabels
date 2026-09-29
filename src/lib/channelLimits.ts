@@ -23,15 +23,35 @@ export interface ChannelLimits {
 const CM = 1 / 2.54;
 
 /**
- * 默认限制（嘉谷万邑 2026.9.24 渠道说明）：只写“最大限制”（超过就拒收），附加费不管（接口报价已经包含）。
- * GOFO：DIM 166，计费重最多 30 磅（20–30 磅的附加费接口报价里会算），最长边 ≤ 90cm，三边和 ≤ 150cm；SwiftX：DIM 166，20 磅以内；
+ * 嘉谷的默认限制（嘉谷万邑 2026.9.24 渠道说明）：只写“最大限制”（超过就拒收），附加费不管（接口报价已经包含）。
+ * GOFO：DIM 166，计费重 20 磅以内（说明写“限制 20 磅以内”；20–30 磅虽然能收但要加 $15 并按 20 磅补收，安全起见不报价），最长边 ≤ 90cm，三边和 ≤ 150cm；SwiftX：DIM 166，20 磅以内；
  * UniUni：DIM 166，单边 ≤ 50cm，三边和 ≤ 120cm。
  */
 export function defaultLimits(code: string, name = getChannel(code)?.name ?? ""): ChannelLimits | null {
-  if (!isJiaguCode(code)) return null;
-  if (/GOFO/i.test(name)) return { maxLb: 30, maxLongestIn: round1(90 * CM), maxSumIn: round1(150 * CM), divisor: 166 };
+  if (!isJiaguCode(code)) return shipBestDefault(name);
+  if (/GOFO/i.test(name)) return { maxLb: 20, maxLongestIn: round1(90 * CM), maxSumIn: round1(150 * CM), divisor: 166 };
   if (/SWIFT\s*X/i.test(name)) return { maxLb: 20, divisor: 166 };
   if (/UNI\s*UNI/i.test(name)) return { maxLongestIn: round1(50 * CM), maxSumIn: round1(120 * CM), divisor: 166 };
+  return null;
+}
+
+/**
+ * ShipBest 的默认限制（ShipBest 2026.8 报价表里各渠道的“重量 / 尺寸限制”，只取超过就拒收的上限）：
+ * GOFO ≤ 20 lb、单边 ≤ 60cm、三边和 ≤ 150cm；SwiftX 单边 ≤ 60cm、三边和 ≤ 120cm；
+ * USPS ≤ 70 lb、最长边 ≤ 30in、长 + 周长 ≤ 130in；UniUni ≤ 30 lb、最长边 ≤ 20in、三边和 ≤ 50in；
+ * 燕文 ≤ 20 lb、60×50×40cm 以内；SpeedX 计费重 ≤ 25 lb、最长边 ≤ 24in；
+ * FedEx Economy ≤ 70 lb、长 + 周长 ≤ 130in；FedEx / UPS 地面 ≤ 150 lb、最长边 ≤ 108in、长 + 周长 ≤ 165in。
+ * 材积系数都按 166（cm 算法 ÷6000）；USPS 体积重只在超过 1 立方英尺时才算，这里只检查实重。
+ */
+function shipBestDefault(name: string): ChannelLimits | null {
+  if (/GOFO/i.test(name)) return { maxLb: 20, maxLongestIn: round1(60 * CM), maxSumIn: round1(150 * CM), divisor: 166 };
+  if (/SWIFT\s*X/i.test(name)) return { maxLongestIn: round1(60 * CM), maxSumIn: round1(120 * CM) };
+  if (/UNI\s*UNI/i.test(name)) return { maxLb: 30, maxLongestIn: 20, maxSumIn: 50, divisor: 166 };
+  if (/YWE|燕文/i.test(name)) return { maxLb: 20, maxLongestIn: round1(60 * CM), maxSumIn: round1(150 * CM), divisor: 166 };
+  if (/SPEED\s*X|\bSPX\b/i.test(name)) return { maxLb: 25, maxLongestIn: 24, divisor: 166 };
+  if (/USPS/i.test(name)) return { maxLb: 70, maxLongestIn: 30, maxGirthIn: 130 };
+  if (/FEDEX.*(ECONOMY|SMART)/i.test(name)) return { maxLb: 70, maxGirthIn: 130 };
+  if (/FEDEX|UPS/i.test(name)) return { maxLb: 150, maxLongestIn: 108, maxGirthIn: 165 };
   return null;
 }
 
