@@ -29,7 +29,7 @@ import { notifyLater } from "./notify";
 import type { AddressCheck } from "./addressCheck";
 import { computePrice, resolveRule, roundUp, type MarkupRule, type PartialRule } from "./pricing";
 import { effectiveRule } from "./markup";
-import { checkLimits } from "./channelLimits";
+import { checkLimits, checkMinSize } from "./channelLimits";
 import { getShipBestClient, getTestAccountClient, shipbestMode, ShipBestError } from "./shipbest/client";
 import { isJiaguCode } from "./shipbest/jiagu";
 import { guessCarrier } from "./carriers";
@@ -179,6 +179,8 @@ export interface ChannelQuote {
   zone?: string | null;
   /** 服务商没返回分区，按同一目的地其他渠道的分区补上的（仅供参考） */
   zoneEstimated?: boolean;
+  /** 提醒（不影响下单），例如包裹比渠道要求的最小尺寸还小 */
+  warning?: string;
   rule?: MarkupRule;
   price?: number;
   profit?: number;
@@ -252,7 +254,9 @@ async function quoteOne(customerId: number, channelCode: string, channelName: st
   if (pre) return { channelCode, channelName, ok: false, error: pre } satisfies ChannelQuote;
   const res = await quoteRemote(customerId, channelCode, channelName, req, rule);
   rememberQuote(channelCode, zip, res.ok, res.error);
-  return res;
+  // 包裹太小：照常报价，只提醒
+  const small = res.ok ? checkMinSize(channelCode, req) : null;
+  return small ? { ...res, warning: small } : res;
 }
 
 async function quoteRemote(customerId: number, channelCode: string, channelName: string, req: ShipmentRequest, ruleOverride?: MarkupRule): Promise<ChannelQuote> {

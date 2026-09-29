@@ -16,6 +16,8 @@ export interface PublicQuote {
   zone?: string | null;
   price?: number;
   currency?: string;
+  /** 提醒（例如包裹偏小），不影响下单 */
+  warning?: string;
 }
 
 export function toPublicQuote(q: ChannelQuote): PublicQuote {
@@ -27,6 +29,7 @@ export function toPublicQuote(q: ChannelQuote): PublicQuote {
     zone: q.zone,
     price: q.price,
     currency: q.currency,
+    ...(q.warning ? { warning: q.warning } : {}),
   };
 }
 

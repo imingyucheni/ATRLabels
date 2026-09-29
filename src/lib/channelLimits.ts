@@ -18,7 +18,13 @@ export interface ChannelLimits {
   maxGirthIn?: number | null;
   /** 材积系数（立方英寸 ÷ 系数 = 体积重磅数）；空 = 只看实重 */
   divisor?: number | null;
+  /** 最小尺寸（英寸）：最长边 / 第二长边不够时提醒（不拦单）；0 = 不提醒 */
+  minLongestIn?: number | null;
+  minSecondIn?: number | null;
 }
+
+/** 所有渠道默认的最小尺寸：面单是 4×6 英寸，包裹一面至少 15 × 10 cm（USPS 也这么要求），太小贴不下面单、可能被拒收 */
+export const DEFAULT_MIN = { minLongestIn: 5.9, minSecondIn: 3.9 };
 
 const CM = 1 / 2.54;
 
@@ -67,17 +73,20 @@ function conn() {
       channel_code TEXT PRIMARY KEY,
       max_lb REAL, max_longest_in REAL, max_sum_in REAL, max_girth_in REAL, divisor REAL
     )`);
+    const cols = (c.prepare("PRAGMA table_info(channel_limits)").all() as { name: string }[]).map((x) => x.name);
+    if (!cols.includes("min_longest_in")) c.exec("ALTER TABLE channel_limits ADD COLUMN min_longest_in REAL");
+    if (!cols.includes("min_second_in")) c.exec("ALTER TABLE channel_limits ADD COLUMN min_second_in REAL");
     ready = c;
   }
   return c;
 }
 
-type Row = { max_lb: number | null; max_longest_in: number | null; max_sum_in: number | null; max_girth_in: number | null; divisor: number | null };
+type Row = { max_lb: number | null; max_longest_in: number | null; max_sum_in: number | null; max_girth_in: number | null; divisor: number | null; min_longest_in: number | null; min_second_in: number | null };
 
 /** 后台保存过的限制（没保存过 = null，用默认值） */
 export function savedLimits(code: string): ChannelLimits | null {
   const r = conn().prepare("SELECT * FROM channel_limits WHERE channel_code = ?").get(code) as Row | undefined;
-  return r ? { maxLb: r.max_lb, maxLongestIn: r.max_longest_in, maxSumIn: r.max_sum_in, maxGirthIn: r.max_girth_in, divisor: r.divisor } : null;
+  return r ? { maxLb: r.max_lb, maxLongestIn: r.max_longest_in, maxSumIn: r.max_sum_in, maxGirthIn: r.max_girth_in, divisor: r.divisor, minLongestIn: r.min_longest_in, minSecondIn: r.min_second_in } : null;
 }
 
 export function limitsFor(code: string): ChannelLimits | null {
@@ -91,10 +100,11 @@ export function saveLimits(code: string, l: ChannelLimits | null) {
   }
   conn()
     .prepare(
-      `INSERT INTO channel_limits (channel_code, max_lb, max_longest_in, max_sum_in, max_girth_in, divisor) VALUES (?,?,?,?,?,?)
-       ON CONFLICT(channel_code) DO UPDATE SET max_lb = excluded.max_lb, max_longest_in = excluded.max_longest_in, max_sum_in = excluded.max_sum_in, max_girth_in = excluded.max_girth_in, divisor = excluded.divisor`,
+      `INSERT INTO channel_limits (channel_code, max_lb, max_longest_in, max_sum_in, max_girth_in, divisor, min_longest_in, min_second_in) VALUES (?,?,?,?,?,?,?,?)
+       ON CONFLICT(channel_code) DO UPDATE SET max_lb = excluded.max_lb, max_longest_in = excluded.max_longest_in, max_sum_in = excluded.max_sum_in, max_girth_in = excluded.max_girth_in, divisor = excluded.divisor,
+         min_longest_in = excluded.min_longest_in, min_second_in = excluded.min_second_in`,
     )
-    .run(code, l.maxLb ?? null, l.maxLongestIn ?? null, l.maxSumIn ?? null, l.maxGirthIn ?? null, l.divisor ?? null);
+    .run(code, l.maxLb ?? null, l.maxLongestIn ?? null, l.maxSumIn ?? null, l.maxGirthIn ?? null, l.divisor ?? null, l.minLongestIn ?? null, l.minSecondIn ?? null);
 }
 
 /** 包裹尺寸（英寸，从大到小）和实重（磅） */
@@ -123,6 +133,24 @@ export function checkLimits(code: string, req: ShipmentRequest): string | null {
     const billed = Math.max(lb, dimLb);
     if (billed > l.maxLb + 1e-6)
       return `超出渠道重量限制：计费重量 ${f1(billed)} lb（实重 ${f1(lb)} lb${dimLb ? `，按材积系数 ${l.divisor} 折算 ${f1(dimLb)} lb` : ""}），上限 ${f1(l.maxLb)} lb`;
+  }
+  return null;
+}
+
+/**
+ * 包裹太小的提醒（不拦单）：最长边 / 第二长边不到渠道要求的最小尺寸时返回提醒文字，够了返回 null。
+ * 没设置时用 DEFAULT_MIN（15 × 10 cm）；设成 0 = 这个渠道不提醒。
+ */
+export function checkMinSize(code: string, req: ShipmentRequest): string | null {
+  const l = limitsFor(code);
+  const minA = l?.minLongestIn ?? DEFAULT_MIN.minLongestIn;
+  const minB = l?.minSecondIn ?? DEFAULT_MIN.minSecondIn;
+  const { dims } = packageInLb(req);
+  const [a, b] = dims;
+  if (!a && !b) return null;
+  if ((minA && a + 1e-6 < minA) || (minB && b + 1e-6 < minB)) {
+    const cm = (n: number) => Math.round(n * 2.54);
+    return `包裹偏小：最长边 ${f1(a)} in、第二长边 ${f1(b)} in，这个渠道要求至少 ${f1(minA)} × ${f1(minB)} in（约 ${cm(minA)} × ${cm(minB)} cm）。面单可能贴不下，可能被拒收或加收费用，建议用大一点的包装或填写实际外箱尺寸`;
   }
   return null;
 }

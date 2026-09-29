@@ -1166,7 +1166,7 @@ async function jiaguStatus(prefix: string): Promise<FlashState> {
 
 export async function saveChannelLimitsAction(_: FlashState, fd: FormData): Promise<FlashState> {
   await requireAdmin();
-  const keys = ["maxLb", "maxLongestIn", "maxSumIn", "maxGirthIn", "divisor"] as const;
+  const keys = ["maxLb", "maxLongestIn", "maxSumIn", "maxGirthIn", "divisor", "minLongestIn", "minSecondIn"] as const;
   let n = 0;
   for (const c of listChannels(true)) {
     if (fd.get(`${c.code}.reset`) === "on") {

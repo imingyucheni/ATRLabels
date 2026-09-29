@@ -45,4 +45,15 @@ describe("渠道重量 / 尺寸限制", () => {
     expect(publicQuoteError(lim.checkLimits("JG-579181", pkg(12, 10, 8, 21)))).toBe("不支持该重量或地区");
     expect(publicQuoteError(lim.checkLimits("JG-579181", pkg(95, 20, 10, 1, 1)))).toBe("超出尺寸范围：这个渠道不支持该包裹尺寸");
   });
+
+  it("包裹太小：只提醒不拦单；默认 15 × 10 cm，可以改或关掉", async () => {
+    expect(lim.checkMinSize("JG-579181", pkg(8, 6, 2, 1))).toBeNull();
+    expect(lim.checkMinSize("JG-579181", pkg(4, 3, 1, 0.5))).toMatch(/包裹偏小：最长边 4 in、第二长边 3 in.*5.9 × 3.9 in（约 15 × 10 cm）/);
+    expect(lim.checkMinSize("JG-579181", pkg(12, 8, 1, 1, 1))).toMatch(/包裹偏小/); // 12 × 8 cm
+    expect(lim.checkLimits("JG-579181", pkg(4, 3, 1, 0.5))).toBeNull(); // 不拦单
+    lim.saveLimits("LP-GOFO", { maxLb: 20, minLongestIn: 0, minSecondIn: 0 });
+    expect(lim.checkMinSize("LP-GOFO", pkg(4, 3, 1, 0.5))).toBeNull(); // 0 = 不提醒
+    const { translateMessage } = await import("@/lib/i18n");
+    expect(translateMessage("en", lim.checkMinSize("JG-579181", pkg(4, 3, 1, 0.5)))).toMatch(/^Package is small: longest side 4 in/);
+  });
 });

@@ -429,6 +429,7 @@ export default function BatchOrders(props: {
                                 <span className="muted" title={t("成本 / 利润")}>{money(q.cost)} · <span className={q.price! - q.cost < 0 ? "profit-neg" : ""}>+{(q.price! - q.cost).toFixed(2)}</span>{" "}</span>
                               )}
                               <b style={q.ok ? undefined : { color: "var(--err)", fontWeight: 500 }}>{q.ok ? money(q.price, q.currency ?? "") : uncovered(q.error) ? t("地址未覆盖") : t("不可用")}</b>
+                              {q.ok && q.warning && <span title={tr(q.warning)} style={{ color: "var(--warn)", cursor: "help" }}> ⚠</span>}
                             </span>
                           </label>
                         ))}
@@ -461,6 +462,10 @@ export default function BatchOrders(props: {
                     )}
                     {r.error && <div style={{ color: r.status === "quoted" ? "var(--warn)" : "var(--err)", maxWidth: 260 }}>{tr(r.error)}</div>}
                     {r.warning && r.status !== "created" && <div style={{ color: "var(--warn)", maxWidth: 260 }}>⚠ {tr(r.warning)}</div>}
+                    {(() => {
+                      const w = r.status === "quoted" ? r.quotes.find((q) => q.ok && q.code === r.channelCode)?.warning : undefined;
+                      return w ? <div className="small" style={{ color: "var(--warn)", maxWidth: 260 }}>⚠ {tr(w)}</div> : null;
+                    })()}
                   </td>
                 </tr>
               );
