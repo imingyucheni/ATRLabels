@@ -284,6 +284,9 @@ tr.best td { background: var(--accent-soft); }
 .badge.exception { background: var(--err-soft); color: var(--err); }
 .badge.cancelled { background: var(--sunken); color: var(--muted); }
 .badge.ok { background: var(--ok-soft); color: var(--ok); }
+.badge.promo { background: #ffe8e0; color: #c2410c; font-weight: 650; }
+:root[data-theme="dark"] .badge.promo { background: #3a1d12; color: #fdba74; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .badge.promo { background: #3a1d12; color: #fdba74; } }
 .badge.warn { background: var(--warn-soft); color: var(--warn); }
 
 /* 勾选卡片（客户可用渠道） */

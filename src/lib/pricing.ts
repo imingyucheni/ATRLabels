@@ -7,6 +7,9 @@ export interface MarkupRule {
   minProfit: number;
   /** 加价比例来自哪一级（记在订单里给后台看；老订单没有） */
   source?: string;
+  /** 限时活动：活动编号、服务商返利比例（%），利润计算要加上返利 */
+  promoId?: number;
+  rebate?: number;
 }
 
 /** 可部分覆盖的规则：null/undefined 表示沿用上一级。 */
@@ -33,7 +36,8 @@ export function roundUp(value: number, step: number): number {
 /** 报价 = max(成本 × (1 + 百分比) + 固定加价, 成本 + 最低利润)，再向上取整。 */
 export function computePrice(cost: number, rule: MarkupRule, roundingStep = 0.01): number {
   const marked = cost * (1 + rule.percent / 100) + rule.fixed;
-  const floor = cost + rule.minProfit;
+  // 限时活动价可以低于账面成本（有返利兜底），不套最低利润
+  const floor = rule.source === "promo" ? -Infinity : cost + rule.minProfit;
   return roundUp(Math.max(marked, floor), roundingStep);
 }
 

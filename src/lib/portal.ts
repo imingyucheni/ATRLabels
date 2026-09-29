@@ -18,6 +18,8 @@ export interface PublicQuote {
   currency?: string;
   /** 提醒（例如包裹偏小），不影响下单 */
   warning?: string;
+  /** 限时活动：活动名、结束日期、原价 */
+  promo?: { label: string; endsOn: string; originalPrice: number };
 }
 
 export function toPublicQuote(q: ChannelQuote): PublicQuote {
@@ -30,6 +32,7 @@ export function toPublicQuote(q: ChannelQuote): PublicQuote {
     price: q.price,
     currency: q.currency,
     ...(q.warning ? { warning: q.warning } : {}),
+    ...(q.promo ? { promo: q.promo } : {}),
   };
 }
 

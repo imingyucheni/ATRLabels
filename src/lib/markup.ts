@@ -6,10 +6,12 @@
  */
 import { db, getChannel, getCustomer, getSettings, isInternalCustomer } from "./db";
 import type { MarkupRule, PartialRule } from "./pricing";
+import { activePromotion } from "./promotions";
 
-export type MarkupSource = "customer_channel" | "customer" | "channel" | "global" | "house";
+export type MarkupSource = "promo" | "customer_channel" | "customer" | "channel" | "global" | "house";
 
 export const MARKUP_SOURCE_LABEL: Record<MarkupSource, string> = {
+  promo: "限时活动价",
   customer_channel: "客户在该渠道的专属加价",
   customer: "客户专属加价",
   channel: "渠道加价",
@@ -92,8 +94,11 @@ export function setCustomerChannelMarkups(customerId: number, rules: Record<stri
 /* ---------------- 生效规则 ---------------- */
 
 /** 这个客户在这个渠道实际用的加价规则，以及百分比来自哪一级 */
-export function effectiveRule(customerId: number, channelCode: string): MarkupRule & { source: MarkupSource } {
+export function effectiveRule(customerId: number, channelCode: string, opts: { ignorePromo?: boolean } = {}): MarkupRule & { source: MarkupSource } {
   if (isInternalCustomer(customerId)) return { percent: 0, fixed: 0, minProfit: 0, source: "house" };
+  // 限时活动：活动期间所有客户都按活动加价（可以是负数），记下返利比例算利润
+  const promo = opts.ignorePromo ? null : activePromotion(channelCode);
+  if (promo) return { percent: promo.customerPercent, fixed: 0, minProfit: 0, source: "promo", promoId: promo.id, rebate: promo.rebatePercent };
   const levels: [MarkupSource, PartialRule | null | undefined][] = [
     ["customer_channel", customerChannelMarkup(customerId, channelCode)],
     ["customer", getCustomer(customerId)?.markup],

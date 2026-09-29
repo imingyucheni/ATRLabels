@@ -1192,7 +1192,10 @@ export function shipmentProfit(s: Shipment): number | null {
   const adj = s.customerAdj - s.costAdj;
   if (s.status === "cancelled") return (s.cancelFee ?? 0) - (s.sbCancelFee ?? 0) + adj;
   if (s.status === "exception") return null;
-  return s.price - (s.actualCost ?? s.quotedCost) + adj;
+  const cost = s.actualCost ?? s.quotedCost;
+  // 限时活动：服务商按成本返利，算进利润
+  const rebate = s.rule?.rebate ? Math.round(cost * s.rule.rebate) / 100 : 0;
+  return s.price - cost + rebate + adj;
 }
 
 /** 该单应收客户合计（含取消手续费和补差） */

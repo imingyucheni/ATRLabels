@@ -431,6 +431,8 @@ export interface RowQuote {
   cost?: number;
   /** 提醒（例如包裹偏小），不影响下单 */
   warning?: string;
+  /** 限时活动 */
+  promo?: { label: string; endsOn: string; originalPrice: number };
 }
 
 /** cheapest = 每单选最便宜；file = 优先用表格里的物流产品 */
@@ -797,7 +799,7 @@ async function quoteJob(jobId: number) {
       try {
         const q = await quoteChannel(job.customerId, code, req);
         quotes.push(q.ok
-          ? { code, name: q.channelName, ok: true, price: q.price!, currency: q.currency, zone: q.zone ?? null, cost: q.cost, ...(q.warning ? { warning: q.warning } : {}) }
+          ? { code, name: q.channelName, ok: true, price: q.price!, currency: q.currency, zone: q.zone ?? null, cost: q.cost, ...(q.warning ? { warning: q.warning } : {}), ...(q.promo ? { promo: q.promo } : {}) }
           : { code, name: q.channelName, ok: false, error: q.error });
       } catch (e) {
         quotes.push({ code, name: getChannel(code)?.name ?? code, ok: false, error: (e as Error).message });

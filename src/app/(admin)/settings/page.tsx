@@ -1,7 +1,9 @@
 import { fmtTime } from "@/lib/time";
+import { localDate } from "@/lib/reports";
 import { labelSkuStats } from "@/lib/labelSku";
 import { describeRule, listMarkupLog, MARKUP_SCOPE_LABEL } from "@/lib/markup";
 import { DEFAULT_MIN, defaultLimits, limitsFor, savedLimits } from "@/lib/channelLimits";
+import { listPromotions, promoStatus } from "@/lib/promotions";
 import { acceptedCount, getTerms, unsignedCustomers, usingDefaultTerms } from "@/lib/terms";
 import { ADJUSTMENT_POLICY_LABEL, channelCustomerCounts, getSettings, listChannels } from "@/lib/db";
 import { BALANCE_RULE_LABEL } from "@/lib/ledger";
@@ -13,7 +15,7 @@ import SettingsSection, { SettingsToggleAll } from "@/components/SettingsSection
 import FlashForm from "@/components/FlashForm";
 import RuleInputs from "@/components/RuleInputs";
 import { DEFAULT_JG_WAREHOUSES, isJiaguCode, JG_PREFIX, JG_SUFFIX } from "@/lib/shipbest/jiagu";
-import { saveTermsAction, saveSiteAction, saveJiaguAction, testJiaguAction, resetTestEnvAction, resetSandboxAction, resetTermsAction, saveChannelLimitsAction, saveSmtpAction, testMailAction, setFinancePinAction, clearTestDataAction, saveAddrCheckAction, testAddrAction, refreshFxAction, saveChannelsAction, savePaymentSettingsAction, saveSettingsAction, saveShipBestAction, syncChannelsAction, verifyAction } from "@/app/actions";
+import { saveTermsAction, saveSiteAction, saveJiaguAction, testJiaguAction, resetTestEnvAction, resetSandboxAction, resetTermsAction, saveChannelLimitsAction, savePromotionAction, togglePromotionAction, saveSmtpAction, testMailAction, setFinancePinAction, clearTestDataAction, saveAddrCheckAction, testAddrAction, refreshFxAction, saveChannelsAction, savePaymentSettingsAction, saveSettingsAction, saveShipBestAction, syncChannelsAction, verifyAction } from "@/app/actions";
 import { cnyToPay, usdCnyQuote } from "@/lib/fx";
 import FilePick from "@/components/FilePick";
 import { CarrierMark } from "@/components/ChannelLabel";
@@ -608,6 +610,67 @@ export default async function SettingsPage() {
       >
         <StampSettings embedded global={s.stamp} detect={labelSkuStats()} channels={channels.filter((c) => c.enabled).map((c) => ({ code: c.code, name: c.name, stamp: c.stamp }))} />
       </SettingsSection>
+
+      {(() => {
+        const promos = listPromotions();
+        const active = promos.filter((p) => promoStatus(p) === "active");
+        const STATUS: Record<string, [string, string]> = { active: ["进行中", "ok"], upcoming: ["未开始", "pending"], ended: ["已结束", "cancelled"], off: ["已停用", "cancelled"] };
+        const today = localDate();
+        const in30 = localDate(new Date(Date.now() + 30 * 86400_000));
+        return (
+          <SettingsSection id="promotions" title={t("限时活动价")} summary={active.length ? t("{n} 个活动进行中", { n: active.length }) : t("没有进行中的活动")}>
+            <p className="small muted" style={{ marginTop: 0 }}>{t("服务商某个渠道有返利时（例如 OnTrac 返 30%：花 $10，之后返 $3），活动期间这个渠道可以给客户更低的加价，甚至负数（例如 -10%），扣掉返利后我们仍有利润（-10% + 30% ≈ 赚成本的 20%）。活动期间对所有客户生效，优先于其他加价设置；客户端会显示“限时折扣”标签和原价。到结束日期后自动恢复原来的加价。")}</p>
+            {promos.length > 0 && (
+              <div className="table-wrap" style={{ marginBottom: 12 }}>
+                <table>
+                  <thead><tr><th>{t("渠道")}</th><th>{t("活动名称")}</th><th className="num">{t("返利")}</th><th className="num">{t("给客户加价")}</th><th className="num">{t("预计利润（占成本）")}</th><th>{t("日期")}</th><th>{t("状态")}</th><th></th></tr></thead>
+                  <tbody>
+                    {promos.map((p) => {
+                      const st = promoStatus(p);
+                      return (
+                        <tr key={p.id}>
+                          <td className="small">{channels.find((c) => c.code === p.channelCode)?.name ?? p.channelCode}</td>
+                          <td><span className="badge promo">{p.label}</span>{p.note && <div className="small muted">{p.note}</div>}</td>
+                          <td className="num">{p.rebatePercent}%</td>
+                          <td className="num">{p.customerPercent}%</td>
+                          <td className="num"><b>{Math.round((p.customerPercent + p.rebatePercent) * 10) / 10}%</b></td>
+                          <td className="small nowrap">{p.startsOn} ~ {p.endsOn}</td>
+                          <td><span className={`badge ${STATUS[st][1]}`}>{t(STATUS[st][0])}</span></td>
+                          <td className="nowrap">
+                            <FlashForm action={togglePromotionAction} submitLabel={p.enabled ? "停用" : "启用"} submitClass="small" inline>
+                              <input type="hidden" name="id" value={p.id} />
+                            </FlashForm>{" "}
+                            <FlashForm action={togglePromotionAction} submitLabel="删除" submitClass="small" inline confirm="删除这个活动？已经下的单不受影响。">
+                              <input type="hidden" name="id" value={p.id} /><input type="hidden" name="delete" value="1" />
+                            </FlashForm>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <FlashForm action={savePromotionAction} submitLabel="新增活动" review>
+              <h3 style={{ marginTop: 0 }}>{t("新增活动")}</h3>
+              <div className="grid" style={{ marginBottom: 12 }}>
+                <label className="f"><span className="req">{t("渠道")}</span>
+                  <select name="channelCode" required defaultValue="">
+                    <option value="" disabled>{t("选择渠道")}</option>
+                    {channels.filter((c) => c.enabled).map((c) => <option key={c.code} value={c.code}>{c.name}</option>)}
+                  </select>
+                </label>
+                <label className="f">{t("客户看到的活动名称")}<input name="label" maxLength={30} defaultValue={t("限时折扣")} /></label>
+                <label className="f"><span className="req">{t("服务商返利 %")}</span><input name="rebatePercent" type="number" step="0.1" min="0" max="99" required placeholder="30" /></label>
+                <label className="f"><span className="req">{t("活动期间给客户加价 %（可以是负数）")}</span><input name="customerPercent" type="number" step="0.1" required placeholder="-10" /></label>
+                <label className="f"><span className="req">{t("开始日期")}</span><input name="startsOn" type="date" required defaultValue={today} /></label>
+                <label className="f"><span className="req">{t("结束日期")}</span><input name="endsOn" type="date" required defaultValue={in30} /></label>
+                <label className="f" style={{ gridColumn: "1 / -1" }}>{t("备注（只有后台看得到）")}<input name="note" maxLength={200} placeholder={t("例如：OnTrac 10 月返利活动，返利月底结算")} /></label>
+              </div>
+            </FlashForm>
+          </SettingsSection>
+        );
+      })()}
 
       <SettingsSection
         id="channels"

@@ -29,6 +29,7 @@ import { notifyLater } from "./notify";
 import type { AddressCheck } from "./addressCheck";
 import { computePrice, resolveRule, roundUp, type MarkupRule, type PartialRule } from "./pricing";
 import { effectiveRule } from "./markup";
+import { getPromotion } from "./promotions";
 import { checkLimits, checkMinSize } from "./channelLimits";
 import { getShipBestClient, getTestAccountClient, shipbestMode, ShipBestError } from "./shipbest/client";
 import { isJiaguCode } from "./shipbest/jiagu";
@@ -181,6 +182,8 @@ export interface ChannelQuote {
   zoneEstimated?: boolean;
   /** 提醒（不影响下单），例如包裹比渠道要求的最小尺寸还小 */
   warning?: string;
+  /** 限时活动：客户看到的活动名、结束日期、原价 */
+  promo?: { label: string; endsOn: string; originalPrice: number };
   rule?: MarkupRule;
   price?: number;
   profit?: number;
@@ -273,7 +276,12 @@ async function quoteRemote(customerId: number, channelCode: string, channelName:
     if (q.currency && q.currency.toUpperCase() !== "USD") return { channelCode, channelName, ok: false, error: "该渠道报价币种不是美元，暂不支持" } satisfies ChannelQuote;
     const rule = ruleOverride ?? ruleFor(customerId, channelCode);
     // 公司自用账户按成本价：不做价格取整
-    const price = computePrice(cost, rule, isInternalCustomer(customerId) ? 0.01 : roundingStep);
+    const step = isInternalCustomer(customerId) ? 0.01 : roundingStep;
+    const price = computePrice(cost, rule, step);
+    // 限时活动：算出不参加活动时的原价，客户端显示“原价 / 限时价”
+    const promo = rule.source === "promo" && rule.promoId ? getPromotion(rule.promoId) : null;
+    const originalPrice = promo ? computePrice(cost, effectiveRule(customerId, channelCode, { ignorePromo: true }), step) : null;
+    const rebate = rule.rebate ? Math.round(cost * rule.rebate) / 100 : 0;
     return {
       channelCode,
       // 用我们渠道表里的名称（带“· SB / · GDE”服务商标记）；嘉谷的报价接口不返回产品名
@@ -285,7 +293,8 @@ async function quoteRemote(customerId: number, channelCode: string, channelName:
       ...zoneOf(channelCode, req.recipient?.zipCode, q.zone),
       rule,
       price,
-      profit: Math.round((price - cost) * 100) / 100,
+      profit: Math.round((price - cost + rebate) * 100) / 100,
+      ...(promo && originalPrice && originalPrice > price ? { promo: { label: promo.label, endsOn: promo.endsOn, originalPrice } } : {}),
     } satisfies ChannelQuote;
   } catch (e) {
     return { channelCode, channelName, ok: false, error: (e as Error).message } satisfies ChannelQuote;

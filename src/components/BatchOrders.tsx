@@ -429,6 +429,7 @@ export default function BatchOrders(props: {
                                 <span className="muted" title={t("成本 / 利润")}>{money(q.cost)} · <span className={q.price! - q.cost < 0 ? "profit-neg" : ""}>+{(q.price! - q.cost).toFixed(2)}</span>{" "}</span>
                               )}
                               <b style={q.ok ? undefined : { color: "var(--err)", fontWeight: 500 }}>{q.ok ? money(q.price, q.currency ?? "") : uncovered(q.error) ? t("地址未覆盖") : t("不可用")}</b>
+                              {q.ok && q.promo && <span className="badge promo" style={{ marginLeft: 4 }} title={t("原价 {p}，活动至 {d}", { p: money(q.promo.originalPrice), d: q.promo.endsOn })}>{tr(q.promo.label)}</span>}
                               {q.ok && q.warning && <span title={tr(q.warning)} style={{ color: "var(--warn)", cursor: "help" }}> ⚠</span>}
                             </span>
                           </label>

@@ -37,6 +37,8 @@ export interface ReconTotals {
   exceptionCost: number;
   /** 应付合计 = 邮费 + 取消费 + 补差 */
   total: number;
+  /** 限时活动：服务商应返给我们的返利（按下单成本估算，不计入应付） */
+  rebate: number;
 }
 
 export interface ReconChannel extends ReconTotals {
@@ -66,14 +68,14 @@ export interface Recon {
   unmatchedAdj: { count: number; amount: number };
 }
 
-const empty = (): ReconTotals => ({ labels: 0, postage: 0, cancelled: 0, cancelFees: 0, adjustments: 0, adjCount: 0, exceptions: 0, exceptionCost: 0, total: 0 });
+const empty = (): ReconTotals => ({ labels: 0, postage: 0, cancelled: 0, cancelFees: 0, adjustments: 0, adjCount: 0, exceptions: 0, exceptionCost: 0, total: 0, rebate: 0 });
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
 function finish<T extends ReconTotals>(t: T): T {
   const postage = r2(t.postage);
   const cancelFees = r2(t.cancelFees);
   const adjustments = r2(t.adjustments);
-  return { ...t, postage, cancelFees, adjustments, exceptionCost: r2(t.exceptionCost), total: r2(postage + cancelFees + adjustments) };
+  return { ...t, postage, cancelFees, adjustments, exceptionCost: r2(t.exceptionCost), total: r2(postage + cancelFees + adjustments), rebate: r2(t.rebate) };
 }
 
 /** UTC 时间字符串 → 服务器本地日期（和报表、面单记录的日期筛选一致） */
@@ -94,6 +96,7 @@ function addShipment(t: ReconTotals, s: Shipment) {
   } else {
     t.labels++;
     t.postage += postageOf(s);
+    if (s.rule?.rebate) t.rebate += (postageOf(s) * s.rule.rebate) / 100;
   }
 }
 
@@ -227,7 +230,7 @@ export function buildRecon(from: string, to: string): Recon {
   });
   const grand = empty();
   for (const p of providers) {
-    for (const k of ["labels", "postage", "cancelled", "cancelFees", "adjustments", "adjCount", "exceptions", "exceptionCost"] as const) grand[k] += p.totals[k];
+    for (const k of ["labels", "postage", "cancelled", "cancelFees", "adjustments", "adjCount", "exceptions", "exceptionCost", "rebate"] as const) grand[k] += p.totals[k];
   }
   return { from, to, providers, grand: finish(grand), unmatchedAdj: { count: unmatchedAdj.count, amount: r2(unmatchedAdj.amount) } };
 }

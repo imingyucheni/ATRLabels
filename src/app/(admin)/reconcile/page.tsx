@@ -18,6 +18,7 @@ function Summary({ t, tr, big }: { t: ReconTotals; tr: T; big?: boolean }) {
       <div><span>{tr("取消单")}</span><b>{t.cancelled}</b><small>{tr("取消费 {v}", { v: money(t.cancelFees) })}</small></div>
       <div><span>{tr("补差")}</span><b className={t.adjustments < 0 ? "profit-pos" : ""}>{money(t.adjustments)}</b><small>{tr("{n} 笔", { n: t.adjCount })}</small></div>
       <div className="total"><span>{tr("应付合计")}</span><b>{money(t.total)}</b><small>{tr("邮费 + 取消费 + 补差")}</small></div>
+      {t.rebate > 0 && <div><span>{tr("预计返利")}</span><b className="profit-pos">{money(t.rebate)}</b><small>{tr("限时活动，服务商应返给我们")}</small></div>}
     </div>
   );
 }

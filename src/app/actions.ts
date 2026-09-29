@@ -51,6 +51,7 @@ import { clearChannelNameCache, sameNameChannels } from "@/lib/channelDisplay";
 import { clearTestData, resetSandboxData } from "@/lib/cleanup";
 import { logMarkupChange, setCustomerChannelMarkups } from "@/lib/markup";
 import { defaultLimits, saveLimits, type ChannelLimits } from "@/lib/channelLimits";
+import { deletePromotion, getPromotion, savePromotion, validatePromotion } from "@/lib/promotions";
 import { isProductionSite } from "@/lib/sites";
 import { checkAddress, needsAck, type AddressCheck } from "@/lib/addressCheck";
 import { updateLead } from "@/lib/leads";
@@ -1162,6 +1163,39 @@ async function jiaguStatus(prefix: string): Promise<FlashState> {
   } catch (e) {
     return { error: `${prefix}，但连接测试失败：${(e as Error).message}` };
   }
+}
+
+/* ---------------- 限时活动价 ---------------- */
+
+export async function savePromotionAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  await requireAdmin();
+  const id = Number(fd.get("id")) || null;
+  const p = {
+    channelCode: str(fd.get("channelCode"), 50),
+    label: str(fd.get("label"), 30) || "限时折扣",
+    rebatePercent: optNum(fd.get("rebatePercent")) ?? 0,
+    customerPercent: optNum(fd.get("customerPercent")) ?? NaN,
+    startsOn: str(fd.get("startsOn"), 10),
+    endsOn: str(fd.get("endsOn"), 10),
+    enabled: id ? fd.get("enabled") === "on" : true,
+    note: str(fd.get("note"), 200) || null,
+  };
+  const err = validatePromotion(p);
+  if (err) return { error: err };
+  const saved = savePromotion(id, p);
+  logMarkupChange({ scope: "channel", channelCode: p.channelCode, label: `限时活动 #${saved}「${p.label}」${p.startsOn} ~ ${p.endsOn}（返利 ${p.rebatePercent}%）`, before: null, after: { percent: p.customerPercent } });
+  revalidatePath("/settings");
+  return { ok: `活动已保存：${p.startsOn} 到 ${p.endsOn}，这个渠道给客户加价 ${p.customerPercent}%，扣掉返利后我们约赚成本的 ${Math.round((p.customerPercent + p.rebatePercent) * 10) / 10}%` };
+}
+
+export async function togglePromotionAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  await requireAdmin();
+  const p = getPromotion(Number(fd.get("id")));
+  if (!p) return { error: "活动不存在" };
+  if (fd.get("delete") === "1") deletePromotion(p.id);
+  else savePromotion(p.id, { ...p, enabled: !p.enabled });
+  revalidatePath("/settings");
+  return { ok: fd.get("delete") === "1" ? "活动已删除" : p.enabled ? "活动已停用，恢复原来的加价" : "活动已启用" };
 }
 
 export async function saveChannelLimitsAction(_: FlashState, fd: FormData): Promise<FlashState> {
