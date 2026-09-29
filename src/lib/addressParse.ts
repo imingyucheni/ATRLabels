@@ -37,6 +37,32 @@ const CITY_LINE = new RegExp(`^(?:(.*?)[,\\s]+)??(${STATE_NAMES}|[A-Za-z]{2})\\.
 /** 9 位邮编没写横杠（972011234）时补成 97201-1234 */
 const zip9 = (z: string) => (/^\d{9}$/.test(z) ? `${z.slice(0, 5)}-${z.slice(5)}` : z);
 
+/**
+ * “城市”里其实带着街道（以门牌号开头）：拆成街道 + 城市。
+ * 有逗号按最后一个逗号拆；没有逗号按最后一个街道后缀（St / Ave / Rd…）拆，后缀后面的方向（NW）、公寓号（Apt 4）归街道。
+ */
+function splitStreetCity(text: string): { street: string; city: string } | null {
+  const t = text.trim();
+  if (!/^\d+[A-Za-z]?\s+\S/.test(t) && !/^p\.?\s*o\.?\s*box/i.test(t)) return null;
+  const comma = t.lastIndexOf(",");
+  if (comma > 0) {
+    const city = t.slice(comma + 1).trim();
+    return city && !/\d/.test(city) ? { street: t.slice(0, comma).trim(), city } : null;
+  }
+  const re = new RegExp(STREET_HINT.source, "gi");
+  let end = -1;
+  for (let m = re.exec(t); m; m = re.exec(t)) end = m.index + m[0].length;
+  if (end < 0) return null;
+  let rest = t.slice(end).trim();
+  let street = t.slice(0, end).trim();
+  const tail = rest.match(/^((?:n|s|e|w|ne|nw|se|sw)\.?\s+)?((?:apt|apartment|suite|ste|unit|#|bldg|fl|floor|rm|room)\.?\s*#?\s*[\w-]+\s+)?/i);
+  if (tail && tail[0]) {
+    street = `${street} ${tail[0].trim()}`;
+    rest = rest.slice(tail[0].length).trim();
+  }
+  return rest && !/\d/.test(rest) ? { street, city: rest } : null;
+}
+
 function stateCode(s: string): string | null {
   const t = s.trim().toLowerCase();
   if (STATES[t]) return STATES[t];
@@ -111,12 +137,20 @@ export function parseAddress(text: string): Partial<Address> {
         if (!city && start > 0 && !/\d/.test(lines[start - 1]) && !UNIT.test(lines[start - 1])) {
           city = lines[start - 1];
           start -= 1;
+        } else if (!city && start > 0 && splitStreetCity(lines[start - 1])) {
+          // 上一段是“街道 + 城市”连在一起（529 S 8th Ave West Bend）：城市拆出来，街道留在原位
+          const sp = splitStreetCity(lines[start - 1])!;
+          lines[start - 1] = sp.street;
+          city = sp.city;
         }
+        // 街道和城市写在同一行（“529 S 8th Ave West Bend, WI 53095”）：把街道拆出来，放回去给后面识别街道
+        const split = city ? splitStreetCity(city) : null;
+        if (split) city = split.city;
         out.city = city;
         out.province = stateCode(m[2])!;
         out.zipCode = zip9(m[3]);
         out.country ??= "US";
-        lines.splice(start, i - start + 1);
+        lines.splice(start, i - start + 1, ...(split ? [split.street] : []));
         cityIdx = start;
         break;
       }

@@ -177,3 +177,13 @@ describe("客户看到的报价失败原因", () => {
     expect(publicRowError("所有渠道都无法报价：重量段基础费为0，分区代码为8")).toBe("所有渠道都无法报价：不支持该重量或地区");
   });
 });
+
+describe("地址识别：街道和城市在同一行", () => {
+  it("没有逗号 / 有逗号 / 带公寓号", async () => {
+    const { parseAddress } = await import("@/lib/addressParse");
+    expect(parseAddress("test\n529 S 8th Ave West Bend, WI 53095")).toMatchObject({ address1: "529 S 8th Ave", city: "West Bend", province: "WI", zipCode: "53095" });
+    expect(parseAddress("test\n529 S 8th Ave, West Bend, WI 53095")).toMatchObject({ address1: "529 S 8th Ave", city: "West Bend", province: "WI" });
+    expect(parseAddress("John Doe\n100 Main St Apt 4 Los Angeles CA 90001")).toMatchObject({ address1: "100 Main St", address2: "Apt 4", city: "Los Angeles", province: "CA" });
+    expect(parseAddress("Amy, 12 Pine Rd NW Seattle, WA 98101")).toMatchObject({ address1: "12 Pine Rd NW", city: "Seattle", province: "WA" });
+  });
+});
