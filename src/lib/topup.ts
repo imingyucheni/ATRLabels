@@ -177,20 +177,30 @@ export function rejectTopup(id: number, adminNote: string) {
   });
 }
 
-/* ---------------- 支付宝收款码 ---------------- */
+/* ---------------- 收款码（支付宝 / Zelle） ---------------- */
 
-export function saveAlipayQr(buf: Buffer) {
+export type QrKind = "alipay" | "zelle";
+
+export function saveQr(kind: QrKind, buf: Buffer) {
   const { mime, ext } = sniffMime(buf, null);
   if (!["image/png", "image/jpeg"].includes(mime)) throw new Error("收款码请上传 PNG 或 JPG 图片");
   const d = dir("assets");
-  for (const f of fs.readdirSync(d)) if (f.startsWith("alipay-qr.")) fs.unlinkSync(path.join(d, f));
-  fs.writeFileSync(path.join(d, `alipay-qr.${ext}`), buf);
+  for (const f of fs.readdirSync(d)) if (f.startsWith(`${kind}-qr.`)) fs.unlinkSync(path.join(d, f));
+  fs.writeFileSync(path.join(d, `${kind}-qr.${ext}`), buf);
 }
 
-export function readAlipayQr(): { buf: Buffer; mime: string } | null {
+export function readQr(kind: QrKind): { buf: Buffer; mime: string } | null {
   const d = dir("assets");
-  const f = fs.readdirSync(d).find((x) => x.startsWith("alipay-qr."));
+  const f = fs.readdirSync(d).find((x) => x.startsWith(`${kind}-qr.`));
   if (!f) return null;
   const buf = fs.readFileSync(path.join(d, f));
   return { buf, mime: sniffMime(buf, null).mime };
 }
+
+export function deleteQr(kind: QrKind) {
+  const d = dir("assets");
+  for (const f of fs.readdirSync(d)) if (f.startsWith(`${kind}-qr.`)) fs.unlinkSync(path.join(d, f));
+}
+
+export const saveAlipayQr = (buf: Buffer) => saveQr("alipay", buf);
+export const readAlipayQr = () => readQr("alipay");

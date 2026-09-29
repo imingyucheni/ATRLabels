@@ -65,7 +65,7 @@ import { addLedger, balanceOf, postAdjustment } from "@/lib/ledger";
 import { getT } from "@/lib/prefs";
 import { isUsZip } from "@/lib/geo";
 import { saveChannelSample } from "@/lib/labels";
-import { approveTopup, rejectTopup, saveAlipayQr } from "@/lib/topup";
+import { approveTopup, rejectTopup, saveQr, deleteQr } from "@/lib/topup";
 import { usdCnyQuote } from "@/lib/fx";
 import { adminResetFromRequest } from "@/lib/passwordReset";
 import type { Address, ShipmentRequest } from "@/lib/shipbest/types";
@@ -918,14 +918,20 @@ export async function savePaymentSettingsAction(_: FlashState, fd: FormData): Pr
     fxMarkup: markup ?? cur.fxMarkup,
     fxManualRate: manual ?? cur.fxManualRate,
   });
-  const file = fd.get("alipayQr");
-  if (file instanceof File && file.size) {
-    if (file.size > 3 * 1024 * 1024) return { error: "收款码图片不能超过 3MB" };
-    try {
-      saveAlipayQr(Buffer.from(await file.arrayBuffer()));
-      saveSettings({ alipayQr: true });
-    } catch (e) {
-      return { error: (e as Error).message };
+  for (const kind of ["alipay", "zelle"] as const) {
+    if (fd.get(`${kind}QrRemove`) === "on") {
+      deleteQr(kind);
+      saveSettings(kind === "alipay" ? { alipayQr: false } : { zelleQr: false });
+    }
+    const file = fd.get(`${kind}Qr`);
+    if (file instanceof File && file.size) {
+      if (file.size > 3 * 1024 * 1024) return { error: "收款码图片不能超过 3MB" };
+      try {
+        saveQr(kind, Buffer.from(await file.arrayBuffer()));
+        saveSettings(kind === "alipay" ? { alipayQr: true } : { zelleQr: true });
+      } catch (e) {
+        return { error: (e as Error).message };
+      }
     }
   }
   revalidatePath("/settings");

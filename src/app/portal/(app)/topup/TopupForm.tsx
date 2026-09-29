@@ -12,6 +12,7 @@ export default function TopupForm(props: {
   zelleInfo: string;
   alipayInfo: string;
   alipayQr: boolean;
+  zelleQr?: boolean;
   /** 后台设置的充值说明（显示在收款信息下面） */
   instructions?: string;
 }) {
@@ -92,6 +93,13 @@ export default function TopupForm(props: {
           {showPay ? (
             <div className="card" style={{ background: "var(--bg)", whiteSpace: "pre-wrap" }}>
               {method === "zelle" ? props.zelleInfo || t("请联系客服获取 Zelle 收款信息") : props.alipayInfo || t("请联系客服获取支付宝收款信息")}
+              {method === "zelle" && props.zelleQr && (
+                <>
+                  <div className="small muted" style={{ marginTop: 12 }}>{t("也可以用银行 App 的 Zelle 扫码付款：")}</div>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/api/assets/zelle-qr" alt={t("Zelle 收款码")} style={{ display: "block", width: 220, maxWidth: "100%", marginTop: 6, border: "1px solid var(--line)", borderRadius: 8, background: "#fff" }} />
+                </>
+              )}
               {method === "alipay" && props.alipayQr && (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src="/api/assets/alipay-qr" alt={t("支付宝收款码")} style={{ display: "block", width: 200, maxWidth: "100%", marginTop: 12, border: "1px solid var(--line)", borderRadius: 8 }} />

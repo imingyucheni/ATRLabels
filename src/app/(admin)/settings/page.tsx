@@ -526,14 +526,22 @@ export default async function SettingsPage() {
               <textarea name="alipayInfo" rows={3} defaultValue={s.alipayInfo} placeholder={t("支付宝账号：xxx@xxx.com\n户名：某某")} />
             </label>
           </div>
-          <div className="grid" style={{ marginTop: 10 }}>
-            <label className="f" style={{ gridColumn: "span 2" }}>{t("支付宝收款码图片（PNG / JPG，可选）")}{s.alipayQr ? t("：已上传，重新选择可替换") : ""}
-              <FilePick name="alipayQr" accept=".png,.jpg,.jpeg" />
-            </label>
-            {s.alipayQr && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src="/api/assets/alipay-qr" alt={t("支付宝收款码")} style={{ width: 110, height: 110, objectFit: "contain", border: "1px solid var(--line)", borderRadius: 6 }} />
-            )}
+          <div className="grid2" style={{ marginTop: 10 }}>
+            {([
+              ["zelle", "Zelle 收款码图片（银行 App 扫码付款，PNG / JPG，可选）", "Zelle 收款码", !!s.zelleQr],
+              ["alipay", "支付宝收款码图片（PNG / JPG，可选）", "支付宝收款码", s.alipayQr],
+            ] as const).map(([kind, label, alt, has]) => (
+              <div key={kind} className="row" style={{ alignItems: "flex-start", gap: 10 }}>
+                <label className="f" style={{ flex: 1 }}>{t(label)}{has ? t("：已上传，重新选择可替换") : ""}
+                  <FilePick name={`${kind}Qr`} accept=".png,.jpg,.jpeg" />
+                  {has && <span className="small"><input type="checkbox" name={`${kind}QrRemove`} /> {t("删除这张收款码")}</span>}
+                </label>
+                {has && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={`/api/assets/${kind}-qr`} alt={t(alt)} style={{ width: 110, height: 110, objectFit: "contain", border: "1px solid var(--line)", borderRadius: 6, background: "#fff" }} />
+                )}
+              </div>
+            ))}
           </div>
           <h3>{t("人民币汇率")}</h3>
           <div className="grid">

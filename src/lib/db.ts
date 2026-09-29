@@ -429,6 +429,8 @@ export interface Settings {
   alipayInfo: string;
   /** 是否上传了支付宝收款码 */
   alipayQr: boolean;
+  /** 是否上传了 Zelle 收款码（银行 App 扫码付款） */
+  zelleQr?: boolean;
   /** 人民币汇率：auto = 实时汇率 + 加点；manual = 固定汇率 + 加点 */
   fxMode: "auto" | "manual";
   /** 在汇率上加的点数，例如 0.03 */

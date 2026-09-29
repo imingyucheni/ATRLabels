@@ -152,3 +152,16 @@ describe("地址识别边角情况", () => {
     expect(parseAddress("Bob\n2 Oak Rd\nAustin, TX 78701-1234")).toMatchObject({ city: "Austin", province: "TX", zipCode: "78701-1234" });
   });
 });
+
+describe("收款码", () => {
+  it("Zelle 和支付宝收款码分别保存、读取、删除；只收 PNG / JPG", async () => {
+    const { saveQr, readQr, deleteQr } = await import("@/lib/topup");
+    const png = Buffer.from("89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d4944415478da6364f8ff3f0005fe02fea7d6a4c50000000049454e44ae426082", "hex");
+    saveQr("zelle", png);
+    expect(readQr("zelle")?.mime).toBe("image/png");
+    expect(readQr("alipay")).toBeNull();
+    expect(() => saveQr("zelle", Buffer.from("<svg></svg>"))).toThrow(/PNG 或 JPG/);
+    deleteQr("zelle");
+    expect(readQr("zelle")).toBeNull();
+  });
+});

@@ -22,7 +22,7 @@ export default async function PortalTopup() {
         <div className="stat"><div className="muted">{tr("当前余额（美元）")}</div><div className={`v ${me.balance < 0 ? "profit-neg" : ""}`}>{usd(me.balance)}</div></div>
         {me.creditLimit > 0 && <div className="stat"><div className="muted">{tr("可用额度（含信用额度）")}</div><div className="v">{usd(available)}</div></div>}
       </div>
-      <TopupForm rate={fx.rate} rateNote={tr(fx.manual ? "固定汇率" : "今日汇率，每天更新")} zelleInfo={s.zelleInfo} alipayInfo={s.alipayInfo} alipayQr={s.alipayQr} instructions={s.topupInstructions} />
+      <TopupForm rate={fx.rate} rateNote={tr(fx.manual ? "固定汇率" : "今日汇率，每天更新")} zelleInfo={s.zelleInfo} alipayInfo={s.alipayInfo} alipayQr={s.alipayQr} zelleQr={!!s.zelleQr} instructions={s.topupInstructions} />
 
       <div className="card table-wrap">
         <h2>{tr("充值记录")}</h2>
