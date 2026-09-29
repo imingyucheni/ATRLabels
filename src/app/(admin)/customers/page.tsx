@@ -6,6 +6,7 @@ import { pendingResets } from "@/lib/passwordReset";
 import FlashForm from "@/components/FlashForm";
 import { handleResetRequestAction } from "@/app/actions";
 import { getT } from "@/lib/prefs";
+import { getTerms, lastAcceptance } from "@/lib/terms";
 
 const show = (v: number | null | undefined, dflt: string, suffix = "") => (v === null || v === undefined ? <span className="muted">{dflt}</span> : `${v}${suffix}`);
 
@@ -43,13 +44,26 @@ export default async function CustomersPage() {
       <div className="card table-wrap">
         <table>
           <thead>
-            <tr><th>{t("名称")}</th><th>{t("联系人")}</th><th>{t("电话")}</th><th>{t("登录")}</th><th>{t("渠道")}</th><th className="num">{t("余额")}</th><th className="num">{t("信用额度")}</th><th>{t("加价 %")}</th><th>{t("固定加价")}</th><th>{t("最低利润")}</th><th></th></tr>
+            <tr><th>{t("名称")}</th><th>{t("联系人")}</th><th>{t("电话")}</th><th>{t("登录")}</th><th>{t("合同")}</th><th>{t("渠道")}</th><th className="num">{t("余额")}</th><th className="num">{t("信用额度")}</th><th>{t("加价 %")}</th><th>{t("固定加价")}</th><th>{t("最低利润")}</th><th></th></tr>
           </thead>
           <tbody>
             {customers.map((c) => (
               <tr key={c.id}>
                 <td>{c.name}{c.testAccount && <> <span className="badge test">{t("内部测试")}</span></>}</td><td>{c.contact}</td><td>{c.phone}</td>
                 <td className="small">{c.portalEnabled ? c.portalEmail : <span className="muted">{t("未开通")}</span>}</td>
+                <td className="small">
+                  {(() => {
+                    // 合同（服务条款）签署状态：已签当前版本 / 签的是旧版本 / 还没签
+                    const a = lastAcceptance(c.id);
+                    const cur = getTerms().version;
+                    if (!a) return <span className="badge pending">{t("未签")}</span>;
+                    return (
+                      <Link href={`/customers/${c.id}/terms`} title={`${[a.signer, a.signerTitle].filter(Boolean).join(" · ")} · ${fmtTime(a.acceptedAt)}`}>
+                        <span className={`badge ${a.version === cur ? "ok" : "warn"}`}>{a.version === cur ? t("已签") : t("旧版 v{v}", { v: a.version })}</span>
+                      </Link>
+                    );
+                  })()}
+                </td>
                 <td className="small">
                   {(() => {
                     const n = customerChannels(c.id).length;
@@ -64,7 +78,7 @@ export default async function CustomersPage() {
                 </td>
               </tr>
             ))}
-            {!customers.length && <tr><td colSpan={11} className="muted">{t("还没有客户，先新增一个")}</td></tr>}
+            {!customers.length && <tr><td colSpan={12} className="muted">{t("还没有客户，先新增一个")}</td></tr>}
           </tbody>
         </table>
       </div>
