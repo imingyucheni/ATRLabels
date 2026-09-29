@@ -3,7 +3,7 @@ import { getJob, jobExportRows } from "@/lib/batch";
 import { csvResponse } from "@/lib/csv";
 import { isInternalCustomer, STATUS_LABEL } from "@/lib/db";
 import { displayChannel } from "@/lib/channelDisplay";
-import { publicError } from "@/lib/portal";
+import { publicRowError } from "@/lib/portal";
 import { isJiaguCode, jgOrders } from "@/lib/shipbest/jiagu";
 import { fmtTime } from "@/lib/time";
 import { getT } from "@/lib/prefs";
@@ -54,7 +54,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
         : admin
           ? [code ? (isJiaguCode(code) ? "GDE" : "SB") : "", s ? (isJiaguCode(s.channelCode) ? jgOrders.get(s.customNo)?.identifier ?? "" : s.orderNo ?? "") : "", s?.customNo ?? "", code ?? "", price, s ? s.actualCost ?? s.quotedCost : ""]
           : [price]),
-      problem ? (admin ? problem : publicError(problem)) : "",
+      problem ? (admin ? problem : publicRowError(problem)) : "",
       rc.nameLast, rc.nameFirst, rc.phone, rc.country, rc.province, rc.city, rc.zipCode, rc.address1, rc.address2, rc.corporateName,
       r.req.pkg.length, r.req.pkg.width, r.req.pkg.height, r.req.pkg.weight, UNIT[r.req.pkg.displayUnitSystem] ?? "",
       join(r.req.skuList.map((x) => x.sku)), join(r.req.skuList.map((x) => x.productNameEn)), join(r.req.skuList.map((x) => x.quantity)),

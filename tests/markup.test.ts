@@ -69,3 +69,18 @@ describe("按渠道加价", () => {
     expect(db.getShipment(id)!.rule).toMatchObject({ percent: 40, source: "customer_channel" });
   });
 });
+
+describe("客户看不到加价", () => {
+  it("客户端用的订单、报价数据里没有成本、加价、利润", async () => {
+    const db = await import("@/lib/db");
+    const { toPortalShipment, toPublicQuote } = await import("@/lib/portal");
+    const svc = await import("@/lib/service");
+    const secret = /cost|rule|profit|markup|source|percent|minProfit/i;
+    const s = db.listShipments({ limit: 1 })[0];
+    expect(Object.keys(toPortalShipment(s)).filter((k) => secret.test(k))).toEqual([]);
+    expect(JSON.stringify(toPortalShipment(s))).not.toMatch(/"percent"|"minProfit"|"quotedCost"|"actualCost"/);
+    const q = (await svc.quoteAll(s.customerId, { sender: s.sender, recipient: s.recipient, pkg: s.pkg, skuList: s.skuList })).find((x) => x.ok)!;
+    expect(q.rule).toBeDefined(); // 后台有
+    expect(Object.keys(toPublicQuote(q)).filter((k) => secret.test(k))).toEqual([]); // 客户端没有
+  });
+});
