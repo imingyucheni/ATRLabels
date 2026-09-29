@@ -375,7 +375,7 @@ tr.best td { background: var(--accent-soft); }
   .grid2 { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 900px) {
-  .shell { grid-template-columns: minmax(0, 1fr); }
+  .shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; }
   .sidebar { position: sticky; top: 0; z-index: 20; height: auto; padding: 10px 14px; border-right: 0; border-bottom: 1px solid var(--line); gap: 0; }
   .brand { padding: 0; margin: 0; display: flex; align-items: center; gap: 10px; }
   .brand .brand-sub { display: none; }
@@ -596,7 +596,9 @@ button.accent-outline:hover, .btn.accent-outline:hover { background: var(--accen
 .fx-refresh { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
 
 /* 物流商 logo + 渠道名 */
-.channel-label { display: inline-flex; align-items: center; gap: 8px; vertical-align: middle; }
+.channel-label { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; vertical-align: middle; }
+/* 列窄时名称换到 logo 下面，不会被挤成一字一行 */
+.channel-label > span:not(.carrier-mark) { min-width: 4.5em; overflow-wrap: normal; word-break: normal; }
 .carrier-mark { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; background: #fff; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
 .carrier-mark.md { height: 32px; min-width: 80px; padding: 4px 7px; }
 .carrier-mark.sm { height: 22px; min-width: 48px; padding: 2px 5px; }
@@ -1342,4 +1344,41 @@ tr.row-disabled td:first-child { opacity: 0.55; }
   .main { margin: 0 !important; padding: 0 !important; }
   .terms-body { max-height: none; overflow: visible; border: 0; padding: 0; }
   .terms-archive { border: 0; box-shadow: none; }
+}
+
+/* ---------------- 手机适配 ---------------- */
+@media (max-width: 760px) {
+  /* iPhone Safari 输入框字号 < 16px 时一点就自动放大页面 */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), select, textarea { font-size: 16px; }
+  .smart-paste textarea { min-height: 76px; }
+  /* 表头不折行，放不下就横向滑动 */
+  .table-wrap th { white-space: nowrap; }
+  /* 表格单元格默认不折行（避免日期、类型被挤成一字一行），放不下就横向滑动；收件人等文字列仍可折行 */
+  .table-wrap td { white-space: nowrap; }
+  .table-wrap td.wrap, table.list td.wrap { white-space: normal; min-width: 9.5em; }
+  .table-wrap td.wrap .channel-label { flex-wrap: nowrap; }
+  /* 商品明细：手机上每个商品一张卡片，不用左右滑 */
+  .sku-table { min-width: 0; }
+  .sku-table thead { display: none; }
+  .sku-table, .sku-table tbody { display: block; }
+  .sku-table tr { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; padding: 12px; margin-bottom: 10px; border: 1px solid var(--line); border-radius: 10px; }
+  .sku-table td { display: flex; flex-direction: column; gap: 5px; padding: 0 !important; border: 0 !important; width: auto !important; min-width: 0 !important; font-size: 12.5px; color: var(--text-2); }
+  .sku-table td::before { content: attr(data-label); font-weight: 500; }
+  .sku-table td.full { grid-column: 1 / -1; }
+  .sku-table td:last-child:empty { display: none; }
+  .sku-table td input:not([type="checkbox"]) { min-width: 0; }
+  /* 报价结果：每个渠道一张卡片，价格在右，出单按钮整行，不用左右滑 */
+  .quote-table thead { display: none; }
+  .quote-table, .quote-table tbody { display: block; }
+  .quote-table tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 6px 12px; padding: 12px 10px; border-bottom: 1px solid var(--line); border-radius: 8px; }
+  .quote-table td { display: block; padding: 0 !important; border: 0 !important; white-space: normal !important; min-width: 0; }
+  .quote-table .q-ch { grid-column: 1; }
+  .quote-table .q-price { grid-column: 2; grid-row: 1 / span 2; text-align: right; }
+  .quote-table .q-zone, .quote-table .q-cost { grid-column: 1; font-size: 12.5px; color: var(--muted); text-align: left; }
+  .quote-table .q-zone::before, .quote-table .q-cost::before { content: attr(data-label) " "; }
+  .quote-table .q-act { grid-column: 1 / -1; }
+  .quote-table .q-act button { width: 100%; height: 40px; }
+  .quote-table .q-err { grid-column: 1 / -1; }
+  .quote-table td, .quote-table tbody tr:hover td { background: transparent !important; }
+  .quote-table tr.best { background: var(--accent-soft); border-bottom-color: transparent; }
 }

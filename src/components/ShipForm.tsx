@@ -272,13 +272,13 @@ export default function ShipForm(props: {
                 <tbody>
                   {skus.map((s, i) => (
                     <tr key={i}>
-                      <td><input value={s.sku} onChange={(e) => setSku(i, { sku: e.target.value })} /></td>
-                      <td><input value={s.productNameCn} placeholder={t("可不填，默认用英文品名")} onChange={(e) => setSku(i, { productNameCn: e.target.value })} /></td>
-                      <td><input value={s.productNameEn} onChange={(e) => setSku(i, { productNameEn: e.target.value })} /></td>
-                      <td style={{ width: 80 }}><input type="number" min="1" value={s.quantity} onChange={(e) => setSku(i, { quantity: e.target.value })} /></td>
-                      <td style={{ width: 110 }}><input type="number" min="0" step="0.01" value={s.declaredUnitPrice} onChange={(e) => setSku(i, { declaredUnitPrice: e.target.value })} /></td>
-                      <td style={{ width: 130 }}><input value={s.hsCode} onChange={(e) => setSku(i, { hsCode: e.target.value })} /></td>
-                      <td style={{ minWidth: 170 }} className="small">
+                      <td data-label={`SKU${req}`}><input value={s.sku} onChange={(e) => setSku(i, { sku: e.target.value })} /></td>
+                      <td data-label={t("中文品名")}><input value={s.productNameCn} placeholder={t("可不填，默认用英文品名")} onChange={(e) => setSku(i, { productNameCn: e.target.value })} /></td>
+                      <td data-label={t("英文品名") + req}><input value={s.productNameEn} onChange={(e) => setSku(i, { productNameEn: e.target.value })} /></td>
+                      <td data-label={t("数量") + req} style={{ width: 80 }}><input type="number" min="1" value={s.quantity} onChange={(e) => setSku(i, { quantity: e.target.value })} /></td>
+                      <td data-label={t("申报单价") + req} style={{ width: 110 }}><input type="number" min="0" step="0.01" value={s.declaredUnitPrice} onChange={(e) => setSku(i, { declaredUnitPrice: e.target.value })} /></td>
+                      <td data-label={t("海关编码")} style={{ width: 130 }}><input value={s.hsCode} onChange={(e) => setSku(i, { hsCode: e.target.value })} /></td>
+                      <td data-label={t("商品性质") + req} style={{ minWidth: 170 }} className="small full">
                         {(() => {
                           const preset = NATURE_PRESETS.find((p) => p.value === s.productNature)?.value ?? "custom";
                           return (
@@ -315,7 +315,7 @@ export default function ShipForm(props: {
                           );
                         })()}
                       </td>
-                      <td>{skus.length > 1 && <button className="small danger" onClick={() => dirty(setSkus)(skus.filter((_, j) => j !== i))}>{t("删除")}</button>}</td>
+                      <td className="full">{skus.length > 1 && <button className="small danger" onClick={() => dirty(setSkus)(skus.filter((_, j) => j !== i))}>{t("删除")}</button>}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -556,7 +556,7 @@ export default function ShipForm(props: {
         {quotes && !quotes.some((q) => q.ok) && <div className="alert err">{t("所有渠道都不支持这个地址或包裹，请检查邮编、地址或重量尺寸。")}</div>}
         {quotes && (
           <div className="table-wrap">
-            <table>
+            <table className={portal || costTable || re ? "quote-table" : undefined}>
               <thead>
                 {portal ? (
                   <tr><th>{t("渠道")}</th><th>{t("分区")}</th><th className="num">{t("运费")}</th><th></th></tr>
@@ -573,14 +573,14 @@ export default function ShipForm(props: {
                   q.ok ? (
                     costTable || re ? (
                       <tr key={q.channelCode} className={q.price === bestPrice ? "best" : ""}>
-                        <td>
+                        <td className="q-ch">
                           <ChannelLabel code={q.channelCode} name={q.channelName} size="md" />
                           <div className="small muted">{q.channelCode}{re?.channelCode === q.channelCode && <span className="badge pending" style={{ marginLeft: 6 }}>{t("原渠道")}</span>}</div>
                         </td>
-                        <td>{q.zone ?? "-"}{q.zoneEstimated && <span className="small muted" title={t("嘉谷未返回分区，按同一目的地其他渠道的分区估算")}>{t("（参考）")}</span>}</td>
-                        <td className="num muted">{money(costTable ? q.listCost : q.cost)}</td>
-                        <td className="num"><b>{money(q.price, q.currency)}</b>{q.price === bestPrice && <div className="small profit-pos">{t("最低")}</div>}{q.promo && <div className="small" style={{ textAlign: "right" }}><span className="badge promo">{tm(q.promo.label)}</span> <s className="muted">{money(q.promo.originalPrice, q.currency)}</s><div className="muted">{t("活动至 {d}", { d: q.promo.endsOn.slice(5) })}</div></div>}{q.warning && <div className="small warn-text" style={{ maxWidth: 260, marginLeft: "auto", textAlign: "left" }}>⚠ {tm(q.warning)}</div>}</td>
-                        <td>
+                        <td className="q-zone" data-label={t("分区")}>{q.zone ?? "-"}{q.zoneEstimated && <span className="small muted" title={t("嘉谷未返回分区，按同一目的地其他渠道的分区估算")}>{t("（参考）")}</span>}</td>
+                        <td className="num muted q-cost" data-label={costTable ? t("原价") : t("我们的成本")}>{money(costTable ? q.listCost : q.cost)}</td>
+                        <td className="num q-price"><b>{money(q.price, q.currency)}</b>{q.price === bestPrice && <div className="small profit-pos">{t("最低")}</div>}{q.promo && <div className="small" style={{ textAlign: "right" }}><span className="badge promo">{tm(q.promo.label)}</span> <s className="muted">{money(q.promo.originalPrice, q.currency)}</s><div className="muted">{t("活动至 {d}", { d: q.promo.endsOn.slice(5) })}</div></div>}{q.warning && <div className="small warn-text" style={{ maxWidth: 260, marginLeft: "auto", textAlign: "left" }}>⚠ {tm(q.warning)}</div>}</td>
+                        <td className="q-act">
                           <button className="primary small" disabled={!!creating} onClick={() => onCreate(q)}>
                             {creating === q.channelCode ? t("出单中…") : re ? t("用此渠道重新出单") : t("用此渠道出单")}
                           </button>
@@ -588,8 +588,8 @@ export default function ShipForm(props: {
                       </tr>
                     ) :
                     <tr key={q.channelCode} className={q.price === bestPrice ? "best" : ""}>
-                      <td><ChannelLabel code={q.channelCode} name={q.channelName} size="md" />{!portal && <div className="small muted">{q.channelCode}</div>}</td>
-                      <td>{q.zone ?? "-"}{!portal && q.zoneEstimated && <span className="small muted" title={t("嘉谷未返回分区，按同一目的地其他渠道的分区估算")}>{t("（参考）")}</span>}</td>
+                      <td className="q-ch"><ChannelLabel code={q.channelCode} name={q.channelName} size="md" />{!portal && <div className="small muted">{q.channelCode}</div>}</td>
+                      <td className="q-zone" data-label={t("分区")}>{q.zone ?? "-"}{!portal && q.zoneEstimated && <span className="small muted" title={t("嘉谷未返回分区，按同一目的地其他渠道的分区估算")}>{t("（参考）")}</span>}</td>
                       {!portal && (
                         <>
                           <td className="num muted">{money(q.listCost)}</td>
@@ -597,10 +597,10 @@ export default function ShipForm(props: {
                           <td className="small">+{q.rule!.percent}% + {q.rule!.fixed}{t("，最低利润")} {q.rule!.minProfit}</td>
                         </>
                       )}
-                      <td className="num"><b>{money(q.price, q.currency)}</b>{q.promo && <div className="small" style={{ textAlign: "right" }}><span className="badge promo">{tm(q.promo.label)}</span> <s className="muted">{money(q.promo.originalPrice, q.currency)}</s><div className="muted">{t("活动至 {d}", { d: q.promo.endsOn.slice(5) })}</div></div>}{q.warning && <div className="small warn-text" style={{ maxWidth: 260, marginLeft: "auto", textAlign: "left" }}>⚠ {tm(q.warning)}</div>}</td>
+                      <td className="num q-price"><b>{money(q.price, q.currency)}</b>{q.promo && <div className="small" style={{ textAlign: "right" }}><span className="badge promo">{tm(q.promo.label)}</span> <s className="muted">{money(q.promo.originalPrice, q.currency)}</s><div className="muted">{t("活动至 {d}", { d: q.promo.endsOn.slice(5) })}</div></div>}{q.warning && <div className="small warn-text" style={{ maxWidth: 260, marginLeft: "auto", textAlign: "left" }}>⚠ {tm(q.warning)}</div>}</td>
                       {!portal && <td className="num profit-pos">{money(q.profit)}</td>}
                       {portal && (
-                        <td>
+                        <td className="q-act">
                           <button className="primary small" disabled={!!creating} onClick={() => onCreate(q)}>
                             {creating === q.channelCode ? t("出单中…") : t("用此渠道出单")}
                           </button>
@@ -609,8 +609,8 @@ export default function ShipForm(props: {
                     </tr>
                   ) : (
                     <tr key={q.channelCode} className="row-disabled">
-                      <td><ChannelLabel code={q.channelCode} name={q.channelName} size="md" /></td>
-                      <td colSpan={portal ? 3 : costTable || re ? 4 : 6} className="small" style={{ color: "var(--err)" }}>
+                      <td className="q-ch"><ChannelLabel code={q.channelCode} name={q.channelName} size="md" /></td>
+                      <td className="small q-err" colSpan={portal ? 3 : costTable || re ? 4 : 6} style={{ color: "var(--err)" }}>
                         <b>{/不通邮|派送范围|未覆盖/.test(q.error ?? "") ? t("地址未覆盖") : t("不可用")}</b>
                         {q.error && !/^地址未覆盖/.test(q.error) ? `${t("：")}${tm(q.error)}` : q.error ? `${t("：")}${tm(q.error.replace(/^地址未覆盖：/, ""))}` : ""}
                       </td>
