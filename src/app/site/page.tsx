@@ -82,7 +82,7 @@ export default async function SitePage() {
       <section className="vc-band">
         <div className="site-wrap vc-grid">
           {[
-            { big: "6+", title: t("尾程渠道"), body: t("USPS、UniUni、GOFO、SpeedX、FedEx 等，一次报价全部比较。"), href: "#product", link: t("看看怎么比价"), tone: "blue" },
+            { big: "10+", title: t("尾程渠道"), body: t("USPS、UniUni、GOFO、SpeedX、FedEx 等，一次报价全部比较。"), href: "#product", link: t("看看怎么比价"), tone: "blue" },
             { big: "$0", title: t("月费"), body: t("预付余额，按单扣费，没有最低单量。"), href: "#how", link: t("怎么开通"), tone: "teal" },
             { big: "1,000+", title: t("单一次导入"), body: t("Excel 批量导入，逐单比价、合并打印。"), href: "#product", link: t("批量出单"), tone: "violet" },
             hours > 0
