@@ -10,7 +10,7 @@ export default async function manifest(): Promise<MetadataRoute.Manifest> {
   const name = getSettings().brandName || "ATRShip";
   // 从后台网址添加的打开后台首页，从客户网址添加的打开客户中心
   const host = (await headers()).get("host") ?? "";
-  const onAdmin = !!adminOrigin() && adminOrigin().includes(host);
+  const onAdmin = !!host && !!adminOrigin() && new URL(adminOrigin()).host === host;
   return {
     name,
     short_name: name,
