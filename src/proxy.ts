@@ -25,12 +25,25 @@ export function proxy(req: NextRequest) {
 
   if (host === omsHost) {
     // OMS 网址：首页显示官网（/site），页面只开放官网和 /portal；接口（面单、导出等）自己会检查登录身份
-    if (path === "/") return NextResponse.rewrite(new URL("/site", req.url));
+    if (path === "/") {
+      // 首页显示官网：加一个请求头，由 next.config 里的 rewrites 做站内转发到 /site。
+      // （不在这里直接 NextResponse.rewrite：放在反向代理后面、程序只监听 127.0.0.1 时，
+      //  Next 会把它当成外部网址 https://localhost:3000/site 去代理，报 500）
+      const headers = new Headers(req.headers);
+      headers.set("x-atr-oms-home", "1");
+      return NextResponse.next({ request: { headers } });
+    }
     if (isPortal || path === "/site" || path.startsWith("/site/") || path.startsWith("/api/")) return NextResponse.next();
     return NextResponse.redirect(new URL("/portal", omsUrl));
   }
   if (adminHost && host === adminHost && isPortal) {
     return NextResponse.redirect(new URL(path + req.nextUrl.search, omsUrl));
+  }
+  // 这个头只能由上面加：外面带进来的去掉
+  if (req.headers.has("x-atr-oms-home")) {
+    const headers = new Headers(req.headers);
+    headers.delete("x-atr-oms-home");
+    return NextResponse.next({ request: { headers } });
   }
   return NextResponse.next();
 }

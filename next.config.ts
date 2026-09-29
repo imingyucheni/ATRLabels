@@ -19,6 +19,10 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  // 客户 OMS 网址的首页 = 官网：proxy.ts 给这种请求加上 x-atr-oms-home 头，这里转到 /site
+  async rewrites() {
+    return { beforeFiles: [{ source: "/", has: [{ type: "header", key: "x-atr-oms-home" }], destination: "/site" }], afterFiles: [], fallback: [] };
+  },
   serverExternalPackages: ["better-sqlite3", "exceljs", "pdf-lib", "nodemailer", "unpdf"],
   experimental: {
     serverActions: {
