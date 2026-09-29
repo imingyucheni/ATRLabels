@@ -72,7 +72,12 @@ export default async function ReconcilePage({ searchParams }: { searchParams: Pr
 
       {!only && r.providers.length > 1 && (
         <section className="card">
-          <div className="card-head"><h2>{tr("全部服务商合计")}</h2><span className="muted small">{r.providers.map((p) => `${tr(p.name)} ${money(p.totals.total)}`).join(" · ")}</span></div>
+          <div className="card-head"><h2>{tr("全部服务商合计")}</h2></div>
+          <div className="row" style={{ gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
+            {r.providers.map((p) => (
+              <span key={p.key} className="badge" style={{ fontSize: 14, padding: "6px 12px" }}>{tr("{name} 本期应付", { name: tr(p.name) })} <b>{money(p.totals.total)}</b></span>
+            ))}
+          </div>
           <Summary t={r.grand} tr={tr} big />
         </section>
       )}
