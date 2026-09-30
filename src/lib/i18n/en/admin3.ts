@@ -355,6 +355,7 @@ export const admin3: Record<string, string> = {
   "服务商返利（限时活动或渠道返利），应返给我们": "Provider rebates (promotions or channel rebates) owed to us",
   "返利 {n}%": "rebate {n}%",
   "修改订单": "Edit order",
+  "承运商系统暂时无法出单（承运商返回“暂时无法完成，请稍后再试”）。这单没有扣费，可以过几分钟重试，或换一个渠道": "The carrier's system can't create the label right now (it says “try again later”). You were not charged; try again in a few minutes or pick another channel.",
   "重新下单": "Reorder",
   "这张订单已经重新下过单了。": "This order has already been reordered.",
   "只有已取消的订单可以重新下单。": "Only cancelled orders can be reordered.",

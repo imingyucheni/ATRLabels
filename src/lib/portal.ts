@@ -89,6 +89,10 @@ export function publicError(msg?: string | null): string {
   // 服务商超时未出面单
   if (/分钟内未出面单/.test(raw) && /已自动.*取消/.test(raw)) return "该渠道出单超时，系统已自动取消并全额退回余额，请换其他渠道重新下单";
   if (/分钟内未出面单/.test(raw)) return "该渠道出单超时，还没有生成面单。请联系客服，或换其他渠道重新下单";
+  // 承运商（FedEx 等）自己的出单系统报通用错误：订单没有建成、没有扣费，多半过几分钟重试就好
+  if (/LABEL\.GENERIC\.ERROR|Abnormal purchase of shipping ?label|please try again later/i.test(raw)) {
+    return "承运商系统暂时无法出单（承运商返回“暂时无法完成，请稍后再试”）。这单没有扣费，可以过几分钟重试，或换一个渠道";
+  }
   if (raw.includes("还没有开通任何物流渠道")) return "您的账户还没有开通物流渠道，请联系客服开通";
   if (raw.includes("未开通此渠道")) return "您的账户未开通此渠道，请联系客服";
   // 涉及我们和 ShipBest 之间的账户、授权、余额等问题，不给客户看原因

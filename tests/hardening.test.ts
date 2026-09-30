@@ -196,3 +196,11 @@ describe("地址识别：街道后缀和城市粘在一起", () => {
     expect(parseAddress("Amy\n5 Stanley Ave\nAustin, TX 78701")).toMatchObject({ address1: "5 Stanley Ave", city: "Austin" }); // 不误拆 Stanley
   });
 });
+
+describe("承运商通用出单错误给客户看中文说明", () => {
+  it("LABEL.GENERIC.ERROR", async () => {
+    const { publicError } = await import("@/lib/portal");
+    const m = publicError('Abnormal purchase of shippinglabel:["We apologize for the inconvenience. This action cannot be completed at this time. Please try again later.(LABEL.GENERIC.ERROR)(来自承运商接口)"]:null(ShipLabel)');
+    expect(m).toContain("没有扣费");
+  });
+});
