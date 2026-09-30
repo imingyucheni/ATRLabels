@@ -2,7 +2,7 @@ import { fmtTime } from "@/lib/time";
 import Link from "next/link";
 import { describeRule, MARKUP_SOURCE_LABEL, type MarkupSource } from "@/lib/markup";
 import { listCustomers, listShipments, shipmentCost, shipmentProfit, shipmentReceivable, STATUS_LABEL } from "@/lib/db";
-import { money } from "@/lib/pricing";
+import { money, signedPercent } from "@/lib/pricing";
 import StatusBadge from "@/components/StatusBadge";
 import Profit from "@/components/Profit";
 import { getT } from "@/lib/prefs";
@@ -83,7 +83,7 @@ export default async function ShipmentsPage({ searchParams }: { searchParams: Pr
                 <td className="num">{money(s.actualCost ?? s.quotedCost)}{s.actualCost === null && <div className="small muted">{t("试算")}</div>}</td>
                 <td className="num">{money(s.price, s.currency)}</td>
                 <td className="num small" title={`${describeRule(s.rule)}${s.rule.source ? ` · ${t(MARKUP_SOURCE_LABEL[s.rule.source as MarkupSource] ?? s.rule.source)}` : ""}`}>
-                  +{s.rule.percent}%{s.rule.fixed ? <div className="muted">+{money(s.rule.fixed)}</div> : null}
+                  {signedPercent(s.rule.percent)}{s.rule.fixed ? <div className="muted">+{money(s.rule.fixed)}</div> : null}
                 </td>
                 <td className="num">{s.costAdj || s.customerAdj ? <>{money(s.customerAdj)}<div className="small muted">{t("成本")} {money(s.costAdj)}</div></> : "-"}</td>
                 <td className="num"><Profit value={shipmentProfit(s)} /></td>

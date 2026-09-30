@@ -68,6 +68,25 @@ describe("按渠道加价", () => {
     const id = await svc.createLabel({ customerId: cid, channelCode: a, req, expectedPrice: q.price!, waitForLabel: false });
     expect(db.getShipment(id)!.rule).toMatchObject({ percent: 40, source: "customer_channel" });
   });
+
+  it("渠道长期返利：加价可以是负数，价格不低于（成本 − 返利 + 最低利润），利润含返利", async () => {
+    const { computePrice } = await import("@/lib/pricing");
+    const c = codes[codes.length - 1];
+    db.setChannelRebate(c, 30);
+    mk.setCustomerChannelMarkups(cid, { [c]: { percent: -15, fixed: 0, minProfit: 0 } });
+    const r = mk.effectiveRule(cid, c);
+    expect(r).toMatchObject({ percent: -15, rebate: 30, source: "customer_channel" });
+    expect(computePrice(10, r)).toBe(8.5);
+    // 没有返利时负数加价仍被“成本 + 最低利润”兜住
+    expect(computePrice(10, { percent: -15, fixed: 0, minProfit: 0.3 })).toBe(10.3);
+    // 返利 30%、最低利润 0.3：-80% 也只能降到 7.30
+    expect(computePrice(10, { percent: -80, fixed: 0, minProfit: 0.3, rebate: 30 })).toBe(7.3);
+    const q = await svc.quoteChannel(cid, c, req);
+    if (q.ok) expect(q.profit).toBeCloseTo(q.price! - q.cost! + Math.round(q.cost! * 30) / 100, 2);
+    db.setChannelRebate(c, 0);
+    expect(db.getChannel(c)?.rebate).toBe(0);
+    mk.setCustomerChannelMarkups(cid, { [c]: {} });
+  });
 });
 
 describe("客户看不到加价", () => {
@@ -83,4 +102,5 @@ describe("客户看不到加价", () => {
     expect(q.rule).toBeDefined(); // 后台有
     expect(Object.keys(toPublicQuote(q)).filter((k) => secret.test(k))).toEqual([]); // 客户端没有
   });
+
 });

@@ -69,6 +69,12 @@ export function customerChannelMarkups(customerId: number): Record<string, Parti
   return Object.fromEntries(rows.map((r) => [r.channel_code, { percent: r.percent, fixed: r.fixed, minProfit: r.min_profit }]));
 }
 
+/** 某个渠道上所有客户的专属加价（改返利时检查有没有低于返利的负数加价） */
+export function customerChannelMarkupsFor(code: string): { customerId: number; customerName: string; percent: number | null }[] {
+  const rows = conn().prepare("SELECT customer_id, percent FROM customer_channel_markup WHERE channel_code = ?").all(code) as { customer_id: number; percent: number | null }[];
+  return rows.map((r) => ({ customerId: r.customer_id, customerName: getCustomer(r.customer_id)?.name ?? String(r.customer_id), percent: r.percent }));
+}
+
 export function customerChannelMarkup(customerId: number, code: string): PartialRule | null {
   return customerChannelMarkups(customerId)[code] ?? null;
 }
@@ -110,7 +116,8 @@ export function effectiveRule(customerId: number, channelCode: string, opts: { i
     return { v: 0, src: "global" as MarkupSource };
   };
   const p = pick("percent");
-  return { percent: p.v, fixed: pick("fixed").v, minProfit: pick("minProfit").v, source: p.src };
+  const rebate = getChannel(channelCode)?.rebate ?? 0;
+  return { percent: p.v, fixed: pick("fixed").v, minProfit: pick("minProfit").v, source: p.src, ...(rebate > 0 ? { rebate } : {}) };
 }
 
 /* ---------------- 修改记录 ---------------- */
@@ -126,8 +133,8 @@ export interface MarkupLogRow {
   createdAt: string;
 }
 
-export function logMarkupChange(e: { scope: MarkupLogRow["scope"]; customerId?: number | null; channelCode?: string | null; label: string; before?: PartialRule | null; after?: PartialRule | null }) {
-  if (same(e.before, e.after)) return;
+export function logMarkupChange(e: { scope: MarkupLogRow["scope"]; customerId?: number | null; channelCode?: string | null; label: string; before?: PartialRule | null; after?: PartialRule | null; force?: boolean }) {
+  if (!e.force && same(e.before, e.after)) return;
   conn()
     .prepare("INSERT INTO markup_log (scope, customer_id, channel_code, label, before_json, after_json) VALUES (?,?,?,?,?,?)")
     .run(e.scope, e.customerId ?? null, e.channelCode ?? null, e.label, JSON.stringify(clean(e.before)), JSON.stringify(clean(e.after)));
@@ -148,5 +155,5 @@ export function listMarkupLog(opts: { customerId?: number; limit?: number } = {}
 /** 规则显示成一行字：+12% + $0.50，最低利润 $1.00；没设置的项显示“沿用” */
 export function describeRule(r: PartialRule | null | undefined, inherit = "沿用"): string {
   const f = (v: number | null | undefined, fmt: (n: number) => string) => (v === null || v === undefined ? inherit : fmt(v));
-  return `${f(r?.percent, (n) => `+${n}%`)} · ${f(r?.fixed, (n) => `+$${n.toFixed(2)}`)} · 最低利润 ${f(r?.minProfit, (n) => `$${n.toFixed(2)}`)}`;
+  return `${f(r?.percent, (n) => `${n < 0 ? "-" : "+"}${Math.abs(n)}%`)} · ${f(r?.fixed, (n) => `+$${n.toFixed(2)}`)} · 最低利润 ${f(r?.minProfit, (n) => `$${n.toFixed(2)}`)}`;
 }

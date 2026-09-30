@@ -5,6 +5,7 @@ import { isInternalCustomer, listShipments, shipmentProfit, STATUS_LABEL } from 
 import { getT } from "@/lib/prefs";
 import { isJiaguCode, jgOrders } from "@/lib/shipbest/jiagu";
 import { MARKUP_SOURCE_LABEL, type MarkupSource } from "@/lib/markup";
+import { signedPercent } from "@/lib/pricing";
 
 /** 表头首字母大写（中文不受影响） */
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -45,7 +46,7 @@ export async function GET(req: Request) {
       s.customerRef ?? "", fmtTime(s.createdAt), s.customerName, s.customNo,
       isJiaguCode(s.channelCode) ? "GDE" : "SB", isJiaguCode(s.channelCode) ? jgOrders.get(s.customNo)?.identifier ?? "" : s.orderNo,
       s.trackingNo, s.channelName, t(STATUS_LABEL[s.status]), sku(s), who(s), s.recipient.country, s.recipient.zipCode, s.zone, s.currency,
-      s.quotedCost, s.actualCost, s.price, `${s.rule.percent}%${s.rule.fixed ? ` + ${s.rule.fixed}` : ""}`, s.rule.source ? t(MARKUP_SOURCE_LABEL[s.rule.source as MarkupSource] ?? s.rule.source) : "", s.cancelFee, s.sbCancelFee, s.refundAmount, s.costAdj || "", s.customerAdj || "", shipmentProfit(s)?.toFixed(2),
+      s.quotedCost, s.actualCost, s.price, `${signedPercent(s.rule.percent)}${s.rule.fixed ? ` + ${s.rule.fixed}` : ""}`, s.rule.source ? t(MARKUP_SOURCE_LABEL[s.rule.source as MarkupSource] ?? s.rule.source) : "", s.cancelFee, s.sbCancelFee, s.refundAmount, s.costAdj || "", s.customerAdj || "", shipmentProfit(s)?.toFixed(2),
     ]),
   );
 }

@@ -285,6 +285,8 @@ function migrate(conn: Database.Database) {
   // 渠道：给客户看的名称、物流商（显示 logo）
   if (!chcols.includes("display_name")) conn.exec("ALTER TABLE channels ADD COLUMN display_name TEXT");
   if (!chcols.includes("carrier")) conn.exec("ALTER TABLE channels ADD COLUMN carrier TEXT");
+  // 服务商对这个渠道的长期返利（%）：有返利时加价可以填负数，最低到 -返利%
+  if (!chcols.includes("rebate_percent")) conn.exec("ALTER TABLE channels ADD COLUMN rebate_percent REAL");
   // 下单时的收件地址核对结果（JSON）
   if (!cols.includes("addr_check")) conn.exec("ALTER TABLE shipments ADD COLUMN addr_check TEXT");
   conn.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_customers_email ON customers(portal_email) WHERE portal_email IS NOT NULL");
@@ -547,6 +549,8 @@ export interface Channel {
   displayName: string | null;
   /** 物流商（空 = 按名称自动识别） */
   carrier: string | null;
+  /** 服务商长期返利 %（0 = 没有） */
+  rebate: number;
 }
 
 interface ChannelRow {
@@ -560,6 +564,7 @@ interface ChannelRow {
   stamp_json: string | null;
   display_name?: string | null;
   carrier?: string | null;
+  rebate_percent?: number | null;
 }
 
 function toChannel(r: ChannelRow): Channel {
@@ -572,7 +577,13 @@ function toChannel(r: ChannelRow): Channel {
     stamp: r.stamp_json ? JSON.parse(r.stamp_json) : null,
     displayName: r.display_name ?? null,
     carrier: r.carrier ?? null,
+    rebate: r.rebate_percent && r.rebate_percent > 0 ? r.rebate_percent : 0,
   };
+}
+
+/** 服务商长期返利 %（0 = 没有） */
+export function setChannelRebate(code: string, percent: number) {
+  db().prepare("UPDATE channels SET rebate_percent = ? WHERE code = ?").run(percent > 0 ? percent : null, code);
 }
 
 /** 设置渠道给客户看的名称和物流商（空 = 自动） */

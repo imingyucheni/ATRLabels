@@ -12,7 +12,7 @@ import { hasAcceptedTerms, lastAcceptance } from "@/lib/terms";
 import RuleInputs from "@/components/RuleInputs";
 import AddressFields from "@/components/AddressFields";
 import { LEDGER_TYPE_LABEL, listLedger } from "@/lib/ledger";
-import { computePrice, money, resolveRule } from "@/lib/pricing";
+import { computePrice, money, resolveRule, signedPercent } from "@/lib/pricing";
 import { getT, getLang } from "@/lib/prefs";
 import { translateMessage } from "@/lib/i18n";
 import PinField from "@/components/PinField";
@@ -129,7 +129,7 @@ export default async function CustomerEdit({ params }: { params: Promise<{ id: s
               <>
                 <FlashForm action={saveCustomerChannelMarkupAction} submitLabel="保存按渠道加价" className="card" id="channel-markup" review>
                   <h2 style={{ marginTop: 0 }}>{t("按渠道加价")}</h2>
-                  <p className="small muted">{t("这个客户在某个渠道要加多一点或少一点时，在这里单独填；留空沿用上一级（客户专属加价 → 渠道加价 → 全局默认），灰字就是沿用的数值。")}</p>
+                  <p className="small muted">{t("这个客户在某个渠道要加多一点或少一点时，在这里单独填；留空沿用上一级（客户专属加价 → 渠道加价 → 全局默认），灰字就是沿用的数值。")} {t("渠道有服务商返利时（设置 → 渠道），加价可以填负数，最低到 -返利%。")}</p>
                   <input type="hidden" name="id" value={c.id} />
                   <div className="table-wrap">
                     <table>
@@ -144,9 +144,9 @@ export default async function CustomerEdit({ params }: { params: Promise<{ id: s
                             <tr key={ch.code}>
                               <td>{ch.name}</td>
                               {(["percent", "fixed", "minProfit"] as const).map((k) => (
-                                <td key={k}><input name={`${ch.code}.${k}`} type="number" step="0.01" min="0" defaultValue={v(mine[k])} placeholder={String(inherit[k])} style={{ width: 90 }} /></td>
+                                <td key={k}><input name={`${ch.code}.${k}`} type="number" step="0.01" min={k === "percent" ? (ch.rebate > 0 ? -ch.rebate : 0) : 0} defaultValue={v(mine[k])} placeholder={String(inherit[k])} style={{ width: 90 }} /></td>
                               ))}
-                              <td className="small">+{eff.percent}%{eff.fixed ? ` + ${money(eff.fixed)}` : ""}<div className="muted">{t(MARKUP_SOURCE_LABEL[eff.source])}</div></td>
+                              <td className="small">{signedPercent(eff.percent)}{eff.fixed ? ` + ${money(eff.fixed)}` : ""}<div className="muted">{t(MARKUP_SOURCE_LABEL[eff.source])}{ch.rebate > 0 && eff.source !== "promo" ? ` · ${t("返利 {n}%", { n: ch.rebate })}` : ""}</div>{eff.source === "promo" && <div className="small warn-text" style={{ whiteSpace: "normal", maxWidth: 200 }}>{t("活动期间所有客户按限时活动价，左边的设置活动结束后才生效")}</div>}</td>
                               <td className="num">{money(computePrice(10, eff, st.roundingStep))}</td>
                             </tr>
                           );

@@ -40,7 +40,7 @@ export const admin2: Record<string, string> = {
   "撤回后面单恢复为“已出面单”，客户可以继续使用。确定？": "The label will return to “Labeled” and the customer can keep using it. Continue?",
   "实扣成本": "Charged cost",
   "（与试算不同）": " (differs from estimate)",
-  "+{pct}% + {fixed}，最低利润 {min}": "+{pct}% + {fixed}, min. profit {min}",
+  "{pct} + {fixed}，最低利润 {min}": "{pct} + {fixed}, min. profit {min}",
   "客户取消费": "Customer cancel fee",
   "应退客户": "Refund to customer",
   "ShipBest {cost} · 向客户 {customer}": "ShipBest {cost} · customer {customer}",

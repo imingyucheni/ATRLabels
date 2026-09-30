@@ -683,7 +683,7 @@ export default async function SettingsPage() {
         <div className="table-wrap">
           <table>
             <thead>
-              <tr><th>{t("启用")}</th><th>{t("渠道")}</th><th>{t("客户看到的名称 / 物流商")}</th><th>{t("加价 %")}</th><th>{t("固定加价")}</th><th>{t("最低利润")}</th><th>{t("成本 10.00 时客户价")}</th><th className="num">{t("开通客户")}</th></tr>
+              <tr><th>{t("启用")}</th><th>{t("渠道")}</th><th>{t("客户看到的名称 / 物流商")}</th><th title={t("服务商对这个渠道的长期返利；填了之后这个渠道的加价可以填负数，最低到 -返利%")}>{t("服务商返利 %")}</th><th>{t("加价 %")}</th><th>{t("固定加价")}</th><th>{t("最低利润")}</th><th>{t("成本 10.00 时客户价")}</th><th className="num">{t("开通客户")}</th></tr>
             </thead>
             <tbody>
               {channels.map((c) => (
@@ -700,12 +700,13 @@ export default async function SettingsPage() {
                       {CARRIERS.map((x) => <option key={x.id} value={x.id}>{t(x.name)}</option>)}
                     </select>
                   </td>
+                  <td><input name={`rebate.${c.code}`} type="number" step="0.1" min="0" max="99" defaultValue={c.rebate || ""} placeholder="0" style={{ width: 80 }} /></td>
                   <RuleCells prefix={`${c.code}.`} value={c.markup} global={s.markup} t={t} />
-                  <td>{money(computePrice(10, resolveRule(s.markup, c.markup), s.roundingStep))}</td>
+                  <td>{money(computePrice(10, { ...resolveRule(s.markup, c.markup), rebate: c.rebate }, s.roundingStep))}</td>
                   <td className="num">{opened[c.code] ?? 0}</td>
                 </tr>
               ))}
-              {!channels.length && <tr><td colSpan={8} className="muted">{t("还没有渠道，请点上方“同步渠道”")}</td></tr>}
+              {!channels.length && <tr><td colSpan={9} className="muted">{t("还没有渠道，请点上方“同步渠道”")}</td></tr>}
             </tbody>
           </table>
         </div>

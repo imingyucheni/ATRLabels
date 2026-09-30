@@ -7,7 +7,7 @@ export interface MarkupRule {
   minProfit: number;
   /** 加价比例来自哪一级（记在订单里给后台看；老订单没有） */
   source?: string;
-  /** 限时活动：活动编号、服务商返利比例（%），利润计算要加上返利 */
+  /** 服务商返利比例（%，限时活动或渠道长期返利），利润计算要加上返利；promoId = 限时活动编号 */
   promoId?: number;
   rebate?: number;
 }
@@ -33,12 +33,20 @@ export function roundUp(value: number, step: number): number {
   return (Math.ceil(cents / stepCents) * stepCents) / 100;
 }
 
-/** 报价 = max(成本 × (1 + 百分比) + 固定加价, 成本 + 最低利润)，再向上取整。 */
+/**
+ * 报价 = max(成本 × (1 + 百分比) + 固定加价, 实际成本 + 最低利润)，再向上取整。
+ * 实际成本 = 成本 − 服务商返利；有返利时加价可以是负数。
+ */
 export function computePrice(cost: number, rule: MarkupRule, roundingStep = 0.01): number {
   const marked = cost * (1 + rule.percent / 100) + rule.fixed;
   // 限时活动价可以低于账面成本（有返利兜底），不套最低利润
-  const floor = rule.source === "promo" ? -Infinity : cost + rule.minProfit;
+  const floor = rule.source === "promo" ? -Infinity : cost * (1 - (rule.rebate ?? 0) / 100) + rule.minProfit;
   return roundUp(Math.max(marked, floor), roundingStep);
+}
+
+/** 加价百分比带正负号：“+5%” / “-15%” */
+export function signedPercent(p: number): string {
+  return `${p < 0 ? "-" : "+"}${Math.abs(p)}%`;
 }
 
 /** 美元金额（余额等）：“$200.00” / “-$4.18” */

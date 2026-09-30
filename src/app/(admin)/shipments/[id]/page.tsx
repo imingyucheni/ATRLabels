@@ -5,7 +5,7 @@ import { MARKUP_SOURCE_LABEL, type MarkupSource } from "@/lib/markup";
 import { notFound } from "next/navigation";
 import { getCustomer, getSettings, getShipment, listAdjustments, replacedFrom, shipmentProfit, STATUS_LABEL } from "@/lib/db";
 import { isPaperSize } from "@/lib/labelLayout";
-import { money } from "@/lib/pricing";
+import { money, signedPercent } from "@/lib/pricing";
 import { defaultCancelFees, JG_LABEL_TIMEOUT_MIN, JG_LABEL_TIMEOUT_MSG, JG_TIMEOUT_VOIDED_MSG, providerOf } from "@/lib/service";
 import { listProviderEvents } from "@/lib/providerLog";
 import { isJiaguCode, jgOrders, jiaguConfig, warehouseFor } from "@/lib/shipbest/jiagu";
@@ -197,7 +197,7 @@ export default async function ShipmentDetail({ params }: { params: Promise<{ id:
             <dt>{t("分区")}</dt><dd>{s.zone ?? "-"}</dd>
             <dt>{t("试算成本")}</dt><dd>{money(s.quotedCost, s.currency)}</dd>
             <dt>{t("实扣成本")}</dt><dd>{money(s.actualCost, s.currency)}{s.actualCost !== null && Math.abs(s.actualCost - s.quotedCost) > 0.005 && <span className="profit-neg small">{t("（与试算不同）")}</span>}</dd>
-            <dt>{t("加价规则")}</dt><dd>{t("+{pct}% + {fixed}，最低利润 {min}", { pct: s.rule.percent, fixed: money(s.rule.fixed), min: money(s.rule.minProfit) })}{s.rule.source ? <span className="small muted"> · {t(MARKUP_SOURCE_LABEL[s.rule.source as MarkupSource] ?? s.rule.source)}</span> : null}</dd>
+            <dt>{t("加价规则")}</dt><dd>{t("{pct} + {fixed}，最低利润 {min}", { pct: signedPercent(s.rule.percent), fixed: money(s.rule.fixed), min: money(s.rule.minProfit) })}{s.rule.source ? <span className="small muted"> · {t(MARKUP_SOURCE_LABEL[s.rule.source as MarkupSource] ?? s.rule.source)}</span> : null}</dd>
             <dt>{t("客户价")}</dt><dd><b>{money(s.price, s.currency)}</b></dd>
             {s.status === "cancelled" && (
               <>
