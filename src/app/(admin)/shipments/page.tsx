@@ -6,6 +6,7 @@ import { money, signedPercent } from "@/lib/pricing";
 import StatusBadge from "@/components/StatusBadge";
 import Profit from "@/components/Profit";
 import { getT } from "@/lib/prefs";
+import { listLabelFailures } from "@/lib/providerLog";
 
 type SP = { customerId?: string; status?: string; from?: string; to?: string; q?: string };
 
@@ -33,9 +34,37 @@ export default async function ShipmentsPage({ searchParams }: { searchParams: Pr
     { cost: 0, revenue: 0, profit: 0 },
   );
 
+  const failures = listLabelFailures(30);
   return (
     <>
       <h1>{t("面单记录")}</h1>
+      {failures.length > 0 && (
+        <details className="card">
+          <summary style={{ cursor: "pointer" }}>
+            <b>{t("最近出单失败")}</b> <span className="muted small">{t("（服务商 / 承运商拒绝出单，订单没有建成、已退回扣款；最近 {n} 条）", { n: failures.length })}</span>
+          </summary>
+          <p className="small muted">{t("同一个渠道连续失败、其他渠道正常：多半是这个渠道暂时有问题，可以把原话发给服务商查。换了品名 / 包裹后能出单：是这单的内容被拦。")}</p>
+          <div className="table-wrap">
+            <table className="list">
+              <thead><tr><th>{t("时间")}</th><th>{t("客户")}</th><th>{t("渠道")}</th><th>{t("订单号")}</th><th>{t("收件地")}</th><th>{t("包裹")}</th><th>{t("品名")}</th><th>{t("对方返回")}</th></tr></thead>
+              <tbody>
+                {failures.map((f) => (
+                  <tr key={f.id}>
+                    <td className="small muted">{fmtTime(f.createdAt)}</td>
+                    <td className="wrap">{f.customerName}</td>
+                    <td className="wrap">{f.channelName}<div className="small muted">{f.channelCode}</div></td>
+                    <td>{f.customerRef ?? "-"}</td>
+                    <td className="small">{f.recipient}</td>
+                    <td className="small">{f.pkg}</td>
+                    <td className="small wrap">{f.items}</td>
+                    <td className="small wrap wide" style={{ color: "var(--err)" }}>{f.error}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      )}
       <form className="card row" method="get">
         <label className="f">{t("客户")}
           <select name="customerId" defaultValue={sp.customerId ?? ""}>

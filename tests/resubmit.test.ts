@@ -133,4 +133,23 @@ describe("异常单修改后重新下单", () => {
       client.cancelOrder = orig;
     }
   });
+
+  it("服务商拒绝出单：不扣费、不留订单，后台出单失败记录里有渠道、品名和对方原话", async () => {
+    const { listLabelFailures } = await import("@/lib/providerLog");
+    const client = sb.getShipBestClient();
+    const orig = client.createOrder.bind(client);
+    client.createOrder = async () => { throw new sb.ShipBestError(500, "Abnormal purchase of shippinglabel:[LABEL.GENERIC.ERROR]"); };
+    try {
+      const q = (await svc.quoteAll(cid, req(1))).find((x) => x.ok)!;
+      const before = ledger.balanceOf(cid);
+      await expect(svc.createLabel({ customerId: cid, channelCode: q.channelCode, req: req(1), expectedPrice: q.price!, customerRef: "FAIL-1", waitForLabel: false })).rejects.toThrow(/LABEL.GENERIC/);
+      expect(ledger.balanceOf(cid)).toBeCloseTo(before, 2);
+      const f = listLabelFailures(1)[0];
+      expect(f).toMatchObject({ customerId: cid, channelCode: q.channelCode, customerRef: "FAIL-1" });
+      expect(f.items).toContain("T-shirt");
+      expect(f.error).toContain("LABEL.GENERIC.ERROR");
+    } finally {
+      client.createOrder = orig;
+    }
+  });
 });

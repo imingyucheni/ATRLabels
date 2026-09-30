@@ -35,7 +35,7 @@ import { getShipBestClient, getTestAccountClient, shipbestMode, ShipBestError } 
 import { isJiaguCode } from "./shipbest/jiagu";
 import { guessCarrier } from "./carriers";
 import { publicError } from "./portal";
-import { logProviderEvent } from "./providerLog";
+import { logProviderEvent, recordLabelFailure } from "./providerLog";
 import { SB_STATUS } from "./shipbest/types";
 import type { Address, ShipmentRequest } from "./shipbest/types";
 import { isCountryCode, isUsZip, usStateCode } from "./geo";
@@ -438,6 +438,20 @@ export async function createLabel(input: CreateInput): Promise<number> {
   } catch (e) {
     if (e instanceof ShipBestError) {
       // ShipBest 明确拒绝：订单没有建成，退回扣款、删掉本地记录，修改后重试
+      // 后台留一条出单失败记录（渠道、收件地、包裹、品名、对方原话）
+      if (!testAccount) {
+        const u = req.pkg.displayUnitSystem === 3 ? ["in", "lb"] : req.pkg.displayUnitSystem === 2 ? ["cm", "kg"] : ["cm", "g"];
+        recordLabelFailure({
+          customerId,
+          channelCode,
+          channelName: quote.channelName,
+          customerRef: ref || null,
+          recipient: `${req.recipient.city} ${req.recipient.province ?? ""} ${req.recipient.zipCode}`,
+          pkg: `${req.pkg.length}×${req.pkg.width}×${req.pkg.height} ${u[0]} · ${req.pkg.weight} ${u[1]}`,
+          items: req.skuList.map((k) => `${k.productNameEn} ×${k.quantity}`).join(", "),
+          error: e.message,
+        });
+      }
       removeShipmentLedger(id);
       deleteShipment(id);
       throw e;
