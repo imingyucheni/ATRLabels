@@ -14,8 +14,11 @@ import {
   getBatchJobAction,
   requoteAction,
   setSelectedAction,
+  updateRowAction,
   type BatchJobView,
 } from "@/app/batchActions";
+import AddressFields from "@/components/AddressFields";
+import type { Address } from "@/lib/shipbest/types";
 import { JOB_STATUS_LABEL } from "@/lib/batchLabels";
 import { money } from "@/lib/pricing";
 import FilePick from "@/components/FilePick";
@@ -73,6 +76,9 @@ export default function BatchOrders(props: {
   const [onlyAvailable, setOnlyAvailable] = useState(false);
   const [requoteSet, setRequoteSet] = useState<Set<string>>(new Set());
   const [bulkChannel, setBulkChannel] = useState("");
+  // 修改某一单（收件人 / 包裹）
+  type Draft = { rowId: number; rowNo: number; recipient: Partial<Address>; pkg: Record<"length" | "width" | "height" | "weight", string>; unit: number; suggestion?: Partial<Address> | null; error?: string | null };
+  const [draft, setDraft] = useState<Draft | null>(null);
   const house = props.mode === "house";
   const [custId, setCustId] = useState<number | undefined>(house ? props.customers?.[0]?.id : undefined);
   const channelsOf = (id?: number) =>
@@ -117,6 +123,27 @@ export default function BatchOrders(props: {
       if (r.error) setError(r.error);
       if (r.message) setNotice(r.message);
       if (job) await load(job.id);
+    });
+  }
+
+  function openEdit(r: BatchJobView["rows"][number]) {
+    const p = r.edit.pkg;
+    setDraft({ rowId: r.id, rowNo: r.rowNo, recipient: { ...r.edit.recipient }, pkg: { length: String(p.length || ""), width: String(p.width || ""), height: String(p.height || ""), weight: String(p.weight || "") }, unit: p.displayUnitSystem, suggestion: r.address?.suggestion ?? null });
+  }
+
+  function saveEdit() {
+    if (!draft || !job) return;
+    const d = draft;
+    start(async () => {
+      const r = await updateRowAction(job.id, d.rowId, {
+        recipient: d.recipient as Record<string, string>,
+        pkg: { length: Number(d.pkg.length), width: Number(d.pkg.width), height: Number(d.pkg.height), weight: Number(d.pkg.weight), displayUnitSystem: d.unit },
+      });
+      if (r.error) return setDraft({ ...d, error: r.error });
+      setDraft(null);
+      setError(null);
+      setNotice(r.message ?? null);
+      await load(job.id);
     });
   }
 
@@ -337,9 +364,9 @@ export default function BatchOrders(props: {
           <div className="alert warn">⚠ {t("{n} 单的订单号在别的批次里还没提交，可能是重复导入，已默认不勾选。同一个订单号只能下一次单，哪边先提交就算哪边的。", { n: dupes })}</div>
         )}
         {addrIssues > 0 && editable && (
-          <div className="alert warn">⚠ {t("{n} 单的收件地址核对有问题（查不到或缺公寓号），已默认不勾选。请检查地址；确认无误的再手动勾选提交。", { n: addrIssues })}</div>
+          <div className="alert warn">⚠ {t("{n} 单的收件地址核对有问题（查不到或缺公寓号），已默认不勾选。地址写错了点收件人旁边的“修改”；确认没问题的直接勾选就能提交（只是提醒，不影响下单）。", { n: addrIssues })}</div>
         )}
-        {problems > 0 && editable && <p className="small muted">{t("有错误的订单不会提交。请在表格里改好后，把这些订单重新导入。")}</p>}
+        {problems > 0 && editable && <p className="small muted">{t("有错误的订单不会提交。点收件人旁边的“修改”改好后会自动重新试算。")}</p>}
       </div>
 
       <div className="card table-wrap">
@@ -391,6 +418,9 @@ export default function BatchOrders(props: {
                   <td>{r.customerRef ?? "-"}</td>
                   <td className="small">
                     {r.recipient}
+                    {editable && r.status !== "created" && r.status !== "pending" && !r.shipmentId && (
+                      <button type="button" className="small" style={{ marginLeft: 6, padding: "0 8px", height: 24 }} disabled={busy} onClick={() => openEdit(r)}>{t("修改")}</button>
+                    )}
                     {r.address && r.status !== "created" && (
                       <div className={`addr-mini ${addrBad(r) ? (r.address.status === "not_found" ? "err" : "warn") : r.address.status === "corrected" ? "info" : "ok"}`} title={r.address.suggestion ? `${t("建议地址")}${t("：")}${[r.address.suggestion.address1, r.address.suggestion.address2, r.address.suggestion.city, r.address.suggestion.province, r.address.suggestion.zipCode].filter(Boolean).join(", ")}` : undefined}>
                         {r.address.status === "ok" ? `✓ ${t("地址已验证")}` : r.address.status === "corrected" ? `✓ ${t("地址存在（写法可优化）")}` : `⚠ ${tr(r.address.message ?? "")}`}
@@ -452,6 +482,11 @@ export default function BatchOrders(props: {
                         {r.hasLabel && r.shipmentStatus !== "cancelled" && <> · <a href={`/api/labels/${r.shipmentId}`} target="_blank">{t("面单")}</a></>}
                       </div>
                     ) : null}
+                    {r.shipmentStatus === "cancelled" && r.shipmentId && (
+                      <div style={{ marginTop: 4 }}>
+                        <a className="btn small primary" href={props.mode === "portal" ? `/portal/shipments/${r.shipmentId}/reorder?back=${encodeURIComponent(`${props.basePath}?job=${job.id}`)}` : `/shipments/${r.shipmentId}/resubmit?back=${encodeURIComponent(`${props.basePath}?job=${job.id}`)}`}>{t("重新下单")}</a>
+                      </div>
+                    )}
                     {r.shipmentStatus === "exception" && r.shipmentId && (
                       props.mode === "portal" ? (
                         <div style={{ color: "var(--err)", maxWidth: 260 }}>{t("面单没有生成，请联系客服处理，未出面单的运费会全额退回。")}</div>
@@ -474,6 +509,42 @@ export default function BatchOrders(props: {
           </tbody>
         </table>
       </div>
+      {draft && (
+        <div className="modal-back" role="presentation" onClick={() => !busy && setDraft(null)}>
+          <div className="modal" role="dialog" aria-modal="true" aria-label={t("修改订单")} onClick={(e) => e.stopPropagation()} style={{ width: "min(760px, 100%)" }}>
+            <h3 style={{ marginTop: 0 }}>{t("修改订单（第 {n} 行）", { n: draft.rowNo })}</h3>
+            <p className="small muted" style={{ marginTop: -6 }}>{t("保存后这一单会重新试算运费、重新核对地址。")}</p>
+            {draft.suggestion && (
+              <div className="alert warn small" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <span>{t("建议地址")}{t("：")}{[draft.suggestion.address1, draft.suggestion.address2, draft.suggestion.city, draft.suggestion.province, draft.suggestion.zipCode].filter(Boolean).join(", ")}</span>
+                <button type="button" className="small" onClick={() => setDraft({ ...draft, recipient: { ...draft.recipient, ...Object.fromEntries(Object.entries(draft.suggestion!).filter(([, v]) => v)) } })}>{t("使用建议地址")}</button>
+              </div>
+            )}
+            <h4 style={{ margin: "8px 0" }}>{t("收件人")}</h4>
+            <AddressFields value={draft.recipient} onChange={(a) => setDraft({ ...draft, recipient: a })} />
+            <h4 style={{ margin: "14px 0 8px" }}>{t("包裹")}</h4>
+            <div className="grid">
+              <label className="f">{t("单位")}
+                <select value={draft.unit} onChange={(e) => setDraft({ ...draft, unit: Number(e.target.value) })}>
+                  <option value={3}>lb / in</option>
+                  <option value={2}>kg / cm</option>
+                  <option value={1}>g / cm</option>
+                </select>
+              </label>
+              {(["length", "width", "height", "weight"] as const).map((k) => (
+                <label key={k} className="f"><span className="req">{t({ length: "长", width: "宽", height: "高", weight: "重量" }[k])}</span>
+                  <input type="number" min="0" step="0.01" value={draft.pkg[k]} onChange={(e) => setDraft({ ...draft, pkg: { ...draft.pkg, [k]: e.target.value } })} />
+                </label>
+              ))}
+            </div>
+            {draft.error && <div className="alert err" style={{ marginTop: 12 }}>{tr(draft.error)}</div>}
+            <div className="row" style={{ justifyContent: "flex-end", marginTop: 14 }}>
+              <button type="button" disabled={busy} onClick={() => setDraft(null)}>{t("取消")}</button>
+              <button type="button" className="primary" disabled={busy} onClick={saveEdit}>{busy ? t("保存中…") : t("保存并重新试算")}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

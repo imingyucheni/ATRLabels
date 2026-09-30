@@ -59,7 +59,16 @@ export default async function PortalShipmentDetail({ params }: { params: Promise
         <Link href="/portal/shipments">{t("← 返回列表")}</Link>
       </div>
       {s.replacedBy && (
-        <div className="alert ok">{t("这张订单已由客服修改后重新下单，原单已取消")}{t("：")}<Link href={`/portal/shipments/${s.replacedBy}`}>{t("查看新单 →")}</Link></div>
+        <div className="alert ok">{t("这张订单已重新下单，原单已取消")}{t("：")}<Link href={`/portal/shipments/${s.replacedBy}`}>{t("查看新单 →")}</Link></div>
+      )}
+      {s.status === "cancelled" && !s.replacedBy && (
+        <div className="card resubmit-cta">
+          <div>
+            <b>{t("需要重新下单？")}</b>
+            <p className="small muted" style={{ margin: "2px 0 0" }}>{t("原订单的地址、包裹、商品会自动带过去，订单号默认在原单号后面加字母（可以改），重新查询运费出单。")}</p>
+          </div>
+          <Link className="btn primary" href={`/portal/shipments/${s.id}/reorder`}>{t("重新下单")}</Link>
+        </div>
       )}
       {s.problem && <div className="alert err">{t("订单异常：{problem}。请联系客服处理{contact}，未出面单的订单运费会全额退回。", { problem: tm(s.problem), contact: contact ? t("（{contact}）", { contact }) : "" })}</div>}
       {s.status === "exception" && (

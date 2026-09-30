@@ -736,10 +736,11 @@ export interface ResubmitResult {
  */
 const resubmitting = new Set<number>();
 
-export async function resubmitShipment(input: Omit<CreateInput, "customerId" | "createdBy"> & { oldId: number }): Promise<ResubmitResult> {
+export async function resubmitShipment(input: Omit<CreateInput, "customerId"> & { oldId: number }): Promise<ResubmitResult> {
   const old = getShipment(input.oldId);
   if (!old) throw new Error("记录不存在");
-  if (old.status !== "exception") throw new Error("只有出单异常的订单可以修改后重新下单");
+  // 出单异常的单，或者已经取消的单（取消后想改信息 / 换单号重新打）
+  if (old.status !== "exception" && old.status !== "cancelled") throw new Error("只有出单异常或已取消的订单可以重新下单");
   if (old.replacedBy) throw new Error("这张订单已经修改后重新下过单了");
   // 防止连点两次：同一张单正在重新下单时，第二次直接拒绝（不会下出两张新单）
   if (resubmitting.has(old.id)) throw new Error("这张订单正在重新下单，请稍候");
@@ -750,7 +751,7 @@ export async function resubmitShipment(input: Omit<CreateInput, "customerId" | "
       ...input,
       customerId: old.customerId,
       customerRef: input.customerRef ?? old.customerRef ?? undefined,
-      createdBy: "admin",
+      createdBy: input.createdBy ?? "admin",
     });
     updateShipment(old.id, { replacedBy: id });
   } finally {
@@ -761,7 +762,7 @@ export async function resubmitShipment(input: Omit<CreateInput, "customerId" | "
   db()
     .prepare("UPDATE batch_job_rows SET shipment_id = ?, channel_code = ?, channel_name = ?, price = ? WHERE shipment_id = ?")
     .run(id, fresh.channelCode, fresh.channelName, fresh.price, old.id);
-  logProviderEvent(old.customNo, "系统", "修改后重新下单", null, `新单 ${fresh.customNo}`);
+  logProviderEvent(old.customNo, "系统", old.status === "cancelled" ? "取消后重新下单" : "修改后重新下单", null, `新单 ${fresh.customNo}`);
   // 同一订单号的：下新单时已经顺带把原单关掉了
   if (getShipment(old.id)!.status === "cancelled") return { id, old: "cancelled" };
 

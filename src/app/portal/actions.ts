@@ -26,7 +26,7 @@ import { activeShipmentByRef, duplicateRefMessage, getCustomer, getCustomerLogin
 import { InsufficientBalanceError } from "@/lib/ledger";
 import { cancelWindowHours, cancelWindowPassed, ownsShipment, publicError, toPublicQuote, type PublicQuote } from "@/lib/portal";
 import { cleanAddress, cleanRequest, n, str } from "@/lib/sanitize";
-import { createLabel, PriceChangedError, quoteAll, refreshShipment, requestCancel, validateRequest } from "@/lib/service";
+import { createLabel, PriceChangedError, quoteAll, refreshShipment, requestCancel, resubmitShipment, validateRequest } from "@/lib/service";
 import { ShipBestError } from "@/lib/shipbest/client";
 import { createTopup, getTopup } from "@/lib/topup";
 import { requestReset, resetWithToken } from "@/lib/passwordReset";
@@ -157,6 +157,50 @@ export async function portalCreateAction(input: {
     });
     revalidatePath("/portal");
     return { id };
+  } catch (e) {
+    if (e instanceof PriceChangedError) return { error: await tMsg(e.message), quote: toPublicQuote(e.quote) };
+    if (e instanceof InsufficientBalanceError) return { error: await tMsg(e.message) };
+    if (e instanceof ShipBestError) return { error: (await getT())("下单失败：{reason}", { reason: await tMsg(publicError(e.message)) }) };
+    return { error: await tMsg(publicError((e as Error).message)) };
+  }
+}
+
+/** 已取消的订单重新下单（可以改订单号等信息）：新单记在原单的“重新下单”里，批量批次里的这一行换成新单 */
+export async function portalReorderAction(input: {
+  oldId: number;
+  channelCode: string;
+  req: ShipmentRequest;
+  expectedPrice: number;
+  customerRef?: string;
+  remark?: string;
+  addressAck?: boolean;
+}): Promise<{ id?: number; error?: string; quote?: PublicQuote; needAddressAck?: boolean }> {
+  const me = await requireCustomer();
+  const old = getShipment(Number(input.oldId));
+  if (!old || old.customerId !== me.id) return { error: await tMsg("面单不存在") };
+  if (old.status !== "cancelled" || old.replacedBy) return { error: await tMsg("只有已取消、还没重新下过单的订单可以重新下单") };
+  if (!(await impersonatedCustomerId()) && !hasAcceptedTerms(me.id)) return { error: await tMsg("请先阅读并同意服务条款") };
+  try {
+    const ref = str(input.customerRef, 50);
+    const dupe = ref ? activeShipmentByRef(me.id, ref) : undefined;
+    if (dupe) return { error: await tMsg(duplicateRefMessage(ref, dupe)) };
+    const req = cleanRequest(input.req);
+    const address = await checkAddress(req.recipient);
+    if (needsAck(address) && !input.addressAck) {
+      return { error: await tMsg("收件地址可能有问题，请检查地址，或勾选“我确认地址无误”后再下单"), needAddressAck: true };
+    }
+    const r = await resubmitShipment({
+      oldId: old.id,
+      channelCode: str(input.channelCode),
+      req,
+      expectedPrice: n(input.expectedPrice),
+      customerRef: ref || undefined,
+      remark: str(input.remark, 200) || undefined,
+      addressCheck: needsAck(address) ? ({ ...address, acknowledged: true } as AddressCheck) : address,
+      createdBy: await portalActor(),
+    });
+    revalidatePath("/portal");
+    return { id: r.id };
   } catch (e) {
     if (e instanceof PriceChangedError) return { error: await tMsg(e.message), quote: toPublicQuote(e.quote) };
     if (e instanceof InsufficientBalanceError) return { error: await tMsg(e.message) };

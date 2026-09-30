@@ -17,12 +17,13 @@ import {
   requote,
   senderFor,
   setSelected,
+  updateRow,
   type BatchJob,
 } from "@/lib/batch";
 import { getCustomer, getSettings, houseCustomerId } from "@/lib/db";
 import { publicError, publicQuoteError, publicRowError } from "@/lib/portal";
 import { displayChannel } from "@/lib/channelDisplay";
-import { str } from "@/lib/sanitize";
+import { cleanAddress, str } from "@/lib/sanitize";
 
 /** 后台可以操作任意客户；客户只能操作自己的任务 */
 async function actor(): Promise<{ admin: true } | { admin: false; customerId: number }> {
@@ -172,4 +173,22 @@ export async function deleteRowsAction(jobId: number, rowIds: number[]) {
 
 export async function requoteAction(jobId: number, channels: string[]) {
   return edit(jobId, () => requote(jobId, channels.map((c) => str(c, 50))));
+}
+
+/** 修改一单的收件人 / 包裹尺寸重量，改完自动重新试算 */
+export async function updateRowAction(
+  jobId: number,
+  rowId: number,
+  data: { recipient: Record<string, string>; pkg: { length: number; width: number; height: number; weight: number; displayUnitSystem: number } },
+) {
+  return edit(jobId, () => {
+    const u = Number(data.pkg.displayUnitSystem);
+    const n = (v: unknown) => Math.round((Number(v) || 0) * 1000) / 1000;
+    const err = updateRow(jobId, Number(rowId), {
+      recipient: cleanAddress(data.recipient),
+      pkg: { length: n(data.pkg.length), width: n(data.pkg.width), height: n(data.pkg.height), weight: n(data.pkg.weight), displayUnitSystem: (u === 1 || u === 2 ? u : 3) as 1 | 2 | 3 },
+    });
+    if (err) throw new Error(err);
+    return "已保存，正在重新试算这一单";
+  });
 }

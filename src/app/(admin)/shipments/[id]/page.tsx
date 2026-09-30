@@ -97,6 +97,15 @@ export default async function ShipmentDetail({ params }: { params: Promise<{ id:
           <Link className="btn primary" href={`/shipments/${s.id}/resubmit`}>{t("修改后重新下单")}</Link>
         </div>
       )}
+      {s.status === "cancelled" && !s.replacedBy && (
+        <div className="card resubmit-cta">
+          <div>
+            <b>{t("需要重新下单？")}</b>
+            <p className="small muted" style={{ margin: "2px 0 0" }}>{t("原订单的地址、包裹、商品会自动带过去，订单号默认在原单号后面加字母（可以改），重新查询运费出单。")}</p>
+          </div>
+          <Link className="btn primary" href={`/shipments/${s.id}/resubmit`}>{t("重新下单")}</Link>
+        </div>
+      )}
       {s.replacedBy && (() => {
         const n = getShipment(s.replacedBy);
         return <div className="alert ok">{t("这张订单已经修改后重新下单")}{t("：")}<Link href={`/shipments/${s.replacedBy}`}>{t("新单 {no} →", { no: n?.customNo ?? String(s.replacedBy) })}</Link></div>;

@@ -84,6 +84,15 @@ describe("管理员下单（公司自用账户，成本价）", () => {
     // 每单都按所有已启用渠道试算，价格 = 成本
     expect(quoted[0].quotes.length).toBe(db.listChannels(true).length);
     for (const q of quoted[0].quotes.filter((x) => x.ok)) expect(q.price).toBe(q.cost);
+    // 待提交的订单可以直接改收件人 / 包裹，改完自动重新试算
+    const row = quoted[0];
+    expect(batch.updateRow(jobId, row.id, { recipient: row.edit.recipient, pkg: { ...row.edit.pkg, weight: 0 } })).toMatch(/重量/);
+    expect(batch.updateRow(jobId, row.id, { recipient: { ...row.edit.recipient, address2: "Apt 9" }, pkg: { ...row.edit.pkg, weight: 3 } })).toBeNull();
+    job = await wait(["ready"]);
+    const edited = job.rows.find((r) => r.id === row.id)!;
+    expect(edited).toMatchObject({ status: "quoted", selected: true });
+    expect(edited.edit.pkg.weight).toBe(3);
+    expect(edited.edit.recipient.address2).toBe("Apt 9");
     batch.setSelected(jobId, "all");
     batch.confirmJob(jobId);
     job = await wait(["done", "ready"]);

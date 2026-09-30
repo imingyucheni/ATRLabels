@@ -69,8 +69,8 @@ describe("异常单修改后重新下单", () => {
     // 余额：扣新单、退原单
     expect(ledger.balanceOf(cid)).toBeCloseTo(before - fresh.price + old.price, 2);
     // 不能重复重下，也不能重下正常的单
-    await expect(resubmit(old.id)).rejects.toThrow(/只有出单异常/);
-    await expect(resubmit(r.id)).rejects.toThrow(/只有出单异常/);
+    await expect(resubmit(old.id)).rejects.toThrow(/重新下过单/);
+    await expect(resubmit(r.id)).rejects.toThrow(/只有出单异常或已取消/);
   });
 
   it("服务商拒绝取消、但那边本来就是异常单（没出面单）：本地取消并全额退回", async () => {
@@ -102,6 +102,33 @@ describe("异常单修改后重新下单", () => {
       const before = ledger.balanceOf(cid);
       svc.confirmCancelled(old.id, 0, 0);
       expect(ledger.balanceOf(cid)).toBeCloseTo(before + old.price, 2);
+    } finally {
+      client.cancelOrder = orig;
+    }
+  });
+
+  it("已取消的单可以重新下单：订单号默认加 A / B，批次里这一行换成新单，不会再去取消原单", async () => {
+    const q = (await svc.quoteAll(cid, req(1))).find((x) => x.ok)!;
+    const id = await svc.createLabel({ customerId: cid, channelCode: q.channelCode, req: req(1), expectedPrice: q.price!, customerRef: "111-2574169-8848244", waitForLabel: false });
+    db.updateShipment(id, { status: "cancelled" });
+    expect(db.reorderRef(cid, "111-2574169-8848244")).toBe("111-2574169-8848244A");
+    db.db().prepare("INSERT INTO batch_jobs (customer_id, created_by, filename, channel_mode, status) VALUES (?, 'customer', 'c.xlsx', 'cheapest', 'done')").run(cid);
+    const job = (db.db().prepare("SELECT MAX(id) AS id FROM batch_jobs").get() as { id: number }).id;
+    db.db().prepare("INSERT INTO batch_job_rows (job_id, row_no, customer_ref, req_json, status, shipment_id, price) VALUES (?, 3, ?, '{}', 'created', ?, ?)").run(job, "111-2574169-8848244", id, q.price);
+    const client = sb.getShipBestClient();
+    const orig = client.cancelOrder.bind(client);
+    let cancelCalls = 0;
+    client.cancelOrder = async (...a: Parameters<typeof orig>) => { cancelCalls++; return orig(...a); };
+    try {
+      const r = await svc.resubmitShipment({ oldId: id, channelCode: q.channelCode, req: req(1), expectedPrice: q.price!, customerRef: db.reorderRef(cid, "111-2574169-8848244"), createdBy: "customer", waitForLabel: false });
+      expect(cancelCalls).toBe(0);
+      expect(db.getShipment(r.id)!.customerRef).toBe("111-2574169-8848244A");
+      expect(db.getShipment(id)!.replacedBy).toBe(r.id);
+      expect((db.db().prepare("SELECT shipment_id FROM batch_job_rows WHERE job_id = ?").get(job) as { shipment_id: number }).shipment_id).toBe(r.id);
+      // 新单也取消了再重下：接着排 B
+      db.updateShipment(r.id, { status: "cancelled" });
+      expect(db.reorderRef(cid, "111-2574169-8848244A")).toBe("111-2574169-8848244B");
+      await expect(svc.resubmitShipment({ oldId: id, channelCode: q.channelCode, req: req(1), expectedPrice: q.price!, waitForLabel: false })).rejects.toThrow(/重新下过单/);
     } finally {
       client.cancelOrder = orig;
     }

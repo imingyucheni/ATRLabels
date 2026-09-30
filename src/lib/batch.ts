@@ -479,6 +479,8 @@ export interface BatchRow {
   labelPending: boolean;
   /** 下单后面单的状态（出单异常 / 已取消等） */
   shipmentStatus: ShipmentStatus | null;
+  /** 修改订单用：收件人和包裹（客户自己的数据） */
+  edit: { recipient: Address; pkg: Pick<ShipmentRequest["pkg"], "length" | "width" | "height" | "weight" | "displayUnitSystem"> };
 }
 
 export function createJob(input: {
@@ -626,6 +628,7 @@ export function getJob(jobId: number): BatchJob | null {
         hasLabel: !!s?.labelPath,
         labelPending: s?.status === "pending",
         shipmentStatus: s?.status ?? null,
+        edit: { recipient: req.recipient, pkg: { length: req.pkg.length, width: req.pkg.width, height: req.pkg.height, weight: req.pkg.weight, displayUnitSystem: req.pkg.displayUnitSystem } },
       };
     }),
   };
@@ -710,6 +713,36 @@ export function setSelected(jobId: number, rowIds: number[] | "all" | "none") {
     const sel = rowIds === "all" ? 1 : rowIds === "none" ? 0 : rowIds.includes(r.id) ? 1 : 0;
     setRow(r.id, { selected: sel });
   }
+}
+
+/**
+ * 修改一单的收件人 / 包裹尺寸重量（还没提交的订单），改完重新试算、重新核对地址。
+ * 返回校验错误（有错就不保存）。
+ */
+export function updateRow(jobId: number, rowId: number, patch: { recipient: Address; pkg: Pick<ShipmentRequest["pkg"], "length" | "width" | "height" | "weight" | "displayUnitSystem"> }): string | null {
+  assertEditable(jobId);
+  const r = jobRows(jobId).find((x) => x.id === rowId);
+  if (!r || r.status === "created" || r.status === "pending" || r.shipment_id) return "这一单不能修改";
+  const job = getJob(jobId)!;
+  const shipped = r.customer_ref ? activeShipmentByRef(job.customerId, r.customer_ref) : undefined;
+  if (shipped) return duplicateRefMessage(r.customer_ref!, shipped);
+  const req = JSON.parse(r.req_json) as ShipmentRequest;
+  const old = req.pkg;
+  const next: ShipmentRequest = { ...req, recipient: patch.recipient, pkg: { ...old, ...patch.pkg } };
+  // SKU 尺寸原来就是沿用包裹尺寸的，跟着一起改
+  next.skuList = req.skuList.map((s) =>
+    s.length === old.length && s.width === old.width && s.height === old.height && s.unit === old.displayUnitSystem
+      ? { ...s, length: next.pkg.length, width: next.pkg.width, height: next.pkg.height, unit: next.pkg.displayUnitSystem }
+      : s,
+  );
+  const errors = validateRequest(next).filter((e) => next.sender.nameFirst || !e.startsWith("寄件人"));
+  if (errors.length) return errors.join("；");
+  db().prepare("UPDATE batch_job_rows SET req_json = ? WHERE id = ?").run(JSON.stringify(next), r.id);
+  // 客户改过就算确认过了：重新勾选；地址还有问题时重新核对后仍会显示提醒（不会拦着下单）
+  setRow(r.id, { status: "pending", error: null, selected: 1 });
+  setJob(jobId, "quoting");
+  ensureRunning(jobId);
+  return null;
 }
 
 /** 删除还没提交的订单（待出单的订单还没扣款，可以直接删除） */

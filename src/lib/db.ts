@@ -1237,6 +1237,24 @@ export function replacedFrom(id: number): { id: number; customNo: string } | und
 }
 
 /** 同一客户、同一订单号还有效的面单；取消了的、出单异常（没有面单）的可以重新下单 */
+/**
+ * 取消后重新下单的默认订单号：原单号后面加 A，已经用过就 B、C…
+ * 原单号本身就是加过字母的（例如 123A 又取消了）→ 接着往后排（123B）。
+ */
+export function reorderRef(customerId: number, ref: string | null): string {
+  const r = (ref ?? "").trim();
+  if (!r) return "";
+  const m = r.match(/^(.*\d)([A-Z])$/);
+  const used = (x: string) => !!db().prepare("SELECT 1 FROM shipments WHERE customer_id = ? AND customer_ref = ? LIMIT 1").get(customerId, x);
+  const base = m && used(m[1]) ? m[1] : r;
+  const start = m && base === m[1] ? m[2].charCodeAt(0) - 64 : 0;
+  for (let i = start; i < 26; i++) {
+    const c = `${base}${String.fromCharCode(65 + i)}`;
+    if (!used(c)) return c.slice(0, 50);
+  }
+  return `${base}-${Date.now().toString(36).slice(-4).toUpperCase()}`.slice(0, 50);
+}
+
 export function activeShipmentByRef(customerId: number, ref: string) {
   return db()
     .prepare(

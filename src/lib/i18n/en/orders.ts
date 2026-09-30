@@ -260,7 +260,7 @@ export const orders: Record<string, string> = {
   "只看有问题的订单": "Show problems only",
   "{n} 单的订单号在别的批次里还没提交，可能是重复导入，已默认不勾选。同一个订单号只能下一次单，哪边先提交就算哪边的。":
     "{n} orders have an order ref that is also waiting in another batch, so they are unchecked. An order ref can only be shipped once — whichever batch submits first wins.",
-  "有错误的订单不会提交。请在表格里改好后，把这些订单重新导入。": "Orders with errors won't be submitted. Fix them in the spreadsheet and import them again.",
+  "有错误的订单不会提交。点收件人旁边的“修改”改好后会自动重新试算。": "Orders with errors won't be submitted. Click “Edit” next to the recipient to fix them; the order is re-quoted automatically.",
   "物流产品 / 价格": "Service / Rate",
   "已扣款 · 面单生成中": "Charged · generating label",
   "表格：": "Sheet: ",

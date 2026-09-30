@@ -8,7 +8,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { houseCreateAction, houseQuoteAction, quoteAction, resubmitCreateAction, resubmitQuoteAction } from "@/app/actions";
 import type { SavedSender } from "@/lib/senders";
-import { portalCreateAction, portalQuoteAction, saveSenderBookAction } from "@/app/portal/actions";
+import { portalCreateAction, portalQuoteAction, portalReorderAction, saveSenderBookAction } from "@/app/portal/actions";
 import type { PublicQuote } from "@/lib/portal";
 import AddressFields, { SENDER_EXAMPLE } from "@/components/AddressFields";
 import { useT, useTMsg } from "@/components/I18n";
@@ -60,6 +60,8 @@ export interface ResubmitSource {
   request: ShipmentRequest;
   remark: string | null;
   customerRef: string | null;
+  /** 原单是已取消的（取消后重新下单），不是出单异常 */
+  cancelled?: boolean;
   /** 出单成功后回到哪里（例如批量下单的批次页）；不填就打开新单 */
   returnTo?: string;
 }
@@ -71,6 +73,8 @@ export default function ShipForm(props: {
   /** portal = 客户自助下单：不选客户、只显示客户价；house = 管理员按成本价下单（所有渠道）；resubmit = 异常单修改后重新下单 */
   mode?: "admin" | "portal" | "house" | "resubmit";
   resubmit?: ResubmitSource;
+  /** 客户端：已取消的订单重新下单（预填原单信息，出单后批次里的这一行换成新单） */
+  reorder?: { id: number; request: ShipmentRequest; customerRef: string | null; remark: string | null; returnTo?: string };
   customers?: { id: number; name: string; balance?: number; available?: number; sender?: Address | null; channelCount?: number }[];
   defaultCustomerId?: number;
   defaultSender: Address | null;
@@ -90,11 +94,12 @@ export default function ShipForm(props: {
   const costTable = house || !!re?.house;
   // 可以直接出单的模式（客户自助 / 管理员自用 / 异常单重新下单）
   const orderable = portal || house || !!re;
-  const init = re?.request;
+  const reorder = portal ? props.reorder : undefined;
+  const init = re?.request ?? reorder?.request;
   const customers = props.customers ?? [];
   // 后台默认不选客户，避免替错客户下单
   const [customerId, setCustomerId] = useState<number>(props.defaultCustomerId ?? 0);
-  const [customerRef, setCustomerRef] = useState(re?.customerRef ?? "");
+  const [customerRef, setCustomerRef] = useState(re?.customerRef ?? reorder?.customerRef ?? "");
   // 后台试算新客户时临时填写的加价（留空 = 全局 / 渠道设置）
   const [markup, setMarkup] = useState({ percent: "", fixed: "", minProfit: "" });
   const initialCustomer = customers.find((c) => c.id === props.defaultCustomerId);
@@ -135,7 +140,7 @@ export default function ShipForm(props: {
         }))
       : [emptySku()],
   );
-  const [remark, setRemark] = useState(re?.remark ?? "");
+  const [remark, setRemark] = useState(re?.remark ?? reorder?.remark ?? "");
 
   const [quotes, setQuotes] = useState<Quote[] | null>(null);
   // 默认显示全部渠道：送不到的也列出来（灰色、不能选、显示原因）
@@ -232,7 +237,9 @@ export default function ShipForm(props: {
       document.getElementById("addr-check")?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
-    const msg = re
+    const msg = re?.cancelled
+      ? t("确认用 {channel} 重新出单？\n{who}：{price}", { channel: q.channelName, who: re.house ? t("成本价") : t("客户价"), price: money(q.price, q.currency) })
+      : re
       ? t("确认用 {channel} 重新出单？\n{who}：{price}\n出单成功后，原异常单会自动取消，费用退回。", { channel: q.channelName, who: re.house ? t("成本价") : t("客户价"), price: money(q.price, q.currency) })
       : house
       ? t("确认用 {channel} 出单？\n成本价：{price}（公司自用，不扣客户余额）", { channel: q.channelName, price: money(q.price, q.currency) })
@@ -242,9 +249,9 @@ export default function ShipForm(props: {
     setErrors([]);
     try {
       const args = { channelCode: q.channelCode, req: buildRequest(), expectedPrice: q.price!, remark, customerRef, addressAck: addrAck };
-      const r = re ? await resubmitCreateAction({ ...args, oldId: re.id }) : house ? await houseCreateAction(args) : await portalCreateAction(args);
+      const r = re ? await resubmitCreateAction({ ...args, oldId: re.id }) : house ? await houseCreateAction(args) : reorder ? await portalReorderAction({ ...args, oldId: reorder.id }) : await portalCreateAction(args);
       if (r.id) {
-        router.push(re?.returnTo ?? (house || re ? `/shipments/${r.id}` : `/portal/shipments/${r.id}`));
+        router.push(re?.returnTo ?? reorder?.returnTo ?? (house || re ? `/shipments/${r.id}` : `/portal/shipments/${r.id}`));
         return;
       }
       if (r.quote) {

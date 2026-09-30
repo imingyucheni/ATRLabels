@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import ShipForm from "@/components/ShipForm";
-import { getSettings, getShipment, isInternalCustomer } from "@/lib/db";
+import { getSettings, getShipment, isInternalCustomer, reorderRef } from "@/lib/db";
 import { listProviderEvents } from "@/lib/providerLog";
 import { fmtTime } from "@/lib/time";
 import { getLang } from "@/lib/prefs";
@@ -23,12 +23,13 @@ export default async function ResubmitPage({ params, searchParams }: { params: P
   // 服务商最近一次“不是成功”的返回，通常就是异常原因
   const last = listProviderEvents(s.customNo).filter((e) => e.provider !== "系统" && !/^成功/.test(e.message)).slice(-1)[0];
 
-  if (s.status !== "exception" || s.replacedBy) {
+  const wasCancelled = s.status === "cancelled";
+  if ((s.status !== "exception" && !wasCancelled) || s.replacedBy) {
     return (
       <>
         <h1>{t("修改后重新下单")}</h1>
         <div className="alert warn">
-          {s.replacedBy ? t("这张订单已经修改后重新下过单了。") : t("只有出单异常的订单可以修改后重新下单。")}{" "}
+          {s.replacedBy ? t("这张订单已经修改后重新下过单了。") : t("只有出单异常或已取消的订单可以重新下单。")}{" "}
           <Link href={`/shipments/${s.replacedBy ?? s.id}`}>{s.replacedBy ? t("查看新单 →") : t("← 返回订单")}</Link>
         </div>
       </>
@@ -41,15 +42,17 @@ export default async function ResubmitPage({ params, searchParams }: { params: P
         <div>
           <h1 style={{ marginBottom: 2 }}>{t("修改后重新下单")} · {s.customerRef || s.customNo}</h1>
           <p className="small muted" style={{ margin: 0 }}>
-            {t("原订单的地址、包裹和商品已经填好。改好尺寸、重量等信息后重新查询运费出单（也可以换渠道）。新单出单成功后，原异常单会自动取消，费用退回。")}
+            {wasCancelled
+              ? t("原订单已取消。地址、包裹和商品已经填好，订单号默认在原单号后面加字母，可以修改后重新查询运费出单。")
+              : t("原订单的地址、包裹和商品已经填好。改好尺寸、重量等信息后重新查询运费出单（也可以换渠道）。新单出单成功后，原异常单会自动取消，费用退回。")}
           </p>
         </div>
         <Link href={returnTo ?? `/shipments/${s.id}`}>{returnTo ? t("← 返回批次") : t("← 返回订单")}</Link>
       </div>
-      <div className="alert err">
+      {!wasCancelled && <div className="alert err">
         <b>{t("原订单异常")}</b>{t("：")}{tm(s.errorMsg) || t("服务商没有返回具体原因")}
         {last && <div className="small" style={{ marginTop: 4 }}>{t("服务商最近一次返回（{time}）", { time: fmtTime(last.lastAt) })}{t("：")}{t(last.action)} · {last.code ? `[${last.code}] ` : ""}{last.message}</div>}
-      </div>
+      </div>}
       <ShipForm
         mode="resubmit"
         resubmit={{
@@ -59,7 +62,8 @@ export default async function ResubmitPage({ params, searchParams }: { params: P
           channelCode: s.channelCode,
           request: { sender: s.sender, recipient: s.recipient, pkg: s.pkg, skuList: s.skuList },
           remark: s.remark,
-          customerRef: s.customerRef,
+          customerRef: wasCancelled ? reorderRef(s.customerId, s.customerRef) : s.customerRef,
+          cancelled: wasCancelled,
           returnTo,
         }}
         defaultSender={s.sender}

@@ -197,7 +197,7 @@ export async function houseCreateAction(input: {
 export async function resubmitQuoteAction(oldId: number, raw: ShipmentRequest): Promise<{ errors?: string[]; quotes?: ChannelQuote[]; address?: AddressCheck }> {
   await requireAdmin();
   const old = getShipment(Number(oldId));
-  if (!old || old.status !== "exception" || old.replacedBy) return { errors: ["只有出单异常、还没重新下过单的订单可以修改后重新下单"] };
+  if (!old || (old.status !== "exception" && old.status !== "cancelled") || old.replacedBy) return { errors: ["只有出单异常或已取消、还没重新下过单的订单可以重新下单"] };
   const req = cleanRequest(raw);
   const errors = validateRequest(req);
   if (errors.length) return { errors };

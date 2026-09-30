@@ -4,7 +4,7 @@ export const fixC: Record<string, string> = {
   "地址库里查不到这个地址，可能不存在或写错了": "This address wasn't found — it may not exist or may be mistyped",
   "查不到这个公寓 / 单元号，请检查": "This apartment / unit number wasn't found — please check",
   "地址存在，建议的标准写法如下": "Address exists; suggested standard format below",
-  "{n} 单的收件地址核对有问题（查不到或缺公寓号），已默认不勾选。请检查地址；确认无误的再手动勾选提交。": "{n} orders have address issues (not found or missing unit) and were unticked. Please check them; tick the ones that are correct to submit.",
+  "{n} 单的收件地址核对有问题（查不到或缺公寓号），已默认不勾选。地址写错了点收件人旁边的“修改”；确认没问题的直接勾选就能提交（只是提醒，不影响下单）。": "{n} orders have address check issues (not found or missing unit) and were unticked. Click “Edit” next to the recipient to fix a wrong address; if it's correct, just tick it to submit (this is only a reminder).",
   "客户查运费时自动核对收件地址：地址不存在或缺公寓号会提醒客户，必须确认后才能下单；写法不标准会给出建议地址。同一个地址只查一次，以后直接用上次的结果。": "When customers get quotes, the recipient address is checked: if it doesn't exist or is missing a unit number, the customer must confirm before ordering; non-standard formats get a suggested address. Each address is only checked once.",
   "本月已用 {a} / {b} 次": "This month: {a} / {b} lookups",
   "已到上限，本月暂停核对": "limit reached, checks paused this month",
