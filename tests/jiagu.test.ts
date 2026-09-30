@@ -198,7 +198,9 @@ describe("嘉谷万邑接口", () => {
     const { defaultPublicName } = await import("@/lib/carriers");
     expect(defaultPublicName("USPS-D价-GA-917不预上网 · GDE")).toBe("USPS");
     expect(defaultPublicName("GOFO-H-LAX-917 · GDE")).toBe("Gofo Express");
-    expect(defaultPublicName("Fedex NG末端-N · GDE")).toBe("FedEx");
+    // FedEx Ground 和 Economy（SmartPost）是两种服务，名称分开，同一个客户可以一起开通
+    expect(defaultPublicName("Fedex NG末端-N · GDE")).toBe("FedEx Ground");
+    expect(defaultPublicName("Fedex-Economy-SMP-TY · GDE")).toBe("FedEx Economy (SmartPost)");
     expect(defaultPublicName("uniuni-LAX-917(不预上网) · GDE")).toBe("UniUni Express");
     expect(defaultPublicName("UPS-D价-GROUND-923 · GDE")).toBe("UPS");
     expect(defaultPublicName("Ontrac-SG-B-XT · GDE")).toBe("OnTrac");
@@ -220,6 +222,9 @@ describe("嘉谷万邑接口", () => {
     expect(clash?.publicName).toBe("USPS");
     expect(clash?.names.length).toBe(2);
     expect(sameNameChannels(["LP-USPS", "JG-579181"])).toBeNull();
+    db.upsertChannels([{ code: "JG-569599", name: "Fedex NG末端-N · GDE" }, { code: "JG-568995", name: "Fedex-Economy-SMP-TY · GDE" }]);
+    clearChannelNameCache();
+    expect(sameNameChannels(["JG-569599", "JG-568995"])).toBeNull();
 
     // ShipBest 导单表里写的是原来的渠道名（没有“· SB”），照样能对上渠道；订单里记的原名也能查到客户显示名
     const { matchChannel } = await import("@/lib/batch");

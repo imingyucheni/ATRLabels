@@ -82,6 +82,9 @@ export function defaultPublicName(channelName: string, carrierId?: string | null
   const clean = cleanChannelName(own);
   const c = carrierById(carrierId || guessCarrier(own));
   if (!c.fullName) return tagged ? own.replace(/[\u3400-\u9fff（）()]+.*$/, "").trim() || own : clean;
+  // FedEx 分 Ground（NG / Ground）和 Economy（SmartPost）两种服务，名称要分开，同一个客户可以同时开通
+  const service = c.id === "fedex" ? fedexService(own) : null;
+  if (service) return `${c.fullName} ${service}`;
   if (tagged || /[\u3400-\u9fff]/.test(clean)) return c.fullName;
   const short = c.name.toUpperCase();
   const up = clean.toUpperCase();
@@ -93,6 +96,14 @@ export function defaultPublicName(channelName: string, carrierId?: string | null
     .replace(/^[A-Z]{3}$/, "") // 只剩口岸代码（LAX / ONT）
     .trim();
   return rest ? `${c.fullName} ${rest}` : c.fullName;
+}
+
+/** FedEx 的服务类型：Economy / SmartPost / SMP → Economy (SmartPost)；NG / Ground → Ground */
+function fedexService(name: string): string | null {
+  const n = name.toUpperCase();
+  if (/ECONOMY|SMART\s*POST|\bSMP\b/.test(n)) return "Economy (SmartPost)";
+  if (/\bNG\b|GROUND|FEDEX\s*NG/.test(n)) return "Ground";
+  return null;
 }
 
 /** 客户看到的渠道名称 + 物流商 */
