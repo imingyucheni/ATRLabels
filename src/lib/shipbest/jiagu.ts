@@ -17,6 +17,7 @@ const ORDER_TYPE_LASTMILE = 20120;
 /** 嘉谷给的“产品 ID → 仓库 ID”（不同渠道从不同仓库出）；后台可以改，这里是默认值 */
 export const DEFAULT_JG_WAREHOUSES: Record<string, string> = {
   "569599": "221121", // Fedex NG末端-N · GDE-ONE-91761
+  "568995": "221121", // Fedex-Economy-SMP-TY · GDE-ONE-91761（2155 S Excise Ave Ste B, Ontario CA 91761，可处理退件）
   "579181": "196845", // GOFO-LAX-917(不预上网) · GALAX
   "582718": "196845", // GOFO-H-LAX-917 · GALAX
   "590297": "229615", // UPS-D-GROUND-923 · CA-92374

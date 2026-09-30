@@ -53,6 +53,7 @@ describe("嘉谷万邑接口", () => {
     expect(jg.buildJiaguBody(cfg, req, 580914).WarehouseID).toBe(196845); // USPS
     expect(jg.buildJiaguBody(cfg, req, 590297).WarehouseID).toBe(229615); // UPS
     expect(jg.buildJiaguBody(cfg, req, 580469).WarehouseID).toBe(230759); // OnTrac
+    expect(jg.buildJiaguBody(cfg, req, 568995).WarehouseID).toBe(221121); // Fedex-Economy-SMP-TY · GDE-ONE-91761
     expect(jg.buildJiaguBody(cfg, req, 111).WarehouseID).toBe(999); // 后台设置的
     expect(b.OrderType).toBe(20120);
     expect(b.NeedSignService).toBe("10"); // 成人签名
