@@ -354,6 +354,7 @@ export const admin3: Record<string, string> = {
   "预计返利": "Expected rebate",
   "服务商返利（限时活动或渠道返利），应返给我们": "Provider rebates (promotions or channel rebates) owed to us",
   "返利 {n}%": "rebate {n}%",
+  "这个渠道没有设服务商返利，负数加价不会低于成本 + 最低利润": "No provider rebate set on this channel, so a negative markup never goes below cost + min. profit",
   "活动期间所有客户按限时活动价，左边的设置活动结束后才生效": "During the promotion all customers get the promo price; the values on the left apply after it ends",
   "渠道有服务商返利时（设置 → 渠道），加价可以填负数，最低到 -返利%。": "If the provider pays a rebate on a channel (Settings → Channels), the markup can be negative, down to −rebate%.",
   "服务商对这个渠道的长期返利；填了之后这个渠道的加价可以填负数，最低到 -返利%": "Standing provider rebate on this channel; once set, this channel's markup can be negative, down to −rebate%",

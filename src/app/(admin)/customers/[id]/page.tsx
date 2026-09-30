@@ -144,9 +144,9 @@ export default async function CustomerEdit({ params }: { params: Promise<{ id: s
                             <tr key={ch.code}>
                               <td>{ch.name}</td>
                               {(["percent", "fixed", "minProfit"] as const).map((k) => (
-                                <td key={k}><input name={`${ch.code}.${k}`} type="number" step="0.01" min={k === "percent" ? (ch.rebate > 0 ? -ch.rebate : 0) : 0} defaultValue={v(mine[k])} placeholder={String(inherit[k])} style={{ width: 90 }} /></td>
+                                <td key={k}><input name={`${ch.code}.${k}`} type="number" step="0.01" min={k === "percent" ? undefined : 0} defaultValue={v(mine[k])} placeholder={String(inherit[k])} style={{ width: 90 }} /></td>
                               ))}
-                              <td className="small">{signedPercent(eff.percent)}{eff.fixed ? ` + ${money(eff.fixed)}` : ""}<div className="muted">{t(MARKUP_SOURCE_LABEL[eff.source])}{ch.rebate > 0 && eff.source !== "promo" ? ` · ${t("返利 {n}%", { n: ch.rebate })}` : ""}</div>{eff.source === "promo" && <div className="small warn-text" style={{ whiteSpace: "normal", maxWidth: 200 }}>{t("活动期间所有客户按限时活动价，左边的设置活动结束后才生效")}</div>}</td>
+                              <td className="small">{signedPercent(eff.percent)}{eff.fixed ? ` + ${money(eff.fixed)}` : ""}<div className="muted">{t(MARKUP_SOURCE_LABEL[eff.source])}{ch.rebate > 0 && eff.source !== "promo" ? ` · ${t("返利 {n}%", { n: ch.rebate })}` : ""}</div>{eff.source !== "promo" && (mine.percent ?? 0) < 0 && !(ch.rebate > 0) && <div className="small warn-text" style={{ whiteSpace: "normal", maxWidth: 200 }}>{t("这个渠道没有设服务商返利，负数加价不会低于成本 + 最低利润")}</div>}{eff.source === "promo" && <div className="small warn-text" style={{ whiteSpace: "normal", maxWidth: 200 }}>{t("活动期间所有客户按限时活动价，左边的设置活动结束后才生效")}</div>}</td>
                               <td className="num">{money(computePrice(10, eff, st.roundingStep))}</td>
                             </tr>
                           );

@@ -52,7 +52,7 @@ import { clearChannelNameCache, sameNameChannels } from "@/lib/channelDisplay";
 import { clearTestData, resetSandboxData } from "@/lib/cleanup";
 import { customerChannelMarkupsFor, logMarkupChange, setCustomerChannelMarkups } from "@/lib/markup";
 import { defaultLimits, saveLimits, type ChannelLimits } from "@/lib/channelLimits";
-import { deletePromotion, getPromotion, savePromotion, validatePromotion } from "@/lib/promotions";
+import { activePromotion, deletePromotion, getPromotion, savePromotion, validatePromotion } from "@/lib/promotions";
 import { isProductionSite } from "@/lib/sites";
 import { checkAddress, needsAck, type AddressCheck } from "@/lib/addressCheck";
 import { updateLead } from "@/lib/leads";
@@ -303,6 +303,11 @@ function ruleFromForm(fd: FormData, prefix = ""): PartialRule {
   };
 }
 
+/** 这个渠道能填的负数加价下限来自哪个返利：渠道长期返利、进行中的限时活动返利，取大的 */
+function allowedRebate(code: string, channelRebate?: number): number {
+  return Math.max(channelRebate ?? getChannel(code)?.rebate ?? 0, activePromotion(code)?.rebatePercent ?? 0);
+}
+
 /**
  * 加价不允许低于成本：固定加价、最低利润不能为负数；
  * 加价 % 只有渠道有服务商返利时才能填负数，最低到 -返利%（再低就亏本）。
@@ -311,7 +316,7 @@ function negativeRule(r: PartialRule, who = "", rebate = 0): string | null {
   if ([r.fixed, r.minProfit].some((v) => v !== null && v !== undefined && v < 0)) return `${who}固定加价、最低利润不能为负数（会低于成本出单）`;
   const p = r.percent;
   if (p === null || p === undefined || p >= 0) return null;
-  if (!(rebate > 0)) return `${who}加价不能为负数（会低于成本出单）。如果服务商对这个渠道有返利，先在“设置 → 渠道”填上返利 %，就可以填负数`;
+  if (!(rebate > 0)) return `${who}加价不能为负数（会低于成本出单）。如果服务商对这个渠道有返利，先在“设置 → 物流渠道”填上服务商返利 %，就可以填负数`;
   if (p < -rebate) return `${who}加价最低只能到 -${rebate}%（这个渠道服务商返利 ${rebate}%，再低就亏本）`;
   return null;
 }
@@ -498,7 +503,7 @@ export async function saveChannelsAction(_: FlashState, fd: FormData): Promise<F
   await requireAdmin();
   const rebateOf = (c: { code: string; rebate: number }) => (fd.has(`rebate.${c.code}`) ? Math.min(99, Math.max(0, optNum(fd.get(`rebate.${c.code}`)) ?? 0)) : c.rebate);
   for (const c of listChannels()) {
-    const neg = negativeRule(ruleFromForm(fd, `${c.code}.`), `${c.name}：`, rebateOf(c));
+    const neg = negativeRule(ruleFromForm(fd, `${c.code}.`), `${c.name}：`, allowedRebate(c.code, rebateOf(c)));
     if (neg) return { error: neg };
   }
   // 返利调低后，已经填的负数加价（渠道或客户按渠道）不能低于新的返利
@@ -882,7 +887,7 @@ export async function saveCustomerChannelMarkupAction(_: FlashState, fd: FormDat
   const rules: Record<string, PartialRule> = {};
   for (const c of customerChannels(id)) {
     const r = ruleFromForm(fd, `${c.code}.`);
-    const neg = negativeRule(r, `${c.name}：`, getChannel(c.code)?.rebate ?? 0);
+    const neg = negativeRule(r, `${c.name}：`, allowedRebate(c.code));
     if (neg) return { error: neg };
     rules[c.code] = r;
   }
