@@ -1182,8 +1182,30 @@ async function jiaguStatus(prefix: string): Promise<FlashState> {
     const bal = await c.balance().catch(() => null);
     const cfg = jiaguConfig()!;
     const noWh = products.filter((p) => !warehouseFor(cfg, Number(p.code.slice(JG_PREFIX.length)))).map((p) => p.name.replace(JG_SUFFIX, ""));
+    // 还没同步进渠道列表的新渠道：用一个示例包裹试算一次（只算价，不下单），确认接口和仓库都通
+    const known = new Set(listChannels().map((c) => c.code));
+    const fresh = products.filter((p) => !known.has(p.code)).slice(0, 5);
+    const tests: string[] = [];
+    const st = getSettings();
+    if (fresh.length && st.sender?.zipCode) {
+      const sample: ShipmentRequest = {
+        sender: st.sender,
+        recipient: { nameFirst: "Test", nameLast: "Receiver", country: "US", province: "TX", city: "Austin", zipCode: "78701", address1: "500 Congress Ave", phone: "5125550100" },
+        pkg: { length: 10, width: 8, height: 4, weight: 1, displayUnitSystem: 3, signServiceType: 0, insuranceService: 0, currency: "USD" },
+        skuList: [{ sku: "TEST", productNameCn: "测试", productNameEn: "Test item", quantity: 1, declaredUnitPrice: 5, declaredCurrency: "USD", hsCode: "", productNature: "2,4", length: 10, width: 8, height: 4, weight: 1, unit: 3 }],
+      };
+      for (const p of fresh) {
+        const name = p.name.replace(JG_SUFFIX, "");
+        try {
+          const q = await c.trialPrice(p.code, sample);
+          tests.push(q ? `${name} 试算成功：$${q.totalDiscountShippingFee.toFixed(2)}${q.zone ? `（${q.zone}）` : ""}` : `${name} 没有返回价格`);
+        } catch (e) {
+          tests.push(`${name} 试算失败：${(e as Error).message}`);
+        }
+      }
+    }
     return {
-      ok: `${prefix}：开通了 ${products.length} 个渠道${bal ? `，账户余额 $${bal.usd.toFixed(2)}${bal.type ? `（${bal.type}）` : ""}` : ""}。点上面的“同步渠道”把嘉谷渠道加进渠道列表。${noWh.length ? `还没有仓库 ID 的渠道：${noWh.join("、")}` : ""}`,
+      ok: `${prefix}：开通了 ${products.length} 个渠道${bal ? `，账户余额 $${bal.usd.toFixed(2)}${bal.type ? `（${bal.type}）` : ""}` : ""}。${fresh.length ? `新渠道（还没同步）：${fresh.map((p) => p.name.replace(JG_SUFFIX, "")).join("、")}。${tests.length ? `示例包裹（1 lb，10×8×4 in，寄到 Austin TX 78701，只算价不下单）${tests.join("；")}。` : ""}点上面的“同步渠道”把新渠道加进渠道列表。` : "渠道都已同步。"}${noWh.length ? `还没有仓库 ID 的渠道：${noWh.join("、")}` : ""}`,
     };
   } catch (e) {
     return { error: `${prefix}，但连接测试失败：${(e as Error).message}` };
