@@ -128,7 +128,7 @@ export default function StoreOrders({ rows, presets }: { rows: StoreOrderView[];
                   {r.issue === "no_address" ? <span className="muted">—</span> : r.recipient}
                   {r.issue && (
                     <div style={{ color: "var(--warn)" }}>
-                      {r.issue === "no_address" ? t("缺收件地址：请在店铺订单里补上收货地址") : t("收件人姓名、街道被 Shopify 隐藏：要在 Shopify 应用里开启客户数据权限")}
+                      {r.issue === "no_address" ? t("缺收件地址：请在店铺订单里补上收货地址") : t("缺收件人姓名 / 街道地址：请在店铺订单里补全")}
                     </div>
                   )}
                 </td>

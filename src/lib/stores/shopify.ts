@@ -123,7 +123,7 @@ export function normalizeShopifyOrder(o: GqlOrder): StoreOrder | null {
     ...(addr.address2 ? { address2: addr.address2 } : {}),
     zipCode: addr.zip ?? "",
   };
-  // 有城市 / 邮编却没有姓名和街道：Shopify 没给（应用没开 Protected customer data 权限）
+  // 有城市 / 邮编却没有姓名和街道：订单地址不全，或 Shopify 没给客户数据
   const hidden = !!a && !recipient.nameFirst && !recipient.address1 && !!(recipient.city || recipient.zipCode);
   const issue = !a ? "no_address" as const : hidden ? "hidden" as const : undefined;
   return {

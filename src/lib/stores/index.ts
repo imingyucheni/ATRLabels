@@ -323,7 +323,7 @@ export interface StoreOrderRow {
 }
 
 /** 从店铺拉未发货订单：新的加进来；已导入 / 已发货的不动；店铺里已经不用发的（取消、别处发货）标记关闭 */
-export const HIDDEN_HINT = "Shopify 隐藏了收件人姓名和街道地址：请在 Shopify 开发者后台的应用里开启“Protected customer data”（勾选 Name、Address、Phone、Email），保存发布后点“立即同步订单”";
+export const HIDDEN_HINT = "有订单没有收件人姓名 / 街道地址：先在 Shopify 后台打开这些订单看收货地址是否完整，补全后点“立即同步订单”。如果店铺里的地址是完整的，说明我们没拿到客户数据，请联系客服";
 
 export async function syncStore(id: number): Promise<{ added: number; total: number; closed: number }> {
   const r = row(id);
