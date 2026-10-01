@@ -16,6 +16,7 @@ import { computePrice, money, resolveRule, signedPercent } from "@/lib/pricing";
 import { getT, getLang } from "@/lib/prefs";
 import { translateMessage } from "@/lib/i18n";
 import PinField from "@/components/PinField";
+import StoresCard from "./StoresCard";
 import { ledgerEntryAction, hideCredentialsAction, saveCustomerAction, saveCustomerChannelsAction, saveCustomerChannelMarkupAction, saveCustomerPortalAction, saveCustomerSenderAction, saveCustomerStampAction, setCustomerPasswordAction, setTestAccountAction } from "@/app/actions";
 
 export default async function CustomerEdit({ params }: { params: Promise<{ id: string }> }) {
@@ -239,6 +240,8 @@ export default async function CustomerEdit({ params }: { params: Promise<{ id: s
             <AddressFields value={c.sender} namePrefix="sender." />
             <div style={{ height: 12 }} />
           </FlashForm>
+
+          <StoresCard customerId={c.id} />
 
           <div className="card table-wrap">
             <div className="row" style={{ justifyContent: "space-between" }}>

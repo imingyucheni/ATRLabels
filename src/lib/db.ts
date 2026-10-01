@@ -457,6 +457,8 @@ export interface Settings {
   jiagu: { enabled: boolean; clientId: string; secret: string; ownershipId: string; customerId: string; warehouseId: string; warehouses?: Record<string, string>; authUrl?: string; apiUrl?: string };
   /** DHL Express 官方账号（MyDHL API）国际快递 */
   dhl?: import("./shipbest/dhl").DhlSettings;
+  /** eBay 开发者 App（所有卖家共用） */
+  ebay?: import("./stores/ebay").EbaySettings;
   /** USPS 地址核对（Addresses API v3） */
   usps: { enabled: boolean; consumerKey: string; consumerSecret: string };
   /** 收件地址核对：服务商、Google 密钥、每月上限 */

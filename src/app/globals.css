@@ -1399,3 +1399,39 @@ tr.row-disabled td:first-child { opacity: 0.55; }
 .chip { height: 28px; padding: 0 10px; border-radius: 999px; font-size: 12.5px; border: 1px solid var(--line-strong); background: var(--surface); color: var(--text-2); cursor: pointer; font-variant-numeric: tabular-nums; }
 .chip:hover { border-color: var(--accent); color: var(--text); }
 .chip.on { border-color: var(--accent); background: var(--accent-soft); color: var(--text); }
+
+/* 店铺订单：店铺卡片、连接向导 */
+.store-steps { list-style: none; counter-reset: s; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; padding: 0; margin: 14px 0 4px; }
+.store-steps li { counter-increment: s; background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px 12px 46px; position: relative; display: grid; gap: 2px; }
+.store-steps li::before { content: counter(s); position: absolute; left: 14px; top: 12px; width: 22px; height: 22px; border-radius: 50%; background: var(--text); color: var(--surface); display: grid; place-items: center; font-size: 12px; font-weight: 650; }
+.store-steps li span { font-size: 12.5px; color: var(--muted); }
+.store-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; margin-top: 12px; }
+.store-card { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: grid; gap: 3px; background: var(--surface); }
+.store-card.pending, .store-card.error { border-style: dashed; }
+.store-card.disconnected { opacity: .75; }
+.store-name { font-weight: 650; font-size: 15px; margin-top: 4px; overflow-wrap: anywhere; }
+.store-count { color: var(--text); font-size: 14px; }
+.plat { display: inline-block; font-size: 11.5px; font-weight: 700; padding: 2px 8px; border-radius: 6px; letter-spacing: .2px; }
+.plat.shopify { background: #e3f1df; color: #3c6e2f; }
+.plat.ebay { background: #e8effc; color: #1e4fb8; }
+:root[data-theme="dark"] .plat.shopify { background: #1d2f19; color: #9fd48d; }
+:root[data-theme="dark"] .plat.ebay { background: #182640; color: #9db9f5; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .plat.shopify { background: #1d2f19; color: #9fd48d; }
+  :root:not([data-theme="light"]) .plat.ebay { background: #182640; color: #9db9f5; }
+}
+.plat-pick { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; margin-top: 14px; }
+.plat-tile { all: unset; box-sizing: border-box; cursor: pointer; display: grid; gap: 6px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); color: var(--text); transition: border-color .15s, box-shadow .15s; }
+.plat-tile:hover { border-color: var(--text-2); box-shadow: var(--shadow-pop); text-decoration: none; }
+.plat-tile:focus-visible { outline: 2px solid var(--series-1, #3b82f6); outline-offset: 2px; }
+.plat-tile.off { cursor: default; opacity: .6; box-shadow: none; }
+.plat-tile .plat { justify-self: start; }
+.plat-tile b { display: inline-flex; align-items: center; gap: 4px; }
+.wiz-steps { display: flex; flex-wrap: wrap; gap: 6px; margin: 14px 0; }
+.wiz-steps span { font-size: 12.5px; padding: 4px 10px; border-radius: 999px; background: var(--sunken); color: var(--muted); }
+.wiz-steps span.on { background: var(--text); color: var(--surface); font-weight: 600; }
+.wiz-steps span.done { color: var(--ok); }
+.wiz-list { padding-left: 20px; line-height: 1.7; display: grid; gap: 8px; }
+.copy-line { display: flex; gap: 6px; align-items: center; margin-top: 4px; min-width: 0; }
+.copy-line code { flex: 1; min-width: 0; overflow-wrap: anywhere; background: var(--sunken); padding: 5px 8px; border-radius: 6px; font-size: 12.5px; }
+.spin { animation: spin 1s linear infinite; }

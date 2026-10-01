@@ -32,6 +32,7 @@ import { createTopup, getTopup } from "@/lib/topup";
 import { requestReset, resetWithToken } from "@/lib/passwordReset";
 import type { Address, ShipmentRequest } from "@/lib/shipbest/types";
 import type { FlashState } from "@/app/actions";
+import { deleteMyStore, disconnectStore, getStore, importToBatch, listStores, saveShopifyStore, syncStore } from "@/lib/stores";
 import { getLang, getT, tMsg } from "@/lib/prefs";
 import { NOTIFY_EVENTS, saveNotifyPrefs, type NotifyPrefs } from "@/lib/notify";
 import { checkAddress, needsAck, type AddressCheck } from "@/lib/addressCheck";
@@ -400,4 +401,90 @@ export async function portalSaveLabelPaperAction(_: FlashState, fd: FormData): P
   revalidatePath("/portal", "layout");
   const t = await getT();
   return { ok: t("已保存：之后打印 / 下载面单使用 {paper}", { paper: t(PAPER_LABEL[v]) }) };
+}
+
+/* ---------------- 电商店铺（Shopify / eBay） ---------------- */
+
+/** 客户点“同步订单”：同步自己所有已连接的店铺 */
+export async function syncMyStoresAction(_: FlashState): Promise<FlashState> {
+  const me = await requireCustomer();
+  const list = listStores(me.id).filter((s) => s.status === "connected");
+  if (!list.length) return { error: await tMsg("还没有已连接的店铺") };
+  let added = 0;
+  const errs: string[] = [];
+  for (const s of list) {
+    try {
+      added += (await syncStore(s.id)).added;
+    } catch (e) {
+      errs.push(`${s.name}：${(e as Error).message}`);
+    }
+  }
+  revalidatePath("/portal/stores");
+  if (errs.length) return { error: errs.join("；") };
+  return { ok: (await getT())("同步完成，新增 {n} 个待发货订单", { n: added }) };
+}
+
+/** 勾选的店铺订单导入批量下单（默认包裹尺寸由客户选），返回批次 ID */
+export async function importStoreOrdersAction(input: { orderIds: number[]; pkg: { length: number; width: number; height: number; weight: number; unit: number } }): Promise<{ jobId?: number; error?: string }> {
+  const me = await requireCustomer();
+  try {
+    const u = Number(input.pkg.unit);
+    const jobId = importToBatch(
+      me.id,
+      (input.orderIds ?? []).map(Number).filter((x) => x > 0).slice(0, 500),
+      { length: n(input.pkg.length), width: n(input.pkg.width), height: n(input.pkg.height), weight: n(input.pkg.weight), unit: (u === 1 || u === 2 ? u : 3) as 1 | 2 | 3 },
+      await portalActor(),
+    );
+    revalidatePath("/portal", "layout");
+    return { jobId };
+  } catch (e) {
+    return { error: await tMsg((e as Error).message) };
+  }
+}
+
+export async function disconnectMyStoreAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  const me = await requireCustomer();
+  try {
+    disconnectStore(Number(fd.get("id")), me.id);
+    revalidatePath("/portal/stores");
+    return { ok: await tMsg("已断开连接，不会再同步这个店铺的订单") };
+  } catch (e) {
+    return { error: await tMsg((e as Error).message) };
+  }
+}
+
+/**
+ * 客户自己添加 / 修改 Shopify 店铺（店铺域名 + 自己建的 App 的 Client ID / Secret）。
+ * 返回下一步要打开的网址：已连上（演示店铺）就回店铺订单页，否则去 Shopify 授权。
+ */
+export async function saveMyShopifyStoreAction(input: { id?: number | null; shop: string; clientId: string; clientSecret?: string }): Promise<{ next?: string; error?: string }> {
+  const me = await requireCustomer();
+  try {
+    const id = saveShopifyStore({
+      id: Number(input.id) || null,
+      customerId: me.id,
+      shop: String(input.shop ?? "").slice(0, 100),
+      clientId: String(input.clientId ?? "").slice(0, 100),
+      clientSecret: String(input.clientSecret ?? "").slice(0, 200) || undefined,
+    });
+    revalidatePath("/portal", "layout");
+    if (getStore(id)?.status === "connected") {
+      await syncStore(id).catch(() => null);
+      return { next: "/portal/stores?connected=shopify" };
+    }
+    return { next: `/api/stores/shopify/connect?store=${id}` };
+  } catch (e) {
+    return { error: await tMsg((e as Error).message) };
+  }
+}
+
+export async function deleteMyStoreAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  const me = await requireCustomer();
+  try {
+    deleteMyStore(Number(fd.get("id")), me.id);
+    revalidatePath("/portal", "layout");
+    return { ok: await tMsg("已删除") };
+  } catch (e) {
+    return { error: await tMsg((e as Error).message) };
+  }
 }

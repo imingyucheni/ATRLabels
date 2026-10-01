@@ -9,6 +9,7 @@ import { listDraftRows } from "@/lib/batch";
 import { customerChannelMap } from "@/lib/channelDisplay";
 import { portalChannelCodes } from "@/lib/portal";
 import { isDhlCode } from "@/lib/shipbest/dhl";
+import { listStores } from "@/lib/stores";
 import { ChannelNamesProvider } from "@/components/ChannelLabel";
 import { getT } from "@/lib/prefs";
 import { leaveCustomerAction, portalLogoutAction } from "../actions";
@@ -24,6 +25,7 @@ export default async function PortalLayout({ children }: { children: React.React
   const { brandName } = getSettings();
   // 角标只数能直接提交的（已试算成功）；出错 / 失败 / 还在试算的不算
   const drafts = listDraftRows(me.id).filter((r) => r.status === "quoted").length;
+  const storeOpen = listStores(me.id).reduce((n, s) => n + s.openCount, 0);
   const acting = !!(await impersonatedCustomerId());
   // 还没同意（当前版本的）服务条款：先去同意；管理员代操作不拦
   if (!acting && !hasAcceptedTerms(me.id)) redirect("/portal/terms");
@@ -45,6 +47,7 @@ export default async function PortalLayout({ children }: { children: React.React
             items: [
               { href: "/portal/ship", label: "单个下单", icon: "ship" },
               { href: "/portal/batch", label: "批量导入", icon: "batch" },
+              { href: "/portal/stores", label: "店铺订单", icon: "store", count: storeOpen },
               { href: "/portal/drafts", label: "待出单", icon: "sheet", count: drafts },
               { href: "/portal/shipments", label: "我的面单", icon: "list" },
             ],

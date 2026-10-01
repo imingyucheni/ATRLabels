@@ -1,4 +1,7 @@
 import { presetForChannel } from "@/lib/stampConfig";
+import { headers } from "next/headers";
+import { ebaySettings, listStores } from "@/lib/stores";
+import { publicBase } from "@/lib/stores/web";
 import { dhlSettings, DHL_LABEL_TEMPLATES, isDhlCode } from "@/lib/shipbest/dhl";
 import { fmtTime } from "@/lib/time";
 import { localDate } from "@/lib/reports";
@@ -17,7 +20,7 @@ import SettingsSection, { SettingsToggleAll } from "@/components/SettingsSection
 import FlashForm from "@/components/FlashForm";
 import RuleInputs from "@/components/RuleInputs";
 import { DEFAULT_JG_WAREHOUSES, isJiaguCode, JG_PREFIX, JG_SUFFIX } from "@/lib/shipbest/jiagu";
-import { saveTermsAction, saveSiteAction, saveJiaguAction, testJiaguAction, saveDhlAction, testDhlAction, resetTestEnvAction, resetSandboxAction, resetTermsAction, saveChannelLimitsAction, savePromotionAction, togglePromotionAction, saveSmtpAction, testMailAction, setFinancePinAction, clearTestDataAction, saveAddrCheckAction, testAddrAction, refreshFxAction, saveChannelsAction, savePaymentSettingsAction, saveSettingsAction, saveShipBestAction, syncChannelsAction, verifyAction } from "@/app/actions";
+import { saveTermsAction, saveSiteAction, saveJiaguAction, testJiaguAction, saveDhlAction, testDhlAction, saveEbayAction, resetTestEnvAction, resetSandboxAction, resetTermsAction, saveChannelLimitsAction, savePromotionAction, togglePromotionAction, saveSmtpAction, testMailAction, setFinancePinAction, clearTestDataAction, saveAddrCheckAction, testAddrAction, refreshFxAction, saveChannelsAction, savePaymentSettingsAction, saveSettingsAction, saveShipBestAction, syncChannelsAction, verifyAction } from "@/app/actions";
 import { cnyToPay, usdCnyQuote } from "@/lib/fx";
 import FilePick from "@/components/FilePick";
 import { CarrierMark } from "@/components/ChannelLabel";
@@ -298,6 +301,55 @@ export default async function SettingsPage() {
             <div className="row" style={{ marginTop: 8 }}>
               <FlashForm action={testDhlAction} submitLabel="测试连接" submitClass="" inline />
             </div>
+          </SettingsSection>
+        );
+      })()}
+
+      {await (async () => {
+        const e = ebaySettings();
+        const base = publicBase({ headers: await headers() });
+        const ready = !!(e.clientId && e.clientSecret && e.ruName);
+        const n = listStores().filter((x) => x.platform === "ebay" && x.status === "connected").length;
+        return (
+          <SettingsSection
+            id="ebay"
+            title={t("eBay 店铺对接")}
+            badge={<span className={`badge ${e.enabled && (ready || isMockMode()) ? "ok" : "pending"}`}>{e.enabled && ready ? (e.env === "production" ? t("正式") : t("沙盒")) : e.enabled && isMockMode() ? t("模拟") : ready ? t("已停用") : t("未配置")}</span>}
+            summary={n ? t("已连接 {n} 个店铺", { n }) : undefined}
+          >
+            <p className="small muted" style={{ marginTop: 0 }}>
+              {t("用我们自己的一个 eBay 开发者 App，所有客户共用：客户在客户中心“店铺订单”点“连接 eBay”授权后，系统每 15 分钟同步未发货订单，出单后自动回传物流商和运单号。Shopify 店铺由客户在“店铺订单”里按向导自己连接（每个店铺用自己建的 App），后台可在“客户详情 → 电商店铺”查看或代为添加。")}
+            </p>
+            <ol className="small muted" style={{ lineHeight: 1.8 }}>
+              <li>{t("在 developer.ebay.com 注册开发者账号，创建 Keyset（先用 Sandbox 测试，再申请 Production）。")}</li>
+              <li>{t("User Tokens → 添加 RuName（eBay Redirect URL name），“Auth accepted URL”填：")}<code>{`${base}/api/stores/ebay/callback`}</code></li>
+              <li>{t("Alerts & Notifications → Marketplace account deletion：通知地址填下面这个，验证令牌填和下面一样的（不填 Production Keyset 会被停用）：")}<code>{`${base}/api/stores/ebay/deletion`}</code></li>
+              <li>{t("把 App ID（Client ID）、Cert ID（Client Secret）和 RuName 填到下面保存。")}</li>
+            </ol>
+            <FlashForm action={saveEbayAction} submitLabel="保存" review>
+              <div className="grid" style={{ margin: "12px 0" }}>
+                <label className="f">{t("启用")}
+                  <select name="enabled" defaultValue={e.enabled ? "1" : "0"}>
+                    <option value="1">{t("启用")}</option>
+                    <option value="0">{t("停用")}</option>
+                  </select>
+                </label>
+                <label className="f">{t("环境")}
+                  <select name="env" defaultValue={e.env}>
+                    <option value="sandbox">{t("沙盒（Sandbox）")}</option>
+                    <option value="production">{t("正式（Production）")}</option>
+                  </select>
+                </label>
+                <label className="f">App ID (Client ID)<input name="clientId" defaultValue={e.clientId} autoComplete="off" /></label>
+                <label className="f">Cert ID (Client Secret)
+                  <input name="clientSecret" type="password" autoComplete="new-password" placeholder={e.clientSecret ? t("已保存（尾号 {tail}），留空不修改", { tail: e.clientSecret.slice(-4) }) : ""} />
+                </label>
+                <label className="f">RuName<input name="ruName" defaultValue={e.ruName} autoComplete="off" /></label>
+                <label className="f">{t("账户删除通知验证令牌（32–80 位）")}
+                  <input name="verificationToken" type="password" autoComplete="new-password" placeholder={e.verificationToken ? t("已保存（尾号 {tail}），留空不修改", { tail: e.verificationToken.slice(-4) }) : ""} />
+                </label>
+              </div>
+            </FlashForm>
           </SettingsSection>
         );
       })()}

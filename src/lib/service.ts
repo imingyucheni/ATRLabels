@@ -915,6 +915,10 @@ export function startPendingSweeper(intervalMs = 60_000) {
     try {
       await refreshPendingShipments();
       await backfillLabelSku();
+      // 电商店铺：出单后回传运单号、定时同步未发货订单
+      const stores = await import("./stores");
+      await stores.pushPendingFulfillments().catch(() => null);
+      await stores.autoSyncStores().catch(() => null);
     } finally {
       busy = false;
     }

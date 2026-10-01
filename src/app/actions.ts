@@ -47,6 +47,8 @@ import {
 import type { PartialRule } from "@/lib/pricing";
 import { getDhlClient, getShipBestClient, shipbestMode } from "@/lib/shipbest/client";
 import { dhlSettings, DHL_LABEL_TEMPLATES, isDhlCode, type DhlSettings } from "@/lib/shipbest/dhl";
+import { deleteStore, disconnectStore, ebaySettings, getStore, saveShopifyStore, syncStore } from "@/lib/stores";
+import type { EbaySettings } from "@/lib/stores/ebay";
 import { saveDimRule } from "@/lib/rates";
 import { CARRIERS } from "@/lib/carriers";
 import { clearChannelNameCache, sameNameChannels } from "@/lib/channelDisplay";
@@ -1321,4 +1323,69 @@ export async function saveDimRuleAction(_: FlashState, fd: FormData): Promise<Fl
   saveDimRule(code, { divisor, minCubic });
   revalidatePath("/coverage");
   return { ok: "已保存" };
+}
+
+/* ---------------- 电商店铺（后台） ---------------- */
+
+/** 后台给客户添加 / 修改 Shopify 店铺（Dev Dashboard 自定义 App 的 Client ID / Secret） */
+export async function saveShopifyStoreAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  await requireAdmin();
+  const customerId = Number(fd.get("customerId"));
+  if (!getCustomer(customerId)) return { error: "客户不存在" };
+  try {
+    const id = saveShopifyStore({
+      id: Number(fd.get("id")) || null,
+      customerId,
+      shop: str(fd.get("shop"), 100),
+      clientId: str(fd.get("clientId"), 100),
+      clientSecret: str(fd.get("clientSecret"), 200) || undefined, // 留空 = 不修改
+    });
+    revalidatePath(`/customers/${customerId}`);
+    const s = getStore(id)!;
+    return { ok: s.status === "connected" ? "已保存" : "已保存。下一步：把下面的 App URL / 回调网址填到 Shopify App 里，用安装链接装到店铺（或点“授权连接”）" };
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+}
+
+export async function syncStoreAdminAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  await requireAdmin();
+  const s = getStore(Number(fd.get("id")));
+  if (!s) return { error: "店铺不存在" };
+  try {
+    const r = await syncStore(s.id);
+    revalidatePath(`/customers/${s.customerId}`);
+    return { ok: `同步完成：店铺里有 ${r.total} 个未发货订单，新增 ${r.added} 个` };
+  } catch (e) {
+    revalidatePath(`/customers/${s.customerId}`);
+    return { error: `同步失败：${(e as Error).message}` };
+  }
+}
+
+export async function removeStoreAdminAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  await requireAdmin();
+  const s = getStore(Number(fd.get("id")));
+  if (!s) return { error: "店铺不存在" };
+  if (fd.get("mode") === "delete") deleteStore(s.id);
+  else disconnectStore(s.id);
+  revalidatePath(`/customers/${s.customerId}`);
+  return { ok: fd.get("mode") === "delete" ? "已删除店铺连接和同步的订单记录" : "已断开连接（订单记录保留）" };
+}
+
+export async function saveEbayAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  await requireAdmin();
+  const cur = ebaySettings();
+  const next: EbaySettings = {
+    enabled: fd.get("enabled") === "1",
+    env: fd.get("env") === "production" ? "production" : "sandbox",
+    clientId: str(fd.get("clientId"), 200),
+    clientSecret: str(fd.get("clientSecret"), 200) || cur.clientSecret, // 留空 = 不修改
+    ruName: str(fd.get("ruName"), 200),
+    verificationToken: str(fd.get("verificationToken"), 80) || cur.verificationToken,
+  };
+  if (next.enabled && (!next.clientId || !next.clientSecret || !next.ruName)) return { error: "启用前请填写 App ID、Cert ID 和 RuName" };
+  if (next.verificationToken && !/^[A-Za-z0-9_-]{32,80}$/.test(next.verificationToken)) return { error: "验证令牌要 32–80 位（字母、数字、_ 或 -）" };
+  saveSettings({ ebay: next });
+  revalidatePath("/settings");
+  return { ok: next.enabled ? "已保存。客户可以在客户中心“店铺订单”里点“连接 eBay”授权" : "已保存（eBay 对接已停用）" };
 }
