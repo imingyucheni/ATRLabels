@@ -154,4 +154,6 @@ export const stores: Record<string, string> = {
   "按上次同款商品带出": "Pre-filled from your last shipment of these items",
   "还没有寄件地址：请先在“账户设置 → 寄件地址簿”里添加寄件地址": "No sender address: add one under Account settings → Sender addresses first",
   "勾选的订单要填好长、宽、高和重量": "Fill in length, width, height and weight for the selected orders",
+  "要先添加寄件地址才能导入：": "Add a sender address before importing: ",
+  "去账户设置 → 寄件地址簿": "Account settings → Sender addresses",
 };

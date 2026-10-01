@@ -192,6 +192,11 @@ export default function StoreOrders({ rows, presets, senders, defaultUnit = 3 }:
           <div className="row" style={{ marginTop: 12 }}>
             <button className="primary" disabled={busy || !sel.size || !senders.length} onClick={onImport}>{busy ? t("导入中…") : t("导入到批量下单（{n} 单）", { n: sel.size })}</button>
             <span className="small muted">{t("已勾选 {n} / {m} 个待处理订单", { n: sel.size, m: open.length })}</span>
+            {!senders.length && (
+              <span className="small" style={{ color: "var(--err)" }}>
+                {t("要先添加寄件地址才能导入：")}<a href="/portal/account#senders">{t("去账户设置 → 寄件地址簿")}</a>
+              </span>
+            )}
             {blocked > 0 && <span className="small" style={{ color: "var(--warn)" }}>{t("另有 {n} 单收件信息不全，补全后再同步就能导入", { n: blocked })}</span>}
           </div>
         </div>
