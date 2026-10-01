@@ -3,7 +3,7 @@ import { requireCustomer } from "@/lib/auth";
 import { getSettings } from "@/lib/db";
 import { listSenders } from "@/lib/senders";
 import { usd } from "@/lib/pricing";
-import { portalChannelCodes } from "@/lib/portal";
+import { copySource, portalChannelCodes, recentPackages, skuPresets } from "@/lib/portal";
 import { dhlSettings, isDhlCode } from "@/lib/shipbest/dhl";
 import ShipForm from "@/components/ShipForm";
 import { getT } from "@/lib/prefs";
@@ -11,8 +11,9 @@ import { getT } from "@/lib/prefs";
 export const dynamic = "force-dynamic";
 
 /** 国际下单（DHL Express）：和美国本地下单一样的流程，多了报关信息 */
-export default async function PortalIntlPage() {
+export default async function PortalIntlPage({ searchParams }: { searchParams: Promise<{ copy?: string }> }) {
   const me = await requireCustomer();
+  const src = copySource(me.id, (await searchParams).copy);
   const s = getSettings();
   const t = await getT();
   const open = portalChannelCodes(me.id).some(isDhlCode);
@@ -30,7 +31,8 @@ export default async function PortalIntlPage() {
           <Link className="btn primary small" href="/portal/topup">{t("去充值")}</Link>
         </div>
       )}
-      <ShipForm mode="portal" intl defaultOrigin={dhlSettings().originCountry} senders={listSenders(me.id)} defaultSender={s.sender} defaultUnit={s.defaultUnit} defaultCurrency="USD" />
+      {src && <div className="alert info">{t("已复制订单 {no} 的收件人、包裹和商品，修改后查询运费下单。", { no: src.ref })}</div>}
+      <ShipForm key={src?.id ?? "new"} mode="portal" intl copy={src ?? undefined} recentPackages={recentPackages(me.id)} skuPresets={skuPresets(me.id)} defaultOrigin={dhlSettings().originCountry} senders={listSenders(me.id)} defaultSender={s.sender} defaultUnit={s.defaultUnit} defaultCurrency="USD" />
     </>
   );
 }

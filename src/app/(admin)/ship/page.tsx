@@ -2,6 +2,7 @@ import Link from "next/link";
 import ShipForm from "@/components/ShipForm";
 import { getSettings, houseCustomerId, listChannels } from "@/lib/db";
 import { getT } from "@/lib/prefs";
+import { recentPackages, skuPresets } from "@/lib/portal";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +28,7 @@ export default async function AdminShipPage() {
       </div>
       {!channels.length && <div className="alert warn" style={{ marginTop: 12 }}>{t("没有启用的渠道，请先到")} <Link href="/settings">{t("设置")}</Link> {t("同步渠道。")}</div>}
       <div style={{ height: 12 }} />
-      <ShipForm mode="house" defaultSender={s.sender} defaultUnit={s.defaultUnit} defaultCurrency={s.defaultCurrency} />
+      <ShipForm mode="house" recentPackages={recentPackages(houseId)} skuPresets={skuPresets(houseId)} defaultSender={s.sender} defaultUnit={s.defaultUnit} defaultCurrency={s.defaultCurrency} />
     </>
   );
 }

@@ -115,3 +115,20 @@ export function publicChannel(ch: { name: string; displayName?: string | null; c
     carrier,
   };
 }
+
+/**
+ * 运单追踪链接：常见物流商用官网的查询页，其他（GOFO、UniUni、SwiftX、SpeedX 等）用 17TRACK 通用查询。
+ */
+export function trackingUrl(carrierId: string | null | undefined, trackingNo: string | null | undefined): string | null {
+  const n = (trackingNo ?? "").trim();
+  if (!n || !/^[A-Za-z0-9-]{6,40}$/.test(n)) return null;
+  const q = encodeURIComponent(n);
+  switch (carrierId) {
+    case "usps": return `https://tools.usps.com/go/TrackConfirmAction?tLabels=${q}`;
+    case "fedex": return `https://www.fedex.com/fedextrack/?trknbr=${q}`;
+    case "ups": return `https://www.ups.com/track?tracknum=${q}`;
+    case "dhl": return `https://www.dhl.com/us-en/home/tracking/tracking-express.html?submit=1&tracking-id=${q}`;
+    case "ontrac": return `https://www.ontrac.com/tracking/?number=${q}`;
+    default: return `https://t.17track.net/en#nums=${q}`;
+  }
+}

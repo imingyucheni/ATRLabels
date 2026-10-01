@@ -12,6 +12,7 @@ import StatusBadge from "@/components/StatusBadge";
 import { portalCancelAction, portalRefreshAction, portalSaveLabelNoteAction } from "@/app/portal/actions";
 import { isPaperSize } from "@/lib/labelLayout";
 import LabelActions from "@/components/LabelActions";
+import TrackingLink from "@/components/TrackingLink";
 import { dhlDocInfo, isDhlCode } from "@/lib/shipbest/dhl";
 import { getSettings } from "@/lib/db";
 import { makeT, translateMessage, type T } from "@/lib/i18n";
@@ -57,7 +58,10 @@ export default async function PortalShipmentDetail({ params }: { params: Promise
     <>
       <div className="row" style={{ justifyContent: "space-between", marginBottom: 12 }}>
         <h1 style={{ margin: 0 }}>{s.customerRef || s.customNo} <StatusBadge status={s.status} test={s.isTest} /></h1>
-        <Link href="/portal/shipments">{t("← 返回列表")}</Link>
+        <div className="row">
+          <Link className="btn small" href={`/portal/ship?copy=${s.id}`} title={t("复制这张订单的收件人、包裹和商品，新下一单")}>{t("再来一单")}</Link>
+          <Link href="/portal/shipments">{t("← 返回列表")}</Link>
+        </div>
       </div>
       {s.replacedBy && (
         <div className="alert ok">{t("这张订单已重新下单，原单已取消")}{t("：")}<Link href={`/portal/shipments/${s.replacedBy}`}>{t("查看新单 →")}</Link></div>
@@ -156,7 +160,7 @@ export default async function PortalShipmentDetail({ params }: { params: Promise
           <dl className="kv">
             <dt>{t("渠道")}</dt><dd><ChannelLabel code={s.channelCode} name={s.channelName} /></dd>
             <dt>{t("分区")}</dt><dd>{s.zone ?? "-"}</dd>
-            <dt>{t("运单号")}</dt><dd>{s.trackingNo ?? "-"}</dd>
+            <dt>{t("运单号")}</dt><dd><TrackingLink channelCode={s.channelCode} trackingNo={s.trackingNo} title={t("查物流轨迹")} /></dd>
             <dt>{t("运费")}</dt><dd><b>{money(s.price, s.currency)}</b></dd>
             {s.status === "cancelled" && (
               <>

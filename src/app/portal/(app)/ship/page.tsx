@@ -4,10 +4,16 @@ import { customerChannels, getSettings } from "@/lib/db";
 import { listSenders } from "@/lib/senders";
 import { money, usd } from "@/lib/pricing";
 import ShipForm from "@/components/ShipForm";
+import { redirect } from "next/navigation";
+import { copySource, recentPackages, skuPresets } from "@/lib/portal";
+import { isInternational } from "@/lib/shipbest/dhl";
 import { getT } from "@/lib/prefs";
 
-export default async function PortalShipPage() {
+export default async function PortalShipPage({ searchParams }: { searchParams: Promise<{ copy?: string }> }) {
   const me = await requireCustomer();
+  // 再来一单：复制自己的一张旧订单（国际件去国际下单页）
+  const src = copySource(me.id, (await searchParams).copy);
+  if (src && isInternational(src.request)) redirect(`/portal/intl?copy=${src.id}`);
   const s = getSettings();
   const t = await getT();
   return (
@@ -26,7 +32,8 @@ export default async function PortalShipPage() {
       {!customerChannels(me.id).length && (
         <div className="alert warn">{t("您的账户还没有开通物流渠道，暂时无法查询运费和下单。请联系客服开通")}{s.supportContact ? `${t("：")}${s.supportContact}` : t("。")}</div>
       )}
-      <ShipForm mode="portal" senders={listSenders(me.id)} defaultSender={s.sender} defaultUnit={s.defaultUnit} defaultCurrency={s.defaultCurrency} />
+      {src && <div className="alert info">{t("已复制订单 {no} 的收件人、包裹和商品，修改后查询运费下单。", { no: src.ref })}</div>}
+      <ShipForm key={src?.id ?? "new"} mode="portal" copy={src ?? undefined} recentPackages={recentPackages(me.id)} skuPresets={skuPresets(me.id)} senders={listSenders(me.id)} defaultSender={s.sender} defaultUnit={s.defaultUnit} defaultCurrency={s.defaultCurrency} />
     </>
   );
 }

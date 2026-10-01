@@ -9,6 +9,7 @@ import { listOwnShipments } from "@/lib/portal";
 import { money } from "@/lib/pricing";
 import StatusBadge from "@/components/StatusBadge";
 import SelectPrint from "@/components/SelectPrint";
+import TrackingLink from "@/components/TrackingLink";
 import { getT } from "@/lib/prefs";
 
 type SP = { status?: string; from?: string; to?: string; q?: string };
@@ -44,7 +45,7 @@ export default async function PortalShipments({ searchParams }: { searchParams: 
             <span key="n"><Link href={`/portal/shipments/${s.id}`}>{s.customerRef || s.customNo}</Link><div className="small muted">{fmtTime(s.createdAt)}</div></span>,
             <span key="r" className="cell-wrap">{s.recipient.nameFirst} {s.recipient.nameLast}<div className="small muted">{s.recipient.city}, {s.recipient.province ?? s.recipient.country} {s.recipient.zipCode}</div></span>,
             <span key="c" className="cell-wrap"><ChannelLabel code={s.channelCode} name={s.channelName} /></span>,
-            s.trackingNo ?? "-",
+            <TrackingLink key="t" channelCode={s.channelCode} trackingNo={s.trackingNo} title={t("查物流轨迹")} />,
             <StatusBadge key="s" status={s.status} test={s.isTest} />,
             <span key="p">{money(s.price, s.currency)}{s.adjustment ? <div className="small muted">{t("补差")} {money(s.adjustment)}</div> : null}</span>,
           ],

@@ -5,6 +5,7 @@ import { listCustomers, listShipments, shipmentCost, shipmentProfit, shipmentRec
 import { money, signedPercent } from "@/lib/pricing";
 import StatusBadge from "@/components/StatusBadge";
 import Profit from "@/components/Profit";
+import TrackingLink from "@/components/TrackingLink";
 import { getT } from "@/lib/prefs";
 import { listLabelFailures } from "@/lib/providerLog";
 
@@ -107,7 +108,7 @@ export default async function ShipmentsPage({ searchParams }: { searchParams: Pr
                 <td className="wrap">{s.customerName}</td>
                 <td className="wrap">{s.recipient.nameFirst} {s.recipient.nameLast}<div className="small muted">{s.recipient.city}, {s.recipient.province ?? s.recipient.country} {s.recipient.zipCode}</div></td>
                 <td className="wrap">{s.channelName}</td>
-                <td>{s.trackingNo ?? "-"}</td>
+                <td><TrackingLink channelCode={s.channelCode} trackingNo={s.trackingNo} title={t("查物流轨迹")} /></td>
                 <td><StatusBadge status={s.status} test={s.isTest} /></td>
                 <td className="num">{money(s.actualCost ?? s.quotedCost)}{s.actualCost === null && <div className="small muted">{t("试算")}</div>}</td>
                 <td className="num">{money(s.price, s.currency)}</td>

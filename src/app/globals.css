@@ -308,6 +308,7 @@ tr.best td { background: var(--accent-soft); }
 .alert { padding: 10px 14px; border-radius: 10px; margin-bottom: 12px; font-size: 13.5px; border: 1px solid transparent; }
 .alert.ok { background: var(--ok-soft); color: var(--ok); border-color: color-mix(in srgb, var(--ok) 18%, transparent); }
 .alert.err { background: var(--err-soft); color: var(--err); border-color: color-mix(in srgb, var(--err) 18%, transparent); }
+.alert.info { background: var(--info-soft, var(--surface-2)); color: var(--text); border-color: color-mix(in srgb, var(--series-1, #3b82f6) 22%, transparent); }
 .alert.warn { background: var(--warn-soft); color: var(--warn); border-color: color-mix(in srgb, var(--warn) 18%, transparent); }
 .alert ul { margin: 0; padding-left: 18px; }
 .alert b { color: inherit; }
@@ -1388,3 +1389,13 @@ tr.row-disabled td:first-child { opacity: 0.55; }
 .spinner { flex: none; width: 18px; height: 18px; border-radius: 50%; border: 2.5px solid color-mix(in srgb, var(--accent) 25%, transparent); border-top-color: var(--accent); animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2.4s; } }
+
+/* 运单号追踪链接 */
+.track-link { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.track-link span { font-size: 0.85em; opacity: 0.7; }
+
+/* 常用包裹尺寸 */
+.pkg-presets { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: -4px 0 12px; }
+.chip { height: 28px; padding: 0 10px; border-radius: 999px; font-size: 12.5px; border: 1px solid var(--line-strong); background: var(--surface); color: var(--text-2); cursor: pointer; font-variant-numeric: tabular-nums; }
+.chip:hover { border-color: var(--accent); color: var(--text); }
+.chip.on { border-color: var(--accent); background: var(--accent-soft); color: var(--text); }

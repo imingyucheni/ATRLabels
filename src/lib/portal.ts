@@ -59,6 +59,59 @@ export function publicRowError(msg: string): string {
 
 /** ShipBest 的报错里可能带内部信息，客户端只保留对客户有用的部分 */
 /** 客户页面可能用到的渠道代码：开通的渠道 + 订单 / 批量导入里出现过的 */
+export interface RecentPackage { length: number; width: number; height: number; weight: number; unit: 1 | 2 | 3; count: number }
+export interface SkuPreset { sku: string; productNameCn: string; productNameEn: string; declaredUnitPrice: number; hsCode: string; productNature: string; material?: string; originCountry?: string }
+
+/** 客户最近 90 天常用的包裹尺寸（按次数排，最多 6 个），下单页一点就填好 */
+export function recentPackages(customerId: number, limit = 6): RecentPackage[] {
+  const rows = db()
+    .prepare("SELECT package_json FROM shipments WHERE customer_id = ? AND created_at >= datetime('now', '-90 days') ORDER BY id DESC LIMIT 500")
+    .all(customerId) as { package_json: string }[];
+  const m = new Map<string, RecentPackage>();
+  for (const r of rows) {
+    try {
+      const p = JSON.parse(r.package_json) as { length: number; width: number; height: number; weight: number; displayUnitSystem: 1 | 2 | 3 };
+      if (!(p.length > 0 && p.width > 0 && p.height > 0 && p.weight > 0)) continue;
+      const key = [p.length, p.width, p.height, p.weight, p.displayUnitSystem].join("|");
+      const cur = m.get(key);
+      if (cur) cur.count++;
+      else m.set(key, { length: p.length, width: p.width, height: p.height, weight: p.weight, unit: p.displayUnitSystem, count: 1 });
+    } catch {
+      // 旧数据格式不对：跳过
+    }
+  }
+  return [...m.values()].sort((a, b) => b.count - a.count).slice(0, limit);
+}
+
+/** 客户发过的商品（按 SKU 去重，取最近一次的品名 / 申报价 / 海关编码），下单时输入 SKU 自动带出 */
+export function skuPresets(customerId: number, limit = 200): SkuPreset[] {
+  const rows = db().prepare("SELECT sku_json FROM shipments WHERE customer_id = ? ORDER BY id DESC LIMIT 1000").all(customerId) as { sku_json: string }[];
+  const m = new Map<string, SkuPreset>();
+  for (const r of rows) {
+    try {
+      for (const k of JSON.parse(r.sku_json) as SkuPreset[]) {
+        const key = (k.sku ?? "").trim();
+        if (!key || key === "SAMPLE" || m.has(key)) continue;
+        m.set(key, { sku: key, productNameCn: k.productNameCn ?? "", productNameEn: k.productNameEn ?? "", declaredUnitPrice: Number(k.declaredUnitPrice) || 0, hsCode: k.hsCode ?? "", productNature: k.productNature || "2,4", ...(k.material ? { material: k.material } : {}), ...(k.originCountry ? { originCountry: k.originCountry } : {}) });
+        if (m.size >= limit) break;
+      }
+    } catch {
+      // 跳过
+    }
+    if (m.size >= limit) break;
+  }
+  return [...m.values()];
+}
+
+/** 再来一单：客户自己的一张订单（地址、包裹、商品），别人的单返回 null */
+export function copySource(customerId: number, rawId: string | undefined) {
+  const id = Number(rawId);
+  if (!(id > 0)) return null;
+  const s = getShipment(id);
+  if (!s || s.customerId !== customerId) return null;
+  return { id: s.id, ref: s.customerRef || s.customNo, request: { sender: s.sender, recipient: s.recipient, pkg: s.pkg, skuList: s.skuList }, remark: s.remark };
+}
+
 export function portalChannelCodes(customerId: number): string[] {
   const codes = new Set(customerChannels(customerId).map((c) => c.code));
   const rows = db()

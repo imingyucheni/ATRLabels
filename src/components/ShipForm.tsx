@@ -15,6 +15,7 @@ import { useT, useTMsg } from "@/components/I18n";
 import { money, signedPercent } from "@/lib/pricing";
 import type { ChannelQuote } from "@/lib/service";
 import type { Address, ShipmentRequest, UnitSystem } from "@/lib/shipbest/types";
+import type { RecentPackage, SkuPreset } from "@/lib/portal";
 
 type Sku = Record<"sku" | "productNameCn" | "productNameEn" | "quantity" | "declaredUnitPrice" | "hsCode" | "productNature" | "originCountry" | "material", string>;
 
@@ -87,6 +88,12 @@ export default function ShipForm(props: {
   /** portal = 客户自助下单：不选客户、只显示客户价；house = 管理员按成本价下单（所有渠道）；resubmit = 异常单修改后重新下单 */
   mode?: "admin" | "portal" | "house" | "resubmit";
   resubmit?: ResubmitSource;
+  /** 常用包裹尺寸（最近 90 天发过的，按次数排），点一下填好 */
+  recentPackages?: RecentPackage[];
+  /** 发过的商品：输入 SKU 自动带出品名、申报价、海关编码 */
+  skuPresets?: SkuPreset[];
+  /** 再来一单：复制一张以前的订单（地址、包裹、商品），订单号留空，正常下单 */
+  copy?: { request: ShipmentRequest; remark: string | null };
   /** 国际下单（DHL）：收件国家默认空、商品明细多原产国、海关编码必填 */
   intl?: boolean;
   /** 原产国默认值（DHL 设置里的） */
@@ -113,7 +120,7 @@ export default function ShipForm(props: {
   // 可以直接出单的模式（客户自助 / 管理员自用 / 异常单重新下单）
   const orderable = portal || house || !!re;
   const reorder = portal ? props.reorder : undefined;
-  const init = re?.request ?? reorder?.request;
+  const init = re?.request ?? reorder?.request ?? props.copy?.request;
   const customers = props.customers ?? [];
   // 后台默认不选客户，避免替错客户下单
   const [customerId, setCustomerId] = useState<number>(props.defaultCustomerId ?? 0);
@@ -162,7 +169,7 @@ export default function ShipForm(props: {
         }))
       : [emptySku()],
   );
-  const [remark, setRemark] = useState(re?.remark ?? reorder?.remark ?? "");
+  const [remark, setRemark] = useState(re?.remark ?? reorder?.remark ?? props.copy?.remark ?? "");
 
   const [quotes, setQuotes] = useState<Quote[] | null>(null);
   // 默认显示全部渠道：送不到的也列出来（灰色、不能选、显示原因）
@@ -297,6 +304,11 @@ export default function ShipForm(props: {
 
   const skuTable = (req: string) => (
     <>
+            {!!props.skuPresets?.length && (
+              <datalist id="sku-presets">
+                {props.skuPresets.map((p) => <option key={p.sku} value={p.sku}>{p.productNameEn}{p.declaredUnitPrice ? ` · $${p.declaredUnitPrice}` : ""}</option>)}
+              </datalist>
+            )}
             <div className="table-wrap">
               <table className="sku-table">
                 <thead>
@@ -305,7 +317,27 @@ export default function ShipForm(props: {
                 <tbody>
                   {skus.map((s, i) => (
                     <tr key={i}>
-                      <td data-label={`SKU${req}`}><input value={s.sku} onChange={(e) => setSku(i, { sku: e.target.value })} /></td>
+                      <td data-label={`SKU${req}`}>
+                        <input
+                          value={s.sku}
+                          list={props.skuPresets?.length ? "sku-presets" : undefined}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            // 输入 / 选中以前发过的 SKU：带出品名、申报价、海关编码等（数量不变）
+                            const p = props.skuPresets?.find((x) => x.sku === v.trim());
+                            setSku(i, p ? {
+                              sku: v,
+                              productNameCn: p.productNameCn === p.productNameEn ? "" : p.productNameCn,
+                              productNameEn: p.productNameEn,
+                              declaredUnitPrice: p.declaredUnitPrice ? String(p.declaredUnitPrice) : s.declaredUnitPrice,
+                              hsCode: p.hsCode || s.hsCode,
+                              productNature: p.productNature || s.productNature,
+                              material: p.material || s.material,
+                              originCountry: p.originCountry || s.originCountry,
+                            } : { sku: v });
+                          }}
+                        />
+                      </td>
                       <td data-label={t("中文品名")}><input value={s.productNameCn} placeholder={t("可不填，默认用英文品名")} onChange={(e) => setSku(i, { productNameCn: e.target.value })} /></td>
                       <td data-label={t("英文品名") + req}><input value={s.productNameEn} onChange={(e) => setSku(i, { productNameEn: e.target.value })} /></td>
                       <td data-label={t("数量") + req} style={{ width: 80 }}><input type="number" min="1" value={s.quantity} onChange={(e) => setSku(i, { quantity: e.target.value })} /></td>
@@ -507,6 +539,21 @@ export default function ShipForm(props: {
 
       <div className="card">
         <h2>{t("包裹")}</h2>
+        {!!props.recentPackages?.length && (
+          <div className="pkg-presets">
+            <span className="small muted">{t("常用尺寸")}</span>
+            {props.recentPackages.map((p, i) => {
+              const [lu, wu] = p.unit === 3 ? ["in", "lb"] : p.unit === 2 ? ["cm", "kg"] : ["cm", "g"];
+              const on = unit === p.unit && pkg.length === String(p.length) && pkg.width === String(p.width) && pkg.height === String(p.height) && pkg.weight === String(p.weight);
+              return (
+                <button key={i} type="button" className={`chip${on ? " on" : ""}`} title={t("最近 90 天用过 {n} 次", { n: p.count })}
+                  onClick={() => { dirty(setUnit)(p.unit); dirty(setPkg)({ length: String(p.length), width: String(p.width), height: String(p.height), weight: String(p.weight) }); }}>
+                  {p.length}×{p.width}×{p.height} {lu} · {p.weight} {wu}
+                </button>
+              );
+            })}
+          </div>
+        )}
         <div className="grid">
           <label className="f">{t("单位")}
             <select value={unit} onChange={(e) => dirty(setUnit)(Number(e.target.value) as UnitSystem)}>

@@ -1,4 +1,5 @@
 import LabelActions from "@/components/LabelActions";
+import TrackingLink from "@/components/TrackingLink";
 import { dhlDocInfo, isDhlCode } from "@/lib/shipbest/dhl";
 import { fmtTime, TZ_LABEL } from "@/lib/time";
 import Link from "next/link";
@@ -244,7 +245,7 @@ export default async function ShipmentDetail({ params }: { params: Promise<{ id:
             <dt>{t("自定义单号")}</dt><dd>{s.customNo}</dd>
             <dt>{t("服务商")}</dt><dd>{t(provider)}</dd>
             <dt>{t("服务商单号")}</dt><dd>{providerNo ?? "-"}</dd>
-            <dt>{t("运单号")}</dt><dd>{s.trackingNo ?? "-"}</dd>
+            <dt>{t("运单号")}</dt><dd><TrackingLink channelCode={s.channelCode} trackingNo={s.trackingNo} title={t("查物流轨迹")} /></dd>
             <dt>{t("服务商状态")}</dt><dd>{s.sbStatus ? (SB_STATUS[s.sbStatus] ? t(SB_STATUS[s.sbStatus]) : s.sbStatus) : "-"}</dd>
             <dt>{t("创建时间")}</dt><dd>{fmtTime(s.createdAt)}</dd>
             {s.remark && (<><dt>{t("备注")}</dt><dd>{s.remark}</dd></>)}

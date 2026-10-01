@@ -10,6 +10,7 @@ import { buildReport, localDate } from "@/lib/reports";
 import { listDraftRows } from "@/lib/batch";
 import { ChannelBars, DailyBars } from "@/components/charts";
 import StatusBadge from "@/components/StatusBadge";
+import TrackingLink from "@/components/TrackingLink";
 import { getT } from "@/lib/prefs";
 import type { T } from "@/lib/i18n";
 
@@ -189,7 +190,7 @@ export default async function PortalHome() {
                 <td><Link href={`/portal/shipments/${s.id}`}>{s.customerRef || s.customNo}</Link></td>
                 <td className="wrap">{s.recipient.nameFirst} {s.recipient.nameLast}<div className="small muted">{s.recipient.city}, {s.recipient.province ?? ""} {s.recipient.zipCode}</div></td>
                 <td className="wrap"><ChannelLabel code={s.channelCode} name={s.channelName} /></td>
-                <td>{s.trackingNo ?? "-"}</td>
+                <td><TrackingLink channelCode={s.channelCode} trackingNo={s.trackingNo} title={tr("查物流轨迹")} /></td>
                 <td><StatusBadge status={s.status} test={s.isTest} /></td>
                 <td className="num">{money(s.price, s.currency)}</td>
                 <td>{s.hasLabel ? <a href={`/api/labels/${s.id}`} target="_blank">{tr("打印")}</a> : "-"}</td>
