@@ -11,7 +11,7 @@ export async function GET(req: Request) {
   const params = new URL(req.url).searchParams;
   const shop = normalizeShop(params.get("shop"));
   const store = shop ? findShopifyStore(shop) : undefined;
-  if (!shop || !store) return resultPage("店铺还没有登记", "这个 Shopify 店铺还没有在我们的系统里登记，请联系客服。", false);
+  if (!shop || !store) return resultPage("还差一步", "应用已经装到店铺了。请回到客户中心“店铺订单 → 连接 Shopify 店铺”，填好店铺地址和 Client ID / Client Secret，点“保存并去 Shopify 授权”完成连接。", false, { href: `${publicBase(req)}/portal/stores`, label: "打开店铺订单" });
   const sec = shopifySecrets(store.id);
   if (!sec || !verifyShopifyHmac(params, sec.clientSecret)) return resultPage("请求无效", "签名校验没通过，请从 Shopify 后台重新打开应用。", false);
   const state = newShopifyState(store.id);
