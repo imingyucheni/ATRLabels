@@ -1453,3 +1453,9 @@ table.list tr.on td { background: color-mix(in srgb, var(--series-1, #3b82f6) 5%
 .link-btn { all: unset; cursor: pointer; color: var(--accent, var(--series-1)); justify-self: start; font-size: 13px; }
 .link-btn:hover { text-decoration: underline; }
 .link-btn:focus-visible { outline: 2px solid var(--series-1, #3b82f6); outline-offset: 2px; border-radius: 4px; }
+.plat-logo { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; background: #fff; border: 1px solid var(--line); border-radius: 6px; justify-self: start; }
+.plat-logo img { display: block; height: 100%; width: auto; }
+.plat-logo.sm { height: 20px; padding: 3px 6px; }
+.plat-logo.md { height: 28px; padding: 5px 8px; }
+.plat-logo.lg { height: 40px; padding: 7px 12px; }
+.plat-logo.ebay.sm { padding: 2px 6px; }

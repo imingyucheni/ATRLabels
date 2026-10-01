@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { ExternalLink, Plus, RefreshCw, Store as StoreIcon } from "lucide-react";
+import { ExternalLink, Plus, RefreshCw } from "lucide-react";
 import FlashForm from "@/components/FlashForm";
+import PlatformLogo from "@/components/PlatformLogo";
 import { useT } from "@/components/I18n";
 import { deleteMyStoreAction, disconnectMyStoreAction, saveMyShopifyStoreAction, syncMyStoresAction } from "@/app/portal/actions";
 
@@ -87,7 +88,7 @@ export default function StoreConnect({ stores, base, ebayOn, mock, contact }: { 
           {stores.map((s) => (
             <div key={s.id} className={`store-card ${s.status}`}>
               <div className="row" style={{ justifyContent: "space-between", gap: 8 }}>
-                <span className={`plat ${s.platform}`}>{s.platform === "shopify" ? "Shopify" : "eBay"}</span>
+                <PlatformLogo platform={s.platform} />
                 {s.status === "connected" ? <span className="badge ok">{t("已连接")}</span>
                   : s.status === "pending" ? <span className="badge pending">{t("待完成授权")}</span>
                   : s.status === "error" ? <span className="badge exception">{t("连接出错")}</span>
@@ -135,7 +136,7 @@ export default function StoreConnect({ stores, base, ebayOn, mock, contact }: { 
       {picking && (
         <div className="plat-pick">
           <div className="plat-tile static">
-            <span className="plat shopify">Shopify</span>
+            <PlatformLogo platform="shopify" size="lg" />
             <b>{t("连接 Shopify 店铺")}</b>
             <span className="small">
               {t("联系客服开通（推荐）：告诉我们你的店铺地址（xxx.myshopify.com），我们开通后这里会出现“去 Shopify 安装”按钮，点一下就连上。")}
@@ -145,13 +146,13 @@ export default function StoreConnect({ stores, base, ebayOn, mock, contact }: { 
           </div>
           {ebayOn ? (
             <a className="plat-tile" href="/api/stores/ebay/connect">
-              <span className="plat ebay">eBay</span>
+              <PlatformLogo platform="ebay" size="lg" />
               <b>{t("连接 eBay 店铺")} <ExternalLink size={13} /></b>
               <span className="small muted">{t("一键跳到 eBay 登录授权，授权完自动回来")}</span>
             </a>
           ) : (
             <div className="plat-tile off">
-              <span className="plat ebay">eBay</span>
+              <PlatformLogo platform="ebay" size="lg" />
               <b>{t("连接 eBay 店铺")}</b>
               <span className="small muted">{t("暂未开通，请联系客服")}</span>
             </div>
@@ -190,7 +191,7 @@ function ShopifyWizard({ store, base, mock, onClose }: { store: StoreCardView | 
     <div className="modal-back" role="presentation" onClick={() => !busy && onClose()}>
       <div className="modal" role="dialog" aria-modal="true" aria-label={t("连接 Shopify 店铺")} onClick={(e) => e.stopPropagation()} style={{ width: "min(680px, 100%)" }}>
         <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
-          <h2 style={{ margin: 0 }}><StoreIcon size={18} /> {t("连接 Shopify 店铺")}</h2>
+          <h2 style={{ margin: 0, display: "flex", alignItems: "center", gap: 10 }}><PlatformLogo platform="shopify" /> {t("连接店铺")}</h2>
           <button type="button" className="small" onClick={onClose} disabled={busy}>{t("关闭")}</button>
         </div>
         <div className="wiz-steps">

@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import FlashForm from "@/components/FlashForm";
-import { listStores, PLATFORM_LABEL, storesEnabled, type StoreConnection } from "@/lib/stores";
+import PlatformLogo from "@/components/PlatformLogo";
+import { listStores, storesEnabled, type StoreConnection } from "@/lib/stores";
 import { publicBase } from "@/lib/stores/web";
 import { shipbestMode } from "@/lib/shipbest/client";
 import { fmtTime } from "@/lib/time";
@@ -62,7 +63,7 @@ export default async function StoresCard({ customerId }: { customerId: number })
                 const [label, cls] = STATUS[s.status];
                 return (
                   <tr key={s.id}>
-                    <td>{PLATFORM_LABEL[s.platform]}</td>
+                    <td><PlatformLogo platform={s.platform} size="sm" /></td>
                     <td><b>{s.name}</b>{s.name !== s.shop && <div className="small muted">{s.shop}</div>}
                       {s.lastError && <div className="small" style={{ color: "var(--err)" }}>{s.lastError}</div>}</td>
                     <td><span className={`badge ${cls}`}>{t(label)}</span></td>

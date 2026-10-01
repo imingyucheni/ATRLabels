@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { importStoreOrdersAction } from "@/app/portal/actions";
 import { useT } from "@/components/I18n";
+import PlatformLogo from "@/components/PlatformLogo";
 
 type Unit = 1 | 2 | 3;
 type Pkg = { length: number; width: number; height: number; weight: number; unit: Unit };
@@ -224,7 +225,7 @@ export default function StoreOrders({ rows, presets, senders, defaultUnit = 3 }:
                   <td>
                     <b>{r.name}</b>
                     <div className="small muted">{r.orderedAt ? r.orderedAt.slice(0, 16).replace("T", " ") : ""}</div>
-                    <div className="small muted">{r.platform === "shopify" ? "Shopify" : "eBay"} · {r.storeName}</div>
+                    <div className="small muted row" style={{ gap: 6, marginTop: 4 }}><PlatformLogo platform={r.platform} size="sm" />{r.storeName}</div>
                   </td>
                   <td className="small wrap">
                     {r.issue === "no_address" ? <span className="muted">—</span> : r.recipient}
