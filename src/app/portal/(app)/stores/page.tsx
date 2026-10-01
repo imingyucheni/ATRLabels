@@ -61,7 +61,7 @@ export default async function PortalStoresPage({ searchParams }: { searchParams:
           id: r.id, platform: r.platform, storeName: r.storeName, name: r.name, orderedAt: r.orderedAt,
           recipient: `${[r.order.recipient.nameFirst, r.order.recipient.nameLast].filter(Boolean).join(" ")}, ${r.order.recipient.city} ${r.order.recipient.province ?? ""} ${r.order.recipient.zipCode}${r.order.recipient.country !== "US" ? ` ${r.order.recipient.country}` : ""}`,
           items: r.order.items.map((i) => `${i.sku || i.name} ×${i.quantity}`).join("、"),
-          weightGrams: r.order.weightGrams, status: r.status, jobId: r.jobId, shipmentId: r.shipmentId, trackingNo: r.trackingNo, pushError: r.pushError,
+          weightGrams: r.order.weightGrams, status: r.status, jobId: r.jobId, shipmentId: r.shipmentId, trackingNo: r.trackingNo, pushError: r.pushError, issue: r.order.issue,
         }))}
       />
         </>

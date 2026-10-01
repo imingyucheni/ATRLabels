@@ -323,6 +323,8 @@ export interface StoreOrderRow {
 }
 
 /** 从店铺拉未发货订单：新的加进来；已导入 / 已发货的不动；店铺里已经不用发的（取消、别处发货）标记关闭 */
+export const HIDDEN_HINT = "Shopify 隐藏了收件人姓名和街道地址：请在 Shopify 开发者后台的应用里开启“Protected customer data”（勾选 Name、Address、Phone、Email），保存发布后点“立即同步订单”";
+
 export async function syncStore(id: number): Promise<{ added: number; total: number; closed: number }> {
   const r = row(id);
   if (!r) throw new Error("店铺不存在");
@@ -354,6 +356,10 @@ export async function syncStore(id: number): Promise<{ added: number; total: num
       }
       c.prepare("UPDATE store_connections SET last_sync_at = datetime('now'), last_error = NULL, status = CASE WHEN status = 'error' THEN 'connected' ELSE status END WHERE id = ?").run(id);
     })();
+    // 同步成功但收件人被平台隐藏：在店铺上提示怎么开权限（不算同步失败）
+    if (orders.some((o) => o.issue === "hidden")) {
+      c.prepare("UPDATE store_connections SET last_error = ? WHERE id = ?").run(HIDDEN_HINT, id);
+    }
     return { added, total: orders.length, closed };
   } catch (e) {
     conn().prepare("UPDATE store_connections SET last_error = ?, last_sync_at = datetime('now') WHERE id = ?").run((e as Error).message.slice(0, 300), id);
@@ -428,8 +434,11 @@ export function toShipmentRequest(o: StoreOrder, customerId: number, pkg: Defaul
 export function importToBatch(customerId: number, orderIds: number[], pkg: DefaultPackage, createdBy: "admin" | "customer"): number {
   if (!orderIds.length) throw new Error("请勾选要导入的订单");
   if (!(pkg.length > 0 && pkg.width > 0 && pkg.height > 0 && pkg.weight > 0)) throw new Error("请填写默认包裹尺寸和重量");
-  const rows = listStoreOrders(customerId, { status: "open" }).filter((r) => orderIds.includes(r.id));
-  if (!rows.length) throw new Error("勾选的订单已经导入过或不存在，请刷新");
+  const picked = listStoreOrders(customerId, { status: "open" }).filter((r) => orderIds.includes(r.id));
+  if (!picked.length) throw new Error("勾选的订单已经导入过或不存在，请刷新");
+  // 缺收件地址 / 收件人被隐藏的不能导入
+  const rows = picked.filter((r) => !r.order.issue);
+  if (!rows.length) throw new Error("勾选的订单收件信息不全，不能导入");
   const orders: ParsedOrder[] = rows.map((r, i) => {
     const req = toShipmentRequest(r.order, customerId, pkg);
     return { rowNo: i + 1, customerRef: r.name.slice(0, 50), fileChannel: "", req, errors: validateRequest(req) };

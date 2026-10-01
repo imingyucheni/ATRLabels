@@ -19,6 +19,8 @@ export interface StoreOrderView {
   shipmentId: number | null;
   trackingNo: string | null;
   pushError: string | null;
+  /** 收件信息不全，不能导入 */
+  issue?: "no_address" | "hidden";
 }
 
 type Pkg = { length: string; width: string; height: string; weight: string; unit: number };
@@ -39,7 +41,9 @@ export default function StoreOrders({ rows, presets }: { rows: StoreOrderView[];
   const [error, setError] = useState<string | null>(null);
   const p0 = presets[0];
   const [pkg, setPkg] = useState<Pkg>(p0 ? { length: String(p0.length), width: String(p0.width), height: String(p0.height), weight: String(p0.weight), unit: p0.unit } : { length: "", width: "", height: "", weight: "", unit: 3 });
-  const open = rows.filter((r) => r.status === "open");
+  // 能勾选导入的：待处理且收件信息完整
+  const open = rows.filter((r) => r.status === "open" && !r.issue);
+  const blocked = rows.filter((r) => r.status === "open" && r.issue).length;
   const all = open.length > 0 && open.every((r) => sel.has(r.id));
   const [lu, wu] = pkg.unit === 3 ? ["in", "lb"] : pkg.unit === 2 ? ["cm", "kg"] : ["cm", "g"];
   const toggle = (id: number) => setSel((s) => {
@@ -60,7 +64,7 @@ export default function StoreOrders({ rows, presets }: { rows: StoreOrderView[];
 
   return (
     <>
-      {open.length > 0 && (
+      {(open.length > 0 || blocked > 0) && (
         <div className="card">
           <h2 style={{ marginTop: 0 }}>{t("导入到批量下单")}</h2>
           <p className="small muted">{t("店铺订单里没有包裹尺寸：先选这批订单的默认包裹。订单有重量时用订单重量，没有时用下面的默认重量。导入后在批量下单页可以逐单修改尺寸、选渠道、提交出单；出单后运单号会自动回传到店铺。")}</p>
@@ -99,6 +103,7 @@ export default function StoreOrders({ rows, presets }: { rows: StoreOrderView[];
           <div className="row" style={{ marginTop: 12 }}>
             <button className="primary" disabled={busy || !sel.size} onClick={onImport}>{busy ? t("导入中…") : t("导入到批量下单（{n} 单）", { n: sel.size })}</button>
             <span className="small muted">{t("已勾选 {n} / {m} 个待处理订单", { n: sel.size, m: open.length })}</span>
+            {blocked > 0 && <span className="small" style={{ color: "var(--warn)" }}>{t("另有 {n} 单收件信息不全，补全后再同步就能导入", { n: blocked })}</span>}
           </div>
         </div>
       )}
@@ -116,10 +121,17 @@ export default function StoreOrders({ rows, presets }: { rows: StoreOrderView[];
           <tbody>
             {rows.map((r) => (
               <tr key={r.id}>
-                <td>{r.status === "open" && <input type="checkbox" aria-label={t("选择")} checked={sel.has(r.id)} onChange={() => toggle(r.id)} />}</td>
+                <td>{r.status === "open" && !r.issue && <input type="checkbox" aria-label={t("选择")} checked={sel.has(r.id)} onChange={() => toggle(r.id)} />}</td>
                 <td><b>{r.name}</b><div className="small muted">{r.orderedAt ? r.orderedAt.slice(0, 16).replace("T", " ") : ""}</div></td>
                 <td className="small"><span className={`badge ${r.platform === "shopify" ? "ok" : ""}`}>{r.platform === "shopify" ? "Shopify" : "eBay"}</span><div className="muted">{r.storeName}</div></td>
-                <td className="small wrap">{r.recipient}</td>
+                <td className="small wrap">
+                  {r.issue === "no_address" ? <span className="muted">—</span> : r.recipient}
+                  {r.issue && (
+                    <div style={{ color: "var(--warn)" }}>
+                      {r.issue === "no_address" ? t("缺收件地址：请在店铺订单里补上收货地址") : t("收件人姓名、街道被 Shopify 隐藏：要在 Shopify 应用里开启客户数据权限")}
+                    </div>
+                  )}
+                </td>
                 <td className="small wrap">{r.items}</td>
                 <td className="num small">{r.weightGrams > 0 ? `${(r.weightGrams / 453.59237).toFixed(2)} lb` : <span className="muted">{t("默认")}</span>}</td>
                 <td className="small">

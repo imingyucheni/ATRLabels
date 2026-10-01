@@ -107,21 +107,25 @@ type GqlOrder = {
 export function normalizeShopifyOrder(o: GqlOrder): StoreOrder | null {
   const a = o.shippingAddress;
   const items = o.lineItems.nodes.filter((l) => l.requiresShipping !== false && l.quantity > 0);
-  // 没有收货地址（虚拟商品、到店自提）不需要发货
-  if (!a || !items.length) return null;
+  // 没有要发货的商品（虚拟商品等）：不用管
+  if (!items.length) return null;
+  const addr: NonNullable<GqlOrder["shippingAddress"]> = a ?? {};
   const recipient: Address = {
-    nameFirst: (a.firstName ?? "").trim() || (a.lastName ?? "").trim(),
-    nameLast: (a.firstName ?? "").trim() ? (a.lastName ?? "").trim() : "",
-    ...(a.company ? { corporateName: a.company } : {}),
-    phone: (a.phone || o.phone || "").trim() || undefined,
+    nameFirst: (addr.firstName ?? "").trim() || (addr.lastName ?? "").trim(),
+    nameLast: (addr.firstName ?? "").trim() ? (addr.lastName ?? "").trim() : "",
+    ...(addr.company ? { corporateName: addr.company } : {}),
+    phone: (addr.phone || o.phone || "").trim() || undefined,
     ...(o.email ? { email: o.email } : {}),
-    country: (a.countryCodeV2 || "US").toUpperCase(),
-    province: a.provinceCode ?? undefined,
-    city: a.city ?? "",
-    address1: a.address1 ?? "",
-    ...(a.address2 ? { address2: a.address2 } : {}),
-    zipCode: a.zip ?? "",
+    country: (addr.countryCodeV2 || "US").toUpperCase(),
+    province: addr.provinceCode ?? undefined,
+    city: addr.city ?? "",
+    address1: addr.address1 ?? "",
+    ...(addr.address2 ? { address2: addr.address2 } : {}),
+    zipCode: addr.zip ?? "",
   };
+  // 有城市 / 邮编却没有姓名和街道：Shopify 没给（应用没开 Protected customer data 权限）
+  const hidden = !!a && !recipient.nameFirst && !recipient.address1 && !!(recipient.city || recipient.zipCode);
+  const issue = !a ? "no_address" as const : hidden ? "hidden" as const : undefined;
   return {
     extId: o.id,
     name: o.name,
@@ -137,6 +141,7 @@ export function normalizeShopifyOrder(o: GqlOrder): StoreOrder | null {
     weightGrams: Number(o.totalWeight) || 0,
     // 只回传给还在等发货的 fulfillment order（我们自己的仓库发货）
     fulfillRefs: o.fulfillmentOrders.nodes.filter((f) => f.status === "OPEN" || f.status === "IN_PROGRESS").map((f) => ({ id: f.id })),
+    ...(issue ? { issue } : {}),
   };
 }
 

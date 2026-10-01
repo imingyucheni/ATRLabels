@@ -126,6 +126,21 @@ describe("电商店铺对接（Shopify / eBay）", () => {
     expect(mock.pushed[0].shippingCarrierCode).toBeTruthy();
   }, 60_000);
 
+  it("Shopify 订单缺地址 / 收件人被隐藏：照样同步过来但标出来，不能导入", async () => {
+    const { normalizeShopifyOrder } = await import("@/lib/stores/shopify");
+    const base = {
+      id: "gid://shopify/Order/9", name: "#1009", createdAt: "2026-10-01T00:00:00Z",
+      lineItems: { nodes: [{ sku: "A", name: "A", quantity: 1, requiresShipping: true }] },
+      fulfillmentOrders: { nodes: [{ id: "gid://shopify/FulfillmentOrder/9", status: "OPEN" }] },
+    };
+    expect(normalizeShopifyOrder({ ...base, shippingAddress: null })?.issue).toBe("no_address");
+    const hidden = normalizeShopifyOrder({ ...base, shippingAddress: { firstName: null, lastName: null, address1: null, city: "Ottawa", provinceCode: "ON", zip: "K2P 2L8", countryCodeV2: "CA" } });
+    expect(hidden?.issue).toBe("hidden");
+    const ok = normalizeShopifyOrder({ ...base, shippingAddress: { firstName: "Karine", lastName: "Ruby", address1: "1 Main St", city: "Ottawa", provinceCode: "ON", zip: "K2P 2L8", countryCodeV2: "CA" } });
+    expect(ok?.issue).toBeUndefined();
+    expect(normalizeShopifyOrder({ ...base, lineItems: { nodes: [{ sku: "G", name: "Gift card", quantity: 1, requiresShipping: false }] }, shippingAddress: null })).toBeNull();
+  });
+
   it("真实店铺还没授权：同步会报错并记下原因", async () => {
     const id = stores.saveShopifyStore({ customerId: cid, shop: "second-demo.myshopify.com", clientId: "a", clientSecret: "b" });
     expect(stores.getStore(id)?.status).toBe("pending"); // 真实店铺要授权

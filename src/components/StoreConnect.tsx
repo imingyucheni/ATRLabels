@@ -214,6 +214,8 @@ function ShopifyWizard({ store, base, mock, onClose }: { store: StoreCardView | 
               <li>{t("应用网址（App URL）填：")}<Copy value={`${base}/api/stores/shopify/launch`} /></li>
               <li>{t("重定向网址（Redirect URL）填：")}<Copy value={`${base}/api/stores/shopify/callback`} /></li>
               <li>{t("权限（Access scopes）填：")}<Copy value={SCOPES} /></li>
+              <li>{t("开启客户数据权限（Protected customer data），勾选 Name、Address、Phone、Email。不开的话 Shopify 会隐藏收件人姓名和街道地址，订单没法出单。")}</li>
+              <li>{t("如果有“嵌入 Shopify 后台（Embed app in Shopify admin）”选项，取消勾选。")}</li>
               <li>{t("保存并发布版本（Release），然后在应用的“设置”里找到 Client ID 和 Client Secret，下一步要用。")}</li>
             </ol>
             <p className="small muted">{t("只读订单、写入发货信息，不会改动商品、价格和付款。随时可以在 Shopify 里删除这个应用来取消授权。")}</p>

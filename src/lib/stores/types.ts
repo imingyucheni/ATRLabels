@@ -18,6 +18,11 @@ export interface StoreOrder {
   weightGrams: number;
   /** 回传发货时要用的引用：Shopify 是 fulfillment order ID，eBay 是 lineItemId + 数量 */
   fulfillRefs: { id: string; quantity?: number }[];
+  /**
+   * 收件信息有问题、不能导入：
+   * no_address = 订单没有收货地址；hidden = 平台隐藏了姓名 / 街道（Shopify 应用没开客户数据权限）
+   */
+  issue?: "no_address" | "hidden";
 }
 
 /** 回传给平台的发货信息 */

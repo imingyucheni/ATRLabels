@@ -130,4 +130,11 @@ export const stores: Record<string, string> = {
   "已开放：客户 OMS 侧边栏会出现“店铺订单”": "Enabled: “Store orders” now appears in the customer's portal",
   "已关闭：客户看不到“店铺订单”，已连接的店铺暂停同步": "Turned off: the customer can't see “Store orders” and connected stores stop syncing",
   "店铺对接还没有为你的账户开放，请联系客服": "Store integration isn't enabled for your account yet — please contact support",
+  "另有 {n} 单收件信息不全，补全后再同步就能导入": "{n} more orders have incomplete recipient info — fix them and sync again to import",
+  "缺收件地址：请在店铺订单里补上收货地址": "No shipping address: add one to the order in your store",
+  "收件人姓名、街道被 Shopify 隐藏：要在 Shopify 应用里开启客户数据权限": "Name and street hidden by Shopify: enable customer data access in your Shopify app",
+  "勾选的订单收件信息不全，不能导入": "The selected orders have incomplete recipient info and can't be imported",
+  "Shopify 隐藏了收件人姓名和街道地址：请在 Shopify 开发者后台的应用里开启“Protected customer data”（勾选 Name、Address、Phone、Email），保存发布后点“立即同步订单”": "Shopify is hiding recipient names and street addresses: in the Shopify Dev Dashboard, enable “Protected customer data” for the app (Name, Address, Phone, Email), release, then click “Sync orders now”",
+  "开启客户数据权限（Protected customer data），勾选 Name、Address、Phone、Email。不开的话 Shopify 会隐藏收件人姓名和街道地址，订单没法出单。": "Enable Protected customer data and select Name, Address, Phone and Email. Without it Shopify hides recipient names and street addresses and the orders can't be shipped.",
+  "如果有“嵌入 Shopify 后台（Embed app in Shopify admin）”选项，取消勾选。": "If there's an “Embed app in Shopify admin” option, turn it off.",
 };
