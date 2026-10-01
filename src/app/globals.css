@@ -676,14 +676,14 @@ tr.row-disabled td:first-child { opacity: 0.55; }
 
 /* 顶栏 */
 .site-nav { position: sticky; top: 0; z-index: 30; background: color-mix(in srgb, var(--us-bg) 88%, transparent); backdrop-filter: saturate(1.6) blur(12px); border-bottom: 1px solid var(--us-line); }
-.site-nav-in { display: flex; align-items: center; gap: 40px; height: 68px; }
+.site-nav-in { display: flex; align-items: center; gap: 28px; height: 68px; }
 .site-brand { display: flex; align-items: center; gap: 10px; font-weight: 650; font-size: 16px; color: var(--us-ink); text-decoration: none; white-space: nowrap; letter-spacing: -0.01em; }
 .site-brand:hover { text-decoration: none; }
 .site-brand .brand-mark { background: var(--us-navy); color: #fff; border: 0; border-radius: 7px; }
-.site-links { display: flex; gap: 30px; flex: 1; }
-.site-links a { color: var(--us-text); font-size: 14.5px; font-weight: 500; }
+.site-links { display: flex; gap: 22px; flex: 1; min-width: 0; }
+.site-links a { color: var(--us-text); font-size: 14.5px; font-weight: 500; white-space: nowrap; }
 .site-links a:hover { color: var(--us-ink); text-decoration: none; }
-.site-nav-right { display: flex; align-items: center; gap: 18px; }
+.site-nav-right { display: flex; align-items: center; gap: 14px; flex-shrink: 0; white-space: nowrap; }
 .site-nav-right .prefs { margin: 0; }
 .site-nav-login { font-size: 14.5px; font-weight: 600; color: var(--us-ink); }
 .site-nav .btn.us-btn { height: 38px; padding: 0 16px; border-radius: 7px; }
@@ -829,13 +829,16 @@ tr.row-disabled td:first-child { opacity: 0.55; }
   .us-logos { flex-direction: column; align-items: flex-start; gap: 18px; }
   .us-footer-grid { grid-template-columns: 1fr 1fr; }
 }
-@media (max-width: 760px) {
-  .site-wrap { padding: 0 20px; }
+/* 导航放不下一行时（英文菜单名更长）改成汉堡菜单，不要把菜单名挤成两行 */
+@media (max-width: 1199px) {
   .site-links, .site-nav-right { display: none; }
   .site-burger { display: inline-flex; }
-  .site-nav.open .site-nav-in { flex-wrap: wrap; height: auto; padding: 12px 20px 20px; gap: 16px; }
+  .site-nav.open .site-nav-in { flex-wrap: wrap; height: auto; padding-top: 12px; padding-bottom: 20px; gap: 16px; }
   .site-nav.open .site-links { display: flex; flex-direction: column; gap: 16px; width: 100%; order: 3; }
   .site-nav.open .site-nav-right { display: flex; flex-wrap: wrap; width: 100%; order: 4; }
+}
+@media (max-width: 760px) {
+  .site-wrap { padding: 0 20px; }
   .us-hero { padding-top: 56px; }
   .us-section { padding: 80px 0; }
   .us-metrics .site-wrap { grid-template-columns: 1fr 1fr; }

@@ -1,4 +1,5 @@
 import { Check, Clock, Mail, MapPin, MessageCircle, Phone } from "lucide-react";
+import { hoursToEnglish } from "@/lib/hoursText";
 import type { getSettings } from "@/lib/db";
 
 /** 联系我们左侧：标题 + 联系方式（官网底部也用） */
@@ -18,7 +19,7 @@ export default function ContactIntro({ t, lang, site, compact = false }: { t: (k
         {site.phone && <div><Phone size={16} /> <b>{site.phone}</b></div>}
         {site.email && <div><Mail size={16} /> <a href={`mailto:${site.email}`}>{site.email}</a></div>}
         <div><MapPin size={16} /> {site.address || "Chino, CA 91710"}</div>
-        {site.hours && <div><Clock size={16} /> {lang === "en" ? t(site.hours) : site.hours}</div>}
+        {site.hours && <div><Clock size={16} /> {lang === "en" ? (t(site.hours) !== site.hours ? t(site.hours) : hoursToEnglish(site.hours)) : site.hours}</div>}
       </div>
     </div>
   );
