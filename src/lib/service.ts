@@ -448,7 +448,12 @@ export interface CreateInput {
   waitForLabel?: boolean;
   /** 收件地址核对结果（客户确认过的问题地址也会记下来） */
   addressCheck?: AddressCheck | null;
+  /** 开放 API 的测试密钥：模拟出单，不连服务商、不扣余额 */
+  simulate?: boolean;
 }
+
+/** 开放 API 测试密钥出的单（模拟面单，不扣钱） */
+export const API_TEST_ENV = "api-test";
 
 export async function createLabel(input: CreateInput): Promise<number> {
   const { customerId, channelCode } = input;
@@ -473,7 +478,7 @@ export async function createLabel(input: CreateInput): Promise<number> {
   const customNo = newCustomNo();
   const createdBy = input.createdBy ?? "admin";
   // 内部测试账号：模拟出单，不连服务商
-  const testAccount = isTestAccount(customerId);
+  const testAccount = isTestAccount(customerId) || !!input.simulate;
   // 建本地记录和扣款放在同一个事务里：余额不足时什么都不留下
   const id = db().transaction(() => {
     // 试算期间可能已经有同号的单提交了（重复点击 / 两个页面同时下单），入库前再查一次
@@ -496,10 +501,10 @@ export async function createLabel(input: CreateInput): Promise<number> {
     remark: input.remark || null,
     customerRef: ref || null,
     createdBy,
-    env: testAccount ? TEST_ACCOUNT_ENV : shipbestMode(),
+    env: input.simulate ? API_TEST_ENV : testAccount ? TEST_ACCOUNT_ENV : shipbestMode(),
     addressCheck: input.addressCheck && input.addressCheck.status !== "unavailable" && input.addressCheck.status !== "skipped" ? JSON.stringify(input.addressCheck) : null,
     });
-    chargeLabel(customerId, newId, quote.price!, createdBy, `运费 · ${displayChannel(channelCode).name || quote.channelName}${quote.zone ? ` · ${quote.zone}` : ""}`);
+    if (!input.simulate) chargeLabel(customerId, newId, quote.price!, createdBy, `运费 · ${displayChannel(channelCode).name || quote.channelName}${quote.zone ? ` · ${quote.zone}` : ""}`);
     return newId;
   })();
 
@@ -709,6 +714,8 @@ function senderLines(a: Address | null | undefined): string[] | undefined {
 /** 订单变成已取消后，把退款记入客户钱包（幂等） */
 function settleCancel(id: number) {
   const s = getShipment(id);
+  // API 测试密钥的模拟单没扣过钱，也不退
+  if (s?.env === API_TEST_ENV) return;
   if (s?.status === "cancelled" && s.refundAmount) refundCancelled(s.customerId, id, s.refundAmount, "system");
 }
 
@@ -760,7 +767,7 @@ export async function requestCancel(
   } catch (e) {
     logProviderEvent(s.customNo, providerOf(s.channelCode), "申请取消", e instanceof ShipBestError ? e.code : null, `失败：${(e as Error).message}`);
     // 内部测试账号的单是模拟面单，没有真实面单要作废：直接取消，按规则退款
-    if (s.isTest && isTestAccount(s.customerId)) {
+    if (s.isTest && (isTestAccount(s.customerId) || s.env === API_TEST_ENV)) {
       updateShipment(id, { ...cancelPatch(s, wasLabeled(s)), sbStatus: 6, errorMsg: null });
       settleCancel(id);
       return { done: true, message: "已取消，费用已退回账户余额" };

@@ -499,3 +499,31 @@ export async function deleteMyStoreAction(_: FlashState, fd: FormData): Promise<
     return { error: await tMsg((e as Error).message) };
   }
 }
+
+/* ---------------- 开放 API ---------------- */
+
+/** 生成 API 密钥：完整密钥只在这里返回一次 */
+export async function createApiKeyAction(input: { name?: string; mode: string; ipAllow?: string }): Promise<{ token?: string; error?: string }> {
+  const me = await requireCustomer();
+  const { apiEnabled, createKey } = await import("@/lib/api/keys");
+  if (!apiEnabled(me.id)) return { error: await tMsg("API 还没有为你的账户开通，请联系客服") };
+  try {
+    const { token } = createKey(me.id, { name: str(input.name, 40), mode: input.mode === "test" ? "test" : "live", ipAllow: str(input.ipAllow, 500) });
+    revalidatePath("/portal/api");
+    return { token };
+  } catch (e) {
+    return { error: await tMsg((e as Error).message) };
+  }
+}
+
+export async function revokeApiKeyAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  const me = await requireCustomer();
+  const { revokeKey } = await import("@/lib/api/keys");
+  try {
+    revokeKey(Number(fd.get("id")), me.id);
+    revalidatePath("/portal/api");
+    return { ok: await tMsg("已作废：用这个密钥的请求会被拒绝") };
+  } catch (e) {
+    return { error: await tMsg((e as Error).message) };
+  }
+}

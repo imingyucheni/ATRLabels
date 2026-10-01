@@ -1400,3 +1400,26 @@ export async function saveEbayAction(_: FlashState, fd: FormData): Promise<Flash
   revalidatePath("/settings");
   return { ok: next.enabled ? "已保存。客户可以在客户中心“店铺订单”里点“连接 eBay”授权" : "已保存（eBay 对接已停用）" };
 }
+
+/* ---------------- 开放 API（后台） ---------------- */
+
+export async function setApiEnabledAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  await requireAdmin();
+  const id = Number(fd.get("customerId"));
+  if (!getCustomer(id)) return { error: "客户不存在" };
+  const on = fd.get("on") === "1";
+  const { setApiEnabled } = await import("@/lib/api/keys");
+  setApiEnabled(id, on);
+  revalidatePath(`/customers/${id}`);
+  return { ok: on ? "已开通：客户 OMS 侧边栏会出现“API 对接”，可以自己生成密钥" : "已关闭：这个客户的所有 API 密钥暂停使用" };
+}
+
+export async function adminRevokeApiKeyAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  await requireAdmin();
+  const { getKey, revokeKey } = await import("@/lib/api/keys");
+  const k = getKey(Number(fd.get("id")));
+  if (!k) return { error: "密钥不存在" };
+  revokeKey(k.id);
+  revalidatePath(`/customers/${k.customerId}`);
+  return { ok: "已作废" };
+}

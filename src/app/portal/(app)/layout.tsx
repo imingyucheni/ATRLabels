@@ -10,6 +10,7 @@ import { customerChannelMap } from "@/lib/channelDisplay";
 import { portalChannelCodes } from "@/lib/portal";
 import { isDhlCode } from "@/lib/shipbest/dhl";
 import { listStores, storesEnabled } from "@/lib/stores";
+import { apiEnabled } from "@/lib/api/keys";
 import { ChannelNamesProvider } from "@/components/ChannelLabel";
 import { getT } from "@/lib/prefs";
 import { leaveCustomerAction, portalLogoutAction } from "../actions";
@@ -65,6 +66,8 @@ export default async function PortalLayout({ children }: { children: React.React
               { href: "/portal/billing", label: "账单与扣款", icon: "billing" },
               { href: "/portal/adjustments", label: "补差明细", icon: "adjust" },
               { href: "/portal/account", label: "账户设置", icon: "account" },
+              // 开放 API 测试阶段：后台开通了的客户才显示
+              ...(apiEnabled(me.id) ? [{ href: "/portal/api", label: "API 对接", icon: "code" as const }] : []),
             ],
           },
         ]}

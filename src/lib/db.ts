@@ -944,6 +944,8 @@ export interface Shipment {
   labelNote: string | null;
   /** 测试单（模拟 / 沙盒模式下的单，面单不是真的） */
   isTest: boolean;
+  /** 出单环境：live / sandbox / mock / test-account / api-test */
+  env: string | null;
   /** 下单时的收件地址核对结果 */
   addressCheck: { status: string; message?: string } | null;
   /** 官方账单补差合计：正数 = ShipBest 向我们补扣，负数 = 退给我们 */
@@ -1032,6 +1034,7 @@ function toShipment(r: ShipmentRow): Shipment {
     createdBy: r.created_by,
     labelNote: r.label_note,
     isTest: r.env ? r.env !== "live" : !!r.label_url?.startsWith("mock://"),
+    env: r.env ?? null,
     addressCheck: r.addr_check ? JSON.parse(r.addr_check) : null,
     costAdj: r.cost_adj ?? 0,
     customerAdj: r.customer_adj ?? 0,
