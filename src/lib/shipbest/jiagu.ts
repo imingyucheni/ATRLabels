@@ -209,17 +209,17 @@ export class JiaguClient {
     return json.access_token;
   }
 
-  private async call<T>(path: string, body: unknown, retry = true): Promise<{ ok: boolean; code: string | null; message: string; result: T | undefined }> {
+  private async call<T>(path: string, body: unknown, retry = true, timeoutMs = 45_000): Promise<{ ok: boolean; code: string | null; message: string; result: T | undefined }> {
     const res = await fetch(`${this.cfg.apiUrl}${path}`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${await this.accessToken()}` },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(45_000),
+      signal: AbortSignal.timeout(timeoutMs),
       cache: "no-store",
     });
     if (res.status === 401 && retry) {
       this.token = null;
-      return this.call(path, body, false);
+      return this.call(path, body, false, timeoutMs);
     }
     const text = await res.text();
     let j: JgResult<T>;
@@ -252,6 +252,9 @@ export class JiaguClient {
     const r = await this.call<{ ID: number; ProductName: string | null; TotalCharge: number; Message: string | null; RatesList: { Currency: string; ZoneCode: string; Amount: number }[] | null }[]>(
       "/api/gts/CalculateRates",
       { ...buildJiaguBody(this.cfg, req, id), Products: [{ ID: id }] },
+      true,
+      // 只是查价：最多等 25 秒，不让一个慢渠道拖住整个报价（下单仍等 45 秒）
+      25_000,
     );
     if (!r.ok) throw new JiaguError(r.code, r.message || "算价失败");
     const q = (r.result ?? []).find((x) => x.ID === id) ?? r.result?.[0];

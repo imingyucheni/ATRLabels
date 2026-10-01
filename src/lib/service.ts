@@ -37,7 +37,7 @@ import { guessCarrier } from "./carriers";
 import { publicError } from "./portal";
 import { logProviderEvent, recordLabelFailure } from "./providerLog";
 import { SB_STATUS } from "./shipbest/types";
-import type { Address, ShipmentRequest } from "./shipbest/types";
+import type { Address, FeeQuote, ShipmentRequest } from "./shipbest/types";
 import { isCountryCode, isUsZip, usStateCode } from "./geo";
 import { fillProductNames } from "./sanitize";
 
@@ -262,11 +262,44 @@ async function quoteOne(customerId: number, channelCode: string, channelName: st
   return small ? { ...res, warning: small } : res;
 }
 
+/**
+ * 服务商报价短时缓存（3 分钟）：同一个包裹“查询运费”之后马上下单，下单前的复核不用再等一遍接口；
+ * 只缓存成功的报价，键里包含影响运费的全部信息（地址、包裹、签名、保险、申报），任何一项改了都会重新查。
+ */
+const QUOTE_TTL = 3 * 60_000;
+const g = globalThis as unknown as { __quoteCache?: Map<string, { at: number; q: FeeQuote }> };
+const quoteCache = (g.__quoteCache ??= new Map());
+
+function quoteKey(code: string, req: ShipmentRequest) {
+  const a = (x: ShipmentRequest["sender"]) => [x.country, x.province, x.city, x.zipCode, x.address1, x.address2].map((v) => (v ?? "").trim().toUpperCase()).join("|");
+  return JSON.stringify([code, a(req.sender), a(req.recipient), req.pkg, req.skuList.map((k) => [k.quantity, k.declaredUnitPrice, k.productNature])]);
+}
+
+/** 测试用：清空报价缓存 */
+export function clearQuoteCache() {
+  quoteCache.clear();
+}
+
+async function trialPriceCached(channelCode: string, req: ShipmentRequest): Promise<FeeQuote | null> {
+  const key = quoteKey(channelCode, req);
+  const hit = quoteCache.get(key);
+  if (hit && Date.now() - hit.at < QUOTE_TTL) return hit.q;
+  const t0 = Date.now();
+  const q = await getShipBestClient().trialPrice(channelCode, req);
+  const ms = Date.now() - t0;
+  // 慢的渠道记一笔，方便看是哪个服务商拖慢了报价（journalctl 里能看到）
+  if (ms > 5000) console.warn(`[报价] ${getChannel(channelCode)?.name ?? channelCode} 用了 ${(ms / 1000).toFixed(1)} 秒`);
+  if (q) {
+    quoteCache.set(key, { at: Date.now(), q });
+    if (quoteCache.size > 2000) for (const [k, v] of quoteCache) if (Date.now() - v.at >= QUOTE_TTL) quoteCache.delete(k);
+  }
+  return q;
+}
+
 async function quoteRemote(customerId: number, channelCode: string, channelName: string, req: ShipmentRequest, ruleOverride?: MarkupRule): Promise<ChannelQuote> {
-  const client = getShipBestClient();
   const { roundingStep } = getSettings();
   try {
-    const q = await client.trialPrice(channelCode, req);
+    const q = await trialPriceCached(channelCode, req);
     if (!q) return { channelCode, channelName, ok: false, error: "该渠道无报价" } satisfies ChannelQuote;
     // 以“优惠后总运费”作为我们的成本
     const cost = q.totalDiscountShippingFee || q.totalShippingFee;
@@ -305,19 +338,27 @@ async function quoteRemote(customerId: number, channelCode: string, channelName:
  * 对这个客户已开通（且全局启用）的渠道逐个试算。
  * 注：试算接口只返回渠道 id 和名称、不返回 code，所以按 code 逐个请求，保证下单时 code 对得上。
  */
+/**
+ * 并发试算多个渠道：ShipBest 和嘉谷各走各的队列（两家的频率限制互不影响），
+ * ShipBest 同时 3 个（避免触发频率限制 11005），嘉谷同时 4 个；总时间约等于最慢那家的时间。
+ */
+async function quoteChannels<C extends { code: string; name: string }>(channels: C[], fn: (c: C) => Promise<ChannelQuote>): Promise<ChannelQuote[]> {
+  const results: ChannelQuote[] = [];
+  const run = async (list: C[], size: number) => {
+    const queue = [...list];
+    await Promise.all(Array.from({ length: Math.min(size, queue.length) }, async () => {
+      for (let c = queue.shift(); c; c = queue.shift()) results.push(await fn(c));
+    }));
+  };
+  await Promise.all([run(channels.filter((c) => !isJiaguCode(c.code)), 3), run(channels.filter((c) => isJiaguCode(c.code)), 4)]);
+  return results;
+}
+
 export async function quoteAll(customerId: number, req: ShipmentRequest): Promise<ChannelQuote[]> {
   if (!listChannels(true).length) throw new Error("没有启用的物流渠道，请先到“设置”里同步渠道");
   const channels = customerChannels(customerId);
   if (!channels.length) throw new NoChannelsError();
-  const results: ChannelQuote[] = [];
-  // 小并发，避免触发频率限制（11005）
-  const queue = [...channels];
-  const workers = Array.from({ length: Math.min(3, queue.length) }, async () => {
-    for (let c = queue.shift(); c; c = queue.shift()) {
-      results.push(await quoteOne(customerId, c.code, c.name, req));
-    }
-  });
-  await Promise.all(workers);
+  const results = await quoteChannels(channels, (c) => quoteOne(customerId, c.code, c.name, req));
   return flagJiaguCoverage(fillZones(results)).sort((a, b) => Number(b.ok) - Number(a.ok) || (a.price ?? 0) - (b.price ?? 0));
 }
 
@@ -335,16 +376,8 @@ export class NoChannelsError extends Error {
 export async function quoteForProspect(req: ShipmentRequest, markup: PartialRule): Promise<ChannelQuote[]> {
   const channels = listChannels(true);
   if (!channels.length) throw new Error("没有启用的物流渠道，请先到“设置”里同步渠道");
-  const g = getSettings().markup;
-  const results: ChannelQuote[] = [];
-  const queue = [...channels];
-  await Promise.all(
-    Array.from({ length: Math.min(3, queue.length) }, async () => {
-      for (let c = queue.shift(); c; c = queue.shift()) {
-        results.push(await quoteOne(0, c.code, c.name, req, resolveRule(g, c.markup, markup)));
-      }
-    }),
-  );
+  const gm = getSettings().markup;
+  const results = await quoteChannels(channels, (c) => quoteOne(0, c.code, c.name, req, resolveRule(gm, c.markup, markup)));
   return flagJiaguCoverage(fillZones(results)).sort((a, b) => Number(b.ok) - Number(a.ok) || (a.price ?? 0) - (b.price ?? 0));
 }
 

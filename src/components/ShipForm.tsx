@@ -66,6 +66,18 @@ export interface ResubmitSource {
   returnTo?: string;
 }
 
+/** 进行中的秒数（查询运费 / 出单时显示“已等 X 秒”） */
+function useElapsed(active: boolean) {
+  const [sec, setSec] = useState(0);
+  useEffect(() => {
+    if (!active) return setSec(0);
+    const t0 = Date.now();
+    const id = setInterval(() => setSec(Math.floor((Date.now() - t0) / 1000)), 500);
+    return () => clearInterval(id);
+  }, [active]);
+  return sec;
+}
+
 /** 数字转成输入框里的文字（0 / 空显示为空） */
 const numText = (v: number | null | undefined) => (v ? String(v) : "");
 
@@ -148,7 +160,9 @@ export default function ShipForm(props: {
   const [errors, setErrors] = useState<string[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
   const [quoting, startQuote] = useTransition();
+  const quoteSec = useElapsed(quoting);
   const [creating, setCreating] = useState<string | null>(null);
+  const creatingSec = useElapsed(!!creating);
   // 收件地址核对（USPS）
   const [addr, setAddr] = useState<AddressCheck | null>(null);
   const [addrAck, setAddrAck] = useState(false);
@@ -538,6 +552,22 @@ export default function ShipForm(props: {
             {quoting ? t("查询中…") : quotes ? t("重新查询运费") : t("查询运费")}
           </button>
         </div>
+        {quoting && (
+          <div className="busy-line" role="status" aria-live="polite">
+            <span className="spinner" />
+            <span>
+              {t("正在向各渠道查询运费，同时核对收件地址…")}
+              {quoteSec > 0 && <b> {t("已等 {n} 秒", { n: quoteSec })}</b>}
+              <span className="muted small"> · {quoteSec >= 15 ? t("有的服务商接口比较慢，请再稍等一下，不要刷新页面") : t("一般 5–20 秒")}</span>
+            </span>
+          </div>
+        )}
+        {creatingSec > 0 && (
+          <div className="busy-line" role="status" aria-live="polite">
+            <span className="spinner" />
+            <span>{t("正在出单，等服务商返回面单…")} <b>{t("已等 {n} 秒", { n: creatingSec })}</b><span className="muted small"> · {t("请不要关闭或刷新页面")}</span></span>
+          </div>
+        )}
         {notice && <div className="alert warn">{tm(notice)}</div>}
         {orderable && addr && addr.status !== "unavailable" && addr.status !== "skipped" && (
           <AddressCheckPanel

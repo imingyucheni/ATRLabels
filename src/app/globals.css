@@ -1382,3 +1382,9 @@ tr.row-disabled td:first-child { opacity: 0.55; }
   .quote-table td, .quote-table tbody tr:hover td { background: transparent !important; }
   .quote-table tr.best { background: var(--accent-soft); border-bottom-color: transparent; }
 }
+
+/* 查询运费 / 出单进行中 */
+.busy-line { display: flex; align-items: center; gap: 10px; margin: 12px 0 4px; padding: 12px 14px; border-radius: 10px; background: var(--info-soft, var(--surface-2)); font-size: 13.5px; }
+.spinner { flex: none; width: 18px; height: 18px; border-radius: 50%; border: 2.5px solid color-mix(in srgb, var(--accent) 25%, transparent); border-top-color: var(--accent); animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2.4s; } }

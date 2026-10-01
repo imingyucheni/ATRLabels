@@ -179,6 +179,9 @@ export class MockShipBestClient implements ShipBestClient {
   }
 
   async trialPrice(productCode: string, req: ShipmentRequest): Promise<FeeQuote | null> {
+    // 演示 / 测试用：模拟慢接口（MOCK_DELAY_MS），看加载提示
+    const delay = Number(process.env.MOCK_DELAY_MS) || 0;
+    if (delay > 0) await new Promise((r) => setTimeout(r, delay));
     const idx = this.products.findIndex((p) => p.code === productCode);
     if (idx < 0) throw new ShipBestError(10022, "Logistics product not exist!");
     const { weight, displayUnitSystem: u } = req.pkg;
