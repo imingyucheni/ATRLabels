@@ -57,10 +57,26 @@ function conn() {
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
       UNIQUE (store_id, ext_id)
     );
-    CREATE INDEX IF NOT EXISTS store_orders_status ON store_orders (status);`);
+    CREATE INDEX IF NOT EXISTS store_orders_status ON store_orders (status);
+    CREATE TABLE IF NOT EXISTS store_access (
+      customer_id INTEGER PRIMARY KEY,
+      enabled_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );`);
     ready = c;
   }
   return c;
+}
+
+/* ---------------- 开放范围（测试阶段：后台逐个客户开放） ---------------- */
+
+/** 这个客户能不能用店铺对接（默认不开放，后台在客户详情里开放） */
+export function storesEnabled(customerId: number): boolean {
+  return !!conn().prepare("SELECT 1 FROM store_access WHERE customer_id = ?").get(customerId);
+}
+
+export function setStoresEnabled(customerId: number, on: boolean) {
+  if (on) conn().prepare("INSERT OR IGNORE INTO store_access (customer_id) VALUES (?)").run(customerId);
+  else conn().prepare("DELETE FROM store_access WHERE customer_id = ?").run(customerId);
 }
 
 /* ---------------- 店铺连接 ---------------- */
@@ -486,7 +502,7 @@ export async function pushPendingFulfillments(limit = 20): Promise<number> {
 /** 已连接的店铺每 15 分钟自动同步一次未发货订单 */
 export async function autoSyncStores() {
   const due = conn()
-    .prepare("SELECT id FROM store_connections WHERE status = 'connected' AND (last_sync_at IS NULL OR last_sync_at <= datetime('now', '-15 minutes')) LIMIT 5")
+    .prepare("SELECT id FROM store_connections WHERE status = 'connected' AND customer_id IN (SELECT customer_id FROM store_access) AND (last_sync_at IS NULL OR last_sync_at <= datetime('now', '-15 minutes')) LIMIT 5")
     .all() as { id: number }[];
   for (const { id } of due) await syncStore(id).catch(() => null);
 }

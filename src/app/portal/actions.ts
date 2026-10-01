@@ -32,7 +32,7 @@ import { createTopup, getTopup } from "@/lib/topup";
 import { requestReset, resetWithToken } from "@/lib/passwordReset";
 import type { Address, ShipmentRequest } from "@/lib/shipbest/types";
 import type { FlashState } from "@/app/actions";
-import { deleteMyStore, disconnectStore, getStore, importToBatch, listStores, saveShopifyStore, syncStore } from "@/lib/stores";
+import { deleteMyStore, disconnectStore, getStore, importToBatch, listStores, saveShopifyStore, storesEnabled, syncStore } from "@/lib/stores";
 import { getLang, getT, tMsg } from "@/lib/prefs";
 import { NOTIFY_EVENTS, saveNotifyPrefs, type NotifyPrefs } from "@/lib/notify";
 import { checkAddress, needsAck, type AddressCheck } from "@/lib/addressCheck";
@@ -405,9 +405,18 @@ export async function portalSaveLabelPaperAction(_: FlashState, fd: FormData): P
 
 /* ---------------- 电商店铺（Shopify / eBay） ---------------- */
 
+const STORES_LOCKED = "店铺对接还没有为你的账户开放，请联系客服";
+
+/** 店铺对接在测试阶段：后台给这个客户开放了才能用 */
+async function storeCustomer() {
+  const me = await requireCustomer();
+  return storesEnabled(me.id) ? me : null;
+}
+
 /** 客户点“同步订单”：同步自己所有已连接的店铺 */
 export async function syncMyStoresAction(_: FlashState): Promise<FlashState> {
-  const me = await requireCustomer();
+  const me = await storeCustomer();
+  if (!me) return { error: await tMsg(STORES_LOCKED) };
   const list = listStores(me.id).filter((s) => s.status === "connected");
   if (!list.length) return { error: await tMsg("还没有已连接的店铺") };
   let added = 0;
@@ -426,7 +435,8 @@ export async function syncMyStoresAction(_: FlashState): Promise<FlashState> {
 
 /** 勾选的店铺订单导入批量下单（默认包裹尺寸由客户选），返回批次 ID */
 export async function importStoreOrdersAction(input: { orderIds: number[]; pkg: { length: number; width: number; height: number; weight: number; unit: number } }): Promise<{ jobId?: number; error?: string }> {
-  const me = await requireCustomer();
+  const me = await storeCustomer();
+  if (!me) return { error: await tMsg(STORES_LOCKED) };
   try {
     const u = Number(input.pkg.unit);
     const jobId = importToBatch(
@@ -443,7 +453,8 @@ export async function importStoreOrdersAction(input: { orderIds: number[]; pkg: 
 }
 
 export async function disconnectMyStoreAction(_: FlashState, fd: FormData): Promise<FlashState> {
-  const me = await requireCustomer();
+  const me = await storeCustomer();
+  if (!me) return { error: await tMsg(STORES_LOCKED) };
   try {
     disconnectStore(Number(fd.get("id")), me.id);
     revalidatePath("/portal/stores");
@@ -458,7 +469,8 @@ export async function disconnectMyStoreAction(_: FlashState, fd: FormData): Prom
  * 返回下一步要打开的网址：已连上（演示店铺）就回店铺订单页，否则去 Shopify 授权。
  */
 export async function saveMyShopifyStoreAction(input: { id?: number | null; shop: string; clientId: string; clientSecret?: string }): Promise<{ next?: string; error?: string }> {
-  const me = await requireCustomer();
+  const me = await storeCustomer();
+  if (!me) return { error: await tMsg(STORES_LOCKED) };
   try {
     const id = saveShopifyStore({
       id: Number(input.id) || null,
@@ -479,7 +491,8 @@ export async function saveMyShopifyStoreAction(input: { id?: number | null; shop
 }
 
 export async function deleteMyStoreAction(_: FlashState, fd: FormData): Promise<FlashState> {
-  const me = await requireCustomer();
+  const me = await storeCustomer();
+  if (!me) return { error: await tMsg(STORES_LOCKED) };
   try {
     deleteMyStore(Number(fd.get("id")), me.id);
     revalidatePath("/portal", "layout");

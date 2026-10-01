@@ -1,6 +1,7 @@
+import { redirect } from "next/navigation";
 import Link from "next/link";
 import { requireCustomer } from "@/lib/auth";
-import { listStoreOrders, listStores, ebaySettings, type StoreOrderStatus } from "@/lib/stores";
+import { listStoreOrders, listStores, ebaySettings, storesEnabled, type StoreOrderStatus } from "@/lib/stores";
 import { recentPackages } from "@/lib/portal";
 import { isMockMode } from "@/lib/shipbest/client";
 import { fmtTime } from "@/lib/time";
@@ -18,6 +19,7 @@ const TABS: [StoreOrderStatus | "all", string][] = [["open", "待处理"], ["imp
 /** 店铺订单：Shopify / eBay 的未发货订单同步过来，勾选导入批量下单，出单后运单号自动回传店铺 */
 export default async function PortalStoresPage({ searchParams }: { searchParams: Promise<{ status?: string; connected?: string; denied?: string }> }) {
   const me = await requireCustomer();
+  if (!storesEnabled(me.id)) redirect("/portal");
   const t = await getT();
   const sp = await searchParams;
   const tab = (TABS.find(([k]) => k === sp.status)?.[0] ?? "open") as StoreOrderStatus | "all";

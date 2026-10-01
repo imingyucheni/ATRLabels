@@ -121,4 +121,13 @@ export const stores: Record<string, string> = {
   "eBay 不支持撤回已上传的运单号：请在 eBay 订单里手动更新，或重新出单后系统会再上传新运单号": "eBay can't retract uploaded tracking: update it on the eBay order manually, or buy a new label and the new tracking will be uploaded",
   "Shopify 授权已失效，请重新连接店铺": "Shopify authorization expired — please reconnect the store",
   "Shopify 订单没有待发货的 fulfillment order（可能已在别处发货）": "The Shopify order has no open fulfillment order (it may have been fulfilled elsewhere)",
+  "测试中": "Beta",
+  "关闭": "Turn off",
+  "开放给这个客户": "Enable for this customer",
+  "关闭后客户看不到“店铺订单”，已连接的店铺暂停同步订单。确定关闭吗？": "The customer will no longer see “Store orders” and connected stores stop syncing. Turn off?",
+  "已开放：客户 OMS 侧边栏有“店铺订单”，可以自己连接 Shopify / eBay。": "Enabled: “Store orders” appears in the customer's portal and they can connect Shopify / eBay themselves.",
+  "未开放：这个功能还在测试，客户 OMS 里看不到。先给内部测试账号开放测试，没问题再开放给客户。": "Not enabled: this feature is in beta and hidden from the customer. Test it with an internal test account first, then enable it for customers.",
+  "已开放：客户 OMS 侧边栏会出现“店铺订单”": "Enabled: “Store orders” now appears in the customer's portal",
+  "已关闭：客户看不到“店铺订单”，已连接的店铺暂停同步": "Turned off: the customer can't see “Store orders” and connected stores stop syncing",
+  "店铺对接还没有为你的账户开放，请联系客服": "Store integration isn't enabled for your account yet — please contact support",
 };

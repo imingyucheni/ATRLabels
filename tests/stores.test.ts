@@ -52,6 +52,16 @@ describe("电商店铺对接（Shopify / eBay）", () => {
     ledger.addLedger({ customerId: cid, type: "topup", amount: 300, createdBy: "admin" });
   });
 
+  it("测试阶段：默认不开放，后台逐个客户开放 / 关闭", () => {
+    expect(stores.storesEnabled(cid)).toBe(false);
+    stores.setStoresEnabled(cid, true);
+    stores.setStoresEnabled(cid, true);
+    expect(stores.storesEnabled(cid)).toBe(true);
+    stores.setStoresEnabled(cid, false);
+    expect(stores.storesEnabled(cid)).toBe(false);
+    stores.setStoresEnabled(cid, true);
+  });
+
   it("Shopify 签名校验：参数排序后 HMAC-SHA256，改一个字都不行", async () => {
     const { verifyShopifyHmac, normalizeShop } = await import("@/lib/stores/shopify");
     const p = new URLSearchParams({ shop: "abc.myshopify.com", timestamp: "1700000000", code: "xyz", state: "s1" });

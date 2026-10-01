@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { currentCustomerId } from "@/lib/auth";
-import { addDemoEbay, ebaySettings, startEbayConnection, syncStore } from "@/lib/stores";
+import { addDemoEbay, ebaySettings, startEbayConnection, storesEnabled, syncStore } from "@/lib/stores";
 import { ebayAuthorizeUrl } from "@/lib/stores/ebay";
 import { isMockMode } from "@/lib/shipbest/client";
 import { publicBase, resultPage } from "@/lib/stores/web";
@@ -9,6 +9,7 @@ import { publicBase, resultPage } from "@/lib/stores/web";
 export async function GET(req: Request) {
   const customerId = await currentCustomerId();
   if (!customerId) return NextResponse.redirect(`${publicBase(req)}/portal/login`);
+  if (!storesEnabled(customerId)) return resultPage("还没有开放", "店铺对接还没有为你的账户开放，请联系客服。", false);
   const s = ebaySettings();
   if (!s.enabled || !s.clientId || !s.ruName) {
     // 演示环境：没配 eBay 时加一个模拟店铺

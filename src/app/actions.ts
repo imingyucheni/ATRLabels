@@ -47,7 +47,7 @@ import {
 import type { PartialRule } from "@/lib/pricing";
 import { getDhlClient, getShipBestClient, shipbestMode } from "@/lib/shipbest/client";
 import { dhlSettings, DHL_LABEL_TEMPLATES, isDhlCode, type DhlSettings } from "@/lib/shipbest/dhl";
-import { deleteStore, disconnectStore, ebaySettings, getStore, saveShopifyStore, syncStore } from "@/lib/stores";
+import { deleteStore, disconnectStore, ebaySettings, getStore, saveShopifyStore, setStoresEnabled, syncStore } from "@/lib/stores";
 import type { EbaySettings } from "@/lib/stores/ebay";
 import { saveDimRule } from "@/lib/rates";
 import { CARRIERS } from "@/lib/carriers";
@@ -1370,6 +1370,16 @@ export async function removeStoreAdminAction(_: FlashState, fd: FormData): Promi
   else disconnectStore(s.id);
   revalidatePath(`/customers/${s.customerId}`);
   return { ok: fd.get("mode") === "delete" ? "已删除店铺连接和同步的订单记录" : "已断开连接（订单记录保留）" };
+}
+
+export async function setStoresEnabledAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  await requireAdmin();
+  const id = Number(fd.get("customerId"));
+  if (!getCustomer(id)) return { error: "客户不存在" };
+  const on = fd.get("on") === "1";
+  setStoresEnabled(id, on);
+  revalidatePath(`/customers/${id}`);
+  return { ok: on ? "已开放：客户 OMS 侧边栏会出现“店铺订单”" : "已关闭：客户看不到“店铺订单”，已连接的店铺暂停同步" };
 }
 
 export async function saveEbayAction(_: FlashState, fd: FormData): Promise<FlashState> {

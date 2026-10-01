@@ -1,11 +1,11 @@
 import { headers } from "next/headers";
 import FlashForm from "@/components/FlashForm";
-import { listStores, PLATFORM_LABEL, type StoreConnection } from "@/lib/stores";
+import { listStores, PLATFORM_LABEL, storesEnabled, type StoreConnection } from "@/lib/stores";
 import { publicBase } from "@/lib/stores/web";
 import { shipbestMode } from "@/lib/shipbest/client";
 import { fmtTime } from "@/lib/time";
 import { getT } from "@/lib/prefs";
-import { removeStoreAdminAction, saveShopifyStoreAction, syncStoreAdminAction } from "@/app/actions";
+import { removeStoreAdminAction, saveShopifyStoreAction, setStoresEnabledAction, syncStoreAdminAction } from "@/app/actions";
 
 const STATUS: Record<StoreConnection["status"], [string, string]> = {
   connected: ["已连接", "ok"],
@@ -20,6 +20,7 @@ export default async function StoresCard({ customerId }: { customerId: number })
   const stores = listStores(customerId);
   const base = publicBase({ headers: await headers() });
   const mock = shipbestMode() === "mock";
+  const on = storesEnabled(customerId);
   const shopifyForm = (s?: StoreConnection) => (
     <FlashForm action={saveShopifyStoreAction} submitLabel={s ? "保存" : "添加 Shopify 店铺"} submitClass={s ? "small" : "primary"}>
       <input type="hidden" name="customerId" value={customerId} />
@@ -36,7 +37,17 @@ export default async function StoresCard({ customerId }: { customerId: number })
   );
   return (
     <div className="card" id="stores">
-      <h2 style={{ marginTop: 0 }}>{t("电商店铺")}</h2>
+      <h2 style={{ marginTop: 0 }}>{t("电商店铺")} <span className="badge test">{t("测试中")}</span></h2>
+      <FlashForm action={setStoresEnabledAction} submitLabel={on ? "关闭" : "开放给这个客户"} submitClass={on ? "small" : "small primary"} className={`alert ${on ? "ok" : ""}`}
+        confirm={on ? "关闭后客户看不到“店铺订单”，已连接的店铺暂停同步订单。确定关闭吗？" : undefined}>
+        <input type="hidden" name="customerId" value={customerId} />
+        <input type="hidden" name="on" value={on ? "0" : "1"} />
+        <div style={{ marginBottom: 8 }}>
+          {on
+            ? t("已开放：客户 OMS 侧边栏有“店铺订单”，可以自己连接 Shopify / eBay。")
+            : t("未开放：这个功能还在测试，客户 OMS 里看不到。先给内部测试账号开放测试，没问题再开放给客户。")}
+        </div>
+      </FlashForm>
       <p className="small muted">
         {t("客户在客户中心“店铺订单”里自己连接 Shopify / eBay（有分步向导）。这里可以查看连接状态、手动同步，或代客户添加。店铺里未发货的订单每 15 分钟同步一次，出单后运单号自动回传。")}
       </p>
