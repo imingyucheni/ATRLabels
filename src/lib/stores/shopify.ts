@@ -91,6 +91,7 @@ const ORDERS_QUERY = `query Orders($cursor: String) {
     nodes {
       id name createdAt email phone totalWeight
       shippingAddress { firstName lastName company address1 address2 city provinceCode zip countryCodeV2 phone }
+      billingAddress { firstName lastName phone }
       lineItems(first: 50) { nodes { sku name quantity requiresShipping originalUnitPriceSet { shopMoney { amount currencyCode } } } }
       fulfillmentOrders(first: 10) { nodes { id status requestStatus } }
     }
@@ -99,6 +100,7 @@ const ORDERS_QUERY = `query Orders($cursor: String) {
 
 type GqlOrder = {
   id: string; name: string; createdAt: string; email?: string | null; phone?: string | null; totalWeight?: string | number | null;
+  billingAddress?: { firstName?: string | null; lastName?: string | null; phone?: string | null } | null;
   shippingAddress?: { firstName?: string | null; lastName?: string | null; company?: string | null; address1?: string | null; address2?: string | null; city?: string | null; provinceCode?: string | null; zip?: string | null; countryCodeV2?: string | null; phone?: string | null } | null;
   lineItems: { nodes: { sku?: string | null; name: string; quantity: number; requiresShipping?: boolean; originalUnitPriceSet?: { shopMoney?: { amount: string; currencyCode: string } } }[] };
   fulfillmentOrders: { nodes: { id: string; status: string; requestStatus?: string }[] };
@@ -110,11 +112,15 @@ export function normalizeShopifyOrder(o: GqlOrder): StoreOrder | null {
   // 没有要发货的商品（虚拟商品等）：不用管
   if (!items.length) return null;
   const addr: NonNullable<GqlOrder["shippingAddress"]> = a ?? {};
+  // 收货地址没写姓名时（Shopify 允许），用账单地址上的姓名
+  const named = (addr.firstName ?? "").trim() || (addr.lastName ?? "").trim() ? addr : (o.billingAddress ?? {});
+  const first = (named.firstName ?? "").trim();
+  const last = (named.lastName ?? "").trim();
   const recipient: Address = {
-    nameFirst: (addr.firstName ?? "").trim() || (addr.lastName ?? "").trim(),
-    nameLast: (addr.firstName ?? "").trim() ? (addr.lastName ?? "").trim() : "",
+    nameFirst: first || last,
+    nameLast: first ? last : "",
     ...(addr.company ? { corporateName: addr.company } : {}),
-    phone: (addr.phone || o.phone || "").trim() || undefined,
+    phone: (addr.phone || o.phone || o.billingAddress?.phone || "").trim() || undefined,
     ...(o.email ? { email: o.email } : {}),
     country: (addr.countryCodeV2 || "US").toUpperCase(),
     province: addr.provinceCode ?? undefined,
@@ -123,8 +129,8 @@ export function normalizeShopifyOrder(o: GqlOrder): StoreOrder | null {
     ...(addr.address2 ? { address2: addr.address2 } : {}),
     zipCode: addr.zip ?? "",
   };
-  // 有城市 / 邮编却没有姓名和街道：订单地址不全，或 Shopify 没给客户数据
-  const hidden = !!a && !recipient.nameFirst && !recipient.address1 && !!(recipient.city || recipient.zipCode);
+  // 有地址却缺姓名或街道：订单地址不全，或 Shopify 没给客户数据
+  const hidden = !!a && (!recipient.nameFirst || !recipient.address1);
   const issue = !a ? "no_address" as const : hidden ? "hidden" as const : undefined;
   return {
     extId: o.id,

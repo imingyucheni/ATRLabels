@@ -138,6 +138,11 @@ describe("电商店铺对接（Shopify / eBay）", () => {
     expect(hidden?.issue).toBe("hidden");
     const ok = normalizeShopifyOrder({ ...base, shippingAddress: { firstName: "Karine", lastName: "Ruby", address1: "1 Main St", city: "Ottawa", provinceCode: "ON", zip: "K2P 2L8", countryCodeV2: "CA" } });
     expect(ok?.issue).toBeUndefined();
+    // 收货地址没姓名：用账单地址的姓名
+    const billName = normalizeShopifyOrder({ ...base, shippingAddress: { address1: "151 O'Connor St", city: "Ottawa", provinceCode: "ON", zip: "K2P 2L8", countryCodeV2: "CA", phone: "+1 613-555-0114" }, billingAddress: { firstName: "Karine", lastName: "Ruby" } });
+    expect(billName?.recipient).toMatchObject({ nameFirst: "Karine", nameLast: "Ruby", address1: "151 O'Connor St" });
+    expect(billName?.issue).toBeUndefined();
+    expect(normalizeShopifyOrder({ ...base, shippingAddress: { address1: "151 O'Connor St", city: "Ottawa", zip: "K2P 2L8", countryCodeV2: "CA" } })?.issue).toBe("hidden");
     expect(normalizeShopifyOrder({ ...base, lineItems: { nodes: [{ sku: "G", name: "Gift card", quantity: 1, requiresShipping: false }] }, shippingAddress: null })).toBeNull();
   });
 
