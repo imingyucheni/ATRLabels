@@ -337,6 +337,8 @@ export interface StoreOrderRow {
   jobId: number | null;
   shipmentId: number | null;
   trackingNo: string | null;
+  /** 面单状态（pending / labeled / cancelled…） */
+  shipmentStatus: string | null;
   pushedAt: string | null;
   pushError: string | null;
 }
@@ -386,6 +388,24 @@ export async function syncStore(id: number): Promise<{ added: number; total: num
   }
 }
 
+/** 各状态的订单数（标签页上的数字），一次查完 */
+export function countStoreOrders(customerId: number): Record<StoreOrderStatus, number> {
+  const out: Record<StoreOrderStatus, number> = { open: 0, imported: 0, shipped: 0, closed: 0 };
+  const rows = conn()
+    .prepare("SELECT o.status, COUNT(*) AS n FROM store_orders o JOIN store_connections s ON s.id = o.store_id WHERE s.customer_id = ? GROUP BY o.status")
+    .all(customerId) as { status: StoreOrderStatus; n: number }[];
+  for (const r of rows) out[r.status] = r.n;
+  return out;
+}
+
+/** 打开店铺订单页时：超过 5 分钟没同步的店铺先同步一下（最多等几秒，慢了就先显示旧数据） */
+export async function syncStaleStores(customerId: number, waitMs = 4000) {
+  const stale = listStores(customerId).filter((s) => s.status === "connected" && (!s.lastSyncAt || Date.parse(s.lastSyncAt.replace(" ", "T") + "Z") < Date.now() - 5 * 60_000));
+  if (!stale.length) return;
+  const all = Promise.allSettled(stale.map((s) => syncStore(s.id)));
+  await Promise.race([all, new Promise((r) => setTimeout(r, waitMs))]);
+}
+
 export function listStoreOrders(customerId: number, opts: { status?: StoreOrderStatus | "all"; storeId?: number } = {}): StoreOrderRow[] {
   const where = ["s.customer_id = ?"];
   const args: (string | number)[] = [customerId];
@@ -399,9 +419,11 @@ export function listStoreOrders(customerId: number, opts: { status?: StoreOrderS
   }
   const rows = conn()
     .prepare(
-      `SELECT o.*, s.platform, COALESCE(NULLIF(s.name, ''), s.shop) AS store_name, r.shipment_id AS row_shipment
+      `SELECT o.*, s.platform, COALESCE(NULLIF(s.name, ''), s.shop) AS store_name, r.shipment_id AS row_shipment,
+         sh.tracking_no AS tracking_no, sh.status AS shipment_status
        FROM store_orders o JOIN store_connections s ON s.id = o.store_id
        LEFT JOIN batch_job_rows r ON r.job_id = o.job_id AND r.row_no = o.row_no
+       LEFT JOIN shipments sh ON sh.id = COALESCE(o.shipment_id, r.shipment_id)
        WHERE ${where.join(" AND ")} ORDER BY o.ordered_at DESC, o.id DESC LIMIT 500`,
     )
     .all(...args) as (Record<string, any>)[];
@@ -410,7 +432,8 @@ export function listStoreOrders(customerId: number, opts: { status?: StoreOrderS
     return {
       id: r.id, storeId: r.store_id, platform: r.platform, storeName: r.store_name, extId: r.ext_id, name: r.name, orderedAt: r.ordered_at,
       order: JSON.parse(r.data_json) as StoreOrder, status: r.status, jobId: r.job_id, shipmentId,
-      trackingNo: shipmentId ? getShipment(shipmentId)?.trackingNo ?? null : null, pushedAt: r.pushed_at, pushError: r.push_error,
+      trackingNo: shipmentId ? (r.tracking_no as string | null) ?? null : null, shipmentStatus: (r.shipment_status as string | null) ?? null,
+      pushedAt: r.pushed_at, pushError: r.push_error,
     };
   });
 }
@@ -499,9 +522,16 @@ export async function pushPendingFulfillments(limit = 20): Promise<number> {
       `SELECT o.id, o.store_id, o.data_json, o.status, o.shipment_id, o.fulfillment_id, r.shipment_id AS row_shipment, s.platform
        FROM store_orders o JOIN store_connections s ON s.id = o.store_id
        JOIN batch_job_rows r ON r.job_id = o.job_id AND r.row_no = o.row_no
-       WHERE o.status IN ('imported', 'shipped') AND r.shipment_id IS NOT NULL
-         AND (o.status = 'imported' OR o.shipment_id IS NOT r.shipment_id OR o.shipment_id IN (SELECT id FROM shipments WHERE status = 'cancelled'))
+       JOIN shipments sh ON sh.id = r.shipment_id
+       WHERE r.shipment_id IS NOT NULL
+         AND (
+           -- 已导入：面单出好了（有运单号、没取消 / 异常）才回传；还在生成中的不占名额
+           (o.status = 'imported' AND sh.tracking_no IS NOT NULL AND sh.tracking_no != '' AND sh.status NOT IN ('cancelled', 'pending', 'exception'))
+           -- 已回传：面单被取消或批次里换了新单，要撤回
+           OR (o.status = 'shipped' AND (o.shipment_id IS NOT r.shipment_id OR o.shipment_id IN (SELECT id FROM shipments WHERE status = 'cancelled')))
+         )
          AND (o.push_error IS NULL OR o.updated_at <= datetime('now', '-30 minutes'))
+       ORDER BY o.updated_at
        LIMIT ?`,
     )
     .all(limit) as { id: number; store_id: number; data_json: string; status: StoreOrderStatus; shipment_id: number | null; fulfillment_id: string | null; row_shipment: number; platform: Platform }[];

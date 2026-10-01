@@ -114,7 +114,8 @@ type EbayOrder = {
   orderFulfillmentStatus?: string;
   cancelStatus?: { cancelState?: string };
   buyer?: { username?: string };
-  fulfillmentStartInstructions?: { shippingStep?: { shipTo?: { fullName?: string; companyName?: string; contactAddress?: { addressLine1?: string; addressLine2?: string; city?: string; stateOrProvince?: string; postalCode?: string; countryCode?: string }; primaryPhone?: { phoneNumber?: string }; email?: string } } }[];
+  buyerCheckoutNotes?: string;
+  fulfillmentStartInstructions?: { shippingStep?: { shippingServiceCode?: string; shipTo?: { fullName?: string; companyName?: string; contactAddress?: { addressLine1?: string; addressLine2?: string; city?: string; stateOrProvince?: string; postalCode?: string; countryCode?: string }; primaryPhone?: { phoneNumber?: string }; email?: string } } }[];
   lineItems?: { lineItemId: string; sku?: string; title?: string; quantity?: number; lineItemCost?: { value?: string; currency?: string }; lineItemFulfillmentStatus?: string }[];
 };
 
@@ -149,6 +150,8 @@ export function normalizeEbayOrder(o: EbayOrder): (StoreOrder & { buyer?: string
     weightGrams: 0,
     fulfillRefs: items.map((l) => ({ id: l.lineItemId, quantity: l.quantity ?? 1 })),
     ...(o.buyer?.username ? { buyer: o.buyer.username } : {}),
+    ...(o.fulfillmentStartInstructions?.[0]?.shippingStep?.shippingServiceCode ? { shippingMethod: o.fulfillmentStartInstructions[0].shippingStep.shippingServiceCode.slice(0, 60) } : {}),
+    ...(o.buyerCheckoutNotes?.trim() ? { note: o.buyerCheckoutNotes.trim().slice(0, 300) } : {}),
   };
 }
 
@@ -214,7 +217,7 @@ export function mockEbayRest(): EbayRest & { pushed: unknown[] } {
         creationDate: new Date().toISOString(),
         orderFulfillmentStatus: "NOT_STARTED",
         buyer: { username: "buyer_jane" },
-        fulfillmentStartInstructions: [{ shippingStep: { shipTo: { fullName: "Jane Miller", contactAddress: { addressLine1: "45 Oak Ave", city: "Denver", stateOrProvince: "CO", postalCode: "80202", countryCode: "US" }, primaryPhone: { phoneNumber: "3035550111" } } } }],
+        fulfillmentStartInstructions: [{ shippingStep: { shippingServiceCode: "USPSPriority", shipTo: { fullName: "Jane Miller", contactAddress: { addressLine1: "45 Oak Ave", city: "Denver", stateOrProvince: "CO", postalCode: "80202", countryCode: "US" }, primaryPhone: { phoneNumber: "3035550111" } } } }],
         lineItems: [{ lineItemId: "10001", sku: "CASE-IP15", title: "iPhone 15 Case Clear", quantity: 2, lineItemCost: { value: "17.98", currency: "USD" }, lineItemFulfillmentStatus: "NOT_STARTED" }],
       },
     ];

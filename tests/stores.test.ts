@@ -84,6 +84,7 @@ describe("电商店铺对接（Shopify / eBay）", () => {
     expect(r).toMatchObject({ added: 3, total: 3 });
     const open = stores.listStoreOrders(cid, { status: "open" });
     expect(open.map((o) => o.name).sort()).toEqual(["#1001", "#1002", "#1003"]);
+    expect(stores.countStoreOrders(cid).open).toBe(3);
     expect(open[0].order.recipient.country).toBe("US");
 
     const job = await shipAll(open.map((o) => o.id));
@@ -138,6 +139,8 @@ describe("电商店铺对接（Shopify / eBay）", () => {
     expect(hidden?.issue).toBe("hidden");
     const ok = normalizeShopifyOrder({ ...base, shippingAddress: { firstName: "Karine", lastName: "Ruby", address1: "1 Main St", city: "Ottawa", provinceCode: "ON", zip: "K2P 2L8", countryCodeV2: "CA" } });
     expect(ok?.issue).toBeUndefined();
+    const withShip = normalizeShopifyOrder({ ...base, note: " Leave at door ", shippingLine: { title: "Express" }, shippingAddress: { firstName: "A", lastName: "B", address1: "1 Main St", city: "Austin", provinceCode: "TX", zip: "78701", countryCodeV2: "US" } });
+    expect(withShip).toMatchObject({ shippingMethod: "Express", note: "Leave at door" });
     // 收货地址没姓名：用账单地址的姓名
     const billName = normalizeShopifyOrder({ ...base, shippingAddress: { address1: "151 O'Connor St", city: "Ottawa", provinceCode: "ON", zip: "K2P 2L8", countryCodeV2: "CA", phone: "+1 613-555-0114" }, billingAddress: { firstName: "Karine", lastName: "Ruby" } });
     expect(billName?.recipient).toMatchObject({ nameFirst: "Karine", nameLast: "Ruby", address1: "151 O'Connor St" });

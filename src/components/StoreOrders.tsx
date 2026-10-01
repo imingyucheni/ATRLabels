@@ -27,6 +27,11 @@ export interface StoreOrderView {
   issue?: "no_address" | "hidden";
   /** 以前发过同样商品组合时用的包裹（自动带出） */
   suggest?: Pkg | null;
+  /** 买家选的配送方式 / 留言 */
+  shippingMethod?: string | null;
+  note?: string | null;
+  /** 面单已经出好（有运单号），等后台回传店铺 */
+  labelReady?: boolean;
 }
 
 type Dims = { length: string; width: string; height: string; weight: string };
@@ -85,6 +90,10 @@ export default function StoreOrders({ rows, presets, senders, defaultUnit = 3 }:
   const [senderId, setSenderId] = useState<number | null>(senders.find((s) => s.isDefault)?.id ?? senders[0]?.id ?? null);
   const [error, setError] = useState<string | null>(null);
   const [showMissing, setShowMissing] = useState(false);
+  const [q, setQ] = useState("");
+  // 搜索：订单号、收件人、商品 / SKU
+  const kw = q.trim().toLowerCase();
+  const shown = kw ? rows.filter((r) => `${r.name} ${r.recipient} ${r.items}`.toLowerCase().includes(kw)) : rows;
   const [lu, wu] = units(unit);
 
   const all = open.length > 0 && open.every((r) => sel.has(r.id));
@@ -204,18 +213,24 @@ export default function StoreOrders({ rows, presets, senders, defaultUnit = 3 }:
       )}
 
       <div className="card table-wrap">
+        {rows.length > 5 && (
+          <div className="row" style={{ marginBottom: 10 }}>
+            <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("搜索订单号、收件人、商品 / SKU")} style={{ maxWidth: 320 }} />
+            {kw && <span className="small muted">{t("找到 {n} 单", { n: shown.length })}</span>}
+          </div>
+        )}
         <table className="list">
           <thead>
             <tr>
               <th style={{ width: 32 }}>
-                {open.length > 0 && <input type="checkbox" aria-label={t("全选")} checked={all} onChange={() => setSel(all ? new Set() : new Set(open.map((r) => r.id)))} />}
+                {open.length > 0 && <input type="checkbox" aria-label={t("全选")} checked={all} onChange={() => setSel(all ? new Set() : new Set((kw ? shown.filter((r) => r.status === "open" && !r.issue) : open).map((r) => r.id)))} />}
               </th>
               <th>{t("店铺订单号")}</th><th>{t("收件人")}</th><th>{t("商品")}</th>
               <th>{t("包裹（长×宽×高 {l} · 重量 {w}）", { l: lu, w: wu })}</th><th>{t("状态")}</th>
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => {
+            {shown.map((r) => {
               const editable = r.status === "open" && !r.issue;
               const d = dims[r.id] ?? EMPTY;
               const red = showMissing && sel.has(r.id) && !complete(d);
@@ -235,7 +250,11 @@ export default function StoreOrders({ rows, presets, senders, defaultUnit = 3 }:
                       </div>
                     )}
                   </td>
-                  <td className="small wrap">{r.items}</td>
+                  <td className="small wrap">
+                    {r.items}
+                    {r.shippingMethod && <div><span className="badge">{t("买家选：{m}", { m: r.shippingMethod })}</span></div>}
+                    {r.note && <div className="muted" title={r.note}>{t("留言：")}{r.note.length > 60 ? `${r.note.slice(0, 60)}…` : r.note}</div>}
+                  </td>
                   <td>
                     {editable ? (
                       <div className={`row-dims${red ? " missing" : ""}`}>
@@ -259,15 +278,17 @@ export default function StoreOrders({ rows, presets, senders, defaultUnit = 3 }:
                     )}
                   </td>
                   <td className="small">
-                    <span className={`badge ${STATUS[r.status][1]}`}>{t(STATUS[r.status][0])}</span>
+                    {r.status === "imported" && r.labelReady
+                      ? <span className="badge labeled">{t("已出单 · 回传中")}</span>
+                      : <span className={`badge ${STATUS[r.status][1]}`}>{t(STATUS[r.status][0])}</span>}
                     {r.trackingNo && <div>{r.shipmentId ? <a href={`/portal/shipments/${r.shipmentId}`}>{r.trackingNo}</a> : r.trackingNo}</div>}
-                    {r.status === "imported" && r.jobId && <div><a href={`/portal/batch?job=${r.jobId}`}>{t("去出单 →")}</a></div>}
+                    {r.status === "imported" && r.jobId && !r.labelReady && <div><a href={`/portal/batch?job=${r.jobId}`}>{t("去出单 →")}</a></div>}
                     {r.pushError && <div style={{ color: "var(--warn)", maxWidth: 240 }}>{t("回传店铺失败，稍后自动重试")}{t("：")}{r.pushError}</div>}
                   </td>
                 </tr>
               );
             })}
-            {!rows.length && <tr><td colSpan={6} className="muted">{t("没有订单")}</td></tr>}
+            {!shown.length && <tr><td colSpan={6} className="muted">{kw ? t("没有找到匹配的订单") : t("没有订单")}</td></tr>}
           </tbody>
         </table>
       </div>

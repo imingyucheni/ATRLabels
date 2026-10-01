@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { requireCustomer } from "@/lib/auth";
-import { listStoreOrders, listStores, ebaySettings, storesEnabled, type StoreOrderStatus } from "@/lib/stores";
+import { countStoreOrders, listStoreOrders, listStores, ebaySettings, storesEnabled, syncStaleStores, type StoreOrderStatus } from "@/lib/stores";
 import { packagesBySkuCombo, recentPackages, skuComboKey } from "@/lib/portal";
 import { listSenders } from "@/lib/senders";
 import { getSettings } from "@/lib/db";
@@ -25,9 +25,12 @@ export default async function PortalStoresPage({ searchParams }: { searchParams:
   const t = await getT();
   const sp = await searchParams;
   const tab = (TABS.find(([k]) => k === sp.status)?.[0] ?? "open") as StoreOrderStatus | "all";
+  // 超过 5 分钟没同步就先同步一下，打开就是最新的订单
+  await syncStaleStores(me.id);
   const stores = listStores(me.id);
   const rows = listStoreOrders(me.id, { status: tab });
-  const counts = Object.fromEntries(TABS.map(([k]) => [k, k === "all" ? 0 : listStoreOrders(me.id, { status: k }).length]));
+  const c = countStoreOrders(me.id);
+  const counts: Record<string, number> = { ...c, all: 0 };
   const ebayOn = ebaySettings().enabled || isMockMode();
   const combos = packagesBySkuCombo(me.id);
   const lang = await getLang();
@@ -67,7 +70,7 @@ export default async function PortalStoresPage({ searchParams }: { searchParams:
           id: r.id, platform: r.platform, storeName: r.storeName, name: r.name, orderedAt: r.orderedAt,
           recipient: [[r.order.recipient.nameFirst, r.order.recipient.nameLast].filter(Boolean).join(" "), r.order.recipient.address1, `${r.order.recipient.city} ${r.order.recipient.province ?? ""} ${r.order.recipient.zipCode}${r.order.recipient.country !== "US" ? ` ${r.order.recipient.country}` : ""}`.trim()].filter(Boolean).join(", "),
           items: r.order.items.map((i) => `${i.sku || i.name} ×${i.quantity}`).join("、"),
-          weightGrams: r.order.weightGrams, status: r.status, jobId: r.jobId, shipmentId: r.shipmentId, trackingNo: r.trackingNo, pushError: r.pushError, issue: r.order.issue, suggest: r.status === "open" ? combos.get(skuComboKey(r.order.items.map((i) => ({ sku: i.sku || i.name.slice(0, 40) || "ITEM", quantity: i.quantity })))) ?? null : null,
+          weightGrams: r.order.weightGrams, status: r.status, jobId: r.jobId, shipmentId: r.shipmentId, trackingNo: r.trackingNo, pushError: r.pushError, issue: r.order.issue, shippingMethod: r.order.shippingMethod ?? null, note: r.order.note ?? null, labelReady: !!r.trackingNo && r.shipmentStatus !== "cancelled" && r.shipmentStatus !== "pending", suggest: r.status === "open" ? combos.get(skuComboKey(r.order.items.map((i) => ({ sku: i.sku || i.name.slice(0, 40) || "ITEM", quantity: i.quantity })))) ?? null : null,
         }))}
       />
         </>

@@ -89,7 +89,8 @@ const ORDERS_QUERY = `query Orders($cursor: String) {
   orders(first: 50, after: $cursor, sortKey: CREATED_AT, reverse: true, query: "status:open AND (fulfillment_status:unshipped OR fulfillment_status:partial)") {
     pageInfo { hasNextPage endCursor }
     nodes {
-      id name createdAt email phone totalWeight
+      id name createdAt email phone totalWeight note
+      shippingLine { title }
       shippingAddress { firstName lastName company address1 address2 city provinceCode zip countryCodeV2 phone }
       billingAddress { firstName lastName phone }
       lineItems(first: 50) { nodes { sku name quantity requiresShipping originalUnitPriceSet { shopMoney { amount currencyCode } } } }
@@ -99,7 +100,8 @@ const ORDERS_QUERY = `query Orders($cursor: String) {
 }`;
 
 type GqlOrder = {
-  id: string; name: string; createdAt: string; email?: string | null; phone?: string | null; totalWeight?: string | number | null;
+  id: string; name: string; createdAt: string; email?: string | null; phone?: string | null; totalWeight?: string | number | null; note?: string | null;
+  shippingLine?: { title?: string | null } | null;
   billingAddress?: { firstName?: string | null; lastName?: string | null; phone?: string | null } | null;
   shippingAddress?: { firstName?: string | null; lastName?: string | null; company?: string | null; address1?: string | null; address2?: string | null; city?: string | null; provinceCode?: string | null; zip?: string | null; countryCodeV2?: string | null; phone?: string | null } | null;
   lineItems: { nodes: { sku?: string | null; name: string; quantity: number; requiresShipping?: boolean; originalUnitPriceSet?: { shopMoney?: { amount: string; currencyCode: string } } }[] };
@@ -148,6 +150,8 @@ export function normalizeShopifyOrder(o: GqlOrder): StoreOrder | null {
     // 只回传给还在等发货的 fulfillment order（我们自己的仓库发货）
     fulfillRefs: o.fulfillmentOrders.nodes.filter((f) => f.status === "OPEN" || f.status === "IN_PROGRESS").map((f) => ({ id: f.id })),
     ...(issue ? { issue } : {}),
+    ...(o.shippingLine?.title ? { shippingMethod: o.shippingLine.title.slice(0, 60) } : {}),
+    ...(o.note?.trim() ? { note: o.note.trim().slice(0, 300) } : {}),
   };
 }
 
@@ -225,6 +229,8 @@ export function mockShopifyGraphql(seed = 3): ShopifyGraphql & { pushed: unknown
       email: `${f.toLowerCase()}@example.com`,
       phone: null,
       totalWeight: 450 + i * 300,
+      shippingLine: { title: i === 1 ? "Express" : "Standard" },
+      note: i === 0 ? "Please leave at the front desk" : null,
       shippingAddress: { firstName: f, lastName: l, company: null, address1: a1, address2: null, city, provinceCode: st, zip, countryCodeV2: "US", phone: ph },
       lineItems: { nodes: [{ sku: i % 2 ? "MUG-WHITE" : "TS-BLK-M", name: i % 2 ? "Ceramic Mug" : "Cotton T-shirt - Black / M", quantity: 1 + (i % 2), requiresShipping: true, originalUnitPriceSet: { shopMoney: { amount: i % 2 ? "12.00" : "19.90", currencyCode: "USD" } } }] },
       fulfillmentOrders: { nodes: [{ id: `gid://shopify/FulfillmentOrder/${7001 + i}`, status: "OPEN" }] },
