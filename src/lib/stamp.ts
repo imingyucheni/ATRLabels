@@ -5,7 +5,7 @@
 import { degrees, PDFDocument, rgb, StandardFonts, type PDFFont } from "pdf-lib";
 import { getChannel, getCustomer, getSettings, type Shipment } from "./db";
 import { readLabel } from "./labels";
-import { mergeStamp, type StampConfig } from "./stampConfig";
+import { mergeStamp, presetForChannel, type StampConfig } from "./stampConfig";
 
 export * from "./stampConfig";
 
@@ -18,7 +18,9 @@ export * from "./stampConfig";
 export function stampFor(s: Shipment): StampConfig | null {
   const st = getSettings().stamp;
   const mode = getCustomer(s.customerId)?.stampMode ?? "inherit";
-  const ch = getChannel(s.channelCode)?.stamp;
+  const channel = getChannel(s.channelCode);
+  // 还没单独设置过的渠道用预设位置（USPS / FedEx），不用等“同步渠道”
+  const ch = channel ? channel.stamp ?? presetForChannel(channel.name) : null;
   if (mode === "off" || ch?.enabled === false) return null;
   if (st.autoDetect !== false && !s.labelNote?.trim()) {
     if (s.labelSku === "yes") return null;

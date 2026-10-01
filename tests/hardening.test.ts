@@ -204,3 +204,15 @@ describe("承运商通用出单错误给客户看中文说明", () => {
     expect(m).toContain("没有扣费");
   });
 });
+
+describe("FedEx 面单默认加印位置", () => {
+  it("FedEx 渠道用运单号下面的空白，USPS 不变，其他渠道没有预设", async () => {
+    const { presetForChannel, FEDEX_PRESET, USPS_PRESET } = await import("@/lib/stampConfig");
+    expect(presetForChannel("Fedex NG末端-N · GDE")).toBe(FEDEX_PRESET);
+    expect(presetForChannel("Fedex-Economy-SMP-TY · GDE")).toBe(FEDEX_PRESET);
+    expect(FEDEX_PRESET).toMatchObject({ x: 0.2, y: 3.9 });
+    expect(FEDEX_PRESET.enabled).toBeUndefined(); // 不强制开启，自动检查 / 全局开关决定
+    expect(presetForChannel("USPS-（91710） · SB")).toBe(USPS_PRESET);
+    expect(presetForChannel("GOFO-（91710） · SB")).toBeNull();
+  });
+});

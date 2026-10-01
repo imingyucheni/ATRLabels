@@ -57,8 +57,17 @@ export type StampOverride = Partial<Pick<StampConfig, "x" | "y" | "fontSize" | "
  */
 export const USPS_PRESET: StampOverride = { enabled: true, x: 0.15, y: 5.45, maxWidth: 2.8, fontSize: 10 };
 
+/**
+ * FedEx（Ground / Home Delivery / Economy）面单的默认加印位置：运单号 TRK# 下面、条码数字上面的空白
+ * （右边是邮编路由码，宽度留到它左边）。另一个可用的空白是最下面条码的下方（y ≈ 5.7，只放得下一行）。
+ * 不强制开启：面单自带 SKU 时自动检查会跳过，图片面单跟随全局开关。
+ */
+export const FEDEX_PRESET: StampOverride = { x: 0.2, y: 3.9, maxWidth: 2.5, fontSize: 10 };
+
 export function presetForChannel(name: string): StampOverride | null {
-  return /usps/i.test(name) ? USPS_PRESET : null;
+  if (/usps/i.test(name)) return USPS_PRESET;
+  if (/fedex/i.test(name)) return FEDEX_PRESET;
+  return null;
 }
 
 export function mergeStamp(base: StampConfig, o?: StampOverride | null): StampConfig {

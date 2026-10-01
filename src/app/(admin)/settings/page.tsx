@@ -1,3 +1,4 @@
+import { presetForChannel } from "@/lib/stampConfig";
 import { fmtTime } from "@/lib/time";
 import { localDate } from "@/lib/reports";
 import { labelSkuStats } from "@/lib/labelSku";
@@ -608,7 +609,7 @@ export default async function SettingsPage() {
         title={t("面单加印 SKU")}
         summary={[s.stamp.autoDetect !== false ? t("自动检查面单是否已有 SKU") : "", s.stamp.enabled ? t("所有渠道默认加印") : ""].filter(Boolean).join(" · ") || undefined}
       >
-        <StampSettings embedded global={s.stamp} detect={labelSkuStats()} channels={channels.filter((c) => c.enabled).map((c) => ({ code: c.code, name: c.name, stamp: c.stamp }))} />
+        <StampSettings embedded global={s.stamp} detect={labelSkuStats()} channels={channels.filter((c) => c.enabled).map((c) => ({ code: c.code, name: c.name, stamp: c.stamp ?? presetForChannel(c.name) }))} />
       </SettingsSection>
 
       {(() => {
