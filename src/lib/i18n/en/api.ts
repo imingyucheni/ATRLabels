@@ -68,4 +68,6 @@ export const api: Record<string, string> = {
   "package.unit 只能是 in/lb、cm/kg 或 cm/g": "package.unit must be in/lb, cm/kg or cm/g",
   "package.signature 只能是 none、direct、indirect 或 adult": "package.signature must be none, direct, indirect or adult",
   "items 最多 50 个": "At most 50 items",
+  "在线试调": "Try it online",
+  "API 文档": "API docs",
 };

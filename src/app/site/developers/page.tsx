@@ -99,6 +99,7 @@ curl -H "Authorization: Bearer ${key}" "${base}/orders/SO-1001/label?format=base
           {[["start", L("快速开始", "Quick start")], ["auth", L("鉴权与密钥", "Authentication")], ["endpoints", L("接口列表", "Endpoints")], ["fields", L("字段说明", "Fields")], ["status", L("订单状态", "Order status")], ["errors", L("错误码", "Error codes")], ["erp", L("ERP 对接说明", "ERP integration")]].map(([id, t]) => (
             <a key={id} href={`#${id}`}>{t}</a>
           ))}
+          <a href="/site/developers/reference" className="api-toc-primary">{L("在线试调（接口参考）", "Interactive reference")} ↗</a>
           <a href="/api/v1/openapi.json" target="_blank">OpenAPI JSON ↗</a>
         </div>
 

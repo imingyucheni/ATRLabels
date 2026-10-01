@@ -27,7 +27,10 @@ export default async function PortalApiPage() {
       <div className="card">
         <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
           <h2 style={{ margin: 0 }}>{t("接口信息")}</h2>
-          <a className="btn" href="/site/developers" target="_blank">{t("查看接口文档")} ↗</a>
+          <div className="row">
+            <a className="btn" href="/site/developers" target="_blank">{t("查看接口文档")} ↗</a>
+            <a className="btn" href="/site/developers/reference" target="_blank">{t("在线试调")} ↗</a>
+          </div>
         </div>
         <div className="api-info">
           <div><span className="muted small">Base URL</span><div><code>{base}</code></div></div>

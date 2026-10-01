@@ -88,9 +88,10 @@ export function openapiSpec(base: string, brand: string) {
     security: [{ bearer: [] }],
     components: { securitySchemes: { bearer: { type: "http", scheme: "bearer", description: "客户中心「API 对接」里生成的密钥：atr_live_…（正式）或 atr_test_…（测试，模拟出单不扣钱）" } } },
     paths: {
-      "/channels": { get: { summary: "可用渠道", responses: { 200: ok({ type: "array", items: { type: "object", properties: { channel: { type: "string" }, name: { type: "string" }, carrier: { type: "string" }, international: { type: "boolean" } } } }), 401: err } } },
+      "/channels": { get: { tags: ["渠道与报价 Rates"], summary: "可用渠道", responses: { 200: ok({ type: "array", items: { type: "object", properties: { channel: { type: "string" }, name: { type: "string" }, carrier: { type: "string" }, international: { type: "boolean" } } } }), 401: err } } },
       "/rates": {
         post: {
+          tags: ["渠道与报价 Rates"],
           summary: "运费试算",
           requestBody: { required: true, content: { "application/json": { schema: { ...shipment, properties: { ...shipment.properties, channel: { type: "string", description: "只算这个渠道（可选）" } } } } } },
           responses: { 200: ok({ type: "array", items: { type: "object", properties: { channel: { type: "string" }, name: { type: "string" }, carrier: { type: "string" }, available: { type: "boolean" }, price: { type: "number" }, currency: { type: "string" }, zone: { type: "string" }, error: { type: "string" } } } }), 400: err },
@@ -98,6 +99,7 @@ export function openapiSpec(base: string, brand: string) {
       },
       "/orders": {
         post: {
+          tags: ["订单 Orders"],
           summary: "出单（同一个 referenceNo 重复提交返回已有的单，不会重复扣费）",
           requestBody: {
             required: true,
@@ -120,18 +122,19 @@ export function openapiSpec(base: string, brand: string) {
           },
           responses: { 200: ok({ type: "object", properties: { created: { type: "boolean" }, order } }), 400: err, 402: err, 409: err, 422: err },
         },
-        get: { summary: "按 referenceNo 查单", parameters: [{ name: "referenceNo", in: "query", required: true, schema: { type: "string" } }], responses: { 200: ok(order), 404: err } },
+        get: { tags: ["订单 Orders"], summary: "按 referenceNo 查单", parameters: [{ name: "referenceNo", in: "query", required: true, schema: { type: "string" } }], responses: { 200: ok(order), 404: err } },
       },
-      "/orders/{no}": { get: { summary: "查单（运单号、状态、面单是否已出）", parameters: [noParam], responses: { 200: ok(order), 404: err } } },
+      "/orders/{no}": { get: { tags: ["订单 Orders"], summary: "查单（运单号、状态、面单是否已出）", parameters: [noParam], responses: { 200: ok(order), 404: err } } },
       "/orders/{no}/label": {
         get: {
+          tags: ["订单 Orders"],
           summary: "下载面单（默认 PDF；format=base64 返回 JSON）",
           parameters: [noParam, { name: "format", in: "query", schema: { type: "string", enum: ["pdf", "base64"] } }],
           responses: { 200: { description: "PDF 文件，或 { fileName, fileType, content }" }, 404: err, 410: err },
         },
       },
-      "/orders/{no}/cancel": { post: { summary: "取消", parameters: [noParam], responses: { 200: ok({ type: "object", properties: { done: { type: "boolean" }, message: { type: "string" }, order } }), 409: err } } },
-      "/balance": { get: { summary: "账户余额", responses: { 200: ok({ type: "object", properties: { balance: { type: "number" }, creditLimit: { type: "number" }, currency: { type: "string" } } }) } } },
+      "/orders/{no}/cancel": { post: { tags: ["订单 Orders"], summary: "取消", parameters: [noParam], responses: { 200: ok({ type: "object", properties: { done: { type: "boolean" }, message: { type: "string" }, order } }), 409: err } } },
+      "/balance": { get: { tags: ["账户 Account"], summary: "账户余额", responses: { 200: ok({ type: "object", properties: { balance: { type: "number" }, creditLimit: { type: "number" }, currency: { type: "string" } } }) } } },
     },
   };
 }
