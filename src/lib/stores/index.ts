@@ -8,6 +8,8 @@
 import { randomBytes } from "node:crypto";
 import { db, getSettings, getShipment } from "../db";
 import { createJob, senderFor, type ParsedOrder } from "../batch";
+import { getSender } from "../senders";
+import type { Address } from "../shipbest/types";
 import { validateRequest } from "../service";
 import { displayChannel } from "../channelDisplay";
 import { trackingUrl } from "../carriers";
@@ -401,11 +403,9 @@ export function listStoreOrders(customerId: number, opts: { status?: StoreOrderS
 export interface DefaultPackage { length: number; width: number; height: number; weight: number; unit: UnitSystem }
 
 /** 平台订单 → 下单请求：收件人、商品来自订单；包裹尺寸用客户选的默认值，重量优先用订单重量 */
-export function toShipmentRequest(o: StoreOrder, customerId: number, pkg: DefaultPackage): ShipmentRequest {
+export function toShipmentRequest(o: StoreOrder, sender: Address, pkg: DefaultPackage): ShipmentRequest {
   const unit = pkg.unit;
-  // 订单有重量（克）：换成包裹单位
-  const w = o.weightGrams > 0 ? (unit === 3 ? o.weightGrams / 453.59237 : unit === 2 ? o.weightGrams / 1000 : o.weightGrams) : pkg.weight;
-  const weight = Math.max(unit === 1 ? 1 : 0.01, Math.round(w * 100) / 100);
+  const weight = Math.max(unit === 1 ? 1 : 0.01, Math.round(pkg.weight * 100) / 100);
   const qty = o.items.reduce((a, i) => a + i.quantity, 0) || 1;
   const skuList: SkuItem[] = o.items.map((i) => ({
     sku: i.sku || i.name.slice(0, 40) || "ITEM",
@@ -423,7 +423,7 @@ export function toShipmentRequest(o: StoreOrder, customerId: number, pkg: Defaul
     unit,
   }));
   return {
-    sender: senderFor(customerId) ?? ({} as ShipmentRequest["sender"]),
+    sender,
     recipient: o.recipient,
     pkg: { length: pkg.length, width: pkg.width, height: pkg.height, weight, displayUnitSystem: unit, signServiceType: 0, insuranceService: 0, currency: "USD" },
     skuList,
@@ -431,16 +431,20 @@ export function toShipmentRequest(o: StoreOrder, customerId: number, pkg: Defaul
 }
 
 /** 勾选的订单生成一个批量下单批次，返回批次 ID（之后在批量下单页试算、选渠道、提交） */
-export function importToBatch(customerId: number, orderIds: number[], pkg: DefaultPackage, createdBy: "admin" | "customer"): number {
-  if (!orderIds.length) throw new Error("请勾选要导入的订单");
-  if (!(pkg.length > 0 && pkg.width > 0 && pkg.height > 0 && pkg.weight > 0)) throw new Error("请填写默认包裹尺寸和重量");
-  const picked = listStoreOrders(customerId, { status: "open" }).filter((r) => orderIds.includes(r.id));
+export function importToBatch(customerId: number, picks: { id: number; pkg: DefaultPackage }[], createdBy: "admin" | "customer", senderId?: number | null): number {
+  if (!picks.length) throw new Error("请勾选要导入的订单");
+  // 寄件地址：选了地址簿里的就用它，否则用客户默认寄件地址
+  const sender = senderId ? getSender(customerId, senderId)?.address : senderFor(customerId);
+  if (!sender?.address1) throw new Error("还没有寄件地址：请先在“账户设置 → 寄件地址簿”里添加寄件地址");
+  const pkgOf = new Map(picks.map((p) => [p.id, p.pkg]));
+  if (picks.some(({ pkg }) => !(pkg.length > 0 && pkg.width > 0 && pkg.height > 0 && pkg.weight > 0))) throw new Error("勾选的订单要填好长、宽、高和重量");
+  const picked = listStoreOrders(customerId, { status: "open" }).filter((r) => pkgOf.has(r.id));
   if (!picked.length) throw new Error("勾选的订单已经导入过或不存在，请刷新");
   // 缺收件地址 / 收件人被隐藏的不能导入
   const rows = picked.filter((r) => !r.order.issue);
   if (!rows.length) throw new Error("勾选的订单收件信息不全，不能导入");
   const orders: ParsedOrder[] = rows.map((r, i) => {
-    const req = toShipmentRequest(r.order, customerId, pkg);
+    const req = toShipmentRequest(r.order, sender, pkgOf.get(r.id)!);
     return { rowNo: i + 1, customerRef: r.name.slice(0, 50), fileChannel: "", req, errors: validateRequest(req) };
   });
   const platforms = [...new Set(rows.map((r) => r.platform))].map((p) => (p === "shopify" ? "Shopify" : "eBay")).join(" + ");

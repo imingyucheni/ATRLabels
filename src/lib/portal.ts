@@ -83,6 +83,30 @@ export function recentPackages(customerId: number, limit = 6): RecentPackage[] {
   return [...m.values()].sort((a, b) => b.count - a.count).slice(0, limit);
 }
 
+/** 一单里的商品组合（SKU × 数量，排好序），用来认出“以前发过一模一样的” */
+export function skuComboKey(items: { sku: string; quantity: number }[]): string {
+  return items.map((i) => `${(i.sku ?? "").trim().toUpperCase()}×${Number(i.quantity) || 1}`).sort().join("|");
+}
+
+/** 以前发过的商品组合 → 最近一次用的包裹（店铺订单导入时自动带出尺寸、重量） */
+export function packagesBySkuCombo(customerId: number): Map<string, RecentPackage> {
+  const rows = db()
+    .prepare("SELECT sku_json, package_json FROM shipments WHERE customer_id = ? AND created_at >= datetime('now', '-180 days') ORDER BY id DESC LIMIT 2000")
+    .all(customerId) as { sku_json: string; package_json: string }[];
+  const m = new Map<string, RecentPackage>();
+  for (const r of rows) {
+    try {
+      const key = skuComboKey(JSON.parse(r.sku_json) as { sku: string; quantity: number }[]);
+      if (!key || m.has(key)) continue;
+      const p = JSON.parse(r.package_json) as { length: number; width: number; height: number; weight: number; displayUnitSystem: 1 | 2 | 3 };
+      if (p.length > 0 && p.width > 0 && p.height > 0 && p.weight > 0) m.set(key, { length: p.length, width: p.width, height: p.height, weight: p.weight, unit: p.displayUnitSystem, count: 1 });
+    } catch {
+      // 跳过
+    }
+  }
+  return m;
+}
+
 /** 客户发过的商品（按 SKU 去重，取最近一次的品名 / 申报价 / 海关编码），下单时输入 SKU 自动带出 */
 export function skuPresets(customerId: number, limit = 200): SkuPreset[] {
   const rows = db().prepare("SELECT sku_json FROM shipments WHERE customer_id = ? ORDER BY id DESC LIMIT 1000").all(customerId) as { sku_json: string }[];

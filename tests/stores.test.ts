@@ -27,7 +27,7 @@ describe("电商店铺对接（Shopify / eBay）", () => {
 
   /** 导入 → 试算 → 提交 → 等面单 */
   const shipAll = async (orderIds: number[]) => {
-    const jobId = stores.importToBatch(cid, orderIds, pkg, "customer");
+    const jobId = stores.importToBatch(cid, orderIds.map((id) => ({ id, pkg })), "customer");
     batch.ensureRunning(jobId);
     await waitJob(jobId, ["ready"]);
     batch.setSelected(jobId, "all");
@@ -145,6 +145,41 @@ describe("电商店铺对接（Shopify / eBay）", () => {
     expect(normalizeShopifyOrder({ ...base, shippingAddress: { address1: "151 O'Connor St", city: "Ottawa", zip: "K2P 2L8", countryCodeV2: "CA" } })?.issue).toBe("hidden");
     expect(normalizeShopifyOrder({ ...base, lineItems: { nodes: [{ sku: "G", name: "Gift card", quantity: 1, requiresShipping: false }] }, shippingAddress: null })).toBeNull();
   });
+
+  it("每单自己的包裹；没有寄件地址时不能导入；发过的商品组合下次自动带出尺寸", async () => {
+    const portal = await import("@/lib/portal");
+    const id = stores.saveShopifyStore({ customerId: cid, shop: "third-demo.myshopify.com", clientId: "a", clientSecret: "b" });
+    stores.saveStoreToken(id, { accessToken: "x", scope: "read_orders" } as never);
+    // 直接用模拟店铺的数据：重新连上演示店铺的订单已经在 open 里没有了，这里造两单
+    const { normalizeShopifyOrder } = await import("@/lib/stores/shopify");
+    const mk = (n: number, sku: string) => normalizeShopifyOrder({
+      id: `gid://shopify/Order/7${n}`, name: `#70${n}`, createdAt: "2026-10-01T00:00:00Z",
+      shippingAddress: { firstName: "Amy", lastName: "Lee", address1: "1 Main St", city: "Austin", provinceCode: "TX", zip: "78701", countryCodeV2: "US", phone: "5125550100" },
+      lineItems: { nodes: [{ sku, name: sku, quantity: 1, requiresShipping: true }] },
+      fulfillmentOrders: { nodes: [{ id: `gid://shopify/FulfillmentOrder/7${n}`, status: "OPEN" }] },
+    })!;
+    const dbc = db.db();
+    for (const [n, sku] of [[1, "BOX-A"], [2, "BOX-B"]] as const) dbc.prepare("INSERT INTO store_orders (store_id, ext_id, name, data_json) VALUES (?,?,?,?)").run(id, mk(n, sku).extId, mk(n, sku).name, JSON.stringify(mk(n, sku)));
+    const open = stores.listStoreOrders(cid, { status: "open", storeId: id });
+    expect(open.length).toBe(2);
+    // 没有寄件地址
+    const lonely = db.saveCustomer(null, { name: "没寄件地址", contact: null, phone: null, email: null, note: null, markup: {} });
+    db.saveSettings({ sender: null as never });
+    expect(() => stores.importToBatch(lonely, [{ id: open[0].id, pkg }], "customer")).toThrow(/寄件地址/);
+    db.saveSettings({ sender: { nameFirst: "ATR", nameLast: "Warehouse", country: "US", province: "CA", city: "Chino", address1: "13950 Central Ave", zipCode: "91710", phone: "9095550100" } });
+    // 尺寸没填完
+    expect(() => stores.importToBatch(cid, [{ id: open[0].id, pkg: { ...pkg, height: 0 } }], "customer")).toThrow(/长、宽、高/);
+    const a = open.find((o) => o.name === "#701")!, b = open.find((o) => o.name === "#702")!;
+    const jobId = stores.importToBatch(cid, [{ id: a.id, pkg: { length: 6, width: 6, height: 6, weight: 0.5, unit: 3 } }, { id: b.id, pkg: { length: 20, width: 12, height: 10, weight: 7, unit: 3 } }], "customer");
+    const rows = batch.getJob(jobId)!.rows;
+    const byRef = Object.fromEntries(rows.map((r) => [r.customerRef, r.pkg]));
+    expect(byRef["#701"]).toBe("6×6×6 in · 0.5 lb");
+    expect(byRef["#702"]).toBe("20×12×10 in · 7 lb");
+    expect(portal.skuComboKey([{ sku: "b", quantity: 2 }, { sku: "A", quantity: 1 }])).toBe("A×1|B×2");
+    // 已出过单的商品组合能认出来（前面 Shopify 演示店铺发过 TS-BLK-M ×1）
+    const combos = portal.packagesBySkuCombo(cid);
+    expect(combos.get("TS-BLK-M×1")).toMatchObject({ length: 10, width: 8, height: 4 });
+  }, 60_000);
 
   it("真实店铺还没授权：同步会报错并记下原因", async () => {
     const id = stores.saveShopifyStore({ customerId: cid, shop: "second-demo.myshopify.com", clientId: "a", clientSecret: "b" });

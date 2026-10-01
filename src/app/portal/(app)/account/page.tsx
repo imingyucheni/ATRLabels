@@ -31,7 +31,7 @@ export default async function PortalAccount() {
           </select>
         </div>
       </FlashForm>
-      <SenderBook initial={listSenders(me.id)} />
+      <div id="senders"><SenderBook initial={listSenders(me.id)} /></div>
       {notifyReady() && (() => {
         const np = getNotifyPrefs(me.id);
         return (

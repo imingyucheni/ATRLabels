@@ -2,7 +2,9 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { requireCustomer } from "@/lib/auth";
 import { listStoreOrders, listStores, ebaySettings, storesEnabled, type StoreOrderStatus } from "@/lib/stores";
-import { recentPackages } from "@/lib/portal";
+import { packagesBySkuCombo, recentPackages, skuComboKey } from "@/lib/portal";
+import { listSenders } from "@/lib/senders";
+import { getSettings } from "@/lib/db";
 import { isMockMode } from "@/lib/shipbest/client";
 import { fmtTime } from "@/lib/time";
 import { headers } from "next/headers";
@@ -27,6 +29,7 @@ export default async function PortalStoresPage({ searchParams }: { searchParams:
   const rows = listStoreOrders(me.id, { status: tab });
   const counts = Object.fromEntries(TABS.map(([k]) => [k, k === "all" ? 0 : listStoreOrders(me.id, { status: k }).length]));
   const ebayOn = ebaySettings().enabled || isMockMode();
+  const combos = packagesBySkuCombo(me.id);
   const lang = await getLang();
   const tMsg = (m: string) => translateMessage(lang, m);
   return (
@@ -57,11 +60,13 @@ export default async function PortalStoresPage({ searchParams }: { searchParams:
       <StoreOrders
         key={tab}
         presets={recentPackages(me.id)}
+        senders={listSenders(me.id).map((s) => ({ id: s.id, label: s.label, isDefault: s.isDefault }))}
+        defaultUnit={getSettings().defaultUnit}
         rows={rows.map((r) => ({
           id: r.id, platform: r.platform, storeName: r.storeName, name: r.name, orderedAt: r.orderedAt,
           recipient: [[r.order.recipient.nameFirst, r.order.recipient.nameLast].filter(Boolean).join(" "), r.order.recipient.address1, `${r.order.recipient.city} ${r.order.recipient.province ?? ""} ${r.order.recipient.zipCode}${r.order.recipient.country !== "US" ? ` ${r.order.recipient.country}` : ""}`.trim()].filter(Boolean).join(", "),
           items: r.order.items.map((i) => `${i.sku || i.name} ×${i.quantity}`).join("、"),
-          weightGrams: r.order.weightGrams, status: r.status, jobId: r.jobId, shipmentId: r.shipmentId, trackingNo: r.trackingNo, pushError: r.pushError, issue: r.order.issue,
+          weightGrams: r.order.weightGrams, status: r.status, jobId: r.jobId, shipmentId: r.shipmentId, trackingNo: r.trackingNo, pushError: r.pushError, issue: r.order.issue, suggest: r.status === "open" ? combos.get(skuComboKey(r.order.items.map((i) => ({ sku: i.sku || i.name.slice(0, 40) || "ITEM", quantity: i.quantity })))) ?? null : null,
         }))}
       />
         </>

@@ -434,17 +434,15 @@ export async function syncMyStoresAction(_: FlashState): Promise<FlashState> {
 }
 
 /** 勾选的店铺订单导入批量下单（默认包裹尺寸由客户选），返回批次 ID */
-export async function importStoreOrdersAction(input: { orderIds: number[]; pkg: { length: number; width: number; height: number; weight: number; unit: number } }): Promise<{ jobId?: number; error?: string }> {
+export async function importStoreOrdersAction(input: { senderId?: number | null; orders: { id: number; pkg: { length: number; width: number; height: number; weight: number; unit: number } }[] }): Promise<{ jobId?: number; error?: string }> {
   const me = await storeCustomer();
   if (!me) return { error: await tMsg(STORES_LOCKED) };
   try {
-    const u = Number(input.pkg.unit);
-    const jobId = importToBatch(
-      me.id,
-      (input.orderIds ?? []).map(Number).filter((x) => x > 0).slice(0, 500),
-      { length: n(input.pkg.length), width: n(input.pkg.width), height: n(input.pkg.height), weight: n(input.pkg.weight), unit: (u === 1 || u === 2 ? u : 3) as 1 | 2 | 3 },
-      await portalActor(),
-    );
+    const picks = (input.orders ?? []).slice(0, 500).map(({ id, pkg }) => {
+      const u = Number(pkg?.unit);
+      return { id: Number(id), pkg: { length: n(pkg?.length), width: n(pkg?.width), height: n(pkg?.height), weight: n(pkg?.weight), unit: (u === 1 || u === 2 ? u : 3) as 1 | 2 | 3 } };
+    }).filter((p) => p.id > 0);
+    const jobId = importToBatch(me.id, picks, await portalActor(), Number(input.senderId) || null);
     revalidatePath("/portal", "layout");
     return { jobId };
   } catch (e) {

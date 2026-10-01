@@ -1435,3 +1435,16 @@ tr.row-disabled td:first-child { opacity: 0.55; }
 .copy-line { display: flex; gap: 6px; align-items: center; margin-top: 4px; min-width: 0; }
 .copy-line code { flex: 1; min-width: 0; overflow-wrap: anywhere; background: var(--sunken); padding: 5px 8px; border-radius: 6px; font-size: 12.5px; }
 .spin { animation: spin 1s linear infinite; }
+.bulk-pkg { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 12px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; }
+.dim-in { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; color: var(--text-2); }
+.dim-in input { width: 64px; min-width: 0; padding: 5px 7px; -moz-appearance: textfield; }
+.dim-in i { font-style: normal; color: var(--muted); font-size: 12px; }
+.row-dims { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; min-width: 250px; }
+.row-dim { display: inline-flex; align-items: center; gap: 2px; }
+.row-dim input { width: 50px; min-width: 0; padding: 5px 4px; font-size: 13px; text-align: center; -moz-appearance: textfield; }
+.row-dim input::-webkit-outer-spin-button, .row-dim input::-webkit-inner-spin-button, .dim-in input::-webkit-outer-spin-button, .dim-in input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.row-dim:last-of-type input { width: 58px; }
+.row-dim .sep { color: var(--muted); font-weight: 400; padding: 0 1px; }
+.row-dims .small { flex-basis: 100%; }
+.row-dims.missing input:placeholder-shown, .row-dims.missing input:invalid { border-color: var(--err); background: var(--err-soft); }
+table.list tr.on td { background: color-mix(in srgb, var(--series-1, #3b82f6) 5%, transparent); }
