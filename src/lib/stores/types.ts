@@ -49,4 +49,6 @@ export interface PlatformAdapter {
   pushFulfillment(order: StoreOrder, t: TrackingPush): Promise<string | null>;
   /** 取消回传过的发货（平台不支持时抛错说明） */
   cancelFulfillment(fulfillmentId: string): Promise<void>;
+  /** 是不是测试用的店铺（Shopify 开发店铺 / eBay 沙盒）：模拟面单只回传到这种店铺 */
+  isSandbox(): Promise<boolean>;
 }

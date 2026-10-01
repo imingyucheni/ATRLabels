@@ -113,6 +113,7 @@ type EbayOrder = {
   creationDate: string;
   orderFulfillmentStatus?: string;
   cancelStatus?: { cancelState?: string };
+  orderPaymentStatus?: string;
   buyer?: { username?: string };
   buyerCheckoutNotes?: string;
   fulfillmentStartInstructions?: { shippingStep?: { shippingServiceCode?: string; shipTo?: { fullName?: string; companyName?: string; contactAddress?: { addressLine1?: string; addressLine2?: string; city?: string; stateOrProvince?: string; postalCode?: string; countryCode?: string }; primaryPhone?: { phoneNumber?: string }; email?: string } } }[];
@@ -124,6 +125,8 @@ export function normalizeEbayOrder(o: EbayOrder): (StoreOrder & { buyer?: string
   const a = to?.contactAddress;
   const items = (o.lineItems ?? []).filter((l) => l.lineItemFulfillmentStatus !== "FULFILLED" && (l.quantity ?? 0) > 0);
   if (!to || !a || !items.length) return null;
+  // 只发已付款的（没付款 / 付款失败的不同步）
+  if (o.orderPaymentStatus && !["PAID", "PARTIALLY_REFUNDED"].includes(o.orderPaymentStatus)) return null;
   const parts = (to.fullName ?? "").trim().split(/\s+/);
   const recipient: Address = {
     nameFirst: parts[0] ?? "",
@@ -160,7 +163,12 @@ const EBAY_CARRIER: Record<string, string> = { usps: "USPS", fedex: "FedEx", ups
 export const ebayCarrier = (carrierId: string) => EBAY_CARRIER[carrierId] ?? "Other";
 
 export class EbayAdapter implements PlatformAdapter {
-  constructor(private rest: EbayRest) {}
+  /** sandbox：连的是 eBay 沙盒（测试环境） */
+  constructor(private rest: EbayRest, private sandbox = false) {}
+
+  async isSandbox() {
+    return this.sandbox;
+  }
 
   async fetchOpenOrders(): Promise<FetchedOrders> {
     const orders: StoreOrder[] = [];

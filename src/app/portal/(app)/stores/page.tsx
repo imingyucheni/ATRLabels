@@ -70,7 +70,7 @@ export default async function PortalStoresPage({ searchParams }: { searchParams:
           id: r.id, platform: r.platform, storeName: r.storeName, name: r.name, orderedAt: r.orderedAt,
           recipient: [[r.order.recipient.nameFirst, r.order.recipient.nameLast].filter(Boolean).join(" "), r.order.recipient.address1, `${r.order.recipient.city} ${r.order.recipient.province ?? ""} ${r.order.recipient.zipCode}${r.order.recipient.country !== "US" ? ` ${r.order.recipient.country}` : ""}`.trim()].filter(Boolean).join(", "),
           items: r.order.items.map((i) => `${i.sku || i.name} ×${i.quantity}`).join("、"),
-          weightGrams: r.order.weightGrams, status: r.status, jobId: r.jobId, shipmentId: r.shipmentId, trackingNo: r.trackingNo, pushError: r.pushError, issue: r.order.issue, shippingMethod: r.order.shippingMethod ?? null, note: r.order.note ?? null, labelReady: !!r.trackingNo && r.shipmentStatus !== "cancelled" && r.shipmentStatus !== "pending", suggest: r.status === "open" ? combos.get(skuComboKey(r.order.items.map((i) => ({ sku: i.sku || i.name.slice(0, 40) || "ITEM", quantity: i.quantity })))) ?? null : null,
+          weightGrams: r.order.weightGrams, status: r.status, jobId: r.jobId, shipmentId: r.shipmentId, trackingNo: r.trackingNo, pushError: r.pushError, pushNote: r.pushNote, issue: r.order.issue, shippingMethod: r.order.shippingMethod ?? null, note: r.order.note ?? null, labelReady: !!r.trackingNo && r.shipmentStatus !== "cancelled" && r.shipmentStatus !== "pending", suggest: r.status === "open" ? combos.get(skuComboKey(r.order.items.map((i) => ({ sku: i.sku || i.name.slice(0, 40) || "ITEM", quantity: i.quantity })))) ?? null : null,
         }))}
       />
         </>

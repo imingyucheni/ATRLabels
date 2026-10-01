@@ -86,7 +86,7 @@ export function shopifyHttp(shop: string, accessToken: string): ShopifyGraphql {
 }
 
 const ORDERS_QUERY = `query Orders($cursor: String) {
-  orders(first: 50, after: $cursor, sortKey: CREATED_AT, reverse: true, query: "status:open AND (fulfillment_status:unshipped OR fulfillment_status:partial)") {
+  orders(first: 50, after: $cursor, sortKey: CREATED_AT, reverse: true, query: "status:open AND (fulfillment_status:unshipped OR fulfillment_status:partial) AND (financial_status:paid OR financial_status:partially_paid OR financial_status:partially_refunded OR financial_status:authorized)") {
     pageInfo { hasNextPage endCursor }
     nodes {
       id name createdAt email phone totalWeight note
@@ -195,6 +195,12 @@ export class ShopifyAdapter implements PlatformAdapter {
     return r.fulfillment?.id ?? null;
   }
 
+  /** Shopify 开发店铺（Dev Dashboard / Partner 建的测试店铺） */
+  async isSandbox() {
+    const d = (await this.gql(`query Plan { shop { plan { partnerDevelopment publicDisplayName } } }`)) as { shop: { plan: { partnerDevelopment?: boolean; publicDisplayName?: string } } };
+    return !!d.shop?.plan?.partnerDevelopment || d.shop?.plan?.publicDisplayName === "Development";
+  }
+
   async cancelFulfillment(fulfillmentId: string) {
     const d = (await this.gql(`mutation Cancel($id: ID!) { fulfillmentCancel(id: $id) { fulfillment { id status } userErrors { field message } } }`, { id: fulfillmentId })) as {
       fulfillmentCancel: { userErrors: { message: string }[] };
@@ -214,6 +220,7 @@ export function mockShopifyGraphql(seed = 3): ShopifyGraphql & { pushed: unknown
     ["David", "Wilson", "77 Pine Rd", "Seattle", "WA", "98101", "2065550104"],
   ];
   const fn = (async (query: string, variables?: Record<string, unknown>) => {
+    if (query.includes("partnerDevelopment")) return { shop: { plan: { partnerDevelopment: true, publicDisplayName: "Development" } } };
     if (query.includes("fulfillmentCreate")) {
       pushed.push(variables?.fulfillment);
       return { fulfillmentCreate: { fulfillment: { id: `gid://shopify/Fulfillment/${900 + pushed.length}`, status: "SUCCESS" }, userErrors: [] } };

@@ -178,4 +178,6 @@ export const stores: Record<string, string> = {
   "留言：": "Note: ",
   "已出单 · 回传中": "Label bought · syncing to store",
   "没有找到匹配的订单": "No matching orders",
+  "已出单 · 未回传": "Label bought · not synced",
+  "模拟面单，没有回传到正式店铺": "Simulated label — not pushed to a live store",
 };

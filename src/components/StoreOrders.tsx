@@ -32,6 +32,8 @@ export interface StoreOrderView {
   note?: string | null;
   /** 面单已经出好（有运单号），等后台回传店铺 */
   labelReady?: boolean;
+  /** 没回传到店铺的原因（模拟面单不回传到正式店铺） */
+  pushNote?: string | null;
 }
 
 type Dims = { length: string; width: string; height: string; weight: string };
@@ -280,7 +282,10 @@ export default function StoreOrders({ rows, presets, senders, defaultUnit = 3 }:
                   <td className="small">
                     {r.status === "imported" && r.labelReady
                       ? <span className="badge labeled">{t("已出单 · 回传中")}</span>
-                      : <span className={`badge ${STATUS[r.status][1]}`}>{t(STATUS[r.status][0])}</span>}
+                      : r.status === "shipped" && r.pushNote
+                        ? <span className="badge">{t("已出单 · 未回传")}</span>
+                        : <span className={`badge ${STATUS[r.status][1]}`}>{t(STATUS[r.status][0])}</span>}
+                    {r.pushNote && <div className="muted">{t(r.pushNote)}</div>}
                     {r.trackingNo && <div>{r.shipmentId ? <a href={`/portal/shipments/${r.shipmentId}`}>{r.trackingNo}</a> : r.trackingNo}</div>}
                     {r.status === "imported" && r.jobId && !r.labelReady && <div><a href={`/portal/batch?job=${r.jobId}`}>{t("去出单 →")}</a></div>}
                     {r.pushError && <div style={{ color: "var(--warn)", maxWidth: 240 }}>{t("回传店铺失败，稍后自动重试")}{t("：")}{r.pushError}</div>}

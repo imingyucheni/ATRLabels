@@ -197,6 +197,28 @@ describe("电商店铺对接（Shopify / eBay）", () => {
     stores.deleteStore(id);
   });
 
+  it("模拟面单只回传到测试店铺：正式店铺不回传；判断结果记在店铺上", async () => {
+    const { ShopifyAdapter } = await import("@/lib/stores/shopify");
+    const plan = (dev: boolean, name = "Basic") => new ShopifyAdapter((async () => ({ shop: { plan: { partnerDevelopment: dev, publicDisplayName: name } } })) as never);
+    expect(await plan(true).isSandbox()).toBe(true);
+    expect(await plan(false, "Development").isSandbox()).toBe(true);
+    expect(await plan(false, "Grow").isSandbox()).toBe(false);
+    const { EbayAdapter } = await import("@/lib/stores/ebay");
+    expect(await new EbayAdapter((async () => ({})) as never, false).isSandbox()).toBe(false);
+    expect(await new EbayAdapter((async () => ({})) as never, true).isSandbox()).toBe(true);
+  });
+
+  it("只同步已付款的订单（eBay 没付款的不要）", async () => {
+    const { normalizeEbayOrder } = await import("@/lib/stores/ebay");
+    const base = {
+      orderId: "1-1", creationDate: "2026-10-01T00:00:00Z", orderFulfillmentStatus: "NOT_STARTED",
+      fulfillmentStartInstructions: [{ shippingStep: { shipTo: { fullName: "A B", contactAddress: { addressLine1: "1 Main", city: "Austin", stateOrProvince: "TX", postalCode: "78701", countryCode: "US" } } } }],
+      lineItems: [{ lineItemId: "1", sku: "X", title: "X", quantity: 1 }],
+    };
+    expect(normalizeEbayOrder({ ...base, orderPaymentStatus: "PENDING" } as never)).toBeNull();
+    expect(normalizeEbayOrder({ ...base, orderPaymentStatus: "PAID" } as never)).not.toBeNull();
+  });
+
   it("真实店铺还没授权：同步会报错并记下原因", async () => {
     const id = stores.saveShopifyStore({ customerId: cid, shop: "second-demo.myshopify.com", clientId: "a", clientSecret: "b" });
     expect(stores.getStore(id)?.status).toBe("pending"); // 真实店铺要授权

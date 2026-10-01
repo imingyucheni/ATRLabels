@@ -64,6 +64,9 @@ function conn() {
       customer_id INTEGER PRIMARY KEY,
       enabled_at TEXT NOT NULL DEFAULT (datetime('now'))
     );`);
+    // 后加的列：没有回传到店铺的原因（例如模拟面单不回传到正式店铺）
+    const cols = (c.prepare("PRAGMA table_info(store_orders)").all() as { name: string }[]).map((x) => x.name);
+    if (!cols.includes("push_note")) c.exec("ALTER TABLE store_orders ADD COLUMN push_note TEXT");
     ready = c;
   }
   return c;
@@ -295,7 +298,7 @@ export function adapterFor(id: number): PlatformAdapter {
     let m = mocks.get(id);
     if (!m) {
       const mock = r.platform === "shopify" ? mockShopifyGraphql() : mockEbayRest();
-      const a = r.platform === "shopify" ? new ShopifyAdapter(mock as ReturnType<typeof mockShopifyGraphql>) : new EbayAdapter(mock as ReturnType<typeof mockEbayRest>);
+      const a = r.platform === "shopify" ? new ShopifyAdapter(mock as ReturnType<typeof mockShopifyGraphql>) : new EbayAdapter(mock as ReturnType<typeof mockEbayRest>, true);
       m = Object.assign(a, { mock });
       mocks.set(id, m);
     }
@@ -317,6 +320,7 @@ export function adapterFor(id: number): PlatformAdapter {
       }
       return cur.accessToken;
     }),
+    s.env === "sandbox",
   );
 }
 
@@ -341,6 +345,8 @@ export interface StoreOrderRow {
   shipmentStatus: string | null;
   pushedAt: string | null;
   pushError: string | null;
+  /** 没回传的原因（模拟面单不回传到正式店铺） */
+  pushNote: string | null;
 }
 
 /** 从店铺拉未发货订单：新的加进来；已导入 / 已发货的不动；店铺里已经不用发的（取消、别处发货）标记关闭 */
@@ -433,7 +439,7 @@ export function listStoreOrders(customerId: number, opts: { status?: StoreOrderS
       id: r.id, storeId: r.store_id, platform: r.platform, storeName: r.store_name, extId: r.ext_id, name: r.name, orderedAt: r.ordered_at,
       order: JSON.parse(r.data_json) as StoreOrder, status: r.status, jobId: r.job_id, shipmentId,
       trackingNo: shipmentId ? (r.tracking_no as string | null) ?? null : null, shipmentStatus: (r.shipment_status as string | null) ?? null,
-      pushedAt: r.pushed_at, pushError: r.push_error,
+      pushedAt: r.pushed_at, pushError: r.push_error, pushNote: r.push_note ?? null,
     };
   });
 }
@@ -514,6 +520,18 @@ function trackingFor(platform: Platform, channelCode: string, trackingNo: string
  * - 导入的订单出了面单（有运单号）→ 回传店铺，状态改成“已发货”
  * - 回传过的面单被取消 → Shopify 撤回发货，订单回到“已导入”（重新出单后会再回传新运单号）
  */
+/** 店铺是不是测试店铺（Shopify 开发店铺 / eBay 沙盒）；查一次记在店铺配置里 */
+async function storeIsSandbox(storeId: number, adapter: PlatformAdapter): Promise<boolean> {
+  const r = row(storeId);
+  if (!r) return false;
+  if (isDemo(r)) return true;
+  const cfg = r.config_json ? JSON.parse(r.config_json) : {};
+  if (typeof cfg.sandbox === "boolean" && r.platform === "shopify") return cfg.sandbox;
+  const v = await adapter.isSandbox();
+  if (r.platform === "shopify") conn().prepare("UPDATE store_connections SET config_json = ? WHERE id = ?").run(JSON.stringify({ ...cfg, sandbox: v }), storeId);
+  return v;
+}
+
 export async function pushPendingFulfillments(limit = 20): Promise<number> {
   releaseOrphans();
   const c = conn();
@@ -542,15 +560,22 @@ export async function pushPendingFulfillments(limit = 20): Promise<number> {
       const adapter = adapterFor(o.store_id);
       // 之前回传的那张面单取消了（或批次里换成了新单）：先撤回旧的
       const old = o.shipment_id ? getShipment(o.shipment_id) : null;
-      if (o.status === "shipped" && o.fulfillment_id && (old?.status === "cancelled" || o.shipment_id !== o.row_shipment)) {
-        if (o.platform === "shopify") await adapter.cancelFulfillment(o.fulfillment_id);
-        c.prepare("UPDATE store_orders SET status = 'imported', shipment_id = NULL, fulfillment_id = NULL, pushed_at = NULL, push_error = NULL, updated_at = datetime('now') WHERE id = ?").run(o.id);
+      if (o.status === "shipped" && (old?.status === "cancelled" || o.shipment_id !== o.row_shipment)) {
+        // 没回传过（模拟面单）就不用去店铺撤回
+        if (o.platform === "shopify" && o.fulfillment_id) await adapter.cancelFulfillment(o.fulfillment_id);
+        c.prepare("UPDATE store_orders SET status = 'imported', shipment_id = NULL, fulfillment_id = NULL, pushed_at = NULL, push_error = NULL, push_note = NULL, updated_at = datetime('now') WHERE id = ?").run(o.id);
         o.status = "imported";
       }
       const s = getShipment(o.row_shipment);
       if (o.status !== "imported" || !s?.trackingNo || s.status === "cancelled" || s.status === "pending" || s.status === "exception") continue;
+      // 模拟面单（内部测试账号 / 测试环境）：只回传到测试店铺，不给正式店铺的真实订单标上假运单号
+      if (s.isTest && !(await storeIsSandbox(o.store_id, adapter))) {
+        c.prepare("UPDATE store_orders SET status = 'shipped', shipment_id = ?, fulfillment_id = NULL, pushed_at = NULL, push_error = NULL, push_note = ?, updated_at = datetime('now') WHERE id = ?")
+          .run(s.id, "模拟面单，没有回传到正式店铺", o.id);
+        continue;
+      }
       const fid = await adapter.pushFulfillment(order, trackingFor(o.platform, s.channelCode, s.trackingNo));
-      c.prepare("UPDATE store_orders SET status = 'shipped', shipment_id = ?, fulfillment_id = ?, pushed_at = datetime('now'), push_error = NULL, updated_at = datetime('now') WHERE id = ?").run(s.id, fid, o.id);
+      c.prepare("UPDATE store_orders SET status = 'shipped', shipment_id = ?, fulfillment_id = ?, pushed_at = datetime('now'), push_error = NULL, push_note = NULL, updated_at = datetime('now') WHERE id = ?").run(s.id, fid, o.id);
       pushed++;
     } catch (e) {
       c.prepare("UPDATE store_orders SET push_error = ?, updated_at = datetime('now') WHERE id = ?").run((e as Error).message.slice(0, 300), o.id);
