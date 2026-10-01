@@ -68,9 +68,10 @@ export default async function Dashboard() {
       })()}
       <div className="stats">
         <div className="stat"><div className="muted">{t("今日出单")}</div><div className="v">{today.count}</div>{today.pending > 0 && <div className="small muted">{t("含面单生成中 {n} 单", { n: today.pending })}</div>}</div>
-        <div className="stat"><div className="muted">{t("今日收入")}</div><div className="v">{money(today.revenue)}</div></div>
+        <div className="stat"><div className="muted">{t("今日打单金额")}</div><div className="v">{money(today.revenue)}</div></div>
         <div className="stat"><div className="muted">{t("今日利润")}</div><div className="v">{money(today.profit)}</div></div>
         <div className="stat"><div className="muted">{t("本月出单")}</div><div className="v">{month.count}</div></div>
+        <div className="stat"><div className="muted">{t("本月打单金额")}</div><div className="v">{money(month.revenue)}</div></div>
         <div className="stat"><div className="muted">{t("本月利润")}</div><div className="v">{money(month.profit)}</div></div>
       </div>
 

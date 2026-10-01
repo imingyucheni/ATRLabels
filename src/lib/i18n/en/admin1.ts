@@ -22,6 +22,8 @@ export const admin1: Record<string, string> = {
   "点“同步渠道”，并设置加价规则。": "and click “Sync services”, then set the markup rules.",
   "含面单生成中 {n} 单": "incl. {n} generating",
   "今日收入": "Today's revenue",
+  "今日打单金额": "Today's label sales",
+  "本月打单金额": "Label sales this month",
   "今日利润": "Today's profit",
   "本月利润": "Month profit",
   "需要处理（{n}）": "Needs attention ({n})",
