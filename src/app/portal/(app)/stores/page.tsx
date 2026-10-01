@@ -43,9 +43,10 @@ export default async function PortalStoresPage({ searchParams }: { searchParams:
         base={publicBase({ headers: await headers() })}
         ebayOn={ebayOn}
         mock={isMockMode()}
+        contact={getSettings().supportContact || undefined}
         stores={stores.map((s) => ({
           id: s.id, platform: s.platform, name: s.name, shop: s.shop, status: s.status, lastSync: s.lastSyncAt ? fmtTime(s.lastSyncAt) : null,
-          lastError: s.lastError ? tMsg(s.lastError) : null, openCount: s.openCount, hasSecret: s.hasSecret, clientId: s.clientId,
+          lastError: s.lastError ? tMsg(s.lastError) : null, openCount: s.openCount, hasSecret: s.hasSecret, clientId: s.clientId, installUrl: s.installUrl,
         }))}
       />
 

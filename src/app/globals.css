@@ -1448,3 +1448,8 @@ tr.row-disabled td:first-child { opacity: 0.55; }
 .row-dims .small { flex-basis: 100%; }
 .row-dims.missing input:placeholder-shown, .row-dims.missing input:invalid { border-color: var(--err); background: var(--err-soft); }
 table.list tr.on td { background: color-mix(in srgb, var(--series-1, #3b82f6) 5%, transparent); }
+.plat-tile.static { cursor: default; }
+.plat-tile.static:hover { border-color: var(--line); box-shadow: none; }
+.link-btn { all: unset; cursor: pointer; color: var(--accent, var(--series-1)); justify-self: start; font-size: 13px; }
+.link-btn:hover { text-decoration: underline; }
+.link-btn:focus-visible { outline: 2px solid var(--series-1, #3b82f6); outline-offset: 2px; border-radius: 4px; }

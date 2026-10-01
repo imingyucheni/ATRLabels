@@ -1339,10 +1339,11 @@ export async function saveShopifyStoreAction(_: FlashState, fd: FormData): Promi
       shop: str(fd.get("shop"), 100),
       clientId: str(fd.get("clientId"), 100),
       clientSecret: str(fd.get("clientSecret"), 200) || undefined, // 留空 = 不修改
+      installUrl: str(fd.get("installUrl"), 1000),
     });
     revalidatePath(`/customers/${customerId}`);
     const s = getStore(id)!;
-    return { ok: s.status === "connected" ? "已保存" : "已保存。下一步：把下面的 App URL / 回调网址填到 Shopify App 里，用安装链接装到店铺（或点“授权连接”）" };
+    return { ok: s.status === "connected" ? "已保存" : s.installUrl ? "已保存。客户在“店铺订单”里会看到“去 Shopify 安装”按钮，也可以把安装链接直接发给客户" : "已保存。还没填安装链接：在 Shopify 应用的分发设置里生成后填上" };
   } catch (e) {
     return { error: (e as Error).message };
   }

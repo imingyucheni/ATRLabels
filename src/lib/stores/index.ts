@@ -99,6 +99,8 @@ export interface StoreConnection {
   /** Shopify 自定义 App 的 Client ID（Secret 不返回） */
   clientId: string | null;
   hasSecret: boolean;
+  /** Shopify 自定义分发的安装链接（我们替客户建 App 时填，客户点一下就装好） */
+  installUrl: string | null;
   openCount: number;
 }
 
@@ -108,11 +110,11 @@ interface StoreRow {
 }
 
 function toStore(r: StoreRow): StoreConnection {
-  const cfg = r.config_json ? (JSON.parse(r.config_json) as { clientId?: string; clientSecret?: string }) : {};
+  const cfg = r.config_json ? (JSON.parse(r.config_json) as { clientId?: string; clientSecret?: string; installUrl?: string }) : {};
   const open = (conn().prepare("SELECT COUNT(*) AS n FROM store_orders WHERE store_id = ? AND status = 'open'").get(r.id) as { n: number }).n;
   return {
     id: r.id, customerId: r.customer_id, platform: r.platform, shop: r.shop, name: r.name || r.shop, status: r.status,
-    lastSyncAt: r.last_sync_at, lastError: r.last_error, createdAt: r.created_at, clientId: cfg.clientId ?? null, hasSecret: !!cfg.clientSecret, openCount: open,
+    lastSyncAt: r.last_sync_at, lastError: r.last_error, createdAt: r.created_at, clientId: cfg.clientId ?? null, hasSecret: !!cfg.clientSecret, installUrl: cfg.installUrl ?? null, openCount: open,
   };
 }
 
@@ -140,7 +142,20 @@ export const DEMO_EBAY = "demo-ebay-seller";
 const isDemo = (r: Pick<StoreRow, "platform" | "shop">) => isMockMode() && (r.shop === DEMO_SHOPIFY || r.shop === DEMO_EBAY);
 
 /** 后台添加 / 修改 Shopify 店铺（每个店铺在 Dev Dashboard 建一个自定义 App，Client ID / Secret 填这里） */
-export function saveShopifyStore(input: { id?: number | null; customerId: number; shop: string; clientId: string; clientSecret?: string }): number {
+/** 安装链接只接受 Shopify 自己的网址（防止填成钓鱼链接发给客户） */
+export function normalizeInstallUrl(raw: string | null | undefined): string | null {
+  const s = (raw ?? "").trim();
+  if (!s) return null;
+  try {
+    const u = new URL(s);
+    if (u.protocol === "https:" && (u.hostname === "shopify.com" || u.hostname.endsWith(".shopify.com") || u.hostname.endsWith(".myshopify.com"))) return u.toString();
+  } catch {
+    // 不是网址
+  }
+  throw new Error("安装链接不对：应为 Shopify 生成的 https://…shopify.com/… 链接");
+}
+
+export function saveShopifyStore(input: { id?: number | null; customerId: number; shop: string; clientId: string; clientSecret?: string; installUrl?: string | null }): number {
   const shop = normalizeShop(input.shop);
   if (!shop) throw new Error("店铺域名不对，应为 xxx.myshopify.com");
   const dup = conn().prepare("SELECT id FROM store_connections WHERE platform = 'shopify' AND shop = ? AND id != ?").get(shop, input.id ?? 0) as { id: number } | undefined;
@@ -151,7 +166,9 @@ export function saveShopifyStore(input: { id?: number | null; customerId: number
   const clientId = input.clientId.trim();
   const clientSecret = input.clientSecret?.trim() || old.clientSecret || "";
   if (shop !== DEMO_SHOPIFY && (!clientId || !clientSecret)) throw new Error("请填写 Shopify App 的 Client ID 和 Client Secret");
-  const cfg = JSON.stringify({ clientId, clientSecret });
+  // installUrl 没传 = 不修改；传空字符串 = 清掉
+  const installUrl = input.installUrl === undefined ? old.installUrl ?? null : normalizeInstallUrl(input.installUrl);
+  const cfg = JSON.stringify({ clientId, clientSecret, ...(installUrl ? { installUrl } : {}) });
   if (cur) {
     // 换了 App 或店铺：原来的授权作废，要重新连接
     const changed = cur.shop !== shop || old.clientId !== clientId;

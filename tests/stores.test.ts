@@ -181,6 +181,19 @@ describe("电商店铺对接（Shopify / eBay）", () => {
     expect(combos.get("TS-BLK-M×1")).toMatchObject({ length: 10, width: 8, height: 4 });
   }, 60_000);
 
+  it("替客户开通：安装链接只收 Shopify 网址，保存凭证时不填就保留", () => {
+    expect(() => stores.normalizeInstallUrl("https://evil.com/install")).toThrow(/安装链接/);
+    expect(() => stores.normalizeInstallUrl("http://admin.shopify.com/x")).toThrow(/安装链接/);
+    const link = "https://admin.shopify.com/store/cust-a/oauth/install_custom_app?client_id=abc&signature=xyz";
+    const id = stores.saveShopifyStore({ customerId: cid, shop: "cust-a.myshopify.com", clientId: "abc", clientSecret: "s", installUrl: link });
+    expect(stores.getStore(id)?.installUrl).toBe(link);
+    stores.saveShopifyStore({ id, customerId: cid, shop: "cust-a.myshopify.com", clientId: "abc" }); // 客户自己改设置：不碰安装链接
+    expect(stores.getStore(id)?.installUrl).toBe(link);
+    stores.saveShopifyStore({ id, customerId: cid, shop: "cust-a.myshopify.com", clientId: "abc", installUrl: "" });
+    expect(stores.getStore(id)?.installUrl).toBeNull();
+    stores.deleteStore(id);
+  });
+
   it("真实店铺还没授权：同步会报错并记下原因", async () => {
     const id = stores.saveShopifyStore({ customerId: cid, shop: "second-demo.myshopify.com", clientId: "a", clientSecret: "b" });
     expect(stores.getStore(id)?.status).toBe("pending"); // 真实店铺要授权

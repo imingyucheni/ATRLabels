@@ -31,6 +31,8 @@ export default async function StoresCard({ customerId }: { customerId: number })
         <label className="f"><span className="req">Client ID</span><input name="clientId" defaultValue={s?.clientId ?? ""} autoComplete="off" /></label>
         <label className="f">Client Secret
           <input name="clientSecret" type="password" autoComplete="new-password" placeholder={s?.hasSecret ? t("已保存，留空不修改") : ""} /></label>
+        <label className="f" style={{ gridColumn: "1 / -1" }}>{t("安装链接（Shopify 自定义分发生成）")}
+          <input name="installUrl" type="url" defaultValue={s?.installUrl ?? ""} placeholder="https://admin.shopify.com/…" autoComplete="off" /></label>
       </div>
       {mock && !s && <p className="small muted">{t("演示模式：店铺域名填 {shop}、Client ID 随便填，就能连上模拟店铺。", { shop: "atr-demo.myshopify.com" })}</p>}
     </FlashForm>
@@ -68,8 +70,8 @@ export default async function StoresCard({ customerId }: { customerId: number })
                     <td className="num">{s.openCount}</td>
                     <td>
                       <div className="row" style={{ gap: 6, justifyContent: "flex-end" }}>
-                        {s.platform === "shopify" && s.status !== "connected" && (
-                          <a className="btn small primary" href={`/api/stores/shopify/connect?store=${s.id}`}>{t("授权连接")}</a>
+                        {s.platform === "shopify" && s.status !== "connected" && s.installUrl && (
+                          <a className="btn small primary" href={s.installUrl} target="_blank" rel="noreferrer">{t("安装链接")}</a>
                         )}
                         {s.status === "connected" && (
                           <FlashForm action={syncStoreAdminAction} submitLabel="立即同步" submitClass="small" inline>
@@ -102,13 +104,15 @@ export default async function StoresCard({ customerId }: { customerId: number })
         </div>
       )}
       <details style={{ marginTop: 12 }}>
-        <summary><b>{t("代客户添加 Shopify 店铺")}</b></summary>
+        <summary><b>{t("替客户开通 Shopify 店铺（客户只需点一下安装链接）")}</b></summary>
         <ol className="small muted" style={{ lineHeight: 1.8 }}>
-          <li>{t("在 Shopify Dev Dashboard（或 Partner 后台）为这个店铺创建一个 App，分发方式选“自定义分发（Custom distribution）”。")}</li>
+          <li>{t("在 dev.shopify.com 点“Create an app”，名称例如“ATRShip 发货 - 客户名”。")}</li>
           <li>{t("App URL 填：")}<code>{`${base}/api/stores/shopify/launch`}</code></li>
           <li>{t("允许的回调网址（Redirect URL）填：")}<code>{`${base}/api/stores/shopify/callback`}</code></li>
-          <li>{t("权限（Scopes）：")}<code>read_orders, read_merchant_managed_fulfillment_orders, write_merchant_managed_fulfillment_orders</code></li>
-          <li>{t("把 App 的 Client ID / Client Secret 填到下面保存，再用 Shopify 生成的安装链接装到店铺（或保存后点“授权连接”）。")}</li>
+          <li>{t("权限（Scopes）：")}<code>read_orders, read_merchant_managed_fulfillment_orders, write_merchant_managed_fulfillment_orders</code>{t("；“嵌入 Shopify 后台”不要勾。保存并发布版本（Release）。")}</li>
+          <li>{t("分发方式（Distribution）选“自定义分发（Custom distribution）”，填客户的 xxx.myshopify.com，生成安装链接。")}</li>
+          <li>{t("把店铺域名、Client ID、Client Secret 和安装链接填到下面保存，再点上面的“开放给这个客户”。")}</li>
+          <li>{t("客户在客户中心“店铺订单”里会看到“去 Shopify 安装”按钮（也可以把安装链接直接发给客户），点 Install 后自动完成连接。")}</li>
         </ol>
         {shopifyForm()}
       </details>

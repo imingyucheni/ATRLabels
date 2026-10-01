@@ -16,6 +16,8 @@ export interface StoreCardView {
   lastError: string | null;
   openCount: number;
   hasSecret: boolean;
+  /** 我们替客户开通时生成的 Shopify 安装链接 */
+  installUrl: string | null;
   clientId: string | null;
 }
 
@@ -52,7 +54,7 @@ function Copy({ value }: { value: string }) {
 }
 
 /** 店铺订单页顶部：已连接的店铺 + 连接新店铺（eBay 一键授权，Shopify 三步向导） */
-export default function StoreConnect({ stores, base, ebayOn, mock }: { stores: StoreCardView[]; base: string; ebayOn: boolean; mock: boolean }) {
+export default function StoreConnect({ stores, base, ebayOn, mock, contact }: { stores: StoreCardView[]; base: string; ebayOn: boolean; mock: boolean; contact?: string }) {
   const t = useT();
   const [picking, setPicking] = useState(stores.length === 0);
   const [wizard, setWizard] = useState<StoreCardView | "new" | null>(null);
@@ -96,16 +98,21 @@ export default function StoreConnect({ stores, base, ebayOn, mock }: { stores: S
               <div className="small muted">
                 {s.status === "connected"
                   ? <>{t("待处理订单")} <b className="store-count">{s.openCount}</b> · {s.lastSync ? t("{time} 同步", { time: s.lastSync }) : t("还没同步")}</>
-                  : s.status === "pending" ? t("还差一步：完成授权后开始同步订单") : t("不会同步订单、不会回传运单号")}
+                  : s.status === "pending"
+                    ? (s.installUrl ? t("我们已经为你开通好了：点“去 Shopify 安装”，在 Shopify 里点 Install 就完成连接") : t("还差一步：完成授权后开始同步订单"))
+                    : t("不会同步订单、不会回传运单号")}
               </div>
               {s.lastError && <div className="small" style={{ color: "var(--err)" }}>{s.lastError}</div>}
               <div className="row" style={{ gap: 6, marginTop: 8, flexWrap: "wrap" }}>
-                {s.platform === "shopify" && s.status !== "connected" && (
+                {s.platform === "shopify" && s.status !== "connected" && s.installUrl && (
+                  <a className="btn small primary" href={s.installUrl}>{t("去 Shopify 安装")} <ExternalLink size={13} /></a>
+                )}
+                {s.platform === "shopify" && s.status !== "connected" && !s.installUrl && (
                   s.hasSecret
                     ? <a className="btn small primary" href={`/api/stores/shopify/connect?store=${s.id}`}>{s.status === "pending" ? t("去授权") : t("重新授权")}</a>
                     : <button type="button" className="small primary" onClick={() => setWizard(s)}>{t("继续设置")}</button>
                 )}
-                {s.platform === "shopify" && s.status !== "connected" && s.hasSecret && (
+                {s.platform === "shopify" && s.status !== "connected" && s.hasSecret && !s.installUrl && (
                   <button type="button" className="small" onClick={() => setWizard(s)}>{t("修改设置")}</button>
                 )}
                 {s.platform === "ebay" && s.status !== "connected" && ebayOn && <a className="btn small primary" href="/api/stores/ebay/connect">{t("重新授权")}</a>}
@@ -127,11 +134,15 @@ export default function StoreConnect({ stores, base, ebayOn, mock }: { stores: S
 
       {picking && (
         <div className="plat-pick">
-          <button type="button" className="plat-tile" onClick={() => setWizard("new")}>
+          <div className="plat-tile static">
             <span className="plat shopify">Shopify</span>
             <b>{t("连接 Shopify 店铺")}</b>
-            <span className="small muted">{t("约 5 分钟：在 Shopify 建一个连接应用，把两串密钥粘贴过来")}</span>
-          </button>
+            <span className="small">
+              {t("联系客服开通（推荐）：告诉我们你的店铺地址（xxx.myshopify.com），我们开通后这里会出现“去 Shopify 安装”按钮，点一下就连上。")}
+              {contact ? <> {t("客服：")}<b>{contact}</b></> : null}
+            </span>
+            <button type="button" className="link-btn small" onClick={() => setWizard("new")}>{t("我会自己设置（约 5 分钟）→")}</button>
+          </div>
           {ebayOn ? (
             <a className="plat-tile" href="/api/stores/ebay/connect">
               <span className="plat ebay">eBay</span>
