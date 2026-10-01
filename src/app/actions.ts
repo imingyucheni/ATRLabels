@@ -45,7 +45,8 @@ import {
   isInternalCustomer,
 } from "@/lib/db";
 import type { PartialRule } from "@/lib/pricing";
-import { getShipBestClient, shipbestMode } from "@/lib/shipbest/client";
+import { getDhlClient, getShipBestClient, shipbestMode } from "@/lib/shipbest/client";
+import { dhlSettings, DHL_LABEL_TEMPLATES, isDhlCode, type DhlSettings } from "@/lib/shipbest/dhl";
 import { saveDimRule } from "@/lib/rates";
 import { CARRIERS } from "@/lib/carriers";
 import { clearChannelNameCache, sameNameChannels } from "@/lib/channelDisplay";
@@ -1167,6 +1168,48 @@ export async function saveJiaguAction(_: FlashState, fd: FormData): Promise<Flas
   revalidatePath("/", "layout");
   if (!next.enabled) return { ok: "已保存（嘉谷已停用，嘉谷渠道暂时不能报价和下单）" };
   return jiaguStatus("已保存");
+}
+
+export async function saveDhlAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  await requireAdmin();
+  const cur = dhlSettings();
+  const tpl = str(fd.get("labelTemplate"), 30);
+  const origin = str(fd.get("originCountry"), 2).toUpperCase();
+  const next: DhlSettings = {
+    ...cur,
+    enabled: fd.get("enabled") === "1",
+    mode: fd.get("mode") === "live" ? "live" : "test",
+    apiKey: str(fd.get("apiKey"), 200),
+    apiSecret: str(fd.get("apiSecret"), 200) || cur.apiSecret, // 留空 = 不修改
+    accountNumber: str(fd.get("accountNumber"), 20).replace(/\s/g, ""),
+    labelTemplate: tpl in DHL_LABEL_TEMPLATES ? (tpl as DhlSettings["labelTemplate"]) : "ECOM26_A6_002",
+    paperless: fd.get("paperless") !== "0",
+    originCountry: /^[A-Z]{2}$/.test(origin) ? origin : "CN",
+  };
+  if (next.enabled && (!next.apiKey || !next.apiSecret || !next.accountNumber)) return { error: "启用前请填写 API Key、API Secret 和 DHL 付款账号" };
+  saveSettings({ dhl: next });
+  clearChannelNameCache();
+  revalidatePath("/", "layout");
+  if (!next.enabled) return { ok: "已保存（DHL 已停用，DHL 渠道暂时不能报价和下单）" };
+  return dhlStatus("已保存");
+}
+
+export async function testDhlAction(_: FlashState): Promise<FlashState> {
+  await requireAdmin();
+  return dhlStatus("连接成功");
+}
+
+/** 测试连接：用发货地址到伦敦报一次价（只报价不下单） */
+async function dhlStatus(prefix: string): Promise<FlashState> {
+  const c = getDhlClient();
+  if (!c) return { error: "DHL 没有启用或账号没填完整" };
+  try {
+    await c.verify();
+    const synced = listChannels().some((ch) => isDhlCode(ch.code));
+    return { ok: `${prefix}：DHL ${dhlSettings().mode === "live" ? "正式" : "测试"}环境报价正常。${synced ? "" : "点“物流渠道 → 同步渠道”把 DHL 渠道加进渠道列表。"}` };
+  } catch (e) {
+    return { error: `${prefix === "已保存" ? "已保存，但" : ""}连接测试失败：${(e as Error).message}` };
+  }
 }
 
 export async function testJiaguAction(_: FlashState): Promise<FlashState> {

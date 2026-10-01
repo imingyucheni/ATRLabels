@@ -33,6 +33,7 @@ import { getPromotion } from "./promotions";
 import { checkLimits, checkMinSize } from "./channelLimits";
 import { getShipBestClient, getTestAccountClient, shipbestMode, ShipBestError } from "./shipbest/client";
 import { isJiaguCode } from "./shipbest/jiagu";
+import { aesRequired, hsDigits, isDhlCode, isInternational } from "./shipbest/dhl";
 import { guessCarrier } from "./carriers";
 import { publicError } from "./portal";
 import { logProviderEvent, recordLabelFailure } from "./providerLog";
@@ -83,6 +84,9 @@ function checkAddress(a: Address | undefined, who: string, errors: string[], zip
   for (const [k, n, label] of max) if ((a[k]?.toString().length ?? 0) > n) errors.push(`${who}${label}最多 ${n} 个字符`);
 }
 
+/** 没有邮编的国家 / 地区（收件邮编可以不填） */
+const NO_POSTCODE = new Set("AE AG AO AW BF BI BJ BO BS BW BZ CD CF CG CI CK CM DJ DM ER FJ GA GD GH GM GQ GY HK JM KI KM KN LC ML MO MR MS MW NR NU QA RW SB SC SL SR ST SY TF TG TK TL TO TT TV UG VU YE ZW".split(" "));
+
 export interface ValidateOptions {
   /** 只试算运费（不出单）：不检查商品明细，试算前用 withQuoteSkus 补一个样品 */
   forQuote?: boolean;
@@ -91,7 +95,18 @@ export interface ValidateOptions {
 export function validateRequest(req: ShipmentRequest, opts: ValidateOptions = {}): string[] {
   const errors: string[] = [];
   checkAddress(req.sender, "寄件人", errors, true);
-  checkAddress(req.recipient, "收件人", errors, true);
+  const intl = isInternational(req);
+  // 有些国家没有邮编（例如香港、阿联酋）
+  checkAddress(req.recipient, "收件人", errors, !(intl && NO_POSTCODE.has(req.recipient.country.toUpperCase())));
+  if (intl) {
+    const r = req.recipient;
+    // DHL 要求：收件人电话必填，地址每行最多 45 个字符
+    if (!r.phone?.trim()) errors.push("国际件收件人电话必填（快递员派送、海关联系要用）");
+    for (const [k, label] of [["address1", "地址1"], ["address2", "地址2"], ["city", "城市"]] as const) {
+      if ((r[k]?.length ?? 0) > 45) errors.push(`国际件收件人${label}最多 45 个字符，请分到地址2 / 地址3`);
+    }
+    if (!req.sender.phone?.trim()) errors.push("寄件人电话必填");
+  }
   const p = req.pkg;
   for (const [k, label] of [
     ["length", "长"],
@@ -112,7 +127,19 @@ export function validateRequest(req: ShipmentRequest, opts: ValidateOptions = {}
     if (!s.productNature) errors.push(n + "商品性质必填");
     if (!(s.quantity > 0)) errors.push(n + "数量必须大于 0");
     if (!(s.declaredUnitPrice > 0)) errors.push(n + "申报单价必须大于 0");
+    if (intl) {
+      // 国际件报关：HS 编码、原产国
+      const hs = hsDigits(s.hsCode);
+      if (!hs) errors.push(n + "国际件海关编码（HS Code）必填，6–10 位数字");
+      else if (hs.length < 6 || hs.length > 10) errors.push(n + `海关编码“${s.hsCode}”不对，应为 6–10 位数字`);
+      if (s.originCountry && !isCountryCode(s.originCountry)) errors.push(n + `原产国“${s.originCountry}”不对，请填二字码，例如 CN、US`);
+      if (!s.material?.trim()) errors.push(n + "国际件材质必填（英文，例如 100% cotton、plastic、stainless steel）");
+    }
   });
+  if (intl) {
+    const hs = aesRequired(req.skuList);
+    if (hs) errors.push(`海关编码 ${hs} 的申报总价值超过 $2,500：按美国出口规定要先做 AES 出口申报（ITN），暂时不能在线下单，请联系客服`);
+  }
   return errors;
 }
 
@@ -253,10 +280,12 @@ async function quoteOne(customerId: number, channelCode: string, channelName: st
   // 渠道的重量 / 尺寸限制（例如 GOFO 计费重 20 磅以内）：超出的直接不报价
   const over = checkLimits(channelCode, req);
   if (over) return { channelCode, channelName, ok: false, error: over } satisfies ChannelQuote;
-  const pre = precheck(channelCode, zip);
+  // 国际件（DHL）的邮编各国重复，不用“最近查过不通邮的邮编”这套记忆
+  const dhl = isDhlCode(channelCode);
+  const pre = dhl ? null : precheck(channelCode, zip);
   if (pre) return { channelCode, channelName, ok: false, error: pre } satisfies ChannelQuote;
   const res = await quoteRemote(customerId, channelCode, channelName, req, rule);
-  rememberQuote(channelCode, zip, res.ok, res.error);
+  if (!dhl) rememberQuote(channelCode, zip, res.ok, res.error);
   // 包裹太小：照常报价，只提醒
   const small = res.ok ? checkMinSize(channelCode, req) : null;
   return small ? { ...res, warning: small } : res;
@@ -354,10 +383,19 @@ async function quoteChannels<C extends { code: string; name: string }>(channels:
   return results;
 }
 
+/** 按收件国家挑渠道：国际件只走 DHL，美国境内不走 DHL */
+export function forDestination<C extends { code: string }>(channels: C[], req: Pick<ShipmentRequest, "recipient">): C[] {
+  const intl = isInternational(req);
+  return channels.filter((c) => isDhlCode(c.code) === intl);
+}
+
 export async function quoteAll(customerId: number, req: ShipmentRequest): Promise<ChannelQuote[]> {
   if (!listChannels(true).length) throw new Error("没有启用的物流渠道，请先到“设置”里同步渠道");
-  const channels = customerChannels(customerId);
-  if (!channels.length) throw new NoChannelsError();
+  const all = customerChannels(customerId);
+  if (!all.length) throw new NoChannelsError();
+  // 寄往美国以外：只用国际快递渠道（DHL）；寄美国：只用尾程渠道
+  const channels = forDestination(all, req);
+  if (!channels.length) throw new Error(isInternational(req) ? "您的账户还没有开通国际快递渠道（DHL），请联系客服开通" : "您的账户还没有开通美国本土渠道，请联系客服开通");
   const results = await quoteChannels(channels, (c) => quoteOne(customerId, c.code, c.name, req));
   return flagJiaguCoverage(fillZones(results)).sort((a, b) => Number(b.ok) - Number(a.ok) || (a.price ?? 0) - (b.price ?? 0));
 }
@@ -374,7 +412,7 @@ export class NoChannelsError extends Error {
  * 方便给新客户报价、比较渠道和加价幅度。
  */
 export async function quoteForProspect(req: ShipmentRequest, markup: PartialRule): Promise<ChannelQuote[]> {
-  const channels = listChannels(true);
+  const channels = forDestination(listChannels(true), req);
   if (!channels.length) throw new Error("没有启用的物流渠道，请先到“设置”里同步渠道");
   const gm = getSettings().markup;
   const results = await quoteChannels(channels, (c) => quoteOne(0, c.code, c.name, req, resolveRule(gm, c.markup, markup)));
@@ -467,7 +505,7 @@ export async function createLabel(input: CreateInput): Promise<number> {
 
   try {
     await (testAccount ? getTestAccountClient() : getShipBestClient()).createOrder(customNo, channelCode, req, input.remark);
-    if (!isJiaguCode(channelCode)) logProviderEvent(customNo, "ShipBest", "提交订单", null, "成功");
+    if (!isJiaguCode(channelCode)) logProviderEvent(customNo, providerOf(channelCode), "提交订单", null, "成功");
   } catch (e) {
     if (e instanceof ShipBestError) {
       // ShipBest 明确拒绝：订单没有建成，退回扣款、删掉本地记录，修改后重试
@@ -514,7 +552,7 @@ export async function refreshShipment(id: number): Promise<Shipment> {
   const d = await clientFor(s).getOrder(s.orderNo ? { orderNo: s.orderNo } : { customNo: s.customNo });
   // 嘉谷的查询在接口层已经逐个记下；ShipBest 这里记一条状态
   if (!isJiaguCode(s.channelCode)) {
-    logProviderEvent(s.customNo, "ShipBest", "查询状态", d.status, [SB_STATUS[d.status] ?? "", d.errorMsg, d.trackingNo ? `运单号 ${d.trackingNo}` : ""].filter(Boolean).join(" · "));
+    logProviderEvent(s.customNo, providerOf(s.channelCode), "查询状态", d.status, [SB_STATUS[d.status] ?? "", d.errorMsg, d.trackingNo ? `运单号 ${d.trackingNo}` : ""].filter(Boolean).join(" · "));
   }
 
   const patch: ShipmentPatch = {
@@ -603,7 +641,7 @@ function clientFor(s: { isTest: boolean }) {
 
 /** 这张面单走的是哪家服务商 */
 export function providerOf(channelCode: string) {
-  return isJiaguCode(channelCode) ? "嘉谷" : "ShipBest";
+  return isDhlCode(channelCode) ? "DHL" : isJiaguCode(channelCode) ? "嘉谷" : "ShipBest";
 }
 
 /** 嘉谷下单后多久还没有面单算出问题 */
@@ -688,7 +726,8 @@ function cancelPatch(s: Shipment, charged: boolean, fees?: { cancelFee: number; 
   // 向客户收的取消费有零头时向上取到分
   // 公司自用账号不向自己收取消费（钱包本来就不扣），记 0，报表里才不会算成收入
   const cancelFee = isInternalCustomer(s.customerId) ? 0 : fees?.cancelFee ?? (charged ? roundUp((s.price * st.cancelFeePercent) / 100, 0.01) : 0);
-  const sbCancelFee = fees?.sbCancelFee ?? (charged ? round2((cost * st.sbCancelFeePercent) / 100) : 0);
+  // DHL 没揽收的运单不计费：我们这边没有服务商取消费
+  const sbCancelFee = fees?.sbCancelFee ?? (charged && !isDhlCode(s.channelCode) ? round2((cost * st.sbCancelFeePercent) / 100) : 0);
   return {
     status: "cancelled",
     cancelFee,
@@ -733,9 +772,9 @@ export async function requestCancel(
     }
     updateShipment(id, {
       status: "cancel_requested",
-      errorMsg: `接口取消未成功：${(e as Error).message}。请在 OMS 联系 ShipBest 人工取消，完成后点“确认已取消”。`,
+      errorMsg: `接口取消未成功：${(e as Error).message}。请联系 ${providerOf(s.channelCode)} 人工取消，完成后点“确认已取消”。`,
     });
-    return { done: false, message: "已标记为取消处理中，请在 OMS 联系 ShipBest 人工取消" };
+    return { done: false, message: `已标记为取消处理中，请联系 ${providerOf(s.channelCode)} 人工取消` };
   }
 }
 
@@ -763,7 +802,7 @@ export function defaultCancelFees(s: Shipment) {
   const st = getSettings();
   return {
     cancelFee: isInternalCustomer(s.customerId) ? 0 : roundUp((s.price * st.cancelFeePercent) / 100, 0.01),
-    sbCancelFee: round2(((s.actualCost ?? s.quotedCost) * st.sbCancelFeePercent) / 100),
+    sbCancelFee: isDhlCode(s.channelCode) ? 0 : round2(((s.actualCost ?? s.quotedCost) * st.sbCancelFeePercent) / 100),
   };
 }
 

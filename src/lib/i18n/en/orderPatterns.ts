@@ -55,6 +55,8 @@ const SKU_ERR: [string, string][] = [
   ["商品性质必填", "goods type is required"],
   ["数量必须大于 0", "quantity must be greater than 0"],
   ["申报单价必须大于 0", "declared unit value must be greater than 0"],
+  ["国际件海关编码（HS Code）必填，6–10 位数字", "HS code is required for international shipments (6–10 digits)"],
+  ["国际件材质必填（英文，例如 100% cotton、plastic、stainless steel）", "material is required for international shipments (English, e.g. 100% cotton, plastic, stainless steel)"],
 ];
 
 /** portal/actions.ts 保存寄件地址：“请填写：姓名、地址1、城市、邮编”的各种组合 */
@@ -94,6 +96,10 @@ export const orderPatterns: [RegExp, string][] = [
   // 包裹 / 商品校验
   ...PKG.map(([l, le]): [RegExp, string] => [new RegExp(`^包裹${l}必须大于 0$`), `Package ${le} must be greater than 0`]),
   ...SKU_ERR.map(([l, le]): [RegExp, string] => [new RegExp(`^商品 (\\d+)：${esc(l)}$`), `Item $1: ${le}`]),
+  [/^商品 (\d+)：海关编码“(.*)”不对，应为 6–10 位数字$/, "Item $1: HS code “$2” is invalid; it should be 6–10 digits"],
+  [/^商品 (\d+)：原产国“(.*)”不对，请填二字码，例如 CN、US$/, "Item $1: country of origin “$2” is invalid; use a 2-letter code such as CN or US"],
+  [/^海关编码 (\S+) 的申报总价值超过 \$2,500：按美国出口规定要先做 AES 出口申报（ITN），暂时不能在线下单，请联系客服$/, "HS code $1 is declared above $2,500: US export rules require an AES filing (ITN) first, so it can't be shipped online yet. Please contact support."],
+  [/^国际件收件人(地址1|地址2|城市)最多 45 个字符，请分到地址2 \/ 地址3$/, "International recipient field is limited to 45 characters; move the rest to the next address line"],
   // 下单
   [/^价格已变化：当前报价 ([\d.]+) (\w+)，请确认后重新提交$/, "Price changed: current rate is $1 $2. Please confirm and submit again."],
   [/^提交结果未知（(.*)），请稍后点“刷新状态”$/, "Submission result unknown ($1). Please click “Refresh status” later."],

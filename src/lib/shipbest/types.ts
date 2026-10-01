@@ -30,6 +30,10 @@ export interface SkuItem {
   hsCode: string;
   /** 1=带磁,2=不带磁,3=带电,4=不带电,5=液体，逗号分隔 */
   productNature: string;
+  /** 原产国二字码（国际件报关用；不填用 DHL 设置里的默认值） */
+  originCountry?: string;
+  /** 材质（国际件报关用，例如 100% cotton），会写进商业发票的品名描述 */
+  material?: string;
   length: number;
   width: number;
   height: number;

@@ -40,12 +40,15 @@ export default function AddressFields({
   onChange,
   namePrefix = "",
   placeholders,
+  noDefaultCountry = false,
 }: {
   value?: Partial<Address> | null;
   onChange?: (a: Partial<Address>) => void;
   namePrefix?: string;
   /** 浅灰色示例（只是提示，不会被提交） */
   placeholders?: Partial<Record<keyof Address, string>>;
+  /** 国际下单：国家空着让用户选，不自动填 US */
+  noDefaultCountry?: boolean;
 }) {
   const t = useT();
   const controlled = !!onChange;
@@ -53,12 +56,12 @@ export default function AddressFields({
   const [otherMode, setOtherMode] = useState(!!value?.country && !COMMON_CODES.has(value.country.toUpperCase()));
   // 受控时：国家没填就默认 US
   useEffect(() => {
-    if (controlled && !value?.country && !otherMode) onChange!({ ...value, country: "US" });
-  }, [controlled, value, onChange, otherMode]);
+    if (controlled && !value?.country && !otherMode && !noDefaultCountry) onChange!({ ...value, country: "US" });
+  }, [controlled, value, onChange, otherMode, noDefaultCountry]);
 
   // 非受控表单里也要跟着国家切换州的输入方式
   const [uncCountry, setUncCountry] = useState((value?.country || "US").toUpperCase());
-  const country = (controlled ? value?.country || (otherMode ? "" : "US") : uncCountry).toUpperCase();
+  const country = (controlled ? value?.country || (otherMode || noDefaultCountry ? "" : "US") : uncCountry).toUpperCase();
   const isUS = country === "US";
   const set = (k: keyof Address, v: string) => onChange?.({ ...value, [k]: v });
 
@@ -74,7 +77,7 @@ export default function AddressFields({
   };
 
   const countryField = () => {
-    const custom = otherMode || !COMMON_CODES.has(country);
+    const custom = otherMode || (!!country && !COMMON_CODES.has(country));
     const hint = country && !isCountryCode(country) ? t("“{code}”不是有效的国家代码", { code: country }) : null;
     const onPick = (v: string) => {
       setOtherMode(v === "__other");
@@ -88,6 +91,7 @@ export default function AddressFields({
           name={controlled || custom ? undefined : namePrefix + "country"}
           onChange={(e) => onPick(e.target.value)}
         >
+          {!country && <option value="" disabled>{t("请选择国家 / 地区")}</option>}
           {COMMON_COUNTRIES.map(([c, n]) => <option key={c} value={c}>{c} · {t(n)}</option>)}
           <option value="__other">{t("其他国家（输入二字码）…")}</option>
         </select>

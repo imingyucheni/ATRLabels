@@ -25,6 +25,8 @@ export function seedDemo(conn: Database.Database) {
     zelleInfo: "Zelle：pay@atr-demo.com\n户名：Atronia Innovations Inc.（演示）",
     alipayInfo: "支付宝账号：atr-demo@example.com\n户名：演示公司",
     topupInstructions: "转账备注请写公司名称；工作日 2 小时内确认到账。",
+    // 演示 DHL 国际快递（模拟：不连 DHL）
+    dhl: { enabled: true, mode: "test", apiKey: "", apiSecret: "", accountNumber: "", labelTemplate: "ECOM26_A6_002", paperless: true, originCountry: "CN" },
     sender: { nameFirst: "ATR", nameLast: "Warehouse", country: "US", province: "CA", city: "Chino", address1: "13950 Central Ave", zipCode: "91710", phone: "9095550100" },
   };
   for (const [k, v] of Object.entries(settings)) set.run(k, JSON.stringify(v));
@@ -44,10 +46,11 @@ export function seedDemo(conn: Database.Database) {
     for (const [code, name] of [
       ["LP10210028", "UniUni-（91710）"], ["LP10210029", "GOFO-（91710）"], ["LP10210030", "USPS-（91710）"],
       ["LP10210433", "SwiftX-91710"], ["LP10210434", "YWE-91710"],
+      ["DHL-P", "DHL Express Worldwide · DHL"], ["DHL-Y", "DHL Express 12:00 · DHL"],
     ]) ch.run(code, name, presetForChannel(name) ? JSON.stringify(presetForChannel(name)) : null);
     // 演示：预付客户开通全部渠道，月结客户只开通 3 个（演示“按客户开通渠道”）
     const grant = conn.prepare("INSERT OR IGNORE INTO customer_channels (customer_id, channel_code) VALUES (?, ?)");
-    for (const code of ["LP10210028", "LP10210029", "LP10210030", "LP10210433", "LP10210434"]) grant.run(a, code);
+    for (const code of ["LP10210028", "LP10210029", "LP10210030", "LP10210433", "LP10210434", "DHL-P", "DHL-Y"]) grant.run(a, code);
     for (const code of ["LP10210028", "LP10210029", "LP10210030"]) grant.run(b, code);
   }
 }

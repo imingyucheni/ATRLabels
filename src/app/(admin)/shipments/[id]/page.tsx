@@ -1,4 +1,5 @@
 import LabelActions from "@/components/LabelActions";
+import { dhlDocInfo, isDhlCode } from "@/lib/shipbest/dhl";
 import { fmtTime, TZ_LABEL } from "@/lib/time";
 import Link from "next/link";
 import { MARKUP_SOURCE_LABEL, type MarkupSource } from "@/lib/markup";
@@ -146,6 +147,22 @@ export default async function ShipmentDetail({ params }: { params: Promise<{ id:
                   <img src={`/api/labels/${s.id}`} alt="label" style={{ maxWidth: "100%", border: "1px solid var(--line)" }} />
                 </>
               ) : null}
+              {(() => {
+                // DHL 国际件：商业发票（报关用）
+                const inv = isDhlCode(s.channelCode) ? dhlDocInfo(s.customNo) : null;
+                if (!inv?.hasInvoice) return null;
+                return (
+                  <div className={`alert ${inv.paperless ? "ok" : "warn"}`} style={{ marginTop: 12 }}>
+                    <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+                      <span>{inv.paperless ? t("商业发票已通过 DHL 电子发票（Paperless Trade）传送，不用打印随货；需要留底可以下载。") : t("这个目的地不支持电子发票：请把商业发票打印 3 份，放进包裹外的透明袋里随货。")}</span>
+                      <span className="row">
+                        <a className="btn small" href={`/api/labels/${s.id}/invoice`} target="_blank">{t("商业发票")}</a>
+                        <a className="btn small" href={`/api/labels/${s.id}/invoice?download=1`}>{t("下载")}</a>
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
             </>
           ) : (
             <p className="muted">{s.status === "cancelled" ? t("这张单已取消，没有面单。") : s.status === "exception" ? t("出单异常，没有面单。") : t("面单尚未生成。ShipBest 一般几秒内出单，可点“刷新状态”。")}</p>
@@ -333,7 +350,7 @@ export default async function ShipmentDetail({ params }: { params: Promise<{ id:
             <tbody>
               {s.skuList.map((k, i) => (
                 <tr key={i}>
-                  <td>{k.sku}</td><td>{k.productNameCn} / {k.productNameEn}</td><td>{k.hsCode}</td><td>{natureLabel(t, k.productNature)}</td>
+                  <td>{k.sku}</td><td>{k.productNameCn === k.productNameEn ? k.productNameEn : `${k.productNameCn} / ${k.productNameEn}`}{(k.material || k.originCountry) && <div className="small muted">{[k.material, k.originCountry && `${t("原产国")} ${k.originCountry}`].filter(Boolean).join(" · ")}</div>}</td><td>{k.hsCode}</td><td>{natureLabel(t, k.productNature)}</td>
                   <td className="num">{k.quantity}</td><td className="num">{money(k.declaredUnitPrice, k.declaredCurrency)}</td>
                 </tr>
               ))}

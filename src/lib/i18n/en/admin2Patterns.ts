@@ -63,6 +63,7 @@ export const admin2Patterns: [RegExp, string][] = [
   [/^已修改 (\d+) 单；(\d+) 单该渠道没有报价，保持原选择$/, "Updated $1 orders; $2 orders have no rate from that service and kept their previous choice"],
 
   // service.ts 取消 / 刷新
-  [/^接口取消未成功：([^]*)。请在 OMS 联系 ShipBest 人工取消，完成后点“确认已取消”。$/, "API cancellation failed: $1. Contact ShipBest in the OMS to cancel manually, then click “Confirm cancelled”."],
+  [/^接口取消未成功：([^]*)。请联系 (\S+) 人工取消，完成后点“确认已取消”。$/, "API cancellation failed: $1. Contact $2 to cancel manually, then click “Confirm cancelled”."],
+  [/^已标记为取消处理中，请联系 (\S+) 人工取消$/, "Marked as cancel pending. Contact $1 to cancel manually"],
   [/^下载面单失败：HTTP (\d+)$/, "Failed to download label: HTTP $1"],
 ];

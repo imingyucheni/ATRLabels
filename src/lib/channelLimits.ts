@@ -56,6 +56,8 @@ function shipBestDefault(name: string): ChannelLimits | null {
   if (/YWE|燕文/i.test(name)) return { maxLb: 20, maxLongestIn: round1(60 * CM), maxSumIn: round1(150 * CM), divisor: 166 };
   if (/SPEED\s*X|\bSPX\b/i.test(name)) return { maxLb: 25, maxLongestIn: 24, divisor: 166 };
   if (/USPS/i.test(name)) return { maxLb: 70, maxLongestIn: 30, maxGirthIn: 130 };
+  // DHL Express：每件最重 70 kg、最长边 120 cm，材积按 5000（cm³/kg）≈ 139（in³/lb）
+  if (/\bDHL\b/i.test(name)) return { maxLb: 154, maxLongestIn: 47.2, divisor: 139 };
   if (/FEDEX.*(ECONOMY|SMART)/i.test(name)) return { maxLb: 70, maxGirthIn: 130 };
   if (/FEDEX|UPS/i.test(name)) return { maxLb: 150, maxLongestIn: 108, maxGirthIn: 165 };
   return null;

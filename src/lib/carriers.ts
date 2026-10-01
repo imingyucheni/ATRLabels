@@ -33,7 +33,7 @@ export const CARRIERS: Carrier[] = [
 const byId = new Map(CARRIERS.map((c) => [c.id, c]));
 
 /** 渠道名后面的服务商标记（只给后台看）：· SB = ShipBest，· GDE = 嘉谷万邑 */
-const PROVIDER_TAG = /\s·\s*(SB|GDE|嘉谷)\s*$/;
+const PROVIDER_TAG = /\s·\s*(SB|GDE|嘉谷|DHL)\s*$/;
 
 /** 去掉服务商标记：“GOFO-（91710） · SB” → “GOFO-（91710）” */
 export function stripProviderTag(channelName: string): string {

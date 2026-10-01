@@ -16,7 +16,7 @@ import { money, signedPercent } from "@/lib/pricing";
 import type { ChannelQuote } from "@/lib/service";
 import type { Address, ShipmentRequest, UnitSystem } from "@/lib/shipbest/types";
 
-type Sku = Record<"sku" | "productNameCn" | "productNameEn" | "quantity" | "declaredUnitPrice" | "hsCode" | "productNature", string>;
+type Sku = Record<"sku" | "productNameCn" | "productNameEn" | "quantity" | "declaredUnitPrice" | "hsCode" | "productNature" | "originCountry" | "material", string>;
 
 const emptySku = (): Sku => ({
   sku: "",
@@ -26,6 +26,8 @@ const emptySku = (): Sku => ({
   declaredUnitPrice: "",
   hsCode: "",
   productNature: "2,4",
+  originCountry: "",
+  material: "",
 });
 
 const NATURE = [
@@ -85,6 +87,10 @@ export default function ShipForm(props: {
   /** portal = 客户自助下单：不选客户、只显示客户价；house = 管理员按成本价下单（所有渠道）；resubmit = 异常单修改后重新下单 */
   mode?: "admin" | "portal" | "house" | "resubmit";
   resubmit?: ResubmitSource;
+  /** 国际下单（DHL）：收件国家默认空、商品明细多原产国、海关编码必填 */
+  intl?: boolean;
+  /** 原产国默认值（DHL 设置里的） */
+  defaultOrigin?: string;
   /** 客户端：已取消的订单重新下单（预填原单信息，出单后批次里的这一行换成新单） */
   reorder?: { id: number; request: ShipmentRequest; customerRef: string | null; remark: string | null; returnTo?: string };
   customers?: { id: number; name: string; balance?: number; available?: number; sender?: Address | null; channelCount?: number }[];
@@ -129,7 +135,9 @@ export default function ShipForm(props: {
   const [senderId, setSenderId] = useState<number | "new" | "system">(bookDefault?.id ?? (sysSender ? "system" : "new"));
   const [senderMsg, setSenderMsg] = useState<string | null>(null);
   const [savingSender, startSaveSender] = useTransition();
-  const [recipient, setRecipient] = useState<Partial<Address>>(init?.recipient ?? { country: "US" });
+  // 国际下单：收件国家先空着，让客户选
+  const [recipient, setRecipient] = useState<Partial<Address>>(init?.recipient ?? { country: props.intl ? "" : "US" });
+  const intlDest = !!recipient.country && recipient.country.toUpperCase() !== "US";
   const [unit, setUnit] = useState<UnitSystem>(init?.pkg.displayUnitSystem ?? props.defaultUnit);
   const [pkg, setPkg] = useState(
     init
@@ -149,6 +157,8 @@ export default function ShipForm(props: {
           declaredUnitPrice: numText(k.declaredUnitPrice),
           hsCode: k.hsCode ?? "",
           productNature: k.productNature || "2,4",
+          originCountry: k.originCountry ?? "",
+          material: k.material ?? "",
         }))
       : [emptySku()],
   );
@@ -206,6 +216,8 @@ export default function ShipForm(props: {
         declaredCurrency: currency,
         hsCode: s.hsCode,
         productNature: s.productNature,
+        ...(s.originCountry.trim() ? { originCountry: s.originCountry.trim().toUpperCase() } : {}),
+        ...(s.material.trim() ? { material: s.material.trim() } : {}),
         length: num(pkg.length),
         width: num(pkg.width),
         height: num(pkg.height),
@@ -288,7 +300,7 @@ export default function ShipForm(props: {
             <div className="table-wrap">
               <table className="sku-table">
                 <thead>
-                  <tr><th>SKU{req}</th><th>{t("中文品名")}</th><th>{t("英文品名")}{req}</th><th>{t("数量")}{req}</th><th>{t("申报单价")}{req}</th><th>{t("海关编码")}</th><th>{t("商品性质")}{req}</th><th></th></tr>
+                  <tr><th>SKU{req}</th><th>{t("中文品名")}</th><th>{t("英文品名")}{req}</th><th>{t("数量")}{req}</th><th>{t("申报单价")}{req}{intlDest ? " (USD)" : ""}</th><th>{t("海关编码")}{intlDest ? " *" : ""}</th>{intlDest && <th>{t("材质（英文）")} *</th>}{intlDest && <th>{t("原产国")}</th>}<th>{t("商品性质")}{req}</th><th></th></tr>
                 </thead>
                 <tbody>
                   {skus.map((s, i) => (
@@ -298,7 +310,13 @@ export default function ShipForm(props: {
                       <td data-label={t("英文品名") + req}><input value={s.productNameEn} onChange={(e) => setSku(i, { productNameEn: e.target.value })} /></td>
                       <td data-label={t("数量") + req} style={{ width: 80 }}><input type="number" min="1" value={s.quantity} onChange={(e) => setSku(i, { quantity: e.target.value })} /></td>
                       <td data-label={t("申报单价") + req} style={{ width: 110 }}><input type="number" min="0" step="0.01" value={s.declaredUnitPrice} onChange={(e) => setSku(i, { declaredUnitPrice: e.target.value })} /></td>
-                      <td data-label={t("海关编码")} style={{ width: 130 }}><input value={s.hsCode} onChange={(e) => setSku(i, { hsCode: e.target.value })} /></td>
+                      <td data-label={t("海关编码") + (intlDest ? " *" : "")} style={{ width: 130 }}><input value={s.hsCode} placeholder={intlDest ? t("例如 6109100010") : undefined} inputMode={intlDest ? "numeric" : undefined} onChange={(e) => setSku(i, { hsCode: e.target.value })} /></td>
+                      {intlDest && (
+                        <td data-label={t("材质（英文）") + " *"} style={{ width: 150 }}><input value={s.material} maxLength={100} placeholder={t("例如 100% cotton")} onChange={(e) => setSku(i, { material: e.target.value })} /></td>
+                      )}
+                      {intlDest && (
+                        <td data-label={t("原产国")} style={{ width: 90 }}><input value={s.originCountry} maxLength={2} placeholder={props.defaultOrigin || "CN"} onChange={(e) => setSku(i, { originCountry: e.target.value.toUpperCase() })} /></td>
+                      )}
                       <td data-label={t("商品性质") + req} style={{ minWidth: 170 }} className="small full">
                         {(() => {
                           const preset = NATURE_PRESETS.find((p) => p.value === s.productNature)?.value ?? "custom";
@@ -483,7 +501,7 @@ export default function ShipForm(props: {
         </div>
         <div className="card">
           <h2>{t("收件人")}</h2>
-          <AddressFields value={recipient} onChange={dirty(setRecipient)} />
+          <AddressFields value={recipient} onChange={dirty(setRecipient)} noDefaultCountry={props.intl} />
         </div>
       </div>
 
@@ -530,6 +548,11 @@ export default function ShipForm(props: {
         {orderable ? (
           <>
             <h3>{t("商品明细（报关用）")}</h3>
+            {intlDest && (
+              <div className="alert warn small">
+                {t("国际件报关：请如实填写英文品名、材质、商品性质、申报单价（美元）、海关编码（HS Code）和原产国。出单时 DHL 会据此生成正式的商业发票（Commercial Invoice）。贸易条款 DAP：关税、进口税由收件人在目的地支付。违禁品（电池单独寄、液体、刀具等）不能寄。")}
+              </div>
+            )}
             {skuTable(" *")}
           </>
         ) : (

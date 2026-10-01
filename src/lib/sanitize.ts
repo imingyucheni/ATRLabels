@@ -73,6 +73,8 @@ export function cleanRequest(raw: ShipmentRequest): ShipmentRequest {
         declaredCurrency: str(s.declaredCurrency, 3).toUpperCase() || "USD",
         hsCode: str(s.hsCode, 20),
         productNature: str(s.productNature, 20),
+        ...(str(s.originCountry, 2) ? { originCountry: str(s.originCountry, 2).toUpperCase() } : {}),
+        ...(str(s.material, 100) ? { material: str(s.material, 100) } : {}),
         length: n(s.length),
         width: n(s.width),
         height: n(s.height),

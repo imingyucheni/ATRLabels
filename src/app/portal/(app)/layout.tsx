@@ -8,6 +8,7 @@ import Sidebar from "@/components/Sidebar";
 import { listDraftRows } from "@/lib/batch";
 import { customerChannelMap } from "@/lib/channelDisplay";
 import { portalChannelCodes } from "@/lib/portal";
+import { isDhlCode } from "@/lib/shipbest/dhl";
 import { ChannelNamesProvider } from "@/components/ChannelLabel";
 import { getT } from "@/lib/prefs";
 import { leaveCustomerAction, portalLogoutAction } from "../actions";
@@ -48,7 +49,10 @@ export default async function PortalLayout({ children }: { children: React.React
               { href: "/portal/shipments", label: "我的面单", icon: "list" },
             ],
           },
-          { title: "国际面单", soon: true, items: [{ href: "#intl", label: "国际下单", icon: "globe" }] },
+          // 开通了 DHL 渠道的客户才能国际下单
+          portalChannelCodes(me.id).some(isDhlCode)
+            ? { title: "国际面单", items: [{ href: "/portal/intl", label: "国际下单", icon: "globe" }] }
+            : { title: "国际面单", soon: true, items: [{ href: "#intl", label: "国际下单", icon: "globe" }] },
           {
             title: "账户",
             items: [

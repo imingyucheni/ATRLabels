@@ -67,6 +67,8 @@ export const FEDEX_PRESET: StampOverride = { x: 0.2, y: 3.9, maxWidth: 2.5, font
 export function presetForChannel(name: string): StampOverride | null {
   if (/usps/i.test(name)) return USPS_PRESET;
   if (/fedex/i.test(name)) return FEDEX_PRESET;
+  // DHL 国际件：面单版式紧凑，品名 / SKU 在商业发票上，默认不加印
+  if (/\bDHL\b/i.test(name)) return { enabled: false };
   return null;
 }
 

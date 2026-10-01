@@ -12,6 +12,8 @@ import type {
 
 import { ShipBestError } from "./errors";
 import { getJiaguClient, isJiaguCode, jgOrders, type JiaguClient } from "./jiagu";
+import { DhlClient, dhlConfig, dhlOrders, dhlSettings, isDhlCode, mockDhlTransport, type DhlConfig } from "./dhl";
+import { mockLabelPdf } from "../labels";
 
 /** ShipBest 渠道名后面加的标记（只有后台看得到，客户看到的是物流商名称） */
 export const SB_SUFFIX = " · SB";
@@ -307,9 +309,19 @@ export class SandboxShipBestClient extends MockShipBestClient {
  * 订单查询 / 取消按自定义单号判断是哪家的单（嘉谷的单在 provider_orders 里有记录）。
  */
 export class MultiProviderClient implements ShipBestClient {
-  constructor(private sb: ShipBestClient | null, private jg: JiaguClient | null) {}
+  constructor(private sb: ShipBestClient | null, private jg: JiaguClient | null, private dhl: DhlClient | null = null) {}
 
-  private pick(code: string): ShipBestClient | JiaguClient {
+  private isDhlOrder(key: { orderNo?: string; customNo?: string }) {
+    return !!this.dhl && !!key.customNo && !!dhlOrders.get(key.customNo);
+  }
+
+  private dhlOr(): DhlClient {
+    if (!this.dhl) throw new ShipBestError(10023, "DHL 没有启用或账号没填完整（设置 → DHL Express）");
+    return this.dhl;
+  }
+
+  private pick(code: string): ShipBestClient | JiaguClient | DhlClient {
+    if (isDhlCode(code)) return this.dhlOr();
     if (isJiaguCode(code)) {
       if (!this.jg) throw new ShipBestError(10023, "嘉谷接口没有启用或没有填写账号（设置 → 嘉谷万邑）");
       return this.jg;
@@ -325,12 +337,14 @@ export class MultiProviderClient implements ShipBestClient {
   async verify() {
     if (this.sb) await this.sb.verify();
     if (this.jg) await this.jg.verify();
+    if (this.dhl) await this.dhl.verify();
   }
 
   async getProducts() {
     const out: Product[] = [];
     if (this.sb) out.push(...(await this.sb.getProducts()).map((p) => ({ ...p, name: p.name.endsWith(SB_SUFFIX) ? p.name : `${p.name}${SB_SUFFIX}` })));
     if (this.jg) out.push(...(await this.jg.getProducts()));
+    if (this.dhl) out.push(...(await this.dhl.getProducts()));
     return out;
   }
 
@@ -340,6 +354,7 @@ export class MultiProviderClient implements ShipBestClient {
 
   async createOrder(customNo: string, code: string, req: ShipmentRequest, remark?: string) {
     const c = this.pick(code);
+    if (c === this.dhl) return this.dhl!.createOrder(customNo, code, req, remark);
     if (c === this.jg) {
       const name = (db().prepare("SELECT name FROM channels WHERE code = ?").get(code) as { name: string } | undefined)?.name;
       return this.jg!.createOrder(customNo, code, req, name ?? code);
@@ -348,12 +363,14 @@ export class MultiProviderClient implements ShipBestClient {
   }
 
   async getOrder(key: { orderNo?: string; customNo?: string }) {
+    if (this.isDhlOrder(key)) return this.dhl!.getOrder(key.customNo!);
     if (this.isJgOrder(key)) return this.jg!.getOrder(key.customNo!);
     if (!this.sb) throw new ShipBestError(11202, "订单不存在");
     return this.sb.getOrder(key);
   }
 
   async cancelOrder(key: { orderNo?: string; customNo?: string }) {
+    if (this.isDhlOrder(key)) return this.dhl!.cancelOrder(key.customNo!);
     if (this.isJgOrder(key)) return this.jg!.cancelOrder(key.customNo!);
     if (!this.sb) throw new ShipBestError(11202, "订单不存在");
     return this.sb.cancelOrder(key);
@@ -416,17 +433,62 @@ export function getTestAccountClient(): ShipBestClient {
   return testWrap.client;
 }
 
+/** DHL 客户端（按配置缓存）；模拟模式下启用了 DHL 就用模拟的 DHL */
+let dhlCache: { key: string; client: DhlClient } | null = null;
+export function getDhlClient(mock = false): DhlClient | null {
+  const cfg: DhlConfig | null = dhlConfig() ?? (mock && dhlSettings().enabled ? { apiKey: "mock", apiSecret: "mock", accountNumber: "mock", baseUrl: "mock://dhl", labelTemplate: "ECOM26_A6_002", paperless: true, originCountry: (dhlSettings().originCountry || "CN").toUpperCase() } : null);
+  if (!cfg) return null;
+  const isMock = mock || cfg.baseUrl.startsWith("mock://");
+  const key = JSON.stringify([cfg, isMock]);
+  if (dhlCache?.key !== key) {
+    dhlCache = { key, client: new DhlClient(cfg, isMock ? mockDhlTransport((no, t, to) => mockLabelPdf(no, { channel: "DHL Express", tracking: t, to })) : undefined) };
+  }
+  return dhlCache.client;
+}
+
+/** 模拟模式：尾程用模拟 ShipBest，DHL 渠道（启用时）交给模拟 DHL；渠道名保持原样 */
+class MockWithDhl implements ShipBestClient {
+  constructor(private mock: MockShipBestClient, private dhl: DhlClient) {}
+  private isDhl(key: { customNo?: string }) {
+    return !!key.customNo && !!dhlOrders.get(key.customNo);
+  }
+  async verify() {}
+  async getProducts() {
+    return [...(await this.mock.getProducts()), ...(await this.dhl.getProducts())];
+  }
+  trialPrice(code: string, req: ShipmentRequest) {
+    return isDhlCode(code) ? this.dhl.trialPrice(code, req) : this.mock.trialPrice(code, req);
+  }
+  createOrder(customNo: string, code: string, req: ShipmentRequest, remark?: string) {
+    return isDhlCode(code) ? this.dhl.createOrder(customNo, code, req, remark) : this.mock.createOrder(customNo, code, req);
+  }
+  getOrder(key: { orderNo?: string; customNo?: string }) {
+    return this.isDhl(key) ? this.dhl.getOrder(key.customNo!) : this.mock.getOrder(key);
+  }
+  cancelOrder(key: { orderNo?: string; customNo?: string }) {
+    return this.isDhl(key) ? this.dhl.cancelOrder(key.customNo!) : this.mock.cancelOrder(key);
+  }
+}
+let mockWithDhl: { dhl: DhlClient; client: MockWithDhl } | null = null;
+
 export function getShipBestClient(): ShipBestClient {
   const c = shipbestConfig();
-  if (c.mode === "mock") return (g.__shipbestMock ??= new MockShipBestClient());
+  if (c.mode === "mock") {
+    const mock = (g.__shipbestMock ??= new MockShipBestClient());
+    const dhl = getDhlClient(true);
+    if (!dhl) return mock;
+    if (mockWithDhl?.dhl !== dhl) mockWithDhl = { dhl, client: new MockWithDhl(mock, dhl) };
+    return mockWithDhl.client;
+  }
   const jg = getJiaguClient();
+  const dhl = getDhlClient();
   const hasSb = !!(c.apiId && c.token);
-  if (!hasSb && !jg) {
+  if (!hasSb && !jg && !dhl) {
     throw new Error("还没有填写 ShipBest API ID / Token，请到后台“设置 → ShipBest 连接”填写");
   }
-  const key = `${c.mode}|${c.baseUrl}|${c.apiId}|${c.token}|${jg ? "jg" : ""}`;
+  const key = `${c.mode}|${c.baseUrl}|${c.apiId}|${c.token}|${jg ? "jg" : ""}|${dhlCache?.key ?? ""}`;
   if (live?.key !== key || live.jg !== jg) {
-    const real = new MultiProviderClient(hasSb ? new HttpShipBestClient(c.baseUrl, c.apiId, c.token) : null, jg);
+    const real = new MultiProviderClient(hasSb ? new HttpShipBestClient(c.baseUrl, c.apiId, c.token) : null, jg, dhl);
     live = { key, jg, client: c.mode === "sandbox" ? new SandboxShipBestClient(real) : real };
   }
   return live.client;

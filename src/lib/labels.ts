@@ -24,7 +24,13 @@ export function sniffMime(buf: Buffer, headerType: string | null): { mime: strin
 export async function downloadLabel(url: string, customNo: string, extra: { from?: string[] } = {}): Promise<{ path: string; mime: string }> {
   let buf: Buffer;
   let headerType: string | null = null;
-  if (url.startsWith("mock://")) {
+  if (url.startsWith("dhl://")) {
+    // DHL 出单时直接返回了面单内容，存在本地订单记录里
+    const { dhlLabelBytes } = await import("./shipbest/dhl");
+    const b = dhlLabelBytes(url.slice("dhl://".length));
+    if (!b) throw new Error("DHL 面单内容不存在");
+    buf = b;
+  } else if (url.startsWith("mock://")) {
     const q = new URL(url.replace("mock://", "http://mock/")).searchParams;
     buf = mockLabelPdf(customNo, { channel: q.get("ch") ?? undefined, tracking: q.get("t") ?? undefined, to: q.get("to")?.split("|"), from: extra.from });
   } else {

@@ -1,4 +1,5 @@
 import { presetForChannel } from "@/lib/stampConfig";
+import { dhlSettings, DHL_LABEL_TEMPLATES, isDhlCode } from "@/lib/shipbest/dhl";
 import { fmtTime } from "@/lib/time";
 import { localDate } from "@/lib/reports";
 import { labelSkuStats } from "@/lib/labelSku";
@@ -9,14 +10,14 @@ import { acceptedCount, getTerms, unsignedCustomers, usingDefaultTerms } from "@
 import { ADJUSTMENT_POLICY_LABEL, channelCustomerCounts, getSettings, listChannels } from "@/lib/db";
 import { BALANCE_RULE_LABEL } from "@/lib/ledger";
 import { computePrice, money, resolveRule, type MarkupRule } from "@/lib/pricing";
-import { isSandboxSite, shipbestConfig, type ShipBestMode } from "@/lib/shipbest/client";
+import { isMockMode, isSandboxSite, shipbestConfig, type ShipBestMode } from "@/lib/shipbest/client";
 import { isProductionSite, siteSwitch } from "@/lib/sites";
 import StampSettings from "@/components/StampSettings";
 import SettingsSection, { SettingsToggleAll } from "@/components/SettingsSection";
 import FlashForm from "@/components/FlashForm";
 import RuleInputs from "@/components/RuleInputs";
 import { DEFAULT_JG_WAREHOUSES, isJiaguCode, JG_PREFIX, JG_SUFFIX } from "@/lib/shipbest/jiagu";
-import { saveTermsAction, saveSiteAction, saveJiaguAction, testJiaguAction, resetTestEnvAction, resetSandboxAction, resetTermsAction, saveChannelLimitsAction, savePromotionAction, togglePromotionAction, saveSmtpAction, testMailAction, setFinancePinAction, clearTestDataAction, saveAddrCheckAction, testAddrAction, refreshFxAction, saveChannelsAction, savePaymentSettingsAction, saveSettingsAction, saveShipBestAction, syncChannelsAction, verifyAction } from "@/app/actions";
+import { saveTermsAction, saveSiteAction, saveJiaguAction, testJiaguAction, saveDhlAction, testDhlAction, resetTestEnvAction, resetSandboxAction, resetTermsAction, saveChannelLimitsAction, savePromotionAction, togglePromotionAction, saveSmtpAction, testMailAction, setFinancePinAction, clearTestDataAction, saveAddrCheckAction, testAddrAction, refreshFxAction, saveChannelsAction, savePaymentSettingsAction, saveSettingsAction, saveShipBestAction, syncChannelsAction, verifyAction } from "@/app/actions";
 import { cnyToPay, usdCnyQuote } from "@/lib/fx";
 import FilePick from "@/components/FilePick";
 import { CarrierMark } from "@/components/ChannelLabel";
@@ -235,6 +236,67 @@ export default async function SettingsPage() {
             </FlashForm>
             <div className="row" style={{ marginTop: 8 }}>
               <FlashForm action={testJiaguAction} submitLabel="测试连接 / 查余额" submitClass="" inline />
+            </div>
+          </SettingsSection>
+        );
+      })()}
+
+      {(() => {
+        const d = dhlSettings();
+        const ready = !!(d.apiKey && d.apiSecret && d.accountNumber);
+        const dhlChannels = listChannels().filter((c) => isDhlCode(c.code));
+        return (
+          <SettingsSection
+            id="dhl"
+            title={t("DHL Express 国际快递")}
+            badge={<span className={`badge ${d.enabled && (ready || isMockMode()) ? "ok" : "pending"}`}>{d.enabled && ready ? (d.mode === "live" ? t("正式") : t("测试环境")) : d.enabled && isMockMode() ? t("模拟") : ready ? t("已停用") : t("未配置")}</span>}
+            summary={dhlChannels.length ? t("{a} 个渠道，启用 {b} 个", { a: dhlChannels.length, b: dhlChannels.filter((c) => c.enabled).length }) : undefined}
+          >
+            <p className="small muted" style={{ marginTop: 0 }}>
+              {t("连接我们自己的 DHL Express 账号（MyDHL API）。启用后点“物流渠道 → 同步渠道”，会出现 DHL Express Worldwide / 12:00 / 9:00 三个渠道（名称后面带“· DHL”），再到客户详情里给客户开通。收件国家不是美国时，报价只走 DHL；寄美国不走 DHL。API Key / Secret 和付款账号向 DHL 客户经理申请（developer.dhl.com 的 MyDHL API）。")}
+            </p>
+            <FlashForm action={saveDhlAction} submitLabel="保存并测试连接" locked="修改后所有客户的 DHL 报价和出单都会受影响" review>
+              <div className="grid" style={{ margin: "12px 0" }}>
+                <label className="f">{t("启用")}
+                  <select name="enabled" defaultValue={d.enabled ? "1" : "0"}>
+                    <option value="1">{t("启用")}</option>
+                    <option value="0">{t("停用")}</option>
+                  </select>
+                </label>
+                <label className="f">{t("环境")}
+                  <select name="mode" defaultValue={d.mode}>
+                    <option value="test">{t("测试环境（不会真实出单）")}</option>
+                    <option value="live">{t("正式（真实出单、DHL 计费）")}</option>
+                  </select>
+                </label>
+                <label className="f">API Key
+                  <input name="apiKey" defaultValue={d.apiKey} autoComplete="off" />
+                </label>
+                <label className="f">API Secret
+                  <input name="apiSecret" type="password" autoComplete="new-password" placeholder={d.apiSecret ? t("已保存（尾号 {tail}），留空不修改", { tail: d.apiSecret.slice(-4) }) : ""} />
+                </label>
+                <label className="f">{t("DHL 付款账号（Account Number）")}
+                  <input name="accountNumber" defaultValue={d.accountNumber} inputMode="numeric" autoComplete="off" />
+                </label>
+                <label className="f">{t("面单纸张")}
+                  <select name="labelTemplate" defaultValue={d.labelTemplate ?? "ECOM26_A6_002"}>
+                    {Object.entries(DHL_LABEL_TEMPLATES).map(([k, v]) => <option key={k} value={k}>{t(v)}</option>)}
+                  </select>
+                </label>
+                <label className="f">{t("电子发票（Paperless Trade）")}
+                  <select name="paperless" defaultValue={d.paperless === false ? "0" : "1"}>
+                    <option value="1">{t("开启：DHL 电子传送商业发票，不用打印随货")}</option>
+                    <option value="0">{t("关闭：打印商业发票随货（3 份）")}</option>
+                  </select>
+                </label>
+                <label className="f">{t("商品原产国默认值")}
+                  <input name="originCountry" defaultValue={d.originCountry ?? "CN"} maxLength={2} placeholder="CN" />
+                </label>
+              </div>
+              <p className="small muted">{t("报关：贸易条款 DAP（关税、进口税由收件人支付）；每个 HS 编码申报价值不超过 $2,500 时自动按 NO EEI 30.37(a) 免 AES 申报。DHL 没有作废运单的接口：没揽收的运单不计费，客户取消时系统会先查轨迹，没揽收就直接作废退款。")}</p>
+            </FlashForm>
+            <div className="row" style={{ marginTop: 8 }}>
+              <FlashForm action={testDhlAction} submitLabel="测试连接" submitClass="" inline />
             </div>
           </SettingsSection>
         );

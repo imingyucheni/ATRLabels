@@ -2,6 +2,7 @@ import { requireAdmin } from "@/lib/auth";
 import { isSandboxSite, shipbestMode } from "@/lib/shipbest/client";
 import { siteSwitch } from "@/lib/sites";
 import { currentEnv } from "@/lib/db";
+import { dhlSettings } from "@/lib/shipbest/dhl";
 import { pendingTopupCount } from "@/lib/topup";
 import { pendingResets } from "@/lib/passwordReset";
 import { newLeadCount } from "@/lib/leads";
@@ -75,7 +76,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
               { href: "/coverage", label: "派送范围与价格", icon: "map" },
             ],
           },
-          { title: "国际面单", soon: true, items: [{ href: "#intl", label: "国际下单", icon: "globe" }] },
+          dhlSettings().enabled
+            ? { title: "国际面单", items: [{ href: "/ship/intl", label: "国际下单（DHL）", icon: "globe" }] }
+            : { title: "国际面单", soon: true, items: [{ href: "/settings#dhl", label: "国际下单", icon: "globe" }] },
           { title: "系统", items: [{ href: "/settings", label: "设置", icon: "settings" }, { href: "/backups", label: "数据备份", icon: "backup" }] },
         ]}
       />
