@@ -49,9 +49,9 @@ const STREET_HINT = /\b(st|street|ave|avenue|rd|road|blvd|boulevard|dr|drive|ln|
 
 // “City, ST 12345” / “City ST 12345-6789” / “City, Texas 12345” / “ST 12345”
 // 城市部分用“尽量不要”（??）：先试整行开头就是州名（West Virginia 25301），避免把州名的前半截当成城市
-const CITY_LINE = new RegExp(`^(?:(.*?)[,\\s]+)??(${STATE_NAMES}|[A-Za-z]{2})\\.?[,\\s]+(\\d{5}(?:-?\\d{4})?)$`, "i");
-/** 9 位邮编没写横杠（972011234）时补成 97201-1234 */
-const zip9 = (z: string) => (/^\d{9}$/.test(z) ? `${z.slice(0, 5)}-${z.slice(5)}` : z);
+const CITY_LINE = new RegExp(`^(?:(.*?)[,\\s]+)??(${STATE_NAMES}|[A-Za-z]{2})\\.?[,\\s]+(\\d{5}(?:-?\\d{4}|-\\d{0,3})?)$`, "i");
+/** 9 位邮编没写横杠（972011234）时补成 97201-1234；后 4 位没写全（91789-281）只留前 5 位 */
+const zip9 = (z: string) => (/^\d{9}$/.test(z) ? `${z.slice(0, 5)}-${z.slice(5)}` : /^\d{5}-\d{0,3}$/.test(z) ? z.slice(0, 5) : z);
 
 /**
  * “城市”里其实带着街道（以门牌号开头）：拆成街道 + 城市。
@@ -231,7 +231,7 @@ export function parseAddress(text: string): Partial<Address> {
   }
   if (cityIdx < 0) {
     // 只有邮编：单独一行 5 位数字
-    const zi = lines.findIndex((l) => /^\d{5}(-?\d{4})?$/.test(l));
+    const zi = lines.findIndex((l) => /^\d{5}(-?\d{4}|-\d{0,3})?$/.test(l));
     if (zi >= 0) {
       out.zipCode = zip9(lines[zi]);
       lines.splice(zi, 1);

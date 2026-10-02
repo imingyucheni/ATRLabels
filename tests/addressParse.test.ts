@@ -60,4 +60,11 @@ describe("体验官反馈的写法", () => {
     });
     expect(parseAddress("Max Muster\nHauptstrasse 5\n10115 Berlin\nGermany")).toMatchObject({ city: "Berlin", zipCode: "10115", country: "DE" });
   });
+
+  it("邮编后 4 位没写全（91789-281）：只取前 5 位，城市州照常识别", () => {
+    expect(parseAddress("test\n19515 E WALNUT DR N\nWALNUT CA   91789-281")).toMatchObject({
+      address1: "19515 E WALNUT DR N", city: "WALNUT", province: "CA", zipCode: "91789", country: "US",
+    });
+    expect(parseAddress("test\n19515 E WALNUT DR N\nWALNUT CA   91789-281").address2).toBeUndefined();
+  });
 });
