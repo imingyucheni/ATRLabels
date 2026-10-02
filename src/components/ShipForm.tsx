@@ -17,6 +17,9 @@ import type { ChannelQuote } from "@/lib/service";
 import type { Address, ShipmentRequest, UnitSystem } from "@/lib/shipbest/types";
 import type { RecentPackage, SkuPreset } from "@/lib/portal";
 import type { OrderDraft } from "@/lib/drafts";
+import { DIM_UNITS, isDimUnit, isWeightUnit, toSystem, unitsOf, WEIGHT_UNITS, type DimUnit, type WeightUnit } from "@/lib/units";
+
+const UNIT_PREF = "atr_pkg_units";
 import { deleteDraftAction, saveDraftAction, type DraftScope } from "@/app/draftActions";
 
 type Sku = Record<"sku" | "productNameCn" | "productNameEn" | "quantity" | "declaredUnitPrice" | "hsCode" | "productNature" | "originCountry" | "material", string>;
@@ -50,7 +53,6 @@ const NATURE_PRESETS = [
   { value: "2,4,5", label: "液体" },
 ];
 
-const UNIT_LABEL: Record<UnitSystem, [string, string]> = { 1: ["g", "cm"], 2: ["kg", "cm"], 3: ["lb", "in"] };
 
 /** 报价行：后台看到完整信息（成本、利润），客户端只有价格 */
 type Quote = PublicQuote & Partial<Pick<ChannelQuote, "cost" | "listCost" | "rule" | "profit" | "zoneEstimated">>;
@@ -161,7 +163,31 @@ export default function ShipForm(props: {
   // 国际下单：收件国家先空着，让客户选
   const [recipient, setRecipient] = useState<Partial<Address>>(init?.recipient ?? { country: props.intl ? "" : "US" });
   const intlDest = !!recipient.country && recipient.country.toUpperCase() !== "US";
-  const [unit, setUnit] = useState<UnitSystem>(init?.pkg.displayUnitSystem ?? props.defaultUnit);
+  // 尺寸、重量单位分开选（草稿里存了原来选的单位就用它）
+  const initUnits = init?.pkg.dimUnit && init.pkg.weightUnit ? { dim: init.pkg.dimUnit, weight: init.pkg.weightUnit } : unitsOf(init?.pkg.displayUnitSystem ?? props.defaultUnit);
+  const [dimU, setDimU] = useState<DimUnit>(initUnits.dim);
+  const [wtU, setWtU] = useState<WeightUnit>(initUnits.weight);
+  // 新订单：用这台电脑上次选的单位
+  useEffect(() => {
+    if (init) return;
+    try {
+      const v = JSON.parse(localStorage.getItem(UNIT_PREF) ?? "null");
+      if (isDimUnit(v?.dim)) setDimU(v.dim);
+      if (isWeightUnit(v?.weight)) setWtU(v.weight);
+    } catch {
+      /* 浏览器不让存就用默认 */
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const pickUnits = (dim: DimUnit, weight: WeightUnit) => {
+    dirty(setDimU)(dim);
+    setWtU(weight);
+    try {
+      localStorage.setItem(UNIT_PREF, JSON.stringify({ dim, weight }));
+    } catch {
+      /* 忽略 */
+    }
+  };
   const [pkg, setPkg] = useState(
     init
       ? { length: numText(init.pkg.length), width: numText(init.pkg.width), height: numText(init.pkg.height), weight: numText(init.pkg.weight) }
@@ -204,7 +230,8 @@ export default function ShipForm(props: {
   const [addrAck, setAddrAck] = useState(false);
   const [requote, setRequote] = useState(false);
 
-  const [wu, lu] = UNIT_LABEL[unit];
+  const lu = dimU;
+  const wu = wtU;
 
   // 表单内容变了，之前的报价作废
   const dirty = <T,>(fn: (v: T) => void) => (v: T) => {
@@ -215,9 +242,12 @@ export default function ShipForm(props: {
     setAddrAck(false);
   };
 
-  function buildRequest(): ShipmentRequest {
+  /** forDraft：草稿存原始输入和选的单位（下次打开原样显示）；报价、出单换算成服务商认的单位组合 */
+  function buildRequest(forDraft = false): ShipmentRequest {
     const num = (s: string) => Number(s) || 0;
     const totalQty = skus.reduce((a, s) => a + (num(s.quantity) || 1), 0) || 1;
+    const conv = toSystem(dimU, wtU, num(pkg.weight));
+    const unit = conv.system;
     return {
       sender: sender as Address,
       recipient: recipient as Address,
@@ -225,8 +255,9 @@ export default function ShipForm(props: {
         length: num(pkg.length),
         width: num(pkg.width),
         height: num(pkg.height),
-        weight: num(pkg.weight),
+        weight: forDraft ? num(pkg.weight) : conv.weight,
         displayUnitSystem: unit,
+        ...(forDraft ? { dimUnit: dimU, weightUnit: wtU } : {}),
         signServiceType: signType as 0 | 1 | 2 | 3,
         insuranceService: insurance.on ? 1 : 0,
         insuranceFee: insurance.on ? num(insurance.fee) : undefined,
@@ -247,7 +278,7 @@ export default function ShipForm(props: {
         length: num(pkg.length),
         width: num(pkg.width),
         height: num(pkg.height),
-        weight: Math.round((num(pkg.weight) / totalQty) * 1000) / 1000,
+        weight: Math.round((conv.weight / totalQty) * 1000) / 1000,
         unit,
       })),
     };
@@ -340,7 +371,7 @@ export default function ShipForm(props: {
     if (!props.draftScope) return;
     const scope = props.draftScope;
     startSaveDraft(async () => {
-      const r = await saveDraftAction({ scope, id: how === "copy" ? undefined : draftId, intl: !!props.intl, request: buildRequest(), customerRef, remark });
+      const r = await saveDraftAction({ scope, id: how === "copy" ? undefined : draftId, intl: !!props.intl, request: buildRequest(true), customerRef, remark });
       if (r.error) return setDraftMsg(r.error);
       if (how === "next") {
         // 换一个空白表单（?n= 让页面重新生成表单）
@@ -597,16 +628,26 @@ export default function ShipForm(props: {
       </div>
 
       <div className="card">
-        <h2>{t("包裹")}</h2>
+        <div className="pkg-head">
+          <h2>{t("包裹")}</h2>
+          <div className="unit-toggles">
+            <div className="seg" role="group" aria-label={t("尺寸单位")}>
+              {DIM_UNITS.map((u) => <button key={u} type="button" className={dimU === u ? "on" : ""} aria-pressed={dimU === u} onClick={() => pickUnits(u, wtU)}>{u}</button>)}
+            </div>
+            <div className="seg" role="group" aria-label={t("重量单位")}>
+              {WEIGHT_UNITS.map((u) => <button key={u} type="button" className={wtU === u ? "on" : ""} aria-pressed={wtU === u} onClick={() => pickUnits(dimU, u)}>{u}</button>)}
+            </div>
+          </div>
+        </div>
         {!!props.recentPackages?.length && (
           <div className="pkg-presets">
             <span className="small muted">{t("常用尺寸")}</span>
             {props.recentPackages.map((p, i) => {
-              const [lu, wu] = p.unit === 3 ? ["in", "lb"] : p.unit === 2 ? ["cm", "kg"] : ["cm", "g"];
-              const on = unit === p.unit && pkg.length === String(p.length) && pkg.width === String(p.width) && pkg.height === String(p.height) && pkg.weight === String(p.weight);
+              const { dim: lu, weight: wu } = unitsOf(p.unit);
+              const on = dimU === lu && wtU === wu && pkg.length === String(p.length) && pkg.width === String(p.width) && pkg.height === String(p.height) && pkg.weight === String(p.weight);
               return (
                 <button key={i} type="button" className={`chip${on ? " on" : ""}`} title={t("最近 90 天用过 {n} 次", { n: p.count })}
-                  onClick={() => { dirty(setUnit)(p.unit); dirty(setPkg)({ length: String(p.length), width: String(p.width), height: String(p.height), weight: String(p.weight) }); }}>
+                  onClick={() => { pickUnits(lu, wu); dirty(setPkg)({ length: String(p.length), width: String(p.width), height: String(p.height), weight: String(p.weight) }); }}>
                   {p.length}×{p.width}×{p.height} {lu} · {p.weight} {wu}
                 </button>
               );
@@ -614,20 +655,13 @@ export default function ShipForm(props: {
           </div>
         )}
         <div className="grid pkg-grid">
-          <label className="f">{t("单位")}
-            <select value={unit} onChange={(e) => dirty(setUnit)(Number(e.target.value) as UnitSystem)}>
-              <option value={3}>lb / in</option>
-              <option value={2}>kg / cm</option>
-              <option value={1}>g / cm</option>
-            </select>
-          </label>
           {(["length", "width", "height"] as const).map((k) => (
-            <label key={k} className="f dim"><span className="req">{t({ length: "长（{u}）", width: "宽（{u}）", height: "高（{u}）" }[k], { u: lu })}</span>
-              <input type="number" min="0" step="0.01" inputMode="decimal" value={pkg[k]} onChange={(e) => dirty(setPkg)({ ...pkg, [k]: e.target.value })} />
+            <label key={k} className="f dim"><span className="req">{t({ length: "长", width: "宽", height: "高" }[k])}</span>
+              <span className="unit-input"><input type="number" min="0" step="0.01" inputMode="decimal" value={pkg[k]} onChange={(e) => dirty(setPkg)({ ...pkg, [k]: e.target.value })} /><i>{lu}</i></span>
             </label>
           ))}
-          <label className="f"><span className="req">{t("重量（{u}）", { u: wu })}</span>
-            <input type="number" min="0" step="0.001" inputMode="decimal" value={pkg.weight} onChange={(e) => dirty(setPkg)({ ...pkg, weight: e.target.value })} />
+          <label className="f dim"><span className="req">{t("重量")}</span>
+            <span className="unit-input"><input type="number" min="0" step="0.001" inputMode="decimal" value={pkg.weight} onChange={(e) => dirty(setPkg)({ ...pkg, weight: e.target.value })} /><i>{wu}</i></span>
           </label>
           <label className="f">{t("签名服务")}
             <select value={signType} onChange={(e) => dirty(setSignType)(Number(e.target.value))}>

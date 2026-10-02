@@ -47,6 +47,9 @@ export interface PackageInfo {
   height: number;
   weight: number;
   displayUnitSystem: UnitSystem;
+  /** 页面上选的单位（只有草稿里存，数值是没换算过的原始输入）；出单时不传 */
+  dimUnit?: "in" | "cm";
+  weightUnit?: "oz" | "lb" | "g" | "kg";
   /** 0 不需要签名 1 直接签名 2 间接签名 3 成人签名 */
   signServiceType: 0 | 1 | 2 | 3;
   insuranceService: 0 | 1;

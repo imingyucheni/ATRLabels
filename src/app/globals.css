@@ -1634,3 +1634,20 @@ fieldset.ro-wrap:disabled button[type="submit"], fieldset.ro-wrap:disabled form 
   .logo-track > [aria-hidden="true"] { display: none; }
   .us-logos > .logo-marquee { -webkit-mask-image: none; mask-image: none; }
 }
+
+/* 包裹：尺寸 / 重量单位分开切换，输入框后面带单位 */
+.pkg-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.pkg-head h2 { margin: 0; }
+.unit-toggles { display: flex; gap: 8px; flex-wrap: wrap; }
+.seg { display: inline-flex; padding: 3px; gap: 2px; background: var(--sunken); border: 1px solid var(--line); border-radius: 9px; }
+.seg button { all: unset; cursor: pointer; padding: 4px 11px; border-radius: 6px; font-size: 13px; font-weight: 600; color: var(--text-2); line-height: 1.4; }
+.seg button:hover { color: var(--text); }
+.seg button.on { background: var(--accent); color: var(--on-accent); }
+.seg button:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: 1px; }
+.unit-input { display: flex; align-items: stretch; }
+.unit-input input { flex: 1; min-width: 0; border-top-right-radius: 0 !important; border-bottom-right-radius: 0 !important; }
+.unit-input i { display: flex; align-items: center; padding: 0 10px; font-style: normal; font-size: 13px; font-weight: 600; color: var(--text-2); background: var(--sunken); border: 1px solid var(--line-strong); border-left: 0; border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
+@media (max-width: 760px) {
+  .seg button { padding: 7px 12px; }
+  .pkg-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
