@@ -8,10 +8,10 @@ import { redirect } from "next/navigation";
 import { copySource, recentPackages, skuPresets } from "@/lib/portal";
 import { isInternational } from "@/lib/shipbest/dhl";
 import { getT } from "@/lib/prefs";
-import { draftRows, getDraft } from "@/lib/drafts";
+import { draftRows, getDraft, MAX_DRAFTS } from "@/lib/drafts";
 import DraftList from "@/components/DraftList";
 
-export default async function PortalShipPage({ searchParams }: { searchParams: Promise<{ copy?: string; draft?: string }> }) {
+export default async function PortalShipPage({ searchParams }: { searchParams: Promise<{ copy?: string; draft?: string; n?: string }> }) {
   const me = await requireCustomer();
   const sp = await searchParams;
   const draft = getDraft(me.id, Number(sp.draft));
@@ -37,9 +37,9 @@ export default async function PortalShipPage({ searchParams }: { searchParams: P
       {!customerChannels(me.id).length && (
         <div className="alert warn">{t("您的账户还没有开通物流渠道，暂时无法查询运费和下单。请联系客服开通")}{s.supportContact ? `${t("：")}${s.supportContact}` : t("。")}</div>
       )}
-      <DraftList scope="portal" drafts={draftRows(me.id, { us: "/portal/ship", intl: "/portal/intl" })} currentId={draft?.id} />
+      <DraftList scope="portal" drafts={draftRows(me.id, { us: "/portal/ship", intl: "/portal/intl" })} currentId={draft?.id} max={MAX_DRAFTS} newHref={`/portal/ship?n=${Date.now()}`} />
       {src && <div className="alert info">{t("已复制订单 {no} 的收件人、包裹和商品，修改后查询运费下单。", { no: src.ref })}</div>}
-      <ShipForm key={draft ? `d${draft.id}` : src ? `c${src.id}` : "new"} mode="portal" draftScope="portal" draft={draft ?? undefined} copy={src ?? undefined} recentPackages={recentPackages(me.id)} skuPresets={skuPresets(me.id)} senders={listSenders(me.id)} defaultSender={s.sender} wallet={{ balance: me.balance, creditLimit: me.creditLimit, rule: s.balanceRule }} defaultUnit={s.defaultUnit} defaultCurrency={s.defaultCurrency} />
+      <ShipForm key={draft ? `d${draft.id}` : src ? `c${src.id}` : `new${sp.n ?? ""}`} mode="portal" draftScope="portal" draft={draft ?? undefined} copy={src ?? undefined} recentPackages={recentPackages(me.id)} skuPresets={skuPresets(me.id)} senders={listSenders(me.id)} defaultSender={s.sender} wallet={{ balance: me.balance, creditLimit: me.creditLimit, rule: s.balanceRule }} defaultUnit={s.defaultUnit} defaultCurrency={s.defaultCurrency} />
     </>
   );
 }

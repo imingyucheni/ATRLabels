@@ -15,7 +15,7 @@ export interface DraftRow {
 }
 
 /** 下单页上方的草稿列表：继续填写 / 删除。没有草稿时不显示 */
-export default function DraftList({ drafts, scope, currentId }: { drafts: DraftRow[]; scope: DraftScope; currentId?: number }) {
+export default function DraftList({ drafts, scope, currentId, max, newHref }: { drafts: DraftRow[]; scope: DraftScope; currentId?: number; max: number; newHref: string }) {
   const t = useT();
   const [all, setAll] = useState(false);
   const [busy, start] = useTransition();
@@ -25,8 +25,9 @@ export default function DraftList({ drafts, scope, currentId }: { drafts: DraftR
     <div className="card draft-list">
       <div className="draft-head">
         <FileClock size={16} aria-hidden="true" />
-        <b>{t("草稿（{n}）", { n: drafts.length })}</b>
-        <span className="small muted">{t("没确认出单的订单，点“继续填写”接着下单；出单成功后草稿自动删除")}</span>
+        <b>{t("草稿（{n}/{max}）", { n: drafts.length, max })}</b>
+        <span className="small muted">{t("没确认出单的订单，点“继续填写”接着下单；出单成功后草稿自动删除。最多保存 {max} 个。", { max })}</span>
+        {currentId && <Link className="small draft-new" href={newHref}>{t("＋ 填新订单")}</Link>}
       </div>
       <ul>
         {shown.map((d) => (

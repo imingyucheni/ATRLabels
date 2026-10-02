@@ -5,20 +5,21 @@ import { recentPackages, skuPresets } from "@/lib/portal";
 import { dhlConfig, dhlSettings, isDhlCode } from "@/lib/shipbest/dhl";
 import { getT } from "@/lib/prefs";
 import { redirect } from "next/navigation";
-import { draftRows, getDraft } from "@/lib/drafts";
+import { draftRows, getDraft, MAX_DRAFTS } from "@/lib/drafts";
 import DraftList from "@/components/DraftList";
 import { isMockMode } from "@/lib/shipbest/client";
 
 export const dynamic = "force-dynamic";
 
 /** 管理员国际下单：公司自用账户，按 DHL 成本价出单 */
-export default async function AdminIntlShipPage({ searchParams }: { searchParams: Promise<{ draft?: string }> }) {
+export default async function AdminIntlShipPage({ searchParams }: { searchParams: Promise<{ draft?: string; n?: string }> }) {
   const t = await getT();
   const s = getSettings();
   const d = dhlSettings();
   const channels = listChannels(true).filter((c) => isDhlCode(c.code));
   const houseId = houseCustomerId();
-  const draft = getDraft(houseId, Number((await searchParams).draft));
+  const sp = await searchParams;
+  const draft = getDraft(houseId, Number(sp.draft));
   if (draft && !draft.intl) redirect(`/ship?draft=${draft.id}`);
   return (
     <>
@@ -35,8 +36,8 @@ export default async function AdminIntlShipPage({ searchParams }: { searchParams
       {!dhlConfig() && !isMockMode() && <div className="alert warn" style={{ marginTop: 12 }}>{t("DHL 还没有启用或账号没填完整，请先到")} <Link href="/settings#dhl">{t("设置 → DHL Express")}</Link>{t("。")}</div>}
       {!channels.length && <div className="alert warn" style={{ marginTop: 12 }}>{t("还没有 DHL 渠道，请到")} <Link href="/settings#channels">{t("设置 → 物流渠道")}</Link> {t("点“同步渠道”。")}</div>}
       <div style={{ height: 12 }} />
-      <DraftList scope="house" drafts={draftRows(houseId, { us: "/ship", intl: "/ship/intl" })} currentId={draft?.id} />
-      <ShipForm key={draft ? `d${draft.id}` : "new"} mode="house" intl draftScope="house" draft={draft ?? undefined} recentPackages={recentPackages(houseCustomerId())} skuPresets={skuPresets(houseCustomerId())} defaultOrigin={d.originCountry} defaultSender={s.sender} defaultUnit={s.defaultUnit} defaultCurrency="USD" />
+      <DraftList scope="house" drafts={draftRows(houseId, { us: "/ship", intl: "/ship/intl" })} currentId={draft?.id} max={MAX_DRAFTS} newHref={`/ship/intl?n=${Date.now()}`} />
+      <ShipForm key={draft ? `d${draft.id}` : `new${sp.n ?? ""}`} mode="house" intl draftScope="house" draft={draft ?? undefined} recentPackages={recentPackages(houseCustomerId())} skuPresets={skuPresets(houseCustomerId())} defaultOrigin={d.originCountry} defaultSender={s.sender} defaultUnit={s.defaultUnit} defaultCurrency="USD" />
     </>
   );
 }

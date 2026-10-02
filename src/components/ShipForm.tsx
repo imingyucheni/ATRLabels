@@ -333,12 +333,18 @@ export default function ShipForm(props: {
     }
   }
 
-  function onSaveDraft() {
+  /** save = 保存 / 更新当前草稿；copy = 另存为一份新草稿；next = 保存后清空表单，接着填下一单 */
+  function onSaveDraft(how: "save" | "copy" | "next" = "save") {
     if (!props.draftScope) return;
     const scope = props.draftScope;
     startSaveDraft(async () => {
-      const r = await saveDraftAction({ scope, id: draftId, intl: !!props.intl, request: buildRequest(), customerRef, remark });
+      const r = await saveDraftAction({ scope, id: how === "copy" ? undefined : draftId, intl: !!props.intl, request: buildRequest(), customerRef, remark });
       if (r.error) return setDraftMsg(r.error);
+      if (how === "next") {
+        // 换一个空白表单（?n= 让页面重新生成表单）
+        router.push(`${window.location.pathname}?n=${Date.now()}`);
+        return;
+      }
       // 页面上方的草稿列表由服务端刷新（saveDraftAction 里 revalidatePath）；表单不重新加载，填的内容和报价都保留
       setDraftId(r.id);
       setDraftMsg(t("草稿已保存（{time}）。下次在页面上方的“草稿”里点“继续填写”。", { time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) }));
@@ -672,16 +678,26 @@ export default function ShipForm(props: {
           <h2 style={{ margin: 0 }}>{t("报价")}</h2>
           <div className="row" style={{ gap: 8 }}>
             {canDraft && (
-              <button type="button" onClick={onSaveDraft} disabled={savingDraft} title={t("还没确认出单的话先存起来，下次在“草稿”里接着填")}>
-                {savingDraft ? t("保存中…") : draftId ? t("更新草稿") : t("保存草稿")}
-              </button>
+              <>
+                <button type="button" onClick={() => onSaveDraft("save")} disabled={savingDraft} title={t("还没确认出单的话先存起来，下次在“草稿”里接着填")}>
+                  {savingDraft ? t("保存中…") : draftId ? t("更新草稿") : t("保存草稿")}
+                </button>
+                <button type="button" onClick={() => onSaveDraft("next")} disabled={savingDraft} title={t("存好这一单，清空表单接着填下一单")}>
+                  {t("保存并填下一单")}
+                </button>
+              </>
             )}
             <button className="primary" onClick={onQuote} disabled={quoting}>
               {quoting ? t("查询中…") : quotes ? t("重新查询运费") : t("查询运费")}
             </button>
           </div>
         </div>
-        {draftMsg && <div className="small draft-msg" role="status">{draftMsg}</div>}
+        {draftMsg && (
+          <div className="small draft-msg" role="status">
+            {draftMsg}
+            {draftId && <> <button type="button" className="link-btn small" disabled={savingDraft} onClick={() => onSaveDraft("copy")}>{t("另存为一份新草稿")}</button></>}
+          </div>
+        )}
         {quoting && (
           <div className="busy-line" role="status" aria-live="polite">
             <span className="spinner" />

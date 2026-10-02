@@ -67,4 +67,10 @@ export const ux2: Record<string, string> = {
   "可打印在面单上": "can be printed on the label",
   "例如 T-shirt": "e.g. T-shirt",
   "美国国内件可以不填，不填按一件普通货物出单。填了 SKU 可以打印在面单上，方便仓库拣货。": "Optional for US shipments — left empty, it ships as one general item. SKUs you enter can be printed on the label, handy for picking.",
+  "草稿（{n}/{max}）": "Drafts ({n}/{max})",
+  "没确认出单的订单，点“继续填写”接着下单；出单成功后草稿自动删除。最多保存 {max} 个。": "Orders you haven't bought yet. Click “Continue” to pick up where you left off; drafts are removed once the label is bought. Up to {max} drafts.",
+  "＋ 填新订单": "+ New order",
+  "保存并填下一单": "Save & start next",
+  "存好这一单，清空表单接着填下一单": "Save this one and clear the form for the next order",
+  "另存为一份新草稿": "Save as a new draft",
 };
