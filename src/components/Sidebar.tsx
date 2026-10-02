@@ -36,7 +36,19 @@ export default function Sidebar(props: {
   const path = usePathname();
   // 选中“最长匹配”的菜单，避免 /shipments 和 /shipments/new 同时高亮
   const all = props.groups.flatMap((g) => g.items);
-  const match = (i: NavItem) => (i.exact ? path === i.href : path === i.href || path.startsWith(i.href + "/"));
+  // 带 #锚点 的菜单（例如 /settings#pricing）只在地址栏也是这个锚点时高亮
+  const [hash, setHash] = useState("");
+  useEffect(() => {
+    const on = () => setHash(window.location.hash);
+    on();
+    window.addEventListener("hashchange", on);
+    return () => window.removeEventListener("hashchange", on);
+  }, [path]);
+  const match = (i: NavItem) => {
+    const [base, anchor] = i.href.split("#");
+    if (anchor !== undefined) return path === base && hash === `#${anchor}`;
+    return i.exact ? path === i.href : path === i.href || path.startsWith(i.href + "/");
+  };
   const active = all.filter(match).sort((a, b) => b.href.length - a.href.length)[0]?.href;
   // 手机上菜单默认收起，点右上角按钮展开；切换页面后自动收起
   const [open, setOpen] = useState(false);
@@ -87,12 +99,20 @@ export default function Sidebar(props: {
                   <span className="nav-soon"><Lock size={10} strokeWidth={2.4} /> {lang === "en" ? "Soon" : "敬请期待"}</span>
                 </span>
               );
+            // 锚点链接用普通 <a>：同一页里点也会触发 hashchange，设置块才会展开
+            const Nav = i.href.includes("#") ? "a" : Link;
             return (
-              <Link key={i.href} href={i.href} title={mini ? t(i.label) + (i.count ? ` (${i.count})` : "") : undefined} className={`nav-item ${active === i.href ? "active" : ""}`} aria-current={active === i.href ? "page" : undefined}>
+              <Nav key={i.href} href={i.href} onClick={i.href.includes("#") ? (e: React.MouseEvent) => {
+                // 已经在这个锚点上（例如往下翻过了）再点一次：重新展开并滚回去
+                if (window.location.pathname + window.location.hash === i.href) {
+                  e.preventDefault();
+                  window.dispatchEvent(new HashChangeEvent("hashchange"));
+                }
+              } : undefined} title={mini ? t(i.label) + (i.count ? ` (${i.count})` : "") : undefined} className={`nav-item ${active === i.href ? "active" : ""}`} aria-current={active === i.href ? "page" : undefined}>
                 <Icon strokeWidth={1.9} />
                 <span className="nav-label">{t(i.label)}</span>
                 {!!i.count && <span className="nav-count">{i.count}</span>}
-              </Link>
+              </Nav>
             );
           })}
         </nav>

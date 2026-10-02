@@ -5,6 +5,8 @@ import { ChevronDown } from "lucide-react";
 import { useT } from "@/components/I18n";
 
 const TOGGLE_ALL = "settings:toggle-all";
+/** 一个锚点同时展开几块：侧边栏「渠道与价格」= #pricing，滚到第一块 */
+const HASH_GROUPS: Record<string, string[]> = { pricing: ["channels", "rules", "promotions", "limits"] };
 
 /**
  * 设置页的一块：已经设置好的默认收起，标题行显示当前状态；需要处理的默认展开。
@@ -26,9 +28,11 @@ export default function SettingsSection({ id, title, badge, summary, actions, de
 
   useEffect(() => {
     const byHash = () => {
-      if (window.location.hash === `#${id}`) {
+      const h = window.location.hash.slice(1);
+      const group = HASH_GROUPS[h];
+      if (h === id || group?.includes(id)) {
         setOpen(true);
-        requestAnimationFrame(() => document.getElementById(id)?.scrollIntoView({ block: "start" }));
+        if (h === id || group?.[0] === id) requestAnimationFrame(() => document.getElementById(id)?.scrollIntoView({ block: "start" }));
       }
     };
     const all = (e: Event) => setOpen((e as CustomEvent<boolean>).detail);
