@@ -31,7 +31,7 @@ export default async function SitePage() {
   const brand = s.brandName;
   const site = s.site;
   const hours = Number(s.cancelWindowHours ?? 48);
-  const logos = ["usps", "uniuni", "gofo", "speedx", "swiftx", "fedex"].map((id) => CARRIERS.find((c) => c.id === id)!);
+  const logos = ["usps", "uniuni", "gofo", "speedx", "swiftx", "fedex", "ontrac"].map((id) => CARRIERS.find((c) => c.id === id)!);
 
   const faq: [string, string][] = [
     [t("怎么开通账户？"), t("填写联系表单或直接联系我们，确认渠道和价格后由我们为你开通。")],
@@ -68,12 +68,17 @@ export default async function SitePage() {
 
         <div className="site-wrap us-logos">
           <span>{t("支持的尾程渠道")}</span>
-          <div>
-            {logos.map((c) => (
-              <span key={c.id} className="carrier-mark md mono">
-                {c.logo ? <img src={c.logo} alt={c.name} /> : c.id === "fedex" ? <span className="carrier-text fedex"><b>Fed</b><i>Ex</i></span> : <span className="carrier-text">{c.name}</span>}
-              </span>
-            ))}
+          {/* 横向循环滚动：同一组 logo 放两遍，滚到一半无缝接上；第二组只是视觉重复，读屏跳过 */}
+          <div className="logo-marquee">
+            <div className="logo-track">
+              {[0, 1].map((dup) =>
+                logos.map((c) => (
+                  <span key={`${dup}-${c.id}`} className="carrier-mark md mono" aria-hidden={dup === 1 || undefined}>
+                    {c.logo ? <img src={c.logo} alt={dup ? "" : c.name} /> : c.id === "fedex" ? <span className="carrier-text fedex"><b>Fed</b><i>Ex</i></span> : <span className="carrier-text">{c.name}</span>}
+                  </span>
+                )),
+              )}
+            </div>
           </div>
         </div>
       </header>
@@ -364,7 +369,6 @@ export default async function SitePage() {
             <span>{site.address || "Chino, CA 91710"}</span>
             {site.phone && <span>{site.phone}</span>}
             {site.wechat && <span>{t("微信")}{t("：")}{site.wechat}</span>}
-            {site.email && <a href={`mailto:${site.email}`}>{site.email}</a>}
             <Link href="/portal">{t("客户登录")}</Link>
           </div>
         </div>

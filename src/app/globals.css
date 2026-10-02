@@ -1618,3 +1618,19 @@ label.check input[type="radio"] { width: auto; }
 /* 只读权限：整块表单禁用 */
 fieldset.ro-wrap { border: 0; padding: 0; margin: 0; min-width: 0; }
 fieldset.ro-wrap:disabled button[type="submit"], fieldset.ro-wrap:disabled form button.primary { display: none; }
+
+/* 官网渠道 logo：横向循环滚动，鼠标放上去暂停；两边渐隐 */
+.us-logos > .logo-marquee { display: block; flex: 1; min-width: 0; overflow: hidden; -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent); mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent); padding: 6px 0 10px; }
+.logo-track { display: flex; flex-wrap: nowrap; gap: 14px; width: max-content; animation: logo-scroll 28s linear infinite; }
+.logo-track > .carrier-mark { flex: 0 0 auto; }
+.logo-marquee:hover .logo-track { animation-play-state: paused; }
+/* 两组 logo 之间也留同样的间距，滚到 -50% 时正好接上 */
+.logo-track::after { content: ""; flex: 0 0 0; }
+@keyframes logo-scroll { from { transform: translateX(0); } to { transform: translateX(calc(-50% - 7px)); } }
+@media (max-width: 760px) { .us-logos > .logo-marquee { width: 100%; } .logo-track { animation-duration: 20s; } }
+/* 系统设置了“减少动态效果”：不滚动，换行显示一组 */
+@media (prefers-reduced-motion: reduce) {
+  .logo-track { animation: none; flex-wrap: wrap; width: auto; }
+  .logo-track > [aria-hidden="true"] { display: none; }
+  .us-logos > .logo-marquee { -webkit-mask-image: none; mask-image: none; }
+}

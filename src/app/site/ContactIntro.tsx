@@ -1,4 +1,4 @@
-import { Check, Clock, Mail, MapPin, MessageCircle, Phone } from "lucide-react";
+import { Check, Clock, MapPin, MessageCircle, Phone, Send } from "lucide-react";
 import { hoursToEnglish } from "@/lib/hoursText";
 import type { getSettings } from "@/lib/db";
 
@@ -17,7 +17,8 @@ export default function ContactIntro({ t, lang, site, compact = false }: { t: (k
       <div className="us-contact-lines">
         {site.wechat && <div><MessageCircle size={16} /> {t("微信")} <b>{site.wechat}</b></div>}
         {site.phone && <div><Phone size={16} /> <b>{site.phone}</b></div>}
-        {site.email && <div><Mail size={16} /> <a href={`mailto:${site.email}`}>{site.email}</a></div>}
+        {/* 邮箱不在官网显示（防垃圾邮件），统一通过表单联系 */}
+        <div><Send size={16} /> {t("填写表单联系我们，我们会尽快回复")}</div>
         <div><MapPin size={16} /> {site.address || "Chino, CA 91710"}</div>
         {site.hours && <div><Clock size={16} /> {lang === "en" ? (t(site.hours) !== site.hours ? t(site.hours) : hoursToEnglish(site.hours)) : site.hours}</div>}
       </div>

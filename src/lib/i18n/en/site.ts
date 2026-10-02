@@ -366,4 +366,7 @@ export const site: Record<string, string> = {
   "Shopify / eBay 店铺对接": "Shopify / eBay integration",
   "Excel 模板批量导入": "Excel template bulk import",
   "Excel 批量导入": "Excel import",
+  "填写表单联系我们，我们会尽快回复": "Use the form and we'll get back to you soon",
+  "在线留言": "Send us a message",
+  "邮箱（官网不显示，访客通过表单联系）": "Email (not shown on the website; visitors use the form)",
 };

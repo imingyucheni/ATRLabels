@@ -161,7 +161,7 @@ export default async function SettingsPage() {
                 <label className="f">{t("签约联系邮箱（服务条款用，官网不显示）")}<input name="contractEmail" type="email" defaultValue={site.contractEmail ?? ""} maxLength={80} placeholder="info@innotronia.com" /></label>
                 <label className="f">{t("微信")}<input name="wechat" defaultValue={site.wechat} maxLength={40} /></label>
                 <label className="f">{t("电话")}<input name="phone" defaultValue={site.phone} maxLength={40} /></label>
-                <label className="f">{t("邮箱")}<input name="email" type="email" defaultValue={site.email} maxLength={80} /></label>
+                <label className="f">{t("邮箱（官网不显示，访客通过表单联系）")}<input name="email" type="email" defaultValue={site.email} maxLength={80} /></label>
                 <label className="f">{t("服务时间")}<input name="hours" defaultValue={site.hours} maxLength={80} /></label>
               </div>
             </FlashForm>
