@@ -64,4 +64,7 @@ export const ux2: Record<string, string> = {
   "未填收件人": "No recipient yet",
   "草稿内容太多，保存不了": "Draft is too large to save",
   "草稿最多保存 50 个，请先删掉一些": "You can keep up to 50 drafts; please delete some first",
+  "可打印在面单上": "can be printed on the label",
+  "例如 T-shirt": "e.g. T-shirt",
+  "美国国内件可以不填，不填按一件普通货物出单。填了 SKU 可以打印在面单上，方便仓库拣货。": "Optional for US shipments — left empty, it ships as one general item. SKUs you enter can be printed on the label, handy for picking.",
 };
