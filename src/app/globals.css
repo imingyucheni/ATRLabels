@@ -1651,3 +1651,4 @@ fieldset.ro-wrap:disabled button[type="submit"], fieldset.ro-wrap:disabled form 
   .seg button { padding: 7px 12px; }
   .pkg-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+#shipgrid .alert { white-space: pre-line; }

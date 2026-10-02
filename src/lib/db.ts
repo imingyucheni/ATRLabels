@@ -459,6 +459,8 @@ export interface Settings {
   terms?: { zh: string; en: string; version: number; updatedAt: string; changeNote?: string } | null;
   /** 嘉谷万邑（Dragon Open API）尾程面单：第二个服务商 */
   jiagu: { enabled: boolean; clientId: string; secret: string; ownershipId: string; customerId: string; warehouseId: string; warehouses?: Record<string, string>; authUrl?: string; apiUrl?: string };
+  /** ShipGrid（SG）：API 密钥 ak_test_… / ak_live_…（测试 / 正式由前缀决定） */
+  shipgrid?: { enabled: boolean; apiKey: string };
   /** DHL Express 官方账号（MyDHL API）国际快递 */
   dhl?: import("./shipbest/dhl").DhlSettings;
   /** eBay 开发者 App（所有卖家共用） */

@@ -3,6 +3,8 @@ import { headers } from "next/headers";
 import { ebaySettings, listStores } from "@/lib/stores";
 import { publicBase } from "@/lib/stores/web";
 import { dhlSettings, DHL_LABEL_TEMPLATES, isDhlCode } from "@/lib/shipbest/dhl";
+import { maskKey, sgKeyMode, shipgridSettings } from "@/lib/shipbest/shipgrid";
+import { saveShipGridAction, testShipGridAction } from "@/app/shipgridActions";
 import { fmtTime } from "@/lib/time";
 import { localDate } from "@/lib/reports";
 import { labelSkuStats } from "@/lib/labelSku";
@@ -244,6 +246,44 @@ export default async function SettingsPage() {
             <div className="row" style={{ marginTop: 8 }}>
               <FlashForm action={testJiaguAction} submitLabel="测试连接 / 查余额" submitClass="" inline />
             </div>
+          </SettingsSection>
+        );
+      })()}
+
+      {(() => {
+        const sg = shipgridSettings();
+        const mode = sgKeyMode(sg.apiKey);
+        return (
+          <SettingsSection
+            id="shipgrid"
+            title={t("ShipGrid（SG）连接")}
+            defaultOpen={!sg.apiKey}
+            badge={<span className={`badge ${sg.enabled && sg.apiKey ? "ok" : "pending"}`}>{!sg.apiKey ? t("未配置") : sg.enabled ? (mode === "live" ? t("已启用 · 正式") : t("已启用 · 测试")) : t("已停用")}</span>}
+            summary={sg.apiKey ? `${t(mode === "live" ? "正式密钥" : "测试密钥")} ${maskKey(sg.apiKey)}` : undefined}
+          >
+            <p className="small muted" style={{ marginTop: 0 }}>
+              {t("ShipGrid 的 USPS、UPS、FedEx、DHL 等渠道（SG 钱包付费）。先填测试密钥（ak_test_ 开头）测试，没问题再换正式密钥（ak_live_ 开头）。密钥在 ShipGrid 后台生成，只保存在服务器上，这里只显示最后 4 位。")}
+            </p>
+            <div className="alert warn small">{t("对接进行中：现在可以保存密钥、测试连接；查价和出单等 SG 开通 API 套餐后接上。")}</div>
+            <FlashForm action={saveShipGridAction} submitLabel="保存并测试连接" review>
+              <div className="grid" style={{ margin: "12px 0" }}>
+                <label className="f">{t("启用")}
+                  <select name="enabled" defaultValue={sg.enabled ? "1" : "0"}>
+                    <option value="1">{t("启用")}</option>
+                    <option value="0">{t("停用")}</option>
+                  </select>
+                </label>
+                <label className="f" style={{ gridColumn: "span 2" }}>{t("API 密钥")}
+                  <input name="apiKey" type="password" autoComplete="new-password" spellCheck={false}
+                    placeholder={sg.apiKey ? t("已保存（{k}），留空不修改", { k: maskKey(sg.apiKey) }) : "ak_test_…"} />
+                </label>
+              </div>
+            </FlashForm>
+            {sg.apiKey && (
+              <div className="row" style={{ marginTop: 8 }}>
+                <FlashForm action={testShipGridAction} submitLabel="测试连接 / 查余额" submitClass="" inline />
+              </div>
+            )}
           </SettingsSection>
         );
       })()}
