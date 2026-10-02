@@ -7,11 +7,13 @@ import FlashForm from "@/components/FlashForm";
 import { handleResetRequestAction } from "@/app/actions";
 import { getT } from "@/lib/prefs";
 import { getTerms, lastAcceptance } from "@/lib/terms";
+import { salesNameByCustomer } from "@/lib/commission";
 
 const show = (v: number | null | undefined, dflt: string, suffix = "") => (v === null || v === undefined ? <span className="muted">{dflt}</span> : `${v}${suffix}`);
 
 export default async function CustomersPage() {
   const customers = listCustomers();
+  const sales = salesNameByCustomer();
   const { markup } = getSettings();
   const resets = pendingResets();
   const t = await getT();
@@ -49,7 +51,7 @@ export default async function CustomersPage() {
           <tbody>
             {customers.map((c) => (
               <tr key={c.id}>
-                <td className="c-main"><Link href={`/customers/${c.id}`}>{c.name}</Link>{c.testAccount && <> <span className="badge test">{t("内部测试")}</span></>}</td><td data-label={t("联系人")}>{c.contact || "-"}</td><td data-label={t("电话")}>{c.phone || "-"}</td>
+                <td className="c-main"><Link href={`/customers/${c.id}`}>{c.name}</Link>{c.testAccount && <> <span className="badge test">{t("内部测试")}</span></>}{sales.get(c.id) && <div className="small muted">{t("销售：{name}", { name: sales.get(c.id)! })}</div>}</td><td data-label={t("联系人")}>{c.contact || "-"}</td><td data-label={t("电话")}>{c.phone || "-"}</td>
                 <td className="small" data-label={t("登录")}>{c.portalEnabled ? c.portalEmail : <span className="muted">{t("未开通")}</span>}</td>
                 <td className="small" data-label={t("合同")}>
                   {(() => {

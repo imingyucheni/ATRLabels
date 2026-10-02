@@ -1604,3 +1604,10 @@ table.list tr.on td { background: color-mix(in srgb, var(--series-1, #3b82f6) 5%
 }
 .th-note { font-weight: 400; font-size: 11.5px; color: var(--muted); margin-left: 4px; }
 .draft-new { margin-left: auto; font-weight: 600; }
+
+/* 销售佣金 */
+.plain-list { list-style: none; margin: 0; padding: 0; }
+.plain-list li { padding: 6px 0; border-top: 1px solid var(--line); }
+.plain-list li:first-child { border-top: 0; }
+label.check { display: flex; align-items: center; gap: 6px; margin: 6px 0; font-weight: 400; }
+label.check input[type="radio"] { width: auto; }

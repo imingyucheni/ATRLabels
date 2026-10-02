@@ -18,6 +18,7 @@ import { translateMessage } from "@/lib/i18n";
 import PinField from "@/components/PinField";
 import StoresCard from "./StoresCard";
 import ApiCard from "./ApiCard";
+import SalesCard from "./SalesCard";
 import { ledgerEntryAction, hideCredentialsAction, saveCustomerAction, saveCustomerChannelsAction, saveCustomerChannelMarkupAction, saveCustomerPortalAction, saveCustomerSenderAction, saveCustomerStampAction, setCustomerPasswordAction, setTestAccountAction } from "@/app/actions";
 
 const TABS = [
@@ -145,6 +146,8 @@ export default async function CustomerEdit({ params, searchParams }: { params: P
               {!allChannels.length && <span className="small muted">{t("还没有渠道，请先到")} <Link href="/settings">{t("设置")}</Link> {t("同步渠道。")}</span>}
             </div>
           </FlashForm>}
+
+          {!c.internal && show("pricing") && <SalesCard customerId={c.id} />}
 
           {!c.internal && show("pricing") && (() => {
             const open = customerChannels(c.id);
