@@ -1584,3 +1584,21 @@ table.list tr.on td { background: color-mix(in srgb, var(--series-1, #3b82f6) 5%
 }
 .set-toc-title { white-space: nowrap; }
 @media (max-width: 760px) { .card-table td { background: transparent !important; } }
+
+/* 下单草稿 */
+.draft-list { padding: 14px 16px; }
+.draft-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+.draft-head svg { color: var(--muted); }
+.draft-list ul { list-style: none; margin: 0; padding: 0; }
+.draft-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 4px 16px; padding: 8px 0; border-top: 1px solid var(--line); }
+.draft-list li.on .draft-title { color: var(--accent); }
+.draft-title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.draft-act { display: inline-flex; gap: 14px; align-items: center; }
+.draft-act .link-btn { color: var(--err); }
+.draft-msg { margin: 8px 0 0; color: var(--accent); }
+@media (max-width: 760px) {
+  .draft-list li { grid-template-columns: minmax(0, 1fr) auto; }
+  .draft-list li > .muted { grid-column: 1; grid-row: 2; }
+  .draft-act { grid-column: 2; grid-row: 1 / span 2; }
+  .draft-act a { display: inline-flex; align-items: center; min-height: 40px; padding: 0 14px; border: 1px solid var(--line-strong); border-radius: 8px; font-weight: 600; }
+}

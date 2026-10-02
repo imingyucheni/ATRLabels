@@ -3,15 +3,20 @@ import ShipForm from "@/components/ShipForm";
 import { getSettings, houseCustomerId, listChannels } from "@/lib/db";
 import { getT } from "@/lib/prefs";
 import { recentPackages, skuPresets } from "@/lib/portal";
+import { redirect } from "next/navigation";
+import { draftRows, getDraft } from "@/lib/drafts";
+import DraftList from "@/components/DraftList";
 
 export const dynamic = "force-dynamic";
 
 /** 管理员下单：记在“公司自用（成本价）”账户下，所有已启用渠道一起比价，按我们的成本出单 */
-export default async function AdminShipPage() {
+export default async function AdminShipPage({ searchParams }: { searchParams: Promise<{ draft?: string }> }) {
   const t = await getT();
   const s = getSettings();
   const channels = listChannels(true);
   const houseId = houseCustomerId();
+  const draft = getDraft(houseId, Number((await searchParams).draft));
+  if (draft?.intl) redirect(`/ship/intl?draft=${draft.id}`);
   return (
     <>
       <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-end" }}>
@@ -28,7 +33,8 @@ export default async function AdminShipPage() {
       </div>
       {!channels.length && <div className="alert warn" style={{ marginTop: 12 }}>{t("没有启用的渠道，请先到")} <Link href="/settings">{t("设置")}</Link> {t("同步渠道。")}</div>}
       <div style={{ height: 12 }} />
-      <ShipForm mode="house" recentPackages={recentPackages(houseId)} skuPresets={skuPresets(houseId)} defaultSender={s.sender} defaultUnit={s.defaultUnit} defaultCurrency={s.defaultCurrency} />
+      <DraftList scope="house" drafts={draftRows(houseId, { us: "/ship", intl: "/ship/intl" })} currentId={draft?.id} />
+      <ShipForm key={draft ? `d${draft.id}` : "new"} mode="house" draftScope="house" draft={draft ?? undefined} recentPackages={recentPackages(houseId)} skuPresets={skuPresets(houseId)} defaultSender={s.sender} defaultUnit={s.defaultUnit} defaultCurrency={s.defaultCurrency} />
     </>
   );
 }

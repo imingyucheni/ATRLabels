@@ -16,6 +16,8 @@ import { money, signedPercent } from "@/lib/pricing";
 import type { ChannelQuote } from "@/lib/service";
 import type { Address, ShipmentRequest, UnitSystem } from "@/lib/shipbest/types";
 import type { RecentPackage, SkuPreset } from "@/lib/portal";
+import type { OrderDraft } from "@/lib/drafts";
+import { deleteDraftAction, saveDraftAction, type DraftScope } from "@/app/draftActions";
 
 type Sku = Record<"sku" | "productNameCn" | "productNameEn" | "quantity" | "declaredUnitPrice" | "hsCode" | "productNature" | "originCountry" | "material", string>;
 
@@ -109,6 +111,9 @@ export default function ShipForm(props: {
   defaultCurrency: string;
   /** 客户端：账户余额、信用额度、余额规则（出单前提示扣款后余额，余额不够时不能点出单） */
   wallet?: { balance: number; creditLimit: number; rule: "positive" | "cover" };
+  /** 可以“保存草稿”（客户自助 / 管理员自用下单）；draft = 打开的草稿，出单成功后自动删掉 */
+  draftScope?: DraftScope;
+  draft?: OrderDraft;
 }) {
   const router = useRouter();
   const t = useT();
@@ -122,11 +127,12 @@ export default function ShipForm(props: {
   // 可以直接出单的模式（客户自助 / 管理员自用 / 异常单重新下单）
   const orderable = portal || house || !!re;
   const reorder = portal ? props.reorder : undefined;
-  const init = re?.request ?? reorder?.request ?? props.copy?.request;
+  const init = re?.request ?? reorder?.request ?? props.draft?.request ?? props.copy?.request;
+  const canDraft = !!props.draftScope && !re && !reorder;
   const customers = props.customers ?? [];
   // 后台默认不选客户，避免替错客户下单
   const [customerId, setCustomerId] = useState<number>(props.defaultCustomerId ?? 0);
-  const [customerRef, setCustomerRef] = useState(re?.customerRef ?? reorder?.customerRef ?? "");
+  const [customerRef, setCustomerRef] = useState(re?.customerRef ?? reorder?.customerRef ?? props.draft?.customerRef ?? "");
   // 后台试算新客户时临时填写的加价（留空 = 全局 / 渠道设置）
   const [markup, setMarkup] = useState({ percent: "", fixed: "", minProfit: "" });
   const initialCustomer = customers.find((c) => c.id === props.defaultCustomerId);
@@ -139,9 +145,15 @@ export default function ShipForm(props: {
   // 系统默认寄件地址（设置里的发货仓）要完整才能直接用
   const sysSender = props.defaultSender?.address1 && props.defaultSender?.zipCode ? props.defaultSender : null;
   const bookDefault = props.senders?.find((x) => x.isDefault);
-  const [editSender, setEditSender] = useState(portal ? !bookDefault && !sysSender : re ? false : !props.defaultSender);
+  // 预填的寄件人（草稿 / 再来一单）：地址簿里有同一个地址就选中它，没有就当新地址
+  const sameAddr = (a?: Partial<Address> | null, b?: Partial<Address> | null) =>
+    !!a && !!b && (["nameFirst", "nameLast", "address1", "address2", "zipCode"] as const).every((k) => (a[k] ?? "").trim().toLowerCase() === (b[k] ?? "").trim().toLowerCase());
+  const initSenderId: number | "new" | "system" | null = portal && init?.sender
+    ? props.senders?.find((x) => sameAddr(x.address, init.sender))?.id ?? (sameAddr(sysSender, init.sender) ? "system" : "new")
+    : null;
+  const [editSender, setEditSender] = useState(initSenderId === "new" ? true : portal ? !bookDefault && !sysSender : re ? false : !props.defaultSender);
   const [senders, setSenders] = useState<SavedSender[]>(props.senders ?? []);
-  const [senderId, setSenderId] = useState<number | "new" | "system">(bookDefault?.id ?? (sysSender ? "system" : "new"));
+  const [senderId, setSenderId] = useState<number | "new" | "system">(initSenderId ?? bookDefault?.id ?? (sysSender ? "system" : "new"));
   const [senderMsg, setSenderMsg] = useState<string | null>(null);
   const [savingSender, startSaveSender] = useTransition();
   // 国际下单：收件国家先空着，让客户选
@@ -171,7 +183,10 @@ export default function ShipForm(props: {
         }))
       : [emptySku()],
   );
-  const [remark, setRemark] = useState(re?.remark ?? reorder?.remark ?? props.copy?.remark ?? "");
+  const [remark, setRemark] = useState(re?.remark ?? reorder?.remark ?? props.draft?.remark ?? props.copy?.remark ?? "");
+  const [draftId, setDraftId] = useState<number | undefined>(props.draft?.id);
+  const [draftMsg, setDraftMsg] = useState<string | null>(null);
+  const [savingDraft, startSaveDraft] = useTransition();
 
   const [quotes, setQuotes] = useState<Quote[] | null>(null);
   // 默认显示全部渠道：送不到的也列出来（灰色、不能选、显示原因）
@@ -301,6 +316,8 @@ export default function ShipForm(props: {
       const args = { channelCode: q.channelCode, req: buildRequest(), expectedPrice: q.price!, remark, customerRef, addressAck: addrAck };
       const r = re ? await resubmitCreateAction({ ...args, oldId: re.id }) : house ? await houseCreateAction(args) : reorder ? await portalReorderAction({ ...args, oldId: reorder.id }) : await portalCreateAction(args);
       if (r.id) {
+        // 从草稿出单成功：草稿不再需要
+        if (draftId && props.draftScope) await deleteDraftAction({ scope: props.draftScope, id: draftId }).catch(() => undefined);
         router.push(re?.returnTo ?? reorder?.returnTo ?? (house || re ? `/shipments/${r.id}` : `/portal/shipments/${r.id}`));
         return;
       }
@@ -314,6 +331,18 @@ export default function ShipForm(props: {
     } finally {
       setCreating(null);
     }
+  }
+
+  function onSaveDraft() {
+    if (!props.draftScope) return;
+    const scope = props.draftScope;
+    startSaveDraft(async () => {
+      const r = await saveDraftAction({ scope, id: draftId, intl: !!props.intl, request: buildRequest(), customerRef, remark });
+      if (r.error) return setDraftMsg(r.error);
+      // 页面上方的草稿列表由服务端刷新（saveDraftAction 里 revalidatePath）；表单不重新加载，填的内容和报价都保留
+      setDraftId(r.id);
+      setDraftMsg(t("草稿已保存（{time}）。下次在页面上方的“草稿”里点“继续填写”。", { time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) }));
+    });
   }
 
   const setSku = (i: number, patch: Partial<Sku>) => dirty(setSkus)(skus.map((s, j) => (j === i ? { ...s, ...patch } : s)));
@@ -636,10 +665,18 @@ export default function ShipForm(props: {
       <div className="card" id="ship-quotes" style={{ scrollMarginTop: 72 }}>
         <div className="row" style={{ justifyContent: "space-between", marginBottom: quotes ? 12 : 0 }}>
           <h2 style={{ margin: 0 }}>{t("报价")}</h2>
-          <button className="primary" onClick={onQuote} disabled={quoting}>
-            {quoting ? t("查询中…") : quotes ? t("重新查询运费") : t("查询运费")}
-          </button>
+          <div className="row" style={{ gap: 8 }}>
+            {canDraft && (
+              <button type="button" onClick={onSaveDraft} disabled={savingDraft} title={t("还没确认出单的话先存起来，下次在“草稿”里接着填")}>
+                {savingDraft ? t("保存中…") : draftId ? t("更新草稿") : t("保存草稿")}
+              </button>
+            )}
+            <button className="primary" onClick={onQuote} disabled={quoting}>
+              {quoting ? t("查询中…") : quotes ? t("重新查询运费") : t("查询运费")}
+            </button>
+          </div>
         </div>
+        {draftMsg && <div className="small draft-msg" role="status">{draftMsg}</div>}
         {quoting && (
           <div className="busy-line" role="status" aria-live="polite">
             <span className="spinner" />

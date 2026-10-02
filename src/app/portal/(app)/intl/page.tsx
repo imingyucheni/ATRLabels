@@ -7,13 +7,19 @@ import { copySource, portalChannelCodes, recentPackages, skuPresets } from "@/li
 import { dhlSettings, isDhlCode } from "@/lib/shipbest/dhl";
 import ShipForm from "@/components/ShipForm";
 import { getT } from "@/lib/prefs";
+import { redirect } from "next/navigation";
+import { draftRows, getDraft } from "@/lib/drafts";
+import DraftList from "@/components/DraftList";
 
 export const dynamic = "force-dynamic";
 
 /** 国际下单（DHL Express）：和美国本地下单一样的流程，多了报关信息 */
-export default async function PortalIntlPage({ searchParams }: { searchParams: Promise<{ copy?: string }> }) {
+export default async function PortalIntlPage({ searchParams }: { searchParams: Promise<{ copy?: string; draft?: string }> }) {
   const me = await requireCustomer();
-  const src = copySource(me.id, (await searchParams).copy);
+  const sp = await searchParams;
+  const draft = getDraft(me.id, Number(sp.draft));
+  if (draft && !draft.intl) redirect(`/portal/ship?draft=${draft.id}`);
+  const src = draft ? null : copySource(me.id, sp.copy);
   const s = getSettings();
   const t = await getT();
   const open = portalChannelCodes(me.id).some(isDhlCode);
@@ -39,8 +45,9 @@ export default async function PortalIntlPage({ searchParams }: { searchParams: P
           <Link className="btn primary small" href="/portal/topup">{t("去充值")}</Link>
         </div>
       )}
+      <DraftList scope="portal" drafts={draftRows(me.id, { us: "/portal/ship", intl: "/portal/intl" })} currentId={draft?.id} />
       {src && <div className="alert info">{t("已复制订单 {no} 的收件人、包裹和商品，修改后查询运费下单。", { no: src.ref })}</div>}
-      <ShipForm key={src?.id ?? "new"} mode="portal" intl copy={src ?? undefined} recentPackages={recentPackages(me.id)} skuPresets={skuPresets(me.id)} defaultOrigin={dhlSettings().originCountry} senders={listSenders(me.id)} defaultSender={s.sender} wallet={{ balance: me.balance, creditLimit: me.creditLimit, rule: s.balanceRule }} defaultUnit={s.defaultUnit} defaultCurrency="USD" />
+      <ShipForm key={draft ? `d${draft.id}` : src ? `c${src.id}` : "new"} mode="portal" intl draftScope="portal" draft={draft ?? undefined} copy={src ?? undefined} recentPackages={recentPackages(me.id)} skuPresets={skuPresets(me.id)} defaultOrigin={dhlSettings().originCountry} senders={listSenders(me.id)} defaultSender={s.sender} wallet={{ balance: me.balance, creditLimit: me.creditLimit, rule: s.balanceRule }} defaultUnit={s.defaultUnit} defaultCurrency="USD" />
       </>}
     </>
   );
