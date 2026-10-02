@@ -45,7 +45,7 @@ export default function CredentialsCard(props: { brand: string; name: string; ur
       {/* 没开通渠道的客户登录后什么都下不了单：先提醒开通渠道再发 */}
       {props.noChannels && (
         <div className="alert warn" style={{ margin: "10px 0 0" }}>
-          {t("这个客户还没有开通任何渠道，请先在下方“可用渠道”里开通，再把登录信息发给客户。")} <a href="#channels">{t("去开通渠道 ↓")}</a>
+          {t("这个客户还没有开通任何渠道，请先在下方“可用渠道”里开通，再把登录信息发给客户。")} <a href="?tab=pricing#channels">{t("去开通渠道 ↓")}</a>
         </div>
       )}
       <pre className="cred-text">{reveal ? text : text.replace(props.password, "••••••••")}</pre>

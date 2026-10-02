@@ -1542,3 +1542,45 @@ table.list tr.on td { background: color-mix(in srgb, var(--series-1, #3b82f6) 5%
   .card-table td.c-act a { display: inline-flex; align-items: center; justify-content: center; min-height: 40px; padding: 0 18px; border: 1px solid var(--line-strong); border-radius: 8px; font-weight: 600; }
   .card-table td.c-act:has(> .muted) { display: none; }
 }
+
+/* 客户详情分页签 */
+.tabs-bar { display: flex; gap: 4px; margin: 0 0 16px; border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; }
+.tabs-bar::-webkit-scrollbar { display: none; }
+.tabs-bar a { display: inline-flex; align-items: center; gap: 8px; padding: 10px 14px; margin-bottom: -1px; border-bottom: 2px solid transparent; color: var(--text-2); font-weight: 500; white-space: nowrap; text-decoration: none; }
+.tabs-bar a:hover { color: var(--text); }
+.tabs-bar a.on { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
+.tab-note { font-size: 12px; font-weight: 500; color: var(--muted); background: var(--sunken); border-radius: 999px; padding: 1px 8px; font-variant-numeric: tabular-nums; }
+.tab-note.neg { color: var(--err); background: var(--err-soft); }
+@media (max-width: 760px) { .tabs-bar { margin-left: -16px; margin-right: -16px; padding: 0 12px; } .tabs-bar a { padding: 12px 10px; min-height: 44px; } }
+
+/* 设置页目录 */
+.set-toc { display: flex; flex-wrap: wrap; gap: 10px 24px; padding: 12px 16px; margin: 0 0 16px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+.set-toc-group { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+.set-toc-title { font-size: 12px; color: var(--muted); margin-right: 2px; }
+.set-toc a { font-size: 13px; padding: 3px 10px; border-radius: 999px; background: var(--sunken); color: var(--text-2); text-decoration: none; white-space: nowrap; }
+.set-toc a:hover { background: var(--accent-soft); color: var(--accent); }
+.set-sec { scroll-margin-top: 16px; }
+@media (max-width: 760px) {
+  .set-toc { flex-wrap: nowrap; overflow-x: auto; padding: 10px 12px; scrollbar-width: none; }
+  .set-toc::-webkit-scrollbar { display: none; }
+  .set-toc-group { flex-wrap: nowrap; }
+  .set-toc a { padding: 8px 12px; }
+}
+
+/* 手机卡片：没有勾选列的表不留左边空位；审核操作占满一行 */
+@media (max-width: 760px) {
+  .card-table tr:not(:has(> td.c-check)) { padding-left: 4px; }
+  .card-table td.hide-m { display: none; }
+  .card-table td.c-review { grid-column: 1 / -1; min-width: 0 !important; }
+  .card-table td.c-review .review-box .row { flex-wrap: wrap; }
+  .card-table td.c-review .review-box .row > label { width: 100% !important; flex: 1 1 100% !important; }
+  .card-table td.c-review button { min-height: 44px; width: 100%; font-size: 15px; }
+}
+.c-links > i { font-style: normal; }
+@media (max-width: 760px) {
+  .card-table td.c-links { display: flex; flex-wrap: wrap; gap: 8px; }
+  .card-table td.c-links > i { display: none; }
+  .card-table td.c-links a { min-height: 38px; padding: 0 12px; font-size: 13px; }
+}
+.set-toc-title { white-space: nowrap; }
+@media (max-width: 760px) { .card-table td { background: transparent !important; } }

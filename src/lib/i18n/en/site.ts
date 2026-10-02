@@ -362,4 +362,8 @@ export const site: Record<string, string> = {
   "产品功能": "Product",
   "支持渠道": "Carriers",
   "帮助": "Help",
+  "Shopify、eBay 店铺订单自动同步，也可以用 Excel 模板批量导入或通过 API 对接自己的系统，每一单自动选最低渠道。": "Shopify and eBay orders sync automatically; or bulk-import with our Excel template or connect your own system via API — every order ships at the lowest rate.",
+  "Shopify / eBay 店铺对接": "Shopify / eBay integration",
+  "Excel 模板批量导入": "Excel template bulk import",
+  "Excel 批量导入": "Excel import",
 };

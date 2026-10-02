@@ -79,7 +79,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           dhlSettings().enabled
             ? { title: "国际面单", items: [{ href: "/ship/intl", label: "国际下单（DHL）", icon: "globe" }] }
             : { title: "国际面单", soon: true, items: [{ href: "/settings#dhl", label: "国际下单", icon: "globe" }] },
-          { title: "系统", items: [{ href: "/settings", label: "设置", icon: "settings" }, { href: "/backups", label: "数据备份", icon: "backup" }] },
+          { title: "系统", items: [{ href: "/settings#channels", label: "渠道与价格", icon: "price" }, { href: "/settings", label: "设置", icon: "settings" }, { href: "/backups", label: "数据备份", icon: "backup" }] },
         ]}
       />
       <main className="main">

@@ -42,16 +42,16 @@ export default async function CustomersPage() {
         <Link className="btn primary" href="/customers/new">{t("＋ 新增客户")}</Link>
       </div>
       <div className="card table-wrap">
-        <table>
+        <table className="card-table">
           <thead>
             <tr><th>{t("名称")}</th><th>{t("联系人")}</th><th>{t("电话")}</th><th>{t("登录")}</th><th>{t("合同")}</th><th>{t("渠道")}</th><th className="num">{t("余额")}</th><th className="num">{t("信用额度")}</th><th>{t("加价 %")}</th><th>{t("固定加价")}</th><th>{t("最低利润")}</th><th></th></tr>
           </thead>
           <tbody>
             {customers.map((c) => (
               <tr key={c.id}>
-                <td><Link href={`/customers/${c.id}`}>{c.name}</Link>{c.testAccount && <> <span className="badge test">{t("内部测试")}</span></>}</td><td>{c.contact}</td><td>{c.phone}</td>
-                <td className="small">{c.portalEnabled ? c.portalEmail : <span className="muted">{t("未开通")}</span>}</td>
-                <td className="small">
+                <td className="c-main"><Link href={`/customers/${c.id}`}>{c.name}</Link>{c.testAccount && <> <span className="badge test">{t("内部测试")}</span></>}</td><td data-label={t("联系人")}>{c.contact || "-"}</td><td data-label={t("电话")}>{c.phone || "-"}</td>
+                <td className="small" data-label={t("登录")}>{c.portalEnabled ? c.portalEmail : <span className="muted">{t("未开通")}</span>}</td>
+                <td className="small" data-label={t("合同")}>
                   {(() => {
                     // 合同（服务条款）签署状态：已签当前版本 / 签的是旧版本 / 还没签
                     const a = lastAcceptance(c.id);
@@ -64,17 +64,17 @@ export default async function CustomersPage() {
                     );
                   })()}
                 </td>
-                <td className="small">
+                <td className="small" data-label={t("渠道")}>
                   {(() => {
                     const n = customerChannels(c.id).length;
-                    return n ? <Link href={`/customers/${c.id}#channels`}>{t("{n} 个", { n })}</Link> : <Link href={`/customers/${c.id}#channels`} style={{ color: "var(--warn)" }}>{t("未开通")}</Link>;
+                    return n ? <Link href={`/customers/${c.id}?tab=pricing#channels`}>{t("{n} 个", { n })}</Link> : <Link href={`/customers/${c.id}?tab=pricing#channels`} style={{ color: "var(--warn)" }}>{t("未开通")}</Link>;
                   })()}
                 </td>
-                <td className={`num ${c.balance < 0 ? "profit-neg" : ""}`}>{money(c.balance)}</td>
-                <td className="num">{c.creditLimit ? money(c.creditLimit) : "-"}</td>
-                <td>{show(c.markup.percent, t("默认"), "%")}</td><td>{show(c.markup.fixed, t("默认"))}</td><td>{show(c.markup.minProfit, t("默认"))}</td>
-                <td className="nowrap">
-                  <a href={`/api/customers/${c.id}/oms`}>{t("进入 OMS")}</a> · <Link href={`/customers/${c.id}`}>{t("管理")}</Link> · <Link href={`/shipments?customerId=${c.id}`}>{t("面单")}</Link> · <Link href={`/customers/${c.id}/charges`}>{t("扣款明细")}</Link> · <Link href={`/customers/${c.id}/statement`}>{t("对账单")}</Link>
+                <td className={`num ${c.balance < 0 ? "profit-neg" : ""}`} data-label={t("余额")}>{money(c.balance)}</td>
+                <td className="num" data-label={t("信用额度")}>{c.creditLimit ? money(c.creditLimit) : "-"}</td>
+                <td className="hide-m">{show(c.markup.percent, t("默认"), "%")}</td><td className="hide-m">{show(c.markup.fixed, t("默认"))}</td><td className="hide-m">{show(c.markup.minProfit, t("默认"))}</td>
+                <td className="nowrap c-act c-links">
+                  <a href={`/api/customers/${c.id}/oms`}>{t("进入 OMS")}</a><i> · </i><Link href={`/customers/${c.id}`}>{t("管理")}</Link><i> · </i><Link href={`/shipments?customerId=${c.id}`}>{t("面单")}</Link><i> · </i><Link href={`/customers/${c.id}/charges`}>{t("扣款明细")}</Link><i> · </i><Link href={`/customers/${c.id}/statement`}>{t("对账单")}</Link>
                 </td>
               </tr>
             ))}

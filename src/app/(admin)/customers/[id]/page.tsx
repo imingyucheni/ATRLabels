@@ -20,8 +20,21 @@ import StoresCard from "./StoresCard";
 import ApiCard from "./ApiCard";
 import { ledgerEntryAction, hideCredentialsAction, saveCustomerAction, saveCustomerChannelsAction, saveCustomerChannelMarkupAction, saveCustomerPortalAction, saveCustomerSenderAction, saveCustomerStampAction, setCustomerPasswordAction, setTestAccountAction } from "@/app/actions";
 
-export default async function CustomerEdit({ params }: { params: Promise<{ id: string }> }) {
+const TABS = [
+  ["overview", "概况"],
+  ["pricing", "渠道与价格"],
+  ["profile", "资料与登录"],
+  ["integrations", "店铺与 API"],
+  ["advanced", "高级"],
+] as const;
+type Tab = (typeof TABS)[number][0];
+
+export default async function CustomerEdit({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string }> }) {
   const { id } = await params;
+  const tabParam = (await searchParams).tab;
+  const tab: Tab = (TABS.find(([k]) => k === tabParam)?.[0] ?? "overview") as Tab;
+  // 新客户只有资料表单；老客户按标签页分开显示，页面不再一长条
+  const show = (k: Tab) => tab === k;
   const c = id === "new" ? null : getCustomer(Number(id));
   if (id !== "new" && !c) notFound();
   const { markup } = getSettings();
@@ -52,7 +65,18 @@ export default async function CustomerEdit({ params }: { params: Promise<{ id: s
         <CredentialsCard brand={getSettings().brandName} name={c.name} url={omsLogin} email={creds.email} password={creds.password}
           onHide={hideCredentialsAction.bind(null, c.id)} noChannels={!usable} />
       )}
-      <FlashForm action={saveCustomerAction} submitLabel={c ? "保存" : "创建客户并生成登录信息"} className="card" review={!!c}>
+      {c && (
+        <nav className="tabs-bar" aria-label={t("客户详情")}>
+          {TABS.map(([k, label]) => (
+            <Link key={k} href={`/customers/${c.id}?tab=${k}`} className={tab === k ? "on" : ""} aria-current={tab === k ? "page" : undefined}>
+              {t(label)}
+              {k === "overview" && <span className={`tab-note${c.balance < 0 ? " neg" : ""}`}>{money(c.balance)}</span>}
+              {k === "pricing" && <span className={`tab-note${usable ? "" : " neg"}`}>{usable ? t("{n} 个渠道", { n: usable }) : t("未开通")}</span>}
+            </Link>
+          ))}
+        </nav>
+      )}
+      {(!c || show("profile")) && <FlashForm action={saveCustomerAction} submitLabel={c ? "保存" : "创建客户并生成登录信息"} className="card" review={!!c}>
         <input type="hidden" name="id" value={c?.id ?? ""} />
         <div className="grid">
           <label className="f"><span className="req">{t("名称")}</span><input name="name" required defaultValue={c?.name} /></label>
@@ -67,8 +91,8 @@ export default async function CustomerEdit({ params }: { params: Promise<{ id: s
           <RuleInputs value={c?.markup} placeholder={{ percent: t("默认 {v}", { v: markup.percent }), fixed: t("默认 {v}", { v: markup.fixed }), minProfit: t("默认 {v}", { v: markup.minProfit }) }} />
         </div>
         <label className="f" style={{ margin: "12px 0" }}>{t("备注")}<textarea name="note" rows={2} defaultValue={c?.note ?? ""} /></label>
-      </FlashForm>
-      {c && !c.internal && (() => {
+      </FlashForm>}
+      {c && !c.internal && (show("profile") || show("overview")) && (() => {
         const signed = lastAcceptance(c.id);
         const current = hasAcceptedTerms(c.id);
         return (
@@ -80,7 +104,7 @@ export default async function CustomerEdit({ params }: { params: Promise<{ id: s
           </div>
         );
       })()}
-      {c && !c.internal && (
+      {c && !c.internal && show("advanced") && (
         <FlashForm action={setTestAccountAction} submitLabel={c.testAccount ? "取消内部测试账号" : "设为内部测试账号"} submitClass="small" className={`alert ${c.testAccount ? "warn" : ""}`}>
           <input type="hidden" name="id" value={c.id} />
           <input type="hidden" name="on" value={c.testAccount ? "0" : "1"} />
@@ -94,14 +118,14 @@ export default async function CustomerEdit({ params }: { params: Promise<{ id: s
       )}
       {c && (
         <>
-          <div className="stats">
+          {show("overview") && <div className="stats">
             <div className="stat"><div className="muted">{t("账户余额")}</div><div className={`v ${c.balance < 0 ? "profit-neg" : ""}`}>{money(c.balance)}</div></div>
             <div className="stat"><div className="muted">{t("信用额度")}</div><div className="v">{money(c.creditLimit)}</div></div>
             <div className="stat"><div className="muted">{t("可用额度")}</div><div className="v">{money(c.balance + c.creditLimit)}</div></div>
             <div className="stat"><div className="muted">{t("客户端登录")}</div><div className="v" style={{ fontSize: 16 }}>{c.portalEnabled ? (c.hasPassword ? t("已开通") : t("未设密码")) : t("未开通")}</div></div>
-          </div>
+          </div>}
 
-          <FlashForm action={saveCustomerChannelsAction} submitLabel="保存渠道" className="card" id="channels" review>
+          {show("pricing") && <FlashForm action={saveCustomerChannelsAction} submitLabel="保存渠道" className="card" id="channels" review>
             <div className="row" style={{ justifyContent: "space-between" }}>
               <h2 style={{ margin: 0 }}>{t("可用渠道")}</h2>
               <span className={`badge ${usable ? "ok" : "warn"}`}>{usable ? t("已开通 {n} 个", { n: usable }) : t("未开通，客户无法下单")}</span>
@@ -120,9 +144,9 @@ export default async function CustomerEdit({ params }: { params: Promise<{ id: s
               ))}
               {!allChannels.length && <span className="small muted">{t("还没有渠道，请先到")} <Link href="/settings">{t("设置")}</Link> {t("同步渠道。")}</span>}
             </div>
-          </FlashForm>
+          </FlashForm>}
 
-          {!c.internal && (() => {
+          {!c.internal && show("pricing") && (() => {
             const open = customerChannels(c.id);
             const own = customerChannelMarkups(c.id);
             const st = getSettings();
@@ -178,8 +202,7 @@ export default async function CustomerEdit({ params }: { params: Promise<{ id: s
             );
           })()}
 
-          <div className="grid2">
-            <FlashForm action={ledgerEntryAction} submitLabel="确认" className="card" resetOnSuccess review confirm={t("给【{name}】入账：提交后立即计入客户余额（当前余额 {bal}）。请核对类型和金额。", { name: c.name, bal: money(c.balance) })}>
+          {show("overview") && <FlashForm action={ledgerEntryAction} submitLabel="确认" className="card" resetOnSuccess review confirm={t("给【{name}】入账：提交后立即计入客户余额（当前余额 {bal}）。请核对类型和金额。", { name: c.name, bal: money(c.balance) })}>
               <h2>{t("充值 / 调账")}</h2>
               <input type="hidden" name="id" value={c.id} />
               <div className="grid" style={{ marginBottom: 12 }}>
@@ -195,9 +218,9 @@ export default async function CustomerEdit({ params }: { params: Promise<{ id: s
                 <label className="f" style={{ gridColumn: "span 2" }}>{t("说明")}<input name="note" maxLength={200} placeholder={t("例如：9月转账 / 赔偿 / 月结账单")} /></label>
                 <PinField />
               </div>
-            </FlashForm>
+            </FlashForm>}
 
-            <div className="card">
+            {show("profile") && <div className="card">
               <h2>{t("客户端登录")}</h2>
               <FlashForm action={saveCustomerPortalAction} submitLabel="保存登录设置" review>
                 <input type="hidden" name="id" value={c.id} />
@@ -218,10 +241,9 @@ export default async function CustomerEdit({ params }: { params: Promise<{ id: s
                 <label className="f" style={{ marginBottom: 8 }}>{t("新密码（至少 8 位；留空自动生成）")}<input name="password" type="text" autoComplete="off" minLength={8} /></label>
               </FlashForm>
               <p className="small muted">{t("把下面的地址和登录邮箱、密码发给客户，客户在自己的 OMS 里下单、充值、查看记录：")}<br /><code>{omsLogin}</code></p>
-            </div>
-          </div>
+            </div>}
 
-          <FlashForm action={saveCustomerStampAction} submitLabel="保存" className="card" review>
+          {show("advanced") && <FlashForm action={saveCustomerStampAction} submitLabel="保存" className="card" review>
             <h2>{t("面单加印 SKU")}</h2>
             <input type="hidden" name="id" value={c.id} />
             <div className="row" style={{ marginBottom: 12 }}>
@@ -234,20 +256,19 @@ export default async function CustomerEdit({ params }: { params: Promise<{ id: s
               </label>
               <span className="small muted">{t("位置和样式在“设置 → 面单加印 SKU”里调整。")}</span>
             </div>
-          </FlashForm>
+          </FlashForm>}
 
-          <FlashForm action={saveCustomerSenderAction} submitLabel="保存寄件地址" className="card" review>
+          {show("profile") && <FlashForm action={saveCustomerSenderAction} submitLabel="保存寄件地址" className="card" review>
             <h2>{t("客户默认寄件地址")}</h2>
             <p className="small muted">{t("客户下单时默认使用这个地址；客户也可以在客户端的寄件地址簿里自己添加和修改。")}</p>
             <input type="hidden" name="id" value={c.id} />
             <AddressFields value={c.sender} namePrefix="sender." />
             <div style={{ height: 12 }} />
-          </FlashForm>
+          </FlashForm>}
 
-          <StoresCard customerId={c.id} />
-          <ApiCard customerId={c.id} />
+          {show("integrations") && <><StoresCard customerId={c.id} /><ApiCard customerId={c.id} /></>}
 
-          <div className="card table-wrap">
+          {show("overview") && <div className="card table-wrap">
             <div className="row" style={{ justifyContent: "space-between" }}>
               <h2>{t("账户流水（最近 100 条）")}</h2>
               <span><Link href={`/customers/${c.id}/charges`}>{t("按订单扣款明细")}</Link> · <Link href={`/customers/${c.id}/statement`}>{t("对账单")}</Link> · <Link href={`/shipments?customerId=${c.id}`}>{t("面单")}</Link></span>
@@ -269,7 +290,7 @@ export default async function CustomerEdit({ params }: { params: Promise<{ id: s
                 {!ledger.length && <tr><td colSpan={7} className="muted">{t("还没有流水")}</td></tr>}
               </tbody>
             </table>
-          </div>
+          </div>}
         </>
       )}
     </>

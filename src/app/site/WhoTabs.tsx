@@ -18,8 +18,8 @@ export default function WhoTabs() {
   const copy: Record<Seg, { title: string; body: string; points: string[] }> = {
     seller: {
       title: t("多平台订单，一个账户出单"),
-      body: t("TikTok Shop、Temu、Shopify、Amazon 自发货订单导出后一次上传，每一单自动选最低渠道。"),
-      points: [t("兼容常见导单表格"), t("逐单自动比价"), t("订单号防重复下单")],
+      body: t("Shopify、eBay 店铺订单自动同步，也可以用 Excel 模板批量导入或通过 API 对接自己的系统，每一单自动选最低渠道。"),
+      points: [t("Shopify / eBay 店铺对接"), t("Excel 模板批量导入"), t("订单号防重复下单")],
     },
     "3pl": {
       title: t("大批量出单，稳定高效"),
@@ -57,10 +57,10 @@ export default function WhoTabs() {
             <div className="wv-card">
               <div className="wv-head"><b>{t("今日订单来源")}</b><span>{t("示意")}</span></div>
               {[
-                ["TikTok Shop", 148, "var(--us-ink)"],
-                ["Temu", 96, "#fb7701"],
-                ["Shopify", 64, "#5e8e3e"],
-                ["Amazon", 34, "#ff9900"],
+                ["Shopify", 148, "#5e8e3e"],
+                ["eBay", 96, "#0064d2"],
+                [t("Excel 批量导入"), 64, "var(--us-ink)"],
+                ["API", 34, "#7c3aed"],
               ].map(([name, n, color]) => (
                 <div key={name as string} className="wv-src">
                   <i style={{ background: color as string }} />

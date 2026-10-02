@@ -113,15 +113,15 @@ export default async function Dashboard() {
         <div className="card">
           <h2>{t("需要处理（{n}）", { n: attention.length })}</h2>
           <div className="table-wrap">
-          <table>
+          <table className="card-table">
             <tbody>
               {attention.map((s, i) => (
                 <tr key={s.id}>
-                  <td><Link href={`/shipments/${s.id}`}>{s.customNo}</Link></td>
+                  <td className="c-main"><Link href={`/shipments/${s.id}`}>{s.customNo}</Link></td>
                   <td>{s.customerName}</td>
                   <td className="small">{t(providerOf(s.channelCode))}</td>
                   <td><StatusBadge status={s.status} test={s.isTest} /></td>
-                  <td className="small muted">{errs[i]} <Link href={`/shipments/${s.id}#provider`} className="small">{t("服务商反馈")}</Link></td>
+                  <td className="small muted c-act">{errs[i]} <Link href={`/shipments/${s.id}#provider`} className="small">{t("服务商反馈")}</Link></td>
                 </tr>
               ))}
             </tbody>
@@ -136,20 +136,20 @@ export default async function Dashboard() {
           <Link className="btn primary" href="/quote">{t("运费试算")}</Link>
         </div>
         <div className="table-wrap">
-          <table>
+          <table className="card-table">
             <thead>
               <tr><th>{t("单号")}</th><th>{t("客户")}</th><th>{t("渠道")}</th><th>{t("运单号")}</th><th>{t("状态")}</th><th className="num">{t("客户价")}</th><th className="num">{t("利润")}</th></tr>
             </thead>
             <tbody>
               {recent.map((s) => (
                 <tr key={s.id}>
-                  <td><Link href={`/shipments/${s.id}`}>{s.customNo}</Link></td>
-                  <td>{s.customerName}</td>
-                  <td>{s.channelName}</td>
-                  <td>{s.trackingNo ?? "-"}</td>
-                  <td><StatusBadge status={s.status} test={s.isTest} /></td>
-                  <td className="num">{money(s.price, s.currency)}</td>
-                  <td className="num"><Profit value={shipmentProfit(s)} /></td>
+                  <td className="c-main"><Link href={`/shipments/${s.id}`}>{s.customNo}</Link></td>
+                  <td data-label={t("客户")}>{s.customerName}</td>
+                  <td data-label={t("渠道")}>{s.channelName}</td>
+                  <td data-label={t("运单号")}>{s.trackingNo ?? "-"}</td>
+                  <td data-label={t("状态")}><StatusBadge status={s.status} test={s.isTest} /></td>
+                  <td className="num" data-label={t("客户价")}>{money(s.price, s.currency)}</td>
+                  <td className="num" data-label={t("利润")}><Profit value={shipmentProfit(s)} /></td>
                 </tr>
               ))}
               {!recent.length && <tr><td colSpan={7} className="muted">{t("暂无记录")}</td></tr>}

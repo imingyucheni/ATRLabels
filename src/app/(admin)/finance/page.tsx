@@ -45,19 +45,19 @@ export default async function FinancePage({ searchParams }: { searchParams: Prom
         <h2>{tr("待确认充值（{n}）", { n: pending.length })}</h2>
         {!pending.length && <p className="muted">{tr("没有待确认的充值申请")}</p>}
         {pending.length > 0 && (
-          <table>
+          <table className="card-table">
             <thead><tr><th>#</th><th>{tr("客户")}</th><th>{tr("方式")}</th><th className="num">{tr("申请（美元）")}</th><th className="num">{tr("应收")}</th><th>{tr("参考号 / 备注")}</th><th>{tr("凭证")}</th><th>{tr("处理")}</th></tr></thead>
             <tbody>
               {pending.map((t) => (
                 <tr key={t.id}>
-                  <td className="muted">{t.id}<div className="small">{fmtTime(t.createdAt)}</div></td>
-                  <td><Link href={`/customers/${t.customerId}`}>{t.customerName}</Link></td>
-                  <td>{tr(TOPUP_METHOD_LABEL[t.method])}</td>
-                  <td className="num">{money(t.amountUsd)}</td>
-                  <td className="num"><b>{t.payCurrency === "CNY" ? `¥${t.payAmount.toFixed(2)}` : `$${t.payAmount.toFixed(2)}`}</b>{t.fxRate && <div className="small muted">{tr("实时 {live} + 加点 {markup} = {rate}", { live: t.fxLive, markup: t.fxLive ? (t.fxRate - t.fxLive).toFixed(4).replace(/0+$/, "") : "-", rate: t.fxRate })}</div>}</td>
-                  <td className="small">{t.reference}{t.note && <div className="muted">{t.note}</div>}</td>
-                  <td>{t.hasProof ? <a href={`/api/topup/${t.id}/proof`} target="_blank">{tr("查看")}</a> : <span className="muted small">{tr("无")}</span>}</td>
-                  <td style={{ minWidth: 300 }}>
+                  <td className="muted" data-label={tr("申请")}>#{t.id}<div className="small">{fmtTime(t.createdAt)}</div></td>
+                  <td className="c-main" data-label={tr("客户")}><Link href={`/customers/${t.customerId}`}>{t.customerName}</Link></td>
+                  <td data-label={tr("方式")}>{tr(TOPUP_METHOD_LABEL[t.method])}</td>
+                  <td className="num" data-label={tr("申请（美元）")}>{money(t.amountUsd)}</td>
+                  <td className="num" data-label={tr("应收")}><b>{t.payCurrency === "CNY" ? `¥${t.payAmount.toFixed(2)}` : `$${t.payAmount.toFixed(2)}`}</b>{t.fxRate && <div className="small muted">{tr("实时 {live} + 加点 {markup} = {rate}", { live: t.fxLive, markup: t.fxLive ? (t.fxRate - t.fxLive).toFixed(4).replace(/0+$/, "") : "-", rate: t.fxRate })}</div>}</td>
+                  <td className="small" data-label={tr("参考号 / 备注")}>{t.reference || "-"}{t.note && <div className="muted">{t.note}</div>}</td>
+                  <td data-label={tr("凭证")}>{t.hasProof ? <a href={`/api/topup/${t.id}/proof`} target="_blank">{tr("查看")}</a> : <span className="muted small">{tr("无")}</span>}</td>
+                  <td className="c-review" style={{ minWidth: 300 }}>
                     <div className="review-box">
                       <FlashForm action={approveTopupAction} submitLabel="确认到账" submitClass="primary small" confirm="确认已收到这笔款项并入账？">
                         <input type="hidden" name="id" value={t.id} />
@@ -83,19 +83,19 @@ export default async function FinancePage({ searchParams }: { searchParams: Prom
         {handled.length > 0 && (
           <>
             <h3>{tr("最近处理")}</h3>
-            <table>
+            <table className="card-table">
               <thead><tr><th>#</th><th>{tr("处理时间")}</th><th>{tr("客户")}</th><th>{tr("方式")}</th><th className="num">{tr("应收")}</th><th>{tr("状态")}</th><th className="num">{tr("入账（美元）")}</th><th>{tr("备注")}</th></tr></thead>
               <tbody>
                 {handled.map((t) => (
                   <tr key={t.id}>
-                    <td className="muted">{t.id}</td>
-                    <td className="small muted">{fmtTime(t.handledAt)}</td>
-                    <td>{t.customerName}</td>
-                    <td className="small">{tr(TOPUP_METHOD_LABEL[t.method])}</td>
-                    <td className="num">{t.payCurrency === "CNY" ? `¥${t.payAmount.toFixed(2)}` : `$${t.payAmount.toFixed(2)}`}</td>
-                    <td>{tr(TOPUP_STATUS_LABEL[t.status])}</td>
-                    <td className="num">{t.creditedUsd !== null ? money(t.creditedUsd) : "-"}</td>
-                    <td className="small">{t.adminNote}{t.hasProof && <> <a href={`/api/topup/${t.id}/proof`} target="_blank">{tr("凭证")}</a></>}</td>
+                    <td className="muted hide-m">{t.id}</td>
+                    <td className="small muted" data-label={tr("处理时间")}>{fmtTime(t.handledAt)}</td>
+                    <td className="c-main">{t.customerName}</td>
+                    <td className="small" data-label={tr("方式")}>{tr(TOPUP_METHOD_LABEL[t.method])}</td>
+                    <td className="num" data-label={tr("应收")}>{t.payCurrency === "CNY" ? `¥${t.payAmount.toFixed(2)}` : `$${t.payAmount.toFixed(2)}`}</td>
+                    <td data-label={tr("状态")}>{tr(TOPUP_STATUS_LABEL[t.status])}</td>
+                    <td className="num" data-label={tr("入账（美元）")}>{t.creditedUsd !== null ? money(t.creditedUsd) : "-"}</td>
+                    <td className="small" data-label={tr("备注")}>{t.adminNote || "-"}{t.hasProof && <> <a href={`/api/topup/${t.id}/proof`} target="_blank">{tr("凭证")}</a></>}</td>
                   </tr>
                 ))}
               </tbody>
@@ -106,16 +106,16 @@ export default async function FinancePage({ searchParams }: { searchParams: Prom
 
       <div className="card table-wrap">
         <h2>{tr("客户余额")}</h2>
-        <table>
+        <table className="card-table">
           <thead><tr><th>{tr("客户")}</th><th className="num">{tr("余额")}</th><th className="num">{tr("信用额度")}</th><th className="num">{tr("可用")}</th><th></th></tr></thead>
           <tbody>
             {[...customers].sort((a, b) => a.balance - b.balance).map((c) => (
               <tr key={c.id}>
-                <td>{c.name}</td>
-                <td className={`num ${c.balance < 0 ? "profit-neg" : ""}`}>{money(c.balance)}</td>
-                <td className="num">{money(c.creditLimit)}</td>
-                <td className={`num ${c.balance + c.creditLimit <= 0 ? "profit-neg" : ""}`}>{money(c.balance + c.creditLimit)}</td>
-                <td><Link href={`/customers/${c.id}`}>{tr("充值 / 流水")}</Link> · <Link href={`/customers/${c.id}/statement`}>{tr("对账单")}</Link></td>
+                <td className="c-main">{c.name}</td>
+                <td className={`num ${c.balance < 0 ? "profit-neg" : ""}`} data-label={tr("余额")}>{money(c.balance)}</td>
+                <td className="num" data-label={tr("信用额度")}>{money(c.creditLimit)}</td>
+                <td className={`num ${c.balance + c.creditLimit <= 0 ? "profit-neg" : ""}`} data-label={tr("可用")}>{money(c.balance + c.creditLimit)}</td>
+                <td className="c-act"><Link href={`/customers/${c.id}`}>{tr("充值 / 流水")}</Link> · <Link href={`/customers/${c.id}/statement`}>{tr("对账单")}</Link></td>
               </tr>
             ))}
           </tbody>
@@ -135,17 +135,17 @@ export default async function FinancePage({ searchParams }: { searchParams: Prom
       </div>
       <div className="card table-wrap">
         <h2>{tr("全部流水（最近 300 条）")}</h2>
-        <table>
+        <table className="card-table">
           <thead><tr><th>{tr("时间")}</th><th>{tr("客户")}</th><th>{tr("类型")}</th><th>{tr("单号")}</th><th>{tr("说明")}</th><th className="num">{tr("金额")}</th></tr></thead>
           <tbody>
             {ledger.map((l) => (
               <tr key={l.id}>
-                <td className="small muted">{fmtTime(l.createdAt)}</td>
-                <td><Link href={`/customers/${l.customerId}`}>{l.customerName}</Link></td>
-                <td>{tr(LEDGER_TYPE_LABEL[l.type])}</td>
-                <td>{l.shipmentId ? <Link href={`/shipments/${l.shipmentId}`}>{l.customNo}</Link> : "-"}</td>
-                <td className="small">{note(l.note)}</td>
-                <td className={`num ${l.amount >= 0 ? "profit-pos" : ""}`}>{money(l.amount)}</td>
+                <td className="small muted" data-label={tr("时间")}>{fmtTime(l.createdAt)}</td>
+                <td data-label={tr("客户")}><Link href={`/customers/${l.customerId}`}>{l.customerName}</Link></td>
+                <td data-label={tr("类型")}>{tr(LEDGER_TYPE_LABEL[l.type])}</td>
+                <td data-label={tr("单号")}>{l.shipmentId ? <Link href={`/shipments/${l.shipmentId}`}>{l.customNo}</Link> : "-"}</td>
+                <td className="small" data-label={tr("说明")}>{note(l.note) || "-"}</td>
+                <td className={`num ${l.amount >= 0 ? "profit-pos" : ""}`} data-label={tr("金额")}>{money(l.amount)}</td>
               </tr>
             ))}
             {!ledger.length && <tr><td colSpan={6} className="muted">{tr("没有流水")}</td></tr>}

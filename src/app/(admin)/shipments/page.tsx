@@ -98,7 +98,7 @@ export default async function ShipmentsPage({ searchParams }: { searchParams: Pr
       </div>
 
       <div className="card table-wrap">
-        <table className="list">
+        <table className="list card-table">
           <thead>
             <tr>
               <th>{t("单号")} / {t("时间")}</th><th>{t("客户")}</th><th>{t("收件人")}</th><th>{t("渠道")}</th><th>{t("运单号")}</th><th>{t("状态")}</th>
@@ -108,20 +108,20 @@ export default async function ShipmentsPage({ searchParams }: { searchParams: Pr
           <tbody>
             {rows.map((s) => (
               <tr key={s.id}>
-                <td><Link href={`/shipments/${s.id}`}>{s.customNo}</Link><div className="small muted">{fmtTime(s.createdAt)}</div></td>
-                <td className="wrap">{s.customerName}</td>
-                <td className="wrap">{s.recipient.nameFirst} {s.recipient.nameLast}<div className="small muted">{s.recipient.city}, {s.recipient.province ?? s.recipient.country} {s.recipient.zipCode}</div></td>
-                <td className="nowrap" title={s.channelName ?? undefined}>{displayChannel(s.channelCode).name || s.channelName}</td>
-                <td><TrackingLink channelCode={s.channelCode} trackingNo={s.trackingNo} title={t("查物流轨迹")} /></td>
-                <td><StatusBadge status={s.status} test={s.isTest} /></td>
-                <td className="num">{money(s.actualCost ?? s.quotedCost)}{s.actualCost === null && <div className="small muted">{t("试算")}</div>}</td>
-                <td className="num">{money(s.price, s.currency)}</td>
-                <td className="num small" title={`${describeRule(s.rule)}${s.rule.source ? ` · ${t(MARKUP_SOURCE_LABEL[s.rule.source as MarkupSource] ?? s.rule.source)}` : ""}`}>
+                <td className="c-main"><Link href={`/shipments/${s.id}`}>{s.customNo}</Link><div className="small muted">{fmtTime(s.createdAt)}</div></td>
+                <td className="wrap" data-label={t("客户")}>{s.customerName}</td>
+                <td className="wrap" data-label={t("收件人")}>{s.recipient.nameFirst} {s.recipient.nameLast}<div className="small muted">{s.recipient.city}, {s.recipient.province ?? s.recipient.country} {s.recipient.zipCode}</div></td>
+                <td className="nowrap" data-label={t("渠道")} title={s.channelName ?? undefined}>{displayChannel(s.channelCode).name || s.channelName}</td>
+                <td data-label={t("运单号")}><TrackingLink channelCode={s.channelCode} trackingNo={s.trackingNo} title={t("查物流轨迹")} /></td>
+                <td data-label={t("状态")}><StatusBadge status={s.status} test={s.isTest} /></td>
+                <td className="num" data-label={t("成本")}>{money(s.actualCost ?? s.quotedCost)}{s.actualCost === null && <div className="small muted">{t("试算")}</div>}</td>
+                <td className="num" data-label={t("客户价")}>{money(s.price, s.currency)}</td>
+                <td className="num small hide-m" title={`${describeRule(s.rule)}${s.rule.source ? ` · ${t(MARKUP_SOURCE_LABEL[s.rule.source as MarkupSource] ?? s.rule.source)}` : ""}`}>
                   {signedPercent(s.rule.percent)}{s.rule.fixed ? <div className="muted">+{money(s.rule.fixed)}</div> : null}
                 </td>
-                <td className="num">{s.costAdj || s.customerAdj ? <>{money(s.customerAdj)}<div className="small muted">{t("成本")} {money(s.costAdj)}</div></> : "-"}</td>
-                <td className="num"><Profit value={shipmentProfit(s)} /></td>
-                <td className="nowrap">{s.labelPath && s.status !== "cancelled" ? <a href={`/api/labels/${s.id}`} target="_blank">{t("打印")}</a> : s.status === "cancelled" ? <span className="muted small">{t("已作废")}</span> : "-"}</td>
+                <td className="num" data-label={t("补差(客户)")}>{s.costAdj || s.customerAdj ? <>{money(s.customerAdj)}<div className="small muted">{t("成本")} {money(s.costAdj)}</div></> : "-"}</td>
+                <td className="num" data-label={t("利润")}><Profit value={shipmentProfit(s)} /></td>
+                <td className="nowrap c-act">{s.labelPath && s.status !== "cancelled" ? <a href={`/api/labels/${s.id}`} target="_blank">{t("打印")}</a> : s.status === "cancelled" ? <span className="muted small">{t("已作废")}</span> : "-"}</td>
               </tr>
             ))}
             {!rows.length && <tr><td colSpan={12} className="muted">{t("没有符合条件的记录")}</td></tr>}

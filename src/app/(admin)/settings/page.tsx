@@ -17,6 +17,7 @@ import { isMockMode, isSandboxSite, shipbestConfig, type ShipBestMode } from "@/
 import { isProductionSite, siteSwitch } from "@/lib/sites";
 import StampSettings from "@/components/StampSettings";
 import SettingsSection, { SettingsToggleAll } from "@/components/SettingsSection";
+import SettingsToc from "@/components/SettingsToc";
 import FlashForm from "@/components/FlashForm";
 import RuleInputs from "@/components/RuleInputs";
 import { DEFAULT_JG_WAREHOUSES, isJiaguCode, JG_PREFIX, JG_SUFFIX } from "@/lib/shipbest/jiagu";
@@ -63,6 +64,7 @@ export default async function SettingsPage() {
         </div>
         <SettingsToggleAll />
       </div>
+      <SettingsToc />
 
       <SettingsSection
         id="shipbest"

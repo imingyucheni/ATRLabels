@@ -440,7 +440,7 @@ export default function ShipForm(props: {
                     {!c && <span className="small muted">{t("用所有已启用的渠道，按右边填写的加价试算")}</span>}
                     {c && <span className="small muted">{t("按这个客户已开通的渠道和他的加价试算")}</span>}
                     {c?.channelCount === 0 && (
-                      <span className="small" style={{ color: "var(--warn)" }}>{t("未开通任何渠道，请先到")} <a href={`/customers/${c.id}#channels`}>{t("客户详情")}</a> {t("开通")}</span>
+                      <span className="small" style={{ color: "var(--warn)" }}>{t("未开通任何渠道，请先到")} <a href={`/customers/${c.id}?tab=pricing#channels`}>{t("客户详情")}</a> {t("开通")}</span>
                     )}
                   </>
                 );
