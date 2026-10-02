@@ -3,6 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 import { useT } from "@/components/I18n";
+import { sectionOrder, tabOfSection } from "@/lib/settingsTabs";
 
 const TOGGLE_ALL = "settings:toggle-all";
 /** 一个锚点同时展开几块：侧边栏「渠道与价格」= #pricing，滚到第一块 */
@@ -46,7 +47,7 @@ export default function SettingsSection({ id, title, badge, summary, actions, de
   }, [id]);
 
   return (
-    <section className={`card set-sec${open ? " open" : ""} ${className}`} id={id}>
+    <section className={`card set-sec${open ? " open" : ""} ${className}`} id={id} data-tab={tabOfSection(id)} style={{ order: sectionOrder(id) }}>
       <div className="set-sec-head">
         <button type="button" className="set-sec-toggle" aria-expanded={open} aria-controls={`${id}-body`} onClick={() => setOpen((o) => !o)}>
           <ChevronDown size={18} className="set-sec-chev" aria-hidden="true" />

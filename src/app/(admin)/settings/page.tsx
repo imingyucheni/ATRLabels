@@ -17,10 +17,11 @@ import { BALANCE_RULE_LABEL } from "@/lib/ledger";
 import { computePrice, money, resolveRule, type MarkupRule } from "@/lib/pricing";
 import { isMockMode, isSandboxSite, shipbestConfig, type ShipBestMode } from "@/lib/shipbest/client";
 import { isProductionSite, siteSwitch } from "@/lib/sites";
-import { providerOf } from "@/lib/service";
+import { groupChannels } from "@/lib/channelGroups";
 import StampSettings from "@/components/StampSettings";
 import SettingsSection, { SettingsToggleAll } from "@/components/SettingsSection";
 import SettingsToc from "@/components/SettingsToc";
+import { DEFAULT_SETTINGS_TAB, isSettingsTab, type SettingsTab } from "@/lib/settingsTabs";
 import FlashForm from "@/components/FlashForm";
 import RuleInputs from "@/components/RuleInputs";
 import { DEFAULT_JG_WAREHOUSES, isJiaguCode, JG_PREFIX, JG_SUFFIX } from "@/lib/shipbest/jiagu";
@@ -38,13 +39,6 @@ import { NOTIFY_EVENTS, NOTIFY_LABEL, recentEmailLog } from "@/lib/notify";
 import { getLang, getT } from "@/lib/prefs";
 import type { T } from "@/lib/i18n";
 
-/** 物流渠道表格按服务商分组显示 */
-const CHANNEL_GROUPS = [
-  { provider: "ShipBest", label: "ShipBest（SB）", note: "" },
-  { provider: "嘉谷", label: "嘉谷万邑（GDE）", note: "" },
-  { provider: "DHL", label: "DHL Express 国际", note: "" },
-];
-
 const MODE_BADGE: Record<ShipBestMode, string> = { mock: "当前：模拟模式", sandbox: "当前：沙盒模式", live: "当前：正式模式" };
 const MODE_NAME: Record<ShipBestMode, string> = { mock: "模拟", sandbox: "沙盒", live: "正式" };
 const MODE_DESC: Record<ShipBestMode, string> = {
@@ -53,7 +47,9 @@ const MODE_DESC: Record<ShipBestMode, string> = {
   live: "真实报价、真实出单，ShipBest 会扣费，面单可以直接贴。正式营业用这个。",
 };
 
-export default async function SettingsPage() {
+export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
+  const tabParam = (await searchParams).tab;
+  const tab: SettingsTab = isSettingsTab(tabParam) ? tabParam : DEFAULT_SETTINGS_TAB;
   const s = getSettings();
   const fx = await usdCnyQuote();
   const channels = listChannels();
@@ -74,7 +70,9 @@ export default async function SettingsPage() {
         </div>
         <SettingsToggleAll />
       </div>
-      <SettingsToc />
+      <SettingsToc initial={tab} />
+      {/* 只显示当前页签的设置块（其他的隐藏，不卸载） */}
+      <div className="settings-body" data-settab={tab}>
 
       <SettingsSection
         id="shipbest"
@@ -853,10 +851,10 @@ export default async function SettingsPage() {
               <tr><th>{t("启用")}</th><th>{t("渠道")}</th><th>{t("客户看到的名称 / 物流商")}</th><th title={t("服务商对这个渠道的长期返利；填了之后这个渠道的加价可以填负数，最低到 -返利%")}>{t("服务商返利 %")}</th><th>{t("加价 %")}</th><th>{t("固定加价")}</th><th>{t("最低利润")}</th><th>{t("成本 10.00 时客户价")}</th><th className="num">{t("开通客户")}</th></tr>
             </thead>
             {/* 按服务商分组：ShipBest / 嘉谷 / DHL Express */}
-            {CHANNEL_GROUPS.map((g) => ({ ...g, list: channels.filter((c) => providerOf(c.code) === g.provider) })).filter((g) => g.list.length).map((g) => (
+            {groupChannels(channels).map((g) => (
             <tbody key={g.provider} className="ch-group">
               <tr className="ch-group-head">
-                <td colSpan={9}><b>{t(g.label)}</b><span className="small muted"> · {t("启用 {a} / 共 {b} 个", { a: g.list.filter((c) => c.enabled).length, b: g.list.length })}</span>{g.note && <span className="small muted"> · {t(g.note)}</span>}</td>
+                <td colSpan={9}><b>{t(g.label)}</b><span className="small muted"> · {t("启用 {a} / 共 {b} 个", { a: g.list.filter((c) => c.enabled).length, b: g.list.length })}</span></td>
               </tr>
               {g.list.map((c) => (
                 <tr key={c.code}>
@@ -964,6 +962,7 @@ export default async function SettingsPage() {
           </SettingsSection>
         );
       })()}
+      </div>
     </>
   );
 }

@@ -19,6 +19,7 @@ import PinField from "@/components/PinField";
 import StoresCard from "./StoresCard";
 import ApiCard from "./ApiCard";
 import SalesCard from "./SalesCard";
+import { groupChannels } from "@/lib/channelGroups";
 import StaffAccessCard from "./StaffAccessCard";
 import { currentAdmin } from "@/lib/auth";
 import { customerAccess } from "@/lib/adminSession";
@@ -145,18 +146,24 @@ export default async function CustomerEdit({ params, searchParams }: { params: P
             </div>
             <p className="small muted">{t("新客户默认不开通任何渠道。勾选后客户才能用这些渠道查询运费、下单和批量导入；后台代下单也只能用这里开通的渠道。")}</p>
             <input type="hidden" name="id" value={c.id} />
-            <div className="check-grid" style={{ margin: "8px 0 12px" }}>
-              {allChannels.map((ch) => (
-                <label key={ch.code} className={`check-tile ${ch.enabled ? "" : "disabled"}`}>
-                  <input type="checkbox" name="channels" value={ch.code} defaultChecked={opened.has(ch.code)} />
-                  <span>
-                    <b>{ch.name}</b>
-                    <span className="small muted">{ch.code}{ch.enabled ? "" : t(" · 设置里已停用，暂不可用")}</span>
-                  </span>
-                </label>
-              ))}
-              {!allChannels.length && <span className="small muted">{t("还没有渠道，请先到")} <Link href="/settings">{t("设置")}</Link> {t("同步渠道。")}</span>}
-            </div>
+            {/* 按服务商分组 */}
+            {groupChannels(allChannels).map((g) => (
+              <div key={g.provider} className="ch-check-group">
+                <div className="ch-check-head"><b>{t(g.label)}</b><span className="small muted"> · {t("已开通 {a} / 共 {b} 个", { a: g.list.filter((ch) => opened.has(ch.code)).length, b: g.list.length })}</span></div>
+                <div className="check-grid">
+                  {g.list.map((ch) => (
+                    <label key={ch.code} className={`check-tile ${ch.enabled ? "" : "disabled"}`}>
+                      <input type="checkbox" name="channels" value={ch.code} defaultChecked={opened.has(ch.code)} />
+                      <span>
+                        <b>{ch.name}</b>
+                        <span className="small muted">{ch.code}{ch.enabled ? "" : t(" · 设置里已停用，暂不可用")}</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ))}
+            {!allChannels.length && <span className="small muted">{t("还没有渠道，请先到")} <Link href="/settings?tab=providers">{t("设置")}</Link> {t("同步渠道。")}</span>}
           </FlashForm>}
 
           {!c.internal && !staff && show("pricing") && <SalesCard customerId={c.id} />}

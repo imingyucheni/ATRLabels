@@ -2,33 +2,74 @@
 
 import { useEffect, useState } from "react";
 import { useT } from "@/components/I18n";
+import { SETTINGS_TABS, isSettingsTab, tabOfSection, type SettingsTab } from "@/lib/settingsTabs";
 
-/** 设置页目录：按用途分组，点了跳到对应那块并展开。这个站点没有的块（正式 / 沙盒不同）自动隐藏。 */
-const GROUPS: [string, [string, string][]][] = [
-  ["渠道与价格", [["channels", "物流渠道"], ["rules", "全局加价规则"], ["promotions", "限时活动价"], ["limits", "重量 / 尺寸限制"], ["stamp", "面单加印 SKU"]]],
-  ["服务商连接", [["shipbest", "ShipBest"], ["jiagu", "嘉谷万邑"], ["shipgrid", "ShipGrid"], ["dhl", "DHL 国际"], ["ebay", "eBay"], ["addr", "地址核对"], ["mail", "邮件通知"]]],
-  ["收款与财务", [["payment", "收款方式"], ["finance-pin", "财务确认密码"]]],
-  ["客户与官网", [["terms", "服务条款"], ["site", "官网与联系方式"]]],
-  ["维护", [["cleanup", "清除测试数据"], ["sandbox-reset", "清空沙盒"]]],
-];
-
-export default function SettingsToc() {
+/**
+ * 设置页的页签 + 当前页签里的小目录。
+ * 每块设置都在页面里（隐藏的页签只是不显示，填了一半的表单不会丢）；切换页签只改地址栏 ?tab=，不重新加载。
+ * 网址带 #某块（例如从别的页面点“去设置”）时自动切到那块所在的页签。
+ */
+export default function SettingsToc({ initial }: { initial: SettingsTab }) {
   const t = useT();
+  const [tab, setTab] = useState<SettingsTab>(initial);
   const [present, setPresent] = useState<Set<string> | null>(null);
+
+  const apply = (k: SettingsTab, push = false) => {
+    setTab(k);
+    const body = document.querySelector<HTMLElement>(".settings-body");
+    if (body) body.dataset.settab = k;
+    const url = new URL(window.location.href);
+    url.searchParams.set("tab", k);
+    if (push) url.hash = "";
+    window.history.replaceState(null, "", url);
+  };
+
+  // 左侧菜单点“服务商 / 渠道与价格”：同一页面换了 ?tab=，跟着切
   useEffect(() => {
-    setPresent(new Set(GROUPS.flatMap(([, items]) => items.map(([id]) => id)).filter((id) => document.getElementById(id))));
+    if (!window.location.hash) apply(initial);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initial]);
+
+  useEffect(() => {
+    setPresent(new Set(SETTINGS_TABS.flatMap((g) => g.sections.map(([id]) => id)).filter((id) => document.getElementById(id))));
+    const byHash = () => {
+      const id = window.location.hash.slice(1);
+      if (id && document.getElementById(id)) apply(tabOfSection(id));
+      else if (id === "pricing") apply("pricing");
+    };
+    byHash();
+    const onPop = () => {
+      const k = new URL(window.location.href).searchParams.get("tab");
+      if (isSettingsTab(k)) apply(k);
+    };
+    window.addEventListener("hashchange", byHash);
+    window.addEventListener("popstate", onPop);
+    return () => {
+      window.removeEventListener("hashchange", byHash);
+      window.removeEventListener("popstate", onPop);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const groups = GROUPS.map(([g, items]) => [g, items.filter(([id]) => !present || present.has(id))] as const).filter(([, items]) => items.length);
+
+  const tabs = SETTINGS_TABS.map((g) => ({ ...g, items: g.sections.filter(([id]) => !present || present.has(id)) })).filter((g) => g.items.length);
+  const cur = tabs.find((g) => g.key === tab) ?? tabs[0];
   return (
-    <nav className="set-toc" aria-label={t("设置目录")}>
-      {groups.map(([g, items]) => (
-        <div key={g} className="set-toc-group">
-          <span className="set-toc-title">{t(g)}</span>
-          {items.map(([id, label]) => (
-            <a key={id} href={`#${id}`}>{t(label)}</a>
-          ))}
-        </div>
-      ))}
-    </nav>
+    <>
+      <nav className="tabs-bar settings-tabs" aria-label={t("设置分类")}>
+        {tabs.map((g) => (
+          <a key={g.key} href={`?tab=${g.key}`} className={g.key === tab ? "on" : ""} aria-current={g.key === tab ? "page" : undefined}
+            onClick={(e) => { e.preventDefault(); apply(g.key, true); window.scrollTo({ top: 0 }); }}>
+            {t(g.label)}
+          </a>
+        ))}
+      </nav>
+      {cur && cur.items.length > 1 && (
+        <nav className="set-toc" aria-label={t("设置目录")}>
+          <div className="set-toc-group">
+            {cur.items.map(([id, label]) => <a key={id} href={`#${id}`}>{t(label)}</a>)}
+          </div>
+        </nav>
+      )}
+    </>
   );
 }

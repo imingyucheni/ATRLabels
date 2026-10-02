@@ -73,31 +73,41 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           { title: "我的账号", items: [{ href: "/account", label: "我的账号 · 确认密码", icon: "account" }] },
         ] : [
           { items: [{ href: "/", label: "概览", icon: "dashboard", exact: true }, { href: "/reports", label: "报表", icon: "reports" }, { href: "/reconcile", label: "服务商对账", icon: "billing" }] },
+          // 面单：美国本地 / 国际下单、面单记录、补差都在这里
           {
-            title: "客户",
-            items: [
-              { href: "/customers", label: "客户管理", icon: "customers", count: resets },
-              { href: "/leads", label: "客户咨询", icon: "leads", count: leads },
-              { href: "/quote", label: "运费试算", icon: "ship" },
-              { href: "/finance", label: "财务 · 充值审核", icon: "finance", count: pendingTopups },
-              { href: "/commissions", label: "销售佣金", icon: "commission" },
-            ],
-          },
-          {
-            title: "美国本地面单",
-            tag: "US",
+            title: "面单",
             items: [
               { href: "/ship", label: "管理员下单", icon: "ship", exact: true },
               { href: "/ship/batch", label: "管理员批量下单", icon: "batch" },
+              dhlSettings().enabled
+                ? { href: "/ship/intl", label: "国际下单（DHL）", icon: "globe" }
+                : { href: "/ship/intl", label: "国际下单（DHL）", icon: "globe", soon: true },
               { href: "/shipments", label: "面单记录", icon: "list" },
               { href: "/adjustments", label: "补差导入", icon: "adjust" },
               { href: "/coverage", label: "派送范围与价格", icon: "map" },
             ],
           },
-          dhlSettings().enabled
-            ? { title: "国际面单", items: [{ href: "/ship/intl", label: "国际下单（DHL）", icon: "globe" }] }
-            : { title: "国际面单", soon: true, items: [{ href: "/settings#dhl", label: "国际下单", icon: "globe" }] },
-          { title: "系统", items: [{ href: "/settings#pricing", label: "渠道与价格", icon: "price" }, { href: "/settings", label: "设置", icon: "settings" }, { href: "/staff", label: "员工账号", icon: "account" }, { href: "/backups", label: "数据备份", icon: "backup" }] },
+          {
+            title: "客户",
+            items: [
+              { href: "/customers", label: "客户管理", icon: "customers", count: resets },
+              { href: "/leads", label: "客户咨询", icon: "leads", count: leads },
+              { href: "/quote", label: "运费试算", icon: "calc" },
+              { href: "/finance", label: "财务 · 充值审核", icon: "finance", count: pendingTopups },
+              { href: "/commissions", label: "销售佣金", icon: "commission" },
+            ],
+          },
+          // 设置：服务商（ShipBest / 嘉谷 / ShipGrid / DHL）和渠道价格单独有入口，其他在“更多设置”的页签里
+          {
+            title: "设置",
+            items: [
+              { href: "/settings?tab=providers", label: "服务商", icon: "provider" },
+              { href: "/settings?tab=pricing", label: "渠道与价格", icon: "price" },
+              { href: "/settings", label: "更多设置", icon: "settings" },
+              { href: "/staff", label: "员工账号", icon: "account" },
+              { href: "/backups", label: "数据备份", icon: "backup" },
+            ],
+          },
         ]}
       />
       <main className="main">

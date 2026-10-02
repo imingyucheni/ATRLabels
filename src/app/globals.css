@@ -1655,3 +1655,15 @@ fieldset.ro-wrap:disabled button[type="submit"], fieldset.ro-wrap:disabled form 
 /* 设置 → 物流渠道：服务商分组标题 */
 .ch-group-head td { background: var(--sunken); padding-top: 9px !important; padding-bottom: 9px !important; border-top: 2px solid var(--line-strong); }
 tbody.ch-group + tbody.ch-group .ch-group-head td { border-top-width: 10px; border-top-color: var(--surface); box-shadow: inset 0 1px 0 var(--line-strong); }
+
+/* 设置页：只显示当前页签的设置块 */
+.settings-body[data-settab] > .set-sec { display: none; }
+.settings-body[data-settab="providers"] > .set-sec[data-tab="providers"],
+.settings-body[data-settab="pricing"] > .set-sec[data-tab="pricing"],
+.settings-body[data-settab="customers"] > .set-sec[data-tab="customers"],
+.settings-body[data-settab="finance"] > .set-sec[data-tab="finance"],
+.settings-body[data-settab="system"] > .set-sec[data-tab="system"] { display: block; }
+.settings-tabs { margin-bottom: 14px; }
+.ch-check-group { margin: 10px 0 14px; }
+.ch-check-head { margin-bottom: 6px; }
+.settings-body { display: flex; flex-direction: column; }
