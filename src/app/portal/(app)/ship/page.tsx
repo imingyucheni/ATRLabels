@@ -33,7 +33,7 @@ export default async function PortalShipPage({ searchParams }: { searchParams: P
         <div className="alert warn">{t("您的账户还没有开通物流渠道，暂时无法查询运费和下单。请联系客服开通")}{s.supportContact ? `${t("：")}${s.supportContact}` : t("。")}</div>
       )}
       {src && <div className="alert info">{t("已复制订单 {no} 的收件人、包裹和商品，修改后查询运费下单。", { no: src.ref })}</div>}
-      <ShipForm key={src?.id ?? "new"} mode="portal" copy={src ?? undefined} recentPackages={recentPackages(me.id)} skuPresets={skuPresets(me.id)} senders={listSenders(me.id)} defaultSender={s.sender} defaultUnit={s.defaultUnit} defaultCurrency={s.defaultCurrency} />
+      <ShipForm key={src?.id ?? "new"} mode="portal" copy={src ?? undefined} recentPackages={recentPackages(me.id)} skuPresets={skuPresets(me.id)} senders={listSenders(me.id)} defaultSender={s.sender} wallet={{ balance: me.balance, creditLimit: me.creditLimit, rule: s.balanceRule }} defaultUnit={s.defaultUnit} defaultCurrency={s.defaultCurrency} />
     </>
   );
 }

@@ -48,7 +48,8 @@ export default function SelectPrint({
         )}
         <span className="small muted">{t("勾选已出面单的记录，合并成一个 PDF 打印")}</span>
       </div>
-      <table className="list">
+      {/* 手机上每单一张卡片（card-table），状态、运费、打印不用横向滑动 */}
+      <table className="list card-table">
         <thead>
           <tr>
             <th style={{ width: 32 }}>
@@ -61,9 +62,9 @@ export default function SelectPrint({
         <tbody>
           {rows.map((r) => (
             <tr key={r.id}>
-              <td>{r.hasLabel && <input type="checkbox" checked={sel.has(r.id)} onChange={() => toggle(r.id)} aria-label={t("选择")} />}</td>
-              {r.cells.map((c, i) => <td key={i} className={numericCols.includes(i) ? "num" : ""}>{c}</td>)}
-              <td>{r.hasLabel ? <a href={`/api/labels/${r.id}`} target="_blank">{t("打印")}</a> : "-"}</td>
+              <td className="c-check">{r.hasLabel && <input type="checkbox" checked={sel.has(r.id)} onChange={() => toggle(r.id)} aria-label={t("选择")} />}</td>
+              {r.cells.map((c, i) => <td key={i} className={`${numericCols.includes(i) ? "num" : ""}${i === 0 ? " c-main" : ""}`} data-label={i === 0 ? undefined : headers[i]}>{c}</td>)}
+              <td className="c-act">{r.hasLabel ? <a href={`/api/labels/${r.id}`} target="_blank">{t("打印")}</a> : <span className="muted">-</span>}</td>
             </tr>
           ))}
           {!rows.length && <tr><td colSpan={headers.length + 2} className="muted">{t("没有记录")}</td></tr>}

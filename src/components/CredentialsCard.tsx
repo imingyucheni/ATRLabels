@@ -6,6 +6,8 @@ import { useT } from "@/components/I18n";
 /** 开户信息：一键复制发给客户 */
 export default function CredentialsCard(props: { brand: string; name: string; url: string; email: string; password: string; onHide: () => Promise<void>; noChannels?: boolean }) {
   const [copied, setCopied] = useState(false);
+  // 密码默认遮住（开放办公室防旁人看到），复制时带完整密码
+  const [reveal, setReveal] = useState(false);
   const t = useT();
   const text = t("您好，{name}：\n您的 {brand} 账号已开通，可以登录下单、充值和查看记录。\n登录地址：{url}\n登录邮箱：{email}\n初始密码：{password}\n登录后请在“账户设置”里修改密码。", {
     name: props.name,
@@ -46,7 +48,8 @@ export default function CredentialsCard(props: { brand: string; name: string; ur
           {t("这个客户还没有开通任何渠道，请先在下方“可用渠道”里开通，再把登录信息发给客户。")} <a href="#channels">{t("去开通渠道 ↓")}</a>
         </div>
       )}
-      <pre className="cred-text">{text}</pre>
+      <pre className="cred-text">{reveal ? text : text.replace(props.password, "••••••••")}</pre>
+      <button type="button" className="small" style={{ marginBottom: 8 }} onClick={() => setReveal((v) => !v)}>{reveal ? t("隐藏密码") : t("显示密码")}</button>
       <p className="small muted" style={{ margin: 0 }}>{t("密码只在这里显示 15 分钟（系统只保存加密后的密码）。过期或忘记了，可以在下方“客户端登录”里重新生成。")}</p>
     </div>
   );

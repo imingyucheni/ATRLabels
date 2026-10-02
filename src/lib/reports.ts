@@ -86,11 +86,12 @@ export interface Report {
   customers: CustomerRow[];
 }
 
-export function buildReport(from: string, to: string, customerId?: number): Report {
-  // 模拟 / 沙盒 / 内部测试单不算营收
-  const list = listShipments({ from, to, customerId }).filter((s) => !s.isTest);
+export function buildReport(from: string, to: string, customerId?: number, opts: { includeTest?: boolean } = {}): Report {
+  // 模拟 / 沙盒 / 内部测试单不算营收（客户首页看自己的出单量时要算上：includeTest）
+  const keep = (s: Shipment) => opts.includeTest || !s.isTest;
+  const list = listShipments({ from, to, customerId }).filter(keep);
   const prevRange = shiftRange(from, to);
-  const prev = listShipments({ ...prevRange, customerId }).filter((s) => !s.isTest);
+  const prev = listShipments({ ...prevRange, customerId }).filter(keep);
 
   const totals = empty();
   const previous = empty();

@@ -201,11 +201,11 @@ export default async function ShipmentDetail({ params }: { params: Promise<{ id:
             <div className="card" style={{ marginTop: 12, background: "var(--warn-soft)" }}>
               <h2>{t("确认已取消")}</h2>
               <p className="small">{t("在 OMS 联系 ShipBest 完成取消后，填写费用并确认。退款 = 客户价 - 客户取消手续费。")}</p>
-              <FlashForm action={confirmCancelAction} submitLabel="确认已取消">
+              <FlashForm action={confirmCancelAction} submitLabel="确认已取消" review confirm={t("作废这张面单并退款给【{name}】：退款 = 客户价 {price} − 客户取消手续费。确认后不能撤回。", { name: s.customerName ?? "", price: money(s.price, s.currency) })}>
                 <input type="hidden" name="id" value={s.id} />
                 <div className="row" style={{ marginBottom: 8 }}>
                   <label className="f">{t("向客户收取的取消手续费")}<input name="cancelFee" type="number" step="0.01" defaultValue={fees.cancelFee} /></label>
-                  <label className="f">{t("ShipBest 收取的取消费")}<input name="sbCancelFee" type="number" step="0.01" defaultValue={fees.sbCancelFee} /></label>
+                  <label className="f">{t("ShipBest 收取的取消费")}<input name="sbCancelFee" type="number" step="0.01" defaultValue={fees.sbCancelFee} /><span className="field-hint muted">{t("预填的是按比例估算的金额，请按 ShipBest 实际收取的填写")}</span></label>
                 </div>
               </FlashForm>
               <p className="small muted" style={{ marginTop: 12 }}>{t("ShipBest 拒绝取消、或者申请错了：")}</p>

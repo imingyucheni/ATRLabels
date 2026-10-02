@@ -46,10 +46,39 @@ export function fillProductNames<T extends Pick<SkuItem, "productNameCn" | "prod
 }
 
 /** 客户端传来的数据不可信：统一转换类型、去掉多余字段。 */
+/** 美国国内件没填商品时用的默认商品（不印到面单上） */
+export const DEFAULT_ITEM_SKU = "GENERAL";
+const US_DOMESTIC = new Set(["US", "PR", "VI", "GU", "AS", "MP", "UM"]);
+
+/**
+ * 美国国内件商品明细选填：完全空的行去掉；只填了一部分的补上默认值（SKU / 英文品名互相补、申报单价默认 1、商品性质默认普货）；
+ * 一行都没有时用一件普通货物。国际件不处理（报关信息必须填）。
+ */
+function domesticItems(req: ShipmentRequest): ShipmentRequest {
+  if (!US_DOMESTIC.has((req.recipient.country || "US").toUpperCase())) return req;
+  const u = req.pkg.displayUnitSystem;
+  const rows = req.skuList
+    .filter((s) => s.sku || s.productNameEn || s.productNameCn || s.declaredUnitPrice > 0)
+    .map((s) => fillProductNames({
+      ...s,
+      sku: s.sku || s.productNameEn || s.productNameCn || DEFAULT_ITEM_SKU,
+      productNameEn: s.productNameEn || s.sku || "Merchandise",
+      quantity: s.quantity > 0 ? s.quantity : 1,
+      declaredUnitPrice: s.declaredUnitPrice > 0 ? s.declaredUnitPrice : 1,
+      productNature: s.productNature || "2,4",
+    }));
+  if (rows.length) return { ...req, skuList: rows };
+  const p = req.pkg;
+  return {
+    ...req,
+    skuList: [{ sku: DEFAULT_ITEM_SKU, productNameCn: "普通货物", productNameEn: "Merchandise", quantity: 1, declaredUnitPrice: 1, declaredCurrency: "USD", hsCode: "", productNature: "2,4", length: p.length, width: p.width, height: p.height, weight: p.weight, unit: u }],
+  };
+}
+
 export function cleanRequest(raw: ShipmentRequest): ShipmentRequest {
   const p = raw?.pkg ?? ({} as ShipmentRequest["pkg"]);
   const sig = Number(p.signServiceType);
-  return {
+  return domesticItems({
     sender: cleanAddress(raw?.sender),
     recipient: cleanAddress(raw?.recipient),
     pkg: {
@@ -82,6 +111,6 @@ export function cleanRequest(raw: ShipmentRequest): ShipmentRequest {
         unit: unit(s.unit),
       }),
     ),
-  };
+  });
 }
 

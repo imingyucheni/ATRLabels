@@ -8,7 +8,7 @@ import { checkAddress, needsAck, type AddressCheck } from "./addressCheck";
 import ExcelJS from "exceljs";
 import { activeShipmentByRef, customerChannels, db, duplicateRefMessage, getChannel, getCustomer, getSettings, getShipment, listChannels, type ShipmentStatus } from "./db";
 import { InsufficientBalanceError } from "./ledger";
-import { createLabel, PriceChangedError, quoteChannel, refreshShipment, validateRequest } from "./service";
+import { createLabel, PriceChangedError, quoteChannel, refreshShipment, validateRequest, forDestination } from "./service";
 import type { Address, ShipmentRequest, SkuItem, UnitSystem } from "./shipbest/types";
 import { usStateCode } from "./geo";
 import { JOB_STATUS_LABEL, type JobStatus } from "./batchLabels";
@@ -258,7 +258,7 @@ export function isShipBestTemplate(header: string[]) {
 export function parseOrders(rows: string[][], defaultSender: Address | null): { orders: ParsedOrder[]; error?: string } {
   const st = getSettings();
   const headerIdx = rows.slice(0, 10).findIndex(isShipBestTemplate);
-  if (headerIdx < 0) return { orders: [], error: "没有找到表头，请使用 ShipBest 导单模板（或在本页下载模板）" };
+  if (headerIdx < 0) return { orders: [], error: "没有找到表头：请用本页“下载模板”里的导单模板填写后上传" };
   const { find, inRecip, inSender, senderStart } = headerIndex(rows[headerIdx]);
   const col = {
     ref: find("自定义单号"), channel: find("物流产品"), ins: find("保险服务"), insFee: find("保险金额"), sign: find("签名服务"),
@@ -828,7 +828,9 @@ async function quoteJob(jobId: number) {
   await pool(pending, 3, async (r) => {
     const req = JSON.parse(r.req_json) as ShipmentRequest;
     const quotes: RowQuote[] = [];
-    for (const code of codes) {
+    // 寄美国只试算美国本土渠道，寄国外只试算国际渠道（不然每单都多出几行“不可用”）
+    const rowCodes = forDestination(codes.map((code) => ({ code })), req).map((c) => c.code);
+    for (const code of rowCodes.length ? rowCodes : codes) {
       try {
         const q = await quoteChannel(job.customerId, code, req);
         quotes.push(q.ok

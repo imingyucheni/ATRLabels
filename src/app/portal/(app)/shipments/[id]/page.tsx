@@ -46,6 +46,9 @@ export default async function PortalShipmentDetail({ params }: { params: Promise
   const canCancel = cancellable && !tooLate;
   const paper = isPaperSize(me.labelPaper) ? me.labelPaper : "4x6";
   const feePct = portalCancelFeePercent();
+  // 取消时的具体金额（和后台取消规则一样：手续费按客户价比例、向上取到分）
+  const feeAmt = Math.ceil(((s.price ?? 0) * feePct) / 100 * 100 - 1e-9) / 100;
+  const refundAmt = Math.round(((s.price ?? 0) - feeAmt) * 100) / 100;
   const contact = getSettings().supportContact;
   const charges = listLedger({ shipmentId: s.id }).filter((l) => l.customerId === me.id).reverse();
   const lang = await getLang();
@@ -86,7 +89,9 @@ export default async function PortalShipmentDetail({ params }: { params: Promise
       <div className="grid2">
         <div className="card">
           <h2>{t("面单")}</h2>
-          {s.hasLabel ? (
+          {s.status === "cancel_requested" ? (
+            <p className="muted">{t("取消处理中：这张面单请不要再打印或使用。")}</p>
+          ) : s.hasLabel ? (
             <>
               <LabelActions id={s.id} defaultPaper={paper} preview={s.labelMime === "application/pdf"} />
               {(() => {
@@ -136,8 +141,8 @@ export default async function PortalShipmentDetail({ params }: { params: Promise
                 inline
                 confirm={
                   s.hasLabel || s.trackingNo
-                    ? t("确认取消这张面单？面单已生成，取消后收取 {pct}% 取消手续费，其余运费退回账户余额，取消后面单不能再使用。", { pct: feePct })
-                    : t("确认取消这张订单？面单还没生成，取消后运费全额退回账户余额。")
+                    ? t("确认取消这张面单？\n运费 {price}，取消手续费 {fee}（{pct}%），退回 {refund} 到账户余额。\n取消后面单不能再使用。", { price: money(s.price, s.currency), fee: money(feeAmt, s.currency), pct: feePct, refund: money(refundAmt, s.currency) })
+                    : t("确认取消这张订单？面单还没生成，运费 {price} 全额退回账户余额。", { price: money(s.price, s.currency) })
                 }
               >
                 <input type="hidden" name="id" value={s.id} />

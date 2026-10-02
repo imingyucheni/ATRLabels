@@ -458,10 +458,14 @@ export async function ledgerEntryAction(_: FlashState, fd: FormData): Promise<Fl
   const pinErr = checkFinancePin(str(fd.get("financePin"), 10));
   if (pinErr) return { error: pinErr };
   const id = Number(fd.get("id"));
-  const type = fd.get("type") === "manual" ? "manual" : "topup";
-  const amount = optNum(fd.get("amount"));
-  if (!amount) return { error: fd.get("amount") ? "金额不能为 0" : "请填写金额" };
-  if (type === "topup" && amount < 0) return { error: "充值金额必须为正数；扣款请选“手动调账”并填负数" };
+  // 类型：充值 / 加款 / 扣款（金额都填正数，扣款时系统转成负数，不会因为漏打负号扣成加）；兼容旧的 manual（正负号）
+  const kind = String(fd.get("type") ?? "");
+  if (!["topup", "manual_add", "manual_sub", "manual"].includes(kind)) return { error: "请选择类型" };
+  const type = kind === "topup" ? "topup" : "manual";
+  const raw = optNum(fd.get("amount"));
+  if (!raw) return { error: fd.get("amount") ? "金额不能为 0" : "请填写金额" };
+  if (kind !== "manual" && raw < 0) return { error: "金额请填正数；要扣款请选“扣款”" };
+  const amount = kind === "manual_sub" ? -Math.abs(raw) : raw;
   const note = str(fd.get("note"), 200) || null;
   if (type === "manual" && !note) return { error: "手动调账请填写说明" };
   addLedger({ customerId: id, type, amount, note, createdBy: "admin" });
@@ -640,9 +644,10 @@ export async function testMailAction(_: FlashState, fd: FormData): Promise<Flash
   }
 }
 
-export async function resetTestEnvAction(_: FlashState): Promise<FlashState> {
+export async function resetTestEnvAction(_: FlashState, fd?: FormData): Promise<FlashState> {
   await requireAdmin();
   if (isProductionSite()) return { error: "正式站没有测试环境，测试请到沙盒站" };
+  if (String(fd?.get("confirmText") ?? "").trim() !== "重置测试环境") return { error: "请输入“重置测试环境”确认" };
   resetTestEnv();
   clearChannelNameCache();
   revalidatePath("/", "layout");

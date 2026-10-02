@@ -397,6 +397,7 @@ tr.best td { background: var(--accent-soft); }
   .main { padding: 18px 16px 48px; }
   .auth { grid-template-columns: minmax(0, 1fr); }
   .auth-side { display: none; }
+  .auth .auth-mobile-brand { display: flex; }
   .hbar-row { grid-template-columns: 100px 1fr 80px; }
   .kv { grid-template-columns: 100px 1fr; }
 }
@@ -834,8 +835,9 @@ tr.row-disabled td:first-child { opacity: 0.55; }
   .site-links, .site-nav-right { display: none; }
   .site-burger { display: inline-flex; }
   .site-nav.open .site-nav-in { flex-wrap: wrap; height: auto; padding-top: 12px; padding-bottom: 20px; gap: 16px; }
-  .site-nav.open .site-links { display: flex; flex-direction: column; gap: 16px; width: 100%; order: 3; }
-  .site-nav.open .site-nav-right { display: flex; flex-wrap: wrap; width: 100%; order: 4; }
+  .site-nav.open .site-links { display: flex; flex-direction: column; gap: 0; flex: 0 0 100%; width: 100%; order: 3; }
+  .site-nav.open .site-links a { display: block; padding: 12px 0; border-bottom: 1px solid var(--us-line); }
+  .site-nav.open .site-nav-right { display: flex; flex-wrap: wrap; flex: 0 0 100%; width: 100%; order: 4; }
 }
 @media (max-width: 760px) {
   .site-wrap { padding: 0 20px; }
@@ -994,7 +996,7 @@ tr.row-disabled td:first-child { opacity: 0.55; }
 .lux-faq p { margin: -6px 0 22px; color: var(--us-text); line-height: 1.7; font-size: 15.5px; }
 
 /* 联系我们 */
-.us-apply.embed { padding: 0; align-items: center; }
+.us-apply.embed { padding-top: 0; padding-bottom: 0; align-items: center; }
 .us-apply h1.h2 { font-size: clamp(30px, 3.6vw, 44px); }
 .us-contact-lines { display: grid; gap: 10px; font-size: 14.5px; color: var(--us-text); padding-top: 24px; border-top: 1px solid var(--us-line); max-width: 420px; }
 .us-contact-lines div { display: flex; align-items: center; gap: 10px; }
@@ -1480,3 +1482,63 @@ table.list tr.on td { background: color-mix(in srgb, var(--series-1, #3b82f6) 5%
 .api-info { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin: 12px 0; }
 .api-info code { overflow-wrap: anywhere; }
 .api-toc a.api-toc-primary { background: var(--text); color: var(--surface); border-color: var(--text); }
+
+/* 概览：待办 */
+.todo-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); gap: 8px; margin-bottom: 16px; }
+.todo { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--muted); min-height: 44px; }
+.todo:hover { text-decoration: none; border-color: var(--text-2); }
+.todo b { font-size: 20px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.todo span { font-size: 12.5px; }
+.todo.on { color: var(--text); }
+.todo.on b { color: var(--text); }
+.todo.on.warn { background: var(--warn-soft); border-color: color-mix(in srgb, var(--warn) 30%, transparent); }
+.todo.on.warn b { color: var(--warn); }
+.todo.on.bad { background: var(--err-soft); border-color: color-mix(in srgb, var(--err) 30%, transparent); }
+.todo.on.bad b { color: var(--err); }
+@media (max-width: 760px) { .todo-row { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.dash-search { flex: 1; max-width: 340px; min-width: 200px; }
+.dash-search input { width: 100%; }
+@media (max-width: 760px) { .dash-search { max-width: none; flex-basis: 100%; } }
+/* 批量下单：每个渠道一行，名称太长省略，价格不被挤 */
+.bq-opt { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 26px; }
+.bq-name { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; overflow: hidden; white-space: nowrap; }
+.bq-name .channel-label { min-width: 0; overflow: hidden; }
+.bq-name .channel-label > span:not(.carrier-mark) { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.bq-price { flex-shrink: 0; }
+
+/* ---------- 手机：点按区域、表单排版（体验官反馈） ---------- */
+@media (max-width: 760px) {
+  button.small, .btn.small, a.btn.small { min-height: 40px; height: auto; padding-top: 0; padding-bottom: 0; }
+  input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="range"]), select { min-height: 44px; }
+  input[type="checkbox"], input[type="radio"] { width: 20px; height: 20px; }
+  /* select.small 优先级比上面的 16px 规则高，iPhone 上会自动放大 */
+  select.small { font-size: 16px; }
+  /* 地址：两列对齐，地址1 / 地址2 占整行 */
+  .addr-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .addr-grid > label[style] { grid-column: 1 / -1 !important; }
+  /* 包裹：长宽高一行，其他字段各占一行 */
+  .pkg-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .pkg-grid > label { grid-column: 1 / -1; }
+  .pkg-grid > label.dim { grid-column: auto; }
+  /* 订单号、备注各占一行 */
+  .ref-f { flex: 1 1 100% !important; min-width: 0 !important; }
+  .bq-opt { min-height: 40px; }
+}
+
+.auth-mobile-brand { display: none; align-items: center; gap: 10px; justify-content: center; margin: 8px 0 18px; font-size: 17px; }
+.auth-mobile-brand .brand-mark { width: 36px; height: 36px; background: none; }
+/* 手机：列表表格变卡片（我的面单等） */
+@media (max-width: 760px) {
+  .table-wrap:has(> .card-table) { overflow: visible; }
+  .card-table { min-width: 0 !important; }
+  .card-table thead { display: none; }
+  .card-table, .card-table tbody { display: block; }
+  .card-table tr { position: relative; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; padding: 12px 4px 12px 38px; border-bottom: 1px solid var(--line); }
+  .card-table td { display: block; padding: 0 !important; border: 0 !important; white-space: normal !important; min-width: 0 !important; text-align: left !important; overflow-wrap: anywhere; }
+  .card-table td[data-label]::before { content: attr(data-label); display: block; font-size: 11.5px; color: var(--muted); margin-bottom: 2px; }
+  .card-table td.c-check { position: absolute; left: 4px; top: 12px; }
+  .card-table td.c-main { grid-column: 1 / -1; font-weight: 600; }
+  .card-table td.c-act { grid-column: 1 / -1; }
+  .card-table td.c-act a { display: inline-flex; align-items: center; justify-content: center; min-height: 40px; padding: 0 18px; border: 1px solid var(--line-strong); border-radius: 8px; font-weight: 600; }
+  .card-table td.c-act:has(> .muted) { display: none; }
+}

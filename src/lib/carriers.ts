@@ -129,6 +129,7 @@ export function trackingUrl(carrierId: string | null | undefined, trackingNo: st
     case "ups": return `https://www.ups.com/track?tracknum=${q}`;
     case "dhl": return `https://www.dhl.com/us-en/home/tracking/tracking-express.html?submit=1&tracking-id=${q}`;
     case "ontrac": return `https://www.ontrac.com/tracking/?number=${q}`;
-    default: return `https://t.17track.net/en#nums=${q}`;
+    // 不写语言：17track 按浏览器语言显示（中文用户看中文）
+    default: return `https://t.17track.net/#nums=${q}`;
   }
 }

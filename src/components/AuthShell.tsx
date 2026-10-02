@@ -22,6 +22,12 @@ export default function AuthShell({ brand, headline, sub, points, children, show
       </div>
       <div className="auth-main">
         <div className="auth-prefs"><PrefToggles showLang={showLang} /></div>
+        {/* 手机上左侧品牌栏隐藏：这里显示 logo 和品牌名 */}
+        <div className="auth-mobile-brand">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img className="brand-mark brand-logo" src="/app-icon.svg" alt="" aria-hidden="true" />
+          <b>{brand}</b>
+        </div>
         <div className="auth-card">{children}</div>
       </div>
     </div>

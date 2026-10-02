@@ -39,7 +39,7 @@ export default function ContactForm({ volumes }: { volumes: string[] }) {
       {/* 防机器人：正常人看不到这个输入框 */}
       <input name="website" tabIndex={-1} autoComplete="off" className="hp" aria-hidden="true" />
       <p className="small muted">{t("微信、电话、邮箱至少填一个，方便我们联系你。")}</p>
-      <button className="primary lg" disabled={pending}>{pending ? t("提交中…") : t("提交")}</button>
+      <button className="primary lg us-btn" disabled={pending}>{pending ? t("提交中…") : t("提交")}</button>
     </form>
   );
 }

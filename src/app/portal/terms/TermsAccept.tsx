@@ -24,6 +24,11 @@ export default function TermsAccept({ contact, title }: { contact: string; title
         <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} /> {t("我已阅读并同意以上服务条款，保证如实申报货物信息，并同意重量尺寸复核后按承运商账单补差。")}
       </label>
       {error && <div className="alert err">{tm(error)}</div>}
+      {!ready && (
+        <p className="small muted" style={{ margin: "0 0 8px" }}>
+          {t("还差：")}{[!signer.trim() && t("签署人姓名"), !signerTitle.trim() && t("签署人职位"), !agree && t("勾选同意")].filter(Boolean).join(t("、"))}
+        </p>
+      )}
       <div className="row">
         <button
           className="primary"

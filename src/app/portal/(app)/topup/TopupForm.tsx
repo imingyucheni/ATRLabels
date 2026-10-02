@@ -21,8 +21,8 @@ export default function TopupForm(props: {
   const tMsg = useTMsg();
   const [method, setMethod] = useState<"zelle" | "alipay">(props.zelleInfo || !props.alipayInfo ? "zelle" : "alipay");
   const [amount, setAmount] = useState("");
-  // 收款账号默认隐藏，点按钮才显示
-  const [showPay, setShowPay] = useState(false);
+  // 收款账号默认显示（先付款再提交），需要时可以隐藏
+  const [showPay, setShowPay] = useState(true);
   const [state, action, pending] = useActionState(portalTopupAction, null);
   const ref = useRef<HTMLFormElement>(null);
   useEffect(() => {
@@ -57,6 +57,35 @@ export default function TopupForm(props: {
 
       <div className="grid2">
         <div>
+          <div className="row" style={{ justifyContent: "space-between", marginBottom: 8 }}>
+            <b>{t("① 先付款")} · {t(method === "zelle" ? "Zelle 收款信息" : "支付宝收款信息")}</b>
+            <button type="button" className="accent-outline" aria-expanded={showPay} onClick={() => setShowPay((v) => !v)}>
+              {showPay ? <EyeOff size={15} strokeWidth={2} /> : <Eye size={15} strokeWidth={2} />}
+              {t(showPay ? "隐藏收款信息" : "显示收款信息")}
+            </button>
+          </div>
+          {showPay ? (
+            <div className="card" style={{ background: "var(--bg)", whiteSpace: "pre-wrap" }}>
+              {method === "zelle" ? props.zelleInfo || t("请联系客服获取 Zelle 收款信息") : props.alipayInfo || t("请联系客服获取支付宝收款信息")}
+              {method === "zelle" && props.zelleQr && (
+                <>
+                  <div className="small muted" style={{ marginTop: 12 }}>{t("也可以用银行 App 的 Zelle 扫码付款：")}</div>
+                  <QrImage src="/api/assets/zelle-qr" alt={t("Zelle 收款码")} />
+                </>
+              )}
+              {method === "alipay" && props.alipayQr && (
+                <QrImage src="/api/assets/alipay-qr" alt={t("支付宝收款码")} />
+              )}
+            </div>
+          ) : (
+            <div className="pay-hidden" onClick={() => setShowPay(true)}>
+              {t("收款账号已隐藏，点击“显示收款信息”查看")}
+            </div>
+          )}
+          {props.instructions && <p className="small muted" style={{ whiteSpace: "pre-wrap", marginBottom: 0 }}>{props.instructions}</p>}
+        </div>
+        <div>
+          <div style={{ marginBottom: 8 }}><b>{t("② 填写付款信息并提交")}</b></div>
           <label className="f" style={{ marginBottom: 10 }}>
             <span className="req">{t("充值金额（美元）")}</span>
             <input name="amountUsd" type="number" min="1" step="0.01" required value={amount} onChange={(e) => setAmount(e.target.value)} placeholder={t("例如 200")} />
@@ -82,34 +111,6 @@ export default function TopupForm(props: {
           <label className="f" style={{ marginBottom: 10 }}>{t("付款截图（可选，PNG / JPG / PDF，5MB 以内）")}<FilePick name="proof" accept=".png,.jpg,.jpeg,.pdf" /></label>
           <label className="f" style={{ marginBottom: 12 }}>{t("备注")}<input name="note" maxLength={300} /></label>
           <button className="primary" disabled={pending}>{t(pending ? "提交中…" : "我已付款，提交充值申请")}</button>
-        </div>
-        <div>
-          <div className="row" style={{ justifyContent: "space-between", marginBottom: 8 }}>
-            <b>{t(method === "zelle" ? "Zelle 收款信息" : "支付宝收款信息")}</b>
-            <button type="button" className="accent-outline" aria-expanded={showPay} onClick={() => setShowPay((v) => !v)}>
-              {showPay ? <EyeOff size={15} strokeWidth={2} /> : <Eye size={15} strokeWidth={2} />}
-              {t(showPay ? "隐藏收款信息" : "显示收款信息")}
-            </button>
-          </div>
-          {showPay ? (
-            <div className="card" style={{ background: "var(--bg)", whiteSpace: "pre-wrap" }}>
-              {method === "zelle" ? props.zelleInfo || t("请联系客服获取 Zelle 收款信息") : props.alipayInfo || t("请联系客服获取支付宝收款信息")}
-              {method === "zelle" && props.zelleQr && (
-                <>
-                  <div className="small muted" style={{ marginTop: 12 }}>{t("也可以用银行 App 的 Zelle 扫码付款：")}</div>
-                  <QrImage src="/api/assets/zelle-qr" alt={t("Zelle 收款码")} />
-                </>
-              )}
-              {method === "alipay" && props.alipayQr && (
-                <QrImage src="/api/assets/alipay-qr" alt={t("支付宝收款码")} />
-              )}
-            </div>
-          ) : (
-            <div className="pay-hidden" onClick={() => setShowPay(true)}>
-              {t("收款账号已隐藏，点击“显示收款信息”查看")}
-            </div>
-          )}
-          {props.instructions && <p className="small muted" style={{ whiteSpace: "pre-wrap", marginBottom: 0 }}>{props.instructions}</p>}
         </div>
       </div>
     </form>

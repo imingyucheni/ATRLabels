@@ -21,11 +21,13 @@ function useWidth<T extends HTMLElement>() {
 }
 
 /** 坐标轴刻度：取整的 4~5 个刻度 */
-function ticks(max: number, n = 4): number[] {
+function ticks(max: number, n = 4, integer = false): number[] {
   if (max <= 0) return [0, 1];
   const raw = max / n;
   const mag = 10 ** Math.floor(Math.log10(raw));
-  const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => s >= raw) ?? raw;
+  let step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => s >= raw) ?? raw;
+  // 单量这类整数：刻度也要整数（不能出现 0.25 单）
+  if (integer) step = Math.max(1, Math.ceil(step));
   const out: number[] = [];
   for (let v = 0; v <= max + step * 0.001; v += step) out.push(Math.round(v * 100) / 100);
   if (out[out.length - 1] < max) out.push(out[out.length - 1] + step);
@@ -71,7 +73,7 @@ export function DailyBars({ data, revenueLabel = "客户消费" }: { data: { dat
   const [hover, setHover] = useState(-1);
   const h = 240;
   const max = Math.max(1, ...data.map((d) => d.orders));
-  const t = ticks(max);
+  const t = ticks(max, 4, true);
   const top = t[t.length - 1];
   const iw = width - PAD.l - PAD.r;
   const ih = h - PAD.t - PAD.b;

@@ -49,7 +49,7 @@ export default async function CustomersPage() {
           <tbody>
             {customers.map((c) => (
               <tr key={c.id}>
-                <td>{c.name}{c.testAccount && <> <span className="badge test">{t("内部测试")}</span></>}</td><td>{c.contact}</td><td>{c.phone}</td>
+                <td><Link href={`/customers/${c.id}`}>{c.name}</Link>{c.testAccount && <> <span className="badge test">{t("内部测试")}</span></>}</td><td>{c.contact}</td><td>{c.phone}</td>
                 <td className="small">{c.portalEnabled ? c.portalEmail : <span className="muted">{t("未开通")}</span>}</td>
                 <td className="small">
                   {(() => {

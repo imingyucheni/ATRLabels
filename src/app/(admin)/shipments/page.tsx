@@ -1,5 +1,7 @@
 import { fmtTime } from "@/lib/time";
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { displayChannel } from "@/lib/channelDisplay";
 import { describeRule, MARKUP_SOURCE_LABEL, type MarkupSource } from "@/lib/markup";
 import { listCustomers, listShipments, shipmentCost, shipmentProfit, shipmentReceivable, STATUS_LABEL } from "@/lib/db";
 import { money, signedPercent } from "@/lib/pricing";
@@ -22,6 +24,8 @@ export default async function ShipmentsPage({ searchParams }: { searchParams: Pr
     q: sp.q || undefined,
   };
   const rows = listShipments({ ...filter, limit: 500 });
+  // 按单号 / 运单号搜到唯一一单：直接打开详情（手机上查件少点一步）
+  if (filter.q && rows.length === 1 && !filter.status && !filter.from && !filter.to && !filter.customerId) redirect(`/shipments/${rows[0].id}`);
   const customers = listCustomers({ includeInternal: true });
   const qs = new URLSearchParams(Object.entries(sp).filter(([, v]) => v) as [string, string][]).toString();
 
@@ -107,7 +111,7 @@ export default async function ShipmentsPage({ searchParams }: { searchParams: Pr
                 <td><Link href={`/shipments/${s.id}`}>{s.customNo}</Link><div className="small muted">{fmtTime(s.createdAt)}</div></td>
                 <td className="wrap">{s.customerName}</td>
                 <td className="wrap">{s.recipient.nameFirst} {s.recipient.nameLast}<div className="small muted">{s.recipient.city}, {s.recipient.province ?? s.recipient.country} {s.recipient.zipCode}</div></td>
-                <td className="wrap">{s.channelName}</td>
+                <td className="nowrap" title={s.channelName ?? undefined}>{displayChannel(s.channelCode).name || s.channelName}</td>
                 <td><TrackingLink channelCode={s.channelCode} trackingNo={s.trackingNo} title={t("查物流轨迹")} /></td>
                 <td><StatusBadge status={s.status} test={s.isTest} /></td>
                 <td className="num">{money(s.actualCost ?? s.quotedCost)}{s.actualCost === null && <div className="small muted">{t("试算")}</div>}</td>

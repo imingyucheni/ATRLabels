@@ -39,3 +39,25 @@ describe("智能识别地址", () => {
     expect(parseAddress("   ")).toEqual({});
   });
 });
+
+describe("体验官反馈的写法", () => {
+  it("姓名、电话、街道连在一行（有逗号 / 没逗号）", async () => {
+    const { parseAddress } = await import("@/lib/addressParse");
+    expect(parseAddress("Jane Roe 5125550100 500 Congress Ave, Austin, TX 78701")).toMatchObject({
+      nameFirst: "Jane", nameLast: "Roe", phone: "5125550100", address1: "500 Congress Ave", city: "Austin", province: "TX", zipCode: "78701",
+    });
+    expect(parseAddress("Jane Roe 512-555-0100 500 Congress Ave Austin TX 78701")).toMatchObject({
+      nameFirst: "Jane", nameLast: "Roe", phone: "512-555-0100", address1: "500 Congress Ave", city: "Austin", province: "TX", zipCode: "78701",
+    });
+  });
+  it("英国、加拿大地址：识别国家、邮编、国际电话", async () => {
+    const { parseAddress } = await import("@/lib/addressParse");
+    expect(parseAddress("Emma Brown\n221B Baker Street\nLondon NW1 6XE\nUnited Kingdom\n+44 20 7946 0958")).toMatchObject({
+      nameFirst: "Emma", nameLast: "Brown", address1: "221B Baker Street", city: "London", zipCode: "NW1 6XE", country: "GB", phone: "+44 20 7946 0958",
+    });
+    expect(parseAddress("Liam Smith\n100 King St W\nToronto ON M5H 2N2\nCanada")).toMatchObject({
+      nameFirst: "Liam", nameLast: "Smith", address1: "100 King St W", city: "Toronto", province: "ON", zipCode: "M5H 2N2", country: "CA",
+    });
+    expect(parseAddress("Max Muster\nHauptstrasse 5\n10115 Berlin\nGermany")).toMatchObject({ city: "Berlin", zipCode: "10115", country: "DE" });
+  });
+});

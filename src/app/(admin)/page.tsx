@@ -1,6 +1,8 @@
 import Link from "next/link";
 import GoLiveChecklist from "@/components/GoLiveChecklist";
-import { listChannels, listShipments, shipmentProfit } from "@/lib/db";
+import { listChannels, listCustomers, listShipments, shipmentProfit } from "@/lib/db";
+import { pendingResets } from "@/lib/passwordReset";
+import { newLeadCount } from "@/lib/leads";
 import { buildReport, localDate } from "@/lib/reports";
 import { money } from "@/lib/pricing";
 import StatusBadge from "@/components/StatusBadge";
@@ -13,8 +15,11 @@ import { jiaguBalance, LOW_BALANCE_USD } from "@/lib/providerBalance";
 /** 和“报表”同一口径：订单数不含已取消 / 异常，含面单生成中的 */
 function summarize(from: string, to: string) {
   const r = buildReport(from, to);
-  const pending = listShipments({ from, to }).filter((s) => s.status === "pending").length;
-  return { count: r.totals.orders, revenue: r.totals.revenue, profit: r.totals.profit, pending };
+  const list = listShipments({ from, to });
+  const pending = list.filter((s) => s.status === "pending").length;
+  // 测试单（模拟 / 沙盒 / 内部测试账号）不计入统计：页面上说明一下，免得以为统计坏了
+  const tests = list.filter((s) => s.isTest && s.status !== "cancelled").length;
+  return { count: r.totals.orders, revenue: r.totals.revenue, profit: r.totals.profit, pending, tests };
 }
 
 export default async function Dashboard() {
@@ -30,14 +35,38 @@ export default async function Dashboard() {
   const t = await getT();
   const errs = await Promise.all(attention.map((s) => tMsg(s.errorMsg)));
   const jg = await jiaguBalance();
+  // 待办：每项都能点进去处理
+  const customers = listCustomers();
+  const owing = customers.filter((c) => c.balance < 0);
+  const overLimit = customers.filter((c) => c.balance < -(c.creditLimit ?? 0));
+  const todo: { label: string; n: number; href: string; tone?: "warn" | "bad" }[] = [
+    { label: t("待审充值"), n: pendingTopups, href: "/finance#topups", tone: "warn" },
+    { label: t("取消处理中"), n: attention.filter((s) => s.status === "cancel_requested").length, href: "/shipments?status=cancel_requested", tone: "warn" },
+    { label: t("出单异常"), n: attention.filter((s) => s.status === "exception").length, href: "/shipments?status=exception", tone: "bad" },
+    { label: t("面单生成中"), n: attention.filter((s) => s.status === "pending").length, href: "/shipments?status=pending" },
+    { label: t("密码重置申请"), n: pendingResets().length, href: "/customers" },
+    { label: t("新客户咨询"), n: newLeadCount(), href: "/leads" },
+    { label: t("超出信用额度的客户"), n: overLimit.length, href: "/customers", tone: "bad" },
+  ];
+  const owed = owing.reduce((a, c) => a + c.balance, 0);
+  const prepaid = customers.filter((c) => c.balance > 0).reduce((a, c) => a + c.balance, 0);
 
   return (
     <>
-      <h1>{t("概览")}</h1>
+      <div className="row" style={{ justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+        <h1 style={{ margin: 0 }}>{t("概览")}</h1>
+        <form action="/shipments" method="get" className="dash-search">
+          <input name="q" type="search" placeholder={t("查单号 / 运单号 / 收件人")} aria-label={t("查单号 / 运单号 / 收件人")} />
+        </form>
+      </div>
       <GoLiveChecklist />
-      {pendingTopups > 0 && (
-        <div className="alert warn">{t("有 {n} 笔客户充值待确认，", { n: pendingTopups })}<Link href="/finance#topups">{t("去处理")}</Link>{t("。")}</div>
-      )}
+      <div className="todo-row">
+        {todo.map((x) => (
+          <Link key={x.label} href={x.href} className={`todo${x.n ? ` on ${x.tone ?? ""}` : ""}`}>
+            <b>{x.n}</b><span>{x.label}</span>
+          </Link>
+        ))}
+      </div>
       {noChannels && (
         <div className="alert warn">
           {t("还没有同步物流渠道，请先到")} <Link href="/settings">{t("设置")}</Link> {t("点“同步渠道”，并设置加价规则。")}
@@ -73,11 +102,17 @@ export default async function Dashboard() {
         <div className="stat"><div className="muted">{t("本月出单")}</div><div className="v">{month.count}</div></div>
         <div className="stat"><div className="muted">{t("本月打单金额")}</div><div className="v">{money(month.revenue)}</div></div>
         <div className="stat"><div className="muted">{t("本月利润")}</div><div className="v">{money(month.profit)}</div></div>
+        <div className="stat"><div className="muted">{t("客户预付余额合计")}</div><div className="v">{money(prepaid)}</div></div>
+        <div className="stat"><div className="muted">{t("客户欠款合计")}</div><div className={`v${owed < 0 ? " profit-neg" : ""}`}>{money(-owed)}</div>{owing.length > 0 && <div className="small muted">{t("{n} 个客户余额为负", { n: owing.length })}</div>}</div>
       </div>
+      {(today.tests > 0 || month.tests > 0) && (
+        <p className="small muted" style={{ marginTop: -8 }}>{t("测试单不计入以上统计（今日 {a} 单，本月 {b} 单测试单）。", { a: today.tests, b: month.tests })}</p>
+      )}
 
       {attention.length > 0 && (
         <div className="card">
           <h2>{t("需要处理（{n}）", { n: attention.length })}</h2>
+          <div className="table-wrap">
           <table>
             <tbody>
               {attention.map((s, i) => (
@@ -91,6 +126,7 @@ export default async function Dashboard() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 

@@ -109,7 +109,7 @@ export function toShipmentRequest(customerId: number, body: ApiShipmentBody): Sh
   const sig = SIGN[String(p?.signature ?? "none").toLowerCase()];
   if (sig === undefined) errors.push("package.signature 只能是 none、direct、indirect 或 adult");
   const u = unit ?? 3;
-  const items: ApiItem[] = Array.isArray(body.items) && body.items.length ? body.items : [{ sku: "ITEM", name: "Merchandise", quantity: 1, unitValue: 1 }];
+  const items: ApiItem[] = Array.isArray(body.items) ? body.items : [];  // 美国件不传时 cleanRequest 会补一件普通货物
   if (items.length > 50) errors.push("items 最多 50 个");
   if (errors.length) throw new ApiError(400, "VALIDATION_ERROR", errors.join("；"), { errors });
   const qty = items.reduce((a, i) => a + (Number(i.quantity) || 1), 0) || 1;

@@ -3,6 +3,7 @@
  * 原始面单文件不改动，打印 / 下载 / 合并打印时实时生成加印版。
  */
 import { degrees, PDFDocument, rgb, StandardFonts, type PDFFont } from "pdf-lib";
+import { DEFAULT_ITEM_SKU } from "./sanitize";
 import { getChannel, getCustomer, getSettings, type Shipment } from "./db";
 import { readLabel } from "./labels";
 import { mergeStamp, presetForChannel, type StampConfig } from "./stampConfig";
@@ -34,7 +35,8 @@ export function stampFor(s: Shipment): StampConfig | null {
 /** 要印的文字：优先用这张面单单独填写的文字，否则用订单 SKU */
 export function stampText(s: Pick<Shipment, "skuList" | "labelNote">, cfg: StampConfig): string {
   if (s.labelNote?.trim()) return s.labelNote.trim();
-  const items = s.skuList.filter((k) => k.sku).map((k) => (cfg.showQty && k.quantity > 1 ? `${k.sku} x${k.quantity}` : k.sku));
+  // 没填商品时系统补的默认商品不印
+  const items = s.skuList.filter((k) => k.sku && k.sku !== DEFAULT_ITEM_SKU).map((k) => (cfg.showQty && k.quantity > 1 ? `${k.sku} x${k.quantity}` : k.sku));
   return items.length ? cfg.prefix + items.join(cfg.separator) : "";
 }
 

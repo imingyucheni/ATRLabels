@@ -24,7 +24,15 @@ export default async function PortalIntlPage({ searchParams }: { searchParams: P
         {t("寄往美国以外的国家 / 地区，走 DHL Express 国际快递。填写收件人、包裹和报关信息，点“查询运费”，选择服务即可出单，运费从账户余额扣除（当前余额 {balance}）。", { balance: usd(me.balance) })}{" "}
         {t("寄美国境内请用")} <Link href="/portal/ship">{t("美国本地下单")}</Link>{t("。")}
       </p>
-      {!open && <div className="alert warn">{t("您的账户还没有开通国际快递（DHL），请联系客服开通")}{s.supportContact ? `${t("：")}${s.supportContact}` : t("。")}</div>}
+      {/* 没开通：只显示开通说明，不渲染一整张填不了的表单 */}
+      {!open && (
+        <div className="card">
+          <h2 style={{ marginTop: 0 }}>{t("开通 DHL Express 国际快递")}</h2>
+          <p>{t("您的账户还没有开通国际快递（DHL），请联系客服开通")}{s.supportContact ? <>{t("：")}<b>{s.supportContact}</b></> : t("。")}</p>
+          <p className="small muted" style={{ marginBottom: 0 }}>{t("开通后这里可以直接查询 DHL 运费、填写报关信息并出单，商业发票自动生成。")}</p>
+        </div>
+      )}
+      {open && <>
       {me.balance + me.creditLimit <= 0 && (
         <div className="alert warn row" style={{ justifyContent: "space-between" }}>
           <span>{t("账户余额 {balance}，需要先充值才能出单（可以先查询运费）。", { balance: usd(me.balance) })}</span>
@@ -32,7 +40,8 @@ export default async function PortalIntlPage({ searchParams }: { searchParams: P
         </div>
       )}
       {src && <div className="alert info">{t("已复制订单 {no} 的收件人、包裹和商品，修改后查询运费下单。", { no: src.ref })}</div>}
-      <ShipForm key={src?.id ?? "new"} mode="portal" intl copy={src ?? undefined} recentPackages={recentPackages(me.id)} skuPresets={skuPresets(me.id)} defaultOrigin={dhlSettings().originCountry} senders={listSenders(me.id)} defaultSender={s.sender} defaultUnit={s.defaultUnit} defaultCurrency="USD" />
+      <ShipForm key={src?.id ?? "new"} mode="portal" intl copy={src ?? undefined} recentPackages={recentPackages(me.id)} skuPresets={skuPresets(me.id)} defaultOrigin={dhlSettings().originCountry} senders={listSenders(me.id)} defaultSender={s.sender} wallet={{ balance: me.balance, creditLimit: me.creditLimit, rule: s.balanceRule }} defaultUnit={s.defaultUnit} defaultCurrency="USD" />
+      </>}
     </>
   );
 }

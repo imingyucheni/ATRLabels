@@ -107,6 +107,8 @@ export default function ShipForm(props: {
   senders?: SavedSender[];
   defaultUnit: UnitSystem;
   defaultCurrency: string;
+  /** 客户端：账户余额、信用额度、余额规则（出单前提示扣款后余额，余额不够时不能点出单） */
+  wallet?: { balance: number; creditLimit: number; rule: "positive" | "cover" };
 }) {
   const router = useRouter();
   const t = useT();
@@ -173,7 +175,7 @@ export default function ShipForm(props: {
 
   const [quotes, setQuotes] = useState<Quote[] | null>(null);
   // 默认显示全部渠道：送不到的也列出来（灰色、不能选、显示原因）
-  const [onlyAvailable, setOnlyAvailable] = useState(false);
+  const [onlyAvailable, setOnlyAvailable] = useState(true);
   const [errors, setErrors] = useState<string[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
   const [quoting, startQuote] = useTransition();
@@ -250,8 +252,18 @@ export default function ShipForm(props: {
       setQuotes(r.quotes ?? null);
       setAddr(("address" in r && r.address) || null);
       setAddrAck(false);
+      // 报错滚到错误提示；有报价滚到报价（手机上页面长，不滚的话像“没反应”）
+      setTimeout(() => document.getElementById(r.errors?.length ? "ship-errors" : "ship-quotes")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
     });
   }
+
+  // 客户端：这一单的运费扣完后余额是多少、够不够出单
+  const wallet = portal ? props.wallet : undefined;
+  const afford = (price: number) => {
+    if (!wallet) return { ok: true, after: null as number | null };
+    const available = wallet.balance + wallet.creditLimit;
+    return { ok: wallet.rule === "positive" ? available > 0 : available >= price, after: Math.round((wallet.balance - price) * 100) / 100 };
+  };
 
   // 采用 USPS 建议地址后自动重新查询
   useEffect(() => {
@@ -276,7 +288,12 @@ export default function ShipForm(props: {
       ? t("确认用 {channel} 重新出单？\n{who}：{price}\n出单成功后，原异常单会自动取消，费用退回。", { channel: q.channelName, who: re.house ? t("成本价") : t("客户价"), price: money(q.price, q.currency) })
       : house
       ? t("确认用 {channel} 出单？\n成本价：{price}（公司自用，不扣客户余额）", { channel: q.channelName, price: money(q.price, q.currency) })
-      : t("确认用 {channel} 出单？\n运费：{price}（从账户余额扣除）", { channel: chName(q.channelCode, q.channelName).name, price: money(q.price, q.currency) });
+      : (() => {
+          const a = afford(q.price!);
+          const base = t("确认用 {channel} 出单？\n运费：{price}", { channel: chName(q.channelCode, q.channelName).name, price: money(q.price, q.currency) });
+          if (a.after === null) return `${base}${t("（从账户余额扣除）")}`;
+          return `${base}\n${t("扣款后余额：{v}", { v: money(a.after, q.currency) })}${a.after < 0 ? `\n\n⚠ ${t("扣款后余额为负数，请尽快充值补足。")}` : ""}`;
+        })();
     if (!window.confirm(msg)) return;
     setCreating(q.channelCode);
     setErrors([]);
@@ -438,11 +455,11 @@ export default function ShipForm(props: {
                   <input value={re.customerName} disabled />
                 </label>
               )}
-              <label className="f" style={{ minWidth: 200 }}>
+              <label className="f ref-f" style={{ minWidth: 200 }}>
                 {house || re ? t("订单号（可选）") : t("我的订单号（可选）")}
                 <input value={customerRef} maxLength={50} onChange={(e) => setCustomerRef(e.target.value)} />
               </label>
-              <label className="f" style={{ flex: 1 }}>
+              <label className="f ref-f" style={{ flex: 1 }}>
                 {t("备注（可选）")}
                 <input value={remark} maxLength={200} onChange={(e) => setRemark(e.target.value)} />
               </label>
@@ -554,7 +571,7 @@ export default function ShipForm(props: {
             })}
           </div>
         )}
-        <div className="grid">
+        <div className="grid pkg-grid">
           <label className="f">{t("单位")}
             <select value={unit} onChange={(e) => dirty(setUnit)(Number(e.target.value) as UnitSystem)}>
               <option value={3}>lb / in</option>
@@ -563,12 +580,12 @@ export default function ShipForm(props: {
             </select>
           </label>
           {(["length", "width", "height"] as const).map((k) => (
-            <label key={k} className="f"><span className="req">{t({ length: "长（{u}）", width: "宽（{u}）", height: "高（{u}）" }[k], { u: lu })}</span>
-              <input type="number" min="0" step="0.01" value={pkg[k]} onChange={(e) => dirty(setPkg)({ ...pkg, [k]: e.target.value })} />
+            <label key={k} className="f dim"><span className="req">{t({ length: "长（{u}）", width: "宽（{u}）", height: "高（{u}）" }[k], { u: lu })}</span>
+              <input type="number" min="0" step="0.01" inputMode="decimal" value={pkg[k]} onChange={(e) => dirty(setPkg)({ ...pkg, [k]: e.target.value })} />
             </label>
           ))}
           <label className="f"><span className="req">{t("重量（{u}）", { u: wu })}</span>
-            <input type="number" min="0" step="0.001" value={pkg.weight} onChange={(e) => dirty(setPkg)({ ...pkg, weight: e.target.value })} />
+            <input type="number" min="0" step="0.001" inputMode="decimal" value={pkg.weight} onChange={(e) => dirty(setPkg)({ ...pkg, weight: e.target.value })} />
           </label>
           <label className="f">{t("签名服务")}
             <select value={signType} onChange={(e) => dirty(setSignType)(Number(e.target.value))}>
@@ -594,13 +611,14 @@ export default function ShipForm(props: {
 
         {orderable ? (
           <>
-            <h3>{t("商品明细（报关用）")}</h3>
+            <h3>{intlDest ? t("商品明细（报关用）") : t("商品明细（选填）")}</h3>
+            {!intlDest && <p className="small muted" style={{ marginTop: -4 }}>{t("美国国内件可以不填：不填按一件普通货物出单。填了 SKU 会按设置加印在面单上，方便拣货。")}</p>}
             {intlDest && (
               <div className="alert warn small">
                 {t("国际件报关：请如实填写英文品名、材质、商品性质、申报单价（美元）、海关编码（HS Code）和原产国。出单时 DHL 会据此生成正式的商业发票（Commercial Invoice）。贸易条款 DAP：关税、进口税由收件人在目的地支付。违禁品（电池单独寄、液体、刀具等）不能寄。")}
               </div>
             )}
-            {skuTable(" *")}
+            {skuTable(intlDest ? " *" : "")}
           </>
         ) : (
           // 后台试算只看地址和包裹：商品明细默认收起，不填也能试算
@@ -612,10 +630,10 @@ export default function ShipForm(props: {
       </div>
 
       {errors.length > 0 && (
-        <div className="alert err"><ul>{errors.map((e, i) => <li key={i}>{tm(e)}</li>)}</ul></div>
+        <div className="alert err" id="ship-errors"><ul>{errors.map((e, i) => <li key={i}>{tm(e)}</li>)}</ul></div>
       )}
 
-      <div className="card">
+      <div className="card" id="ship-quotes" style={{ scrollMarginTop: 72 }}>
         <div className="row" style={{ justifyContent: "space-between", marginBottom: quotes ? 12 : 0 }}>
           <h2 style={{ margin: 0 }}>{t("报价")}</h2>
           <button className="primary" onClick={onQuote} disabled={quoting}>
@@ -666,7 +684,7 @@ export default function ShipForm(props: {
             <table className={portal || costTable || re ? "quote-table" : undefined}>
               <thead>
                 {portal ? (
-                  <tr><th>{t("渠道")}</th><th>{t("分区")}</th><th className="num">{t("运费")}</th><th></th></tr>
+                  <tr><th>{t("渠道")}</th><th>{props.intl ? t("时效") : t("分区")}</th><th className="num">{t("运费")}</th><th></th></tr>
                 ) : costTable ? (
                   <tr><th>{t("渠道")}</th><th>{t("分区")}</th><th className="num">{t("原价")}</th><th className="num">{t("成本价（出单价）")}</th><th></th></tr>
                 ) : re ? (
@@ -704,13 +722,20 @@ export default function ShipForm(props: {
                           <td className="small">{signedPercent(q.rule!.percent)} + {q.rule!.fixed}{t("，最低利润")} {q.rule!.minProfit}</td>
                         </>
                       )}
-                      <td className="num q-price"><b>{money(q.price, q.currency)}</b>{q.promo && <div className="small" style={{ textAlign: "right" }}><span className="badge promo">{tm(q.promo.label)}</span> <s className="muted">{money(q.promo.originalPrice, q.currency)}</s><div className="muted">{t("活动至 {d}", { d: q.promo.endsOn.slice(5) })}</div></div>}{q.warning && <div className="small warn-text" style={{ maxWidth: 260, marginLeft: "auto", textAlign: "left" }}>⚠ {tm(q.warning)}</div>}</td>
+                      <td className="num q-price"><b>{money(q.price, q.currency)}</b>{portal && q.price === bestPrice && <div className="small profit-pos">{t("最低价")}</div>}{q.promo && <div className="small" style={{ textAlign: "right" }}><span className="badge promo">{tm(q.promo.label)}</span> <s className="muted">{money(q.promo.originalPrice, q.currency)}</s><div className="muted">{t("活动至 {d}", { d: q.promo.endsOn.slice(5) })}</div></div>}{q.warning && <div className="small warn-text" style={{ maxWidth: 260, marginLeft: "auto", textAlign: "left" }}>⚠ {tm(q.warning)}</div>}</td>
                       {!portal && <td className="num profit-pos">{money(q.profit)}</td>}
                       {portal && (
                         <td className="q-act">
-                          <button className="primary small" disabled={!!creating} onClick={() => onCreate(q)}>
-                            {creating === q.channelCode ? t("出单中…") : t("用此渠道出单")}
-                          </button>
+                          {afford(q.price!).ok ? (
+                            <button className="primary small" disabled={!!creating} onClick={() => onCreate(q)}>
+                              {creating === q.channelCode ? t("出单中…") : t("用此渠道出单")}
+                            </button>
+                          ) : (
+                            <div className="small" style={{ textAlign: "right" }}>
+                              <button className="primary small" disabled>{t("余额不足")}</button>
+                              <div><a href="/portal/topup">{t("去充值")} →</a></div>
+                            </div>
+                          )}
                         </td>
                       )}
                     </tr>

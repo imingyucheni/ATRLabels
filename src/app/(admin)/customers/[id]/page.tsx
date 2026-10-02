@@ -179,17 +179,19 @@ export default async function CustomerEdit({ params }: { params: Promise<{ id: s
           })()}
 
           <div className="grid2">
-            <FlashForm action={ledgerEntryAction} submitLabel="确认" className="card" resetOnSuccess confirm="确认提交这笔充值 / 调账？提交后会立即计入客户余额。">
+            <FlashForm action={ledgerEntryAction} submitLabel="确认" className="card" resetOnSuccess review confirm={t("给【{name}】入账：提交后立即计入客户余额（当前余额 {bal}）。请核对类型和金额。", { name: c.name, bal: money(c.balance) })}>
               <h2>{t("充值 / 调账")}</h2>
               <input type="hidden" name="id" value={c.id} />
               <div className="grid" style={{ marginBottom: 12 }}>
                 <label className="f">{t("类型")}
-                  <select name="type" defaultValue="topup">
+                  <select name="type" defaultValue="" required>
+                    <option value="" disabled>{t("请选择")}</option>
                     <option value="topup">{t("充值（客户付款到账）")}</option>
-                    <option value="manual">{t("手动调账（正数加、负数扣）")}</option>
+                    <option value="manual_add">{t("加款（补偿、赠送等）")}</option>
+                    <option value="manual_sub">{t("扣款（从余额扣除）")}</option>
                   </select>
                 </label>
-                <label className="f"><span className="req">{t("金额")}</span><input name="amount" type="number" step="0.01" required /></label>
+                <label className="f"><span className="req">{t("金额（填正数）")}</span><input name="amount" type="number" step="0.01" min="0.01" required /></label>
                 <label className="f" style={{ gridColumn: "span 2" }}>{t("说明")}<input name="note" maxLength={200} placeholder={t("例如：9月转账 / 赔偿 / 月结账单")} /></label>
                 <PinField />
               </div>

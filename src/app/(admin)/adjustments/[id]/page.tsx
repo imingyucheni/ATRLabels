@@ -79,7 +79,7 @@ export default async function BatchPage({ params }: { params: Promise<{ id: stri
                     <FlashForm action={linkAdjustmentAction} submitLabel="关联" submitClass="small">
                       <input type="hidden" name="id" value={r.id} />
                       <input name="key" placeholder={t("运单号 / 自定义单号")} required style={{ width: 200, marginRight: 6 }} />
-                      <label className="small nowrap" style={{ marginRight: 6 }}><input type="checkbox" name="force" value="1" /> {t("仍然关联")}</label>
+                      <label className="small nowrap" style={{ marginRight: 6 }}><input type="checkbox" name="force" value="1" /> {t("不检查直接关联")}</label>
                     </FlashForm>
                   </td>
                 </tr>

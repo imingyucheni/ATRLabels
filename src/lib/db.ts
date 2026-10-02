@@ -1,4 +1,5 @@
 import Database from "better-sqlite3";
+import { fmtTime } from "./time";
 import fs from "node:fs";
 import path from "node:path";
 import { seedDemo } from "./demo";
@@ -1273,7 +1274,7 @@ export function activeShipmentByRef(customerId: number, ref: string) {
 
 /** 订单号重复时的提示 */
 export function duplicateRefMessage(ref: string, s: { custom_no: string; tracking_no: string | null; created_at: string }) {
-  return `订单号 ${ref} 已经下过单（${s.tracking_no ?? s.custom_no}，${s.created_at.slice(0, 10)}），不能重复下单。如需重新下单，请先取消原订单`;
+  return `订单号 ${ref} 已经下过单（${s.tracking_no ?? s.custom_no}，${fmtTime(s.created_at).slice(0, 10)}），不能重复下单。如需重新下单，请先取消原订单`;
 }
 
 export function findShipmentByKey(key: string): {

@@ -9,6 +9,8 @@ import { existsSync } from "node:fs";
 
 const env = {
   ...process.env,
+  // 统计、对账都按美西日期算（正式服务器在 systemd 里设了同样的时区）
+  TZ: process.env.TZ || "America/Los_Angeles",
   SHIPBEST_MOCK: "1",
   DEMO_SEED: "1",
   ADMIN_PASSWORD: process.env.ADMIN_PASSWORD || "admin1234",

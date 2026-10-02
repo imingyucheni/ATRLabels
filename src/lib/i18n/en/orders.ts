@@ -356,7 +356,7 @@ export const orders: Record<string, string> = {
   "表格里自定义单号重复": "Duplicate order ref in the spreadsheet",
   "表格里没有订单数据": "No orders found in the spreadsheet",
   "一次最多 500 单，请分批上传": "Up to 500 orders per upload. Please split the file.",
-  "没有找到表头，请使用 ShipBest 导单模板（或在本页下载模板）": "Header row not found. Please use the ShipBest import template (or download it on this page).",
+  "没有找到表头：请用本页“下载模板”里的导单模板填写后上传": "Header row not found — please fill in the template from “Download template” on this page and upload it.",
   "任务不存在": "Batch not found",
   "任务正在下单，不能删除": "Batch is creating labels and can't be deleted",
   "任务里已有订单下单成功，不能删除": "Some orders in this batch were already created, so it can't be deleted",

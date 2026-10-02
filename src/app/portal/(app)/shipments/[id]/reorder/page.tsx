@@ -42,6 +42,7 @@ export default async function PortalReorderPage({ params, searchParams }: { para
         reorder={{ id: s.id, request: { sender: s.sender, recipient: s.recipient, pkg: s.pkg, skuList: s.skuList }, customerRef: reorderRef(me.id, s.customerRef), remark: s.remark, returnTo }}
         senders={listSenders(me.id)}
         defaultSender={st.sender}
+        wallet={{ balance: me.balance, creditLimit: me.creditLimit, rule: st.balanceRule }}
         defaultUnit={s.pkg.displayUnitSystem}
         defaultCurrency={s.currency || st.defaultCurrency}
       />

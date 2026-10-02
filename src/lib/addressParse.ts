@@ -24,6 +24,21 @@ const CODES = new Set(Object.values(STATES).concat(["AA", "AE", "AP", "AS", "MP"
 const STATE_NAMES = Object.keys(STATES).sort((a, b) => b.length - a.length).join("|");
 
 const COUNTRY = /^(united states( of america)?|usa|u\.s\.a\.?|us|america|美国)$/i;
+/** 常见的其他国家（国际件）：名字 → 二字码 */
+const COUNTRIES: [RegExp, string][] = [
+  [/^(canada|ca|加拿大)$/i, "CA"], [/^(united kingdom|uk|u\.k\.|great britain|gb|england|scotland|wales|英国)$/i, "GB"],
+  [/^(australia|au|澳大利亚|澳洲)$/i, "AU"], [/^(germany|deutschland|de|德国)$/i, "DE"], [/^(france|fr|法国)$/i, "FR"],
+  [/^(japan|jp|日本)$/i, "JP"], [/^(china|cn|中国|中国大陆)$/i, "CN"], [/^(mexico|méxico|mx|墨西哥)$/i, "MX"],
+  [/^(italy|it|意大利)$/i, "IT"], [/^(spain|es|西班牙)$/i, "ES"], [/^(netherlands|holland|nl|荷兰)$/i, "NL"],
+  [/^(new zealand|nz|新西兰)$/i, "NZ"], [/^(singapore|sg|新加坡)$/i, "SG"], [/^(hong kong|hk|香港)$/i, "HK"],
+  [/^(taiwan|tw|台湾)$/i, "TW"], [/^(south korea|korea|kr|韩国)$/i, "KR"], [/^(ireland|ie|爱尔兰)$/i, "IE"],
+  [/^(sweden|se|瑞典)$/i, "SE"], [/^(switzerland|ch|瑞士)$/i, "CH"], [/^(belgium|be|比利时)$/i, "BE"],
+];
+const CA_PROV = /^(.*?)[,\s]+(AB|BC|MB|NB|NL|NS|NT|NU|ON|PE|QC|SK|YT)\.?[,\s]+([A-Z]\d[A-Z])\s?(\d[A-Z]\d)$/i;
+const AU_STATE = /^(.*?)[,\s]+(NSW|VIC|QLD|WA|SA|TAS|ACT|NT)[,\s]+(\d{4})$/i;
+const UK_POST = /^(.*?)[,\s]*\b([A-Z]{1,2}\d[A-Z\d]?)\s*(\d[A-Z]{2})$/i;
+// 国际电话：+44 20 7946 0958 / +86 138 0013 8000
+const INTL_PHONE = /\+(?!1[\s.-]?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}\b)\d{1,3}[\s.-]?(?:\(?\d+\)?[\s.-]?){2,6}\d/;
 const EMAIL = /[\w.+-]+@[\w-]+(\.[\w-]+)+/;
 // 电话：+1 (512) 555-0100 / 512.555.0100 / 5125550100 / 带分机
 const PHONE = /(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}(?:\s*(?:ext\.?|x|#)\s*\d{1,6})?/i;
@@ -99,6 +114,32 @@ export function parseAddress(text: string): Partial<Address> {
     .map((l) => l.replace(LABEL, "").trim())
     .filter(Boolean);
 
+  // 国际电话（带 + 国家区号，不是 +1）：在任意位置都先取出来
+  if (!out.phone) {
+    for (let i = 0; i < lines.length; i++) {
+      const m = lines[i].match(INTL_PHONE);
+      if (m) {
+        out.phone = m[0].trim();
+        lines[i] = lines[i].replace(m[0], " ").replace(/^(phone|tel|电话|手机)?\s*[:：]?\s*/i, "").trim();
+        break;
+      }
+    }
+    lines = lines.filter(Boolean);
+  }
+  // 姓名、电话、街道写在同一行（“Jane Roe 512-555-0100 500 Congress Ave …”）：电话取出，姓名和街道分成两行
+  lines = lines.flatMap((l) => {
+    if (out.phone) return [l];
+    const m = l.match(new RegExp(`^([A-Za-z][A-Za-z .'-]*?)\\s+(${PHONE.source})\\s+(\\d+[A-Za-z]?\\s+.+)$`, "i"));
+    if (!m) return [l];
+    out.phone = m[2].trim();
+    return [m[1].trim(), m[m.length - 1].trim()];
+  });
+  // 姓名紧跟着街道（“Jane Roe 500 Congress Ave”）：在门牌号前拆开
+  lines = lines.flatMap((l) => {
+    const m = l.match(/^([A-Za-z][A-Za-z.'-]*(?:\s+[A-Za-z][A-Za-z.'-]*){0,3})\s+(\d+[A-Za-z]?\s+.*)$/);
+    return m && STREET_HINT.test(m[2]) && !STREET_HINT.test(m[1]) && !UNIT.test(m[1]) && !/^(po|p\.o\.)\b/i.test(m[1]) ? [m[1], m[2]] : [l];
+  });
+
   // 电话：单独一行，或行尾带的电话（不能把邮编 / 门牌号当电话）
   lines = lines
     .map((l) => {
@@ -119,15 +160,44 @@ export function parseAddress(text: string): Partial<Address> {
 
   // 3) 国家
   lines = lines.filter((l) => {
-    if (COUNTRY.test(l.replace(/[.,]/g, "").trim())) {
+    const c = l.replace(/[.,]/g, "").trim();
+    if (COUNTRY.test(c)) {
       out.country = "US";
+      return false;
+    }
+    const other = COUNTRIES.find(([re]) => re.test(c));
+    if (other && lines.length > 1) {
+      out.country = other[1];
       return false;
     }
     return true;
   });
 
+  // 3b) 国际件的城市 / 省州 / 邮编（加拿大、澳洲、英国，以及“10115 Berlin” / “Paris 75001” 这类写法）
+  if (out.country && out.country !== "US") {
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const l = lines[i];
+      let m: RegExpMatchArray | null;
+      let hit: Partial<Address> | null = null;
+      if (out.country === "CA" && (m = l.match(CA_PROV))) hit = { city: m[1], province: m[2].toUpperCase(), zipCode: `${m[3]} ${m[4]}`.toUpperCase() };
+      else if (out.country === "AU" && (m = l.match(AU_STATE))) hit = { city: m[1], province: m[2].toUpperCase(), zipCode: m[3] };
+      else if (out.country === "GB" && (m = l.match(UK_POST))) hit = { city: m[1], zipCode: `${m[2]} ${m[3]}`.toUpperCase() };
+      else if ((m = l.match(/^(\d{4,6})\s+([A-Za-zÀ-ÿ][\w\sÀ-ÿ.'-]*)$/))) hit = { zipCode: m[1], city: m[2] };
+      else if ((m = l.match(/^([A-Za-zÀ-ÿ][\w\sÀ-ÿ.'-]*?)\s+(\d{4,6})$/)) && !/^\d/.test(l)) hit = { city: m[1], zipCode: m[2] };
+      if (!hit) continue;
+      let city = (hit.city ?? "").replace(/[,，]\s*$/, "").trim();
+      // 只有邮编（英国 “NW1 6XE” 单独一行）：城市在上一行
+      if (!city && i > 0 && !/\d/.test(lines[i - 1])) {
+        city = lines[i - 1];
+        lines.splice(i - 1, 2);
+      } else lines.splice(i, 1);
+      Object.assign(out, hit, { city });
+      break;
+    }
+  }
+
   // 4) 城市 / 州 / 邮编：在一行里，或拆在相邻的几段里（一行逗号分隔时）
-  let cityIdx = -1;
+  let cityIdx = out.country && out.country !== "US" && out.zipCode ? 0 : -1;
   for (let i = lines.length - 1; i >= 0 && cityIdx < 0; i--) {
     // 把最后几段拼起来试（“Austin” “TX 78701” 或 “Austin” “TX” “78701”）
     for (let span = 1; span <= 3 && i - span + 1 >= 0; span++) {

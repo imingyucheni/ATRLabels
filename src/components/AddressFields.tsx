@@ -69,10 +69,12 @@ export default function AddressFields({
     const v = value?.[f.k] ?? "";
     const max = f.wide ? 100 : 50;
     const ph = f.ph ?? placeholders?.[f.k];
+    // 手机上弹出合适的键盘：电话用拨号键盘、邮箱用邮箱键盘
+    const kb = f.k === "phone" ? { type: "tel", autoComplete: "tel" } : f.k === "email" ? { type: "email", autoComplete: "email" } : f.k === "zipCode" ? { autoComplete: "postal-code" } : {};
     return controlled ? (
-      <input value={v} placeholder={ph} maxLength={max} onChange={(e) => set(f.k, e.target.value)} />
+      <input {...kb} value={v} placeholder={ph} maxLength={max} onChange={(e) => set(f.k, e.target.value)} />
     ) : (
-      <input name={namePrefix + f.k} defaultValue={v} placeholder={ph} maxLength={max} />
+      <input {...kb} name={namePrefix + f.k} defaultValue={v} placeholder={ph} maxLength={max} />
     );
   };
 
@@ -136,8 +138,9 @@ export default function AddressFields({
 
   return (
     <>
-      {controlled && <SmartPaste onParsed={(p) => onChange!({ ...value, ...p, country: p.country || value?.country || "US" })} />}
-      <div className="grid">
+      {/* 每次识别都换成新地址：上一次识别的字段不留（否则旧电话、旧邮箱会混进来） */}
+      {controlled && <SmartPaste onParsed={(p) => onChange!({ ...p, country: p.country || value?.country || "US" })} />}
+      <div className="grid addr-grid">
         {FIELDS.map((f) => (
           <label key={f.k} className="f" style={f.wide ? { gridColumn: "span 2" } : undefined}>
             <span className={f.req && (f.k !== "province" || isUS) ? "req" : ""}>{t(f.label)}</span>

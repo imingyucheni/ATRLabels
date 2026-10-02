@@ -92,7 +92,9 @@ export default async function SettingsPage() {
         )}
         {currentEnv() === "test" && !isSandboxSite() && (
           <div className="row" style={{ marginBottom: 8 }}>
-            <FlashForm action={resetTestEnvAction} submitLabel="用正式数据重置测试环境" submitClass="small" inline confirm="清空所有测试订单、充值和余额，并重新复制正式环境的客户、渠道和设置？" />
+            <FlashForm action={resetTestEnvAction} submitLabel="用正式数据重置测试环境" submitClass="small danger" className="row" confirm="清空所有测试订单、充值和余额，并重新复制正式环境的客户、渠道和设置？所有在测试环境里的人都会受影响。">
+              <label className="f" style={{ maxWidth: 260 }}>{t("输入“重置测试环境”确认")}<input name="confirmText" required autoComplete="off" /></label>
+            </FlashForm>
           </div>
         )}
         <div className="mode-cards">

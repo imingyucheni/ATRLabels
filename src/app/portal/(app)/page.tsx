@@ -55,11 +55,11 @@ export default async function PortalHome() {
   const me = await requireCustomer();
   const tr = await getT();
   const today = dayOffset(0);
-  const t = buildReport(today, today, me.id).totals;
-  const y = buildReport(dayOffset(1), dayOffset(1), me.id).totals;
-  const r30 = buildReport(dayOffset(29), today, me.id);
-  const r7 = buildReport(dayOffset(6), today, me.id).totals;
-  const month = buildReport(today.slice(0, 8) + "01", today, me.id).totals;
+  const t = buildReport(today, today, me.id, { includeTest: true }).totals;
+  const y = buildReport(dayOffset(1), dayOffset(1), me.id, { includeTest: true }).totals;
+  const r30 = buildReport(dayOffset(29), today, me.id, { includeTest: true });
+  const r7 = buildReport(dayOffset(6), today, me.id, { includeTest: true }).totals;
+  const month = buildReport(today.slice(0, 8) + "01", today, me.id, { includeTest: true }).totals;
   const cancelledToday = cancelledOn(me.id, today);
   const cancelledYesterday = cancelledOn(me.id, dayOffset(1));
   const drafts = listDraftRows(me.id).length;
@@ -109,7 +109,7 @@ export default async function PortalHome() {
           <Trend now={t.orders} prev={y.orders} t={tr} />
         </div>
         <div className="kpi">
-          <div className="kpi-label">{tr("今日退单")}</div>
+          <div className="kpi-label">{tr("今日取消")}</div>
           <div className={`kpi-value${cancelledToday ? " neg" : ""}`}>{cancelledToday}</div>
           <Trend now={cancelledToday} prev={cancelledYesterday} upBad t={tr} />
         </div>

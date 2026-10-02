@@ -73,7 +73,7 @@ export default function BatchOrders(props: {
   const [onlyProblems, setOnlyProblems] = useState(false);
   // 和 ShipBest 一样：默认只显示能送达（可下单）的渠道
   // 默认显示全部渠道：送不到的也列出来（灰色、不能选、显示原因）
-  const [onlyAvailable, setOnlyAvailable] = useState(false);
+  const [onlyAvailable, setOnlyAvailable] = useState(true);
   const [requoteSet, setRequoteSet] = useState<Set<string>>(new Set());
   const [bulkChannel, setBulkChannel] = useState("");
   // 修改某一单（收件人 / 包裹）
@@ -437,11 +437,11 @@ export default function BatchOrders(props: {
                         {[...r.quotes].sort((a, b) => (a.ok === b.ok ? (a.price ?? 0) - (b.price ?? 0) : a.ok ? -1 : 1)).filter((q) => q.ok || !onlyAvailable).map((q) => (
                           <label
                             key={q.code}
-                            className="small"
+                            className="small bq-opt"
                             title={q.ok ? "" : tr(q.error)}
-                            style={{ display: "flex", justifyContent: "space-between", gap: 12, opacity: q.ok ? 1 : 0.6, cursor: rowEditable && q.ok ? "pointer" : "default" }}
+                            style={{ opacity: q.ok ? 1 : 0.6, cursor: rowEditable && q.ok ? "pointer" : "default" }}
                           >
-                            <span>
+                            <span className="bq-name">
                               <input
                                 type="radio"
                                 name={`ch-${r.id}`}
@@ -454,7 +454,7 @@ export default function BatchOrders(props: {
                               />{" "}
                               <ChannelLabel code={q.code} name={q.name} />{q.zone ? <span className="muted"> · {q.zone}</span> : null}
                             </span>
-                            <span className="nowrap">
+                            <span className="nowrap bq-price">
                               {q.ok && props.mode !== "portal" && !house && q.cost !== undefined && (
                                 <span className="muted" title={t("成本 / 利润")}>{money(q.cost)} · <span className={q.price! - q.cost < 0 ? "profit-neg" : ""}>+{(q.price! - q.cost).toFixed(2)}</span>{" "}</span>
                               )}
