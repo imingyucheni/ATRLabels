@@ -17,6 +17,7 @@ import { BALANCE_RULE_LABEL } from "@/lib/ledger";
 import { computePrice, money, resolveRule, type MarkupRule } from "@/lib/pricing";
 import { isMockMode, isSandboxSite, shipbestConfig, type ShipBestMode } from "@/lib/shipbest/client";
 import { isProductionSite, siteSwitch } from "@/lib/sites";
+import { providerOf } from "@/lib/service";
 import StampSettings from "@/components/StampSettings";
 import SettingsSection, { SettingsToggleAll } from "@/components/SettingsSection";
 import SettingsToc from "@/components/SettingsToc";
@@ -36,6 +37,13 @@ import { smtpConfig } from "@/lib/mailer";
 import { NOTIFY_EVENTS, NOTIFY_LABEL, recentEmailLog } from "@/lib/notify";
 import { getLang, getT } from "@/lib/prefs";
 import type { T } from "@/lib/i18n";
+
+/** 物流渠道表格按服务商分组显示 */
+const CHANNEL_GROUPS = [
+  { provider: "ShipBest", label: "ShipBest（SB）", note: "" },
+  { provider: "嘉谷", label: "嘉谷万邑（GDE）", note: "" },
+  { provider: "DHL", label: "DHL Express 国际", note: "" },
+];
 
 const MODE_BADGE: Record<ShipBestMode, string> = { mock: "当前：模拟模式", sandbox: "当前：沙盒模式", live: "当前：正式模式" };
 const MODE_NAME: Record<ShipBestMode, string> = { mock: "模拟", sandbox: "沙盒", live: "正式" };
@@ -844,8 +852,13 @@ export default async function SettingsPage() {
             <thead>
               <tr><th>{t("启用")}</th><th>{t("渠道")}</th><th>{t("客户看到的名称 / 物流商")}</th><th title={t("服务商对这个渠道的长期返利；填了之后这个渠道的加价可以填负数，最低到 -返利%")}>{t("服务商返利 %")}</th><th>{t("加价 %")}</th><th>{t("固定加价")}</th><th>{t("最低利润")}</th><th>{t("成本 10.00 时客户价")}</th><th className="num">{t("开通客户")}</th></tr>
             </thead>
-            <tbody>
-              {channels.map((c) => (
+            {/* 按服务商分组：ShipBest / 嘉谷 / DHL Express */}
+            {CHANNEL_GROUPS.map((g) => ({ ...g, list: channels.filter((c) => providerOf(c.code) === g.provider) })).filter((g) => g.list.length).map((g) => (
+            <tbody key={g.provider} className="ch-group">
+              <tr className="ch-group-head">
+                <td colSpan={9}><b>{t(g.label)}</b><span className="small muted"> · {t("启用 {a} / 共 {b} 个", { a: g.list.filter((c) => c.enabled).length, b: g.list.length })}</span>{g.note && <span className="small muted"> · {t(g.note)}</span>}</td>
+              </tr>
+              {g.list.map((c) => (
                 <tr key={c.code}>
                   <td><input type="checkbox" name={`enabled.${c.code}`} defaultChecked={c.enabled} /></td>
                   <td>{c.name}<div className="small muted">{c.code}</div></td>
@@ -865,8 +878,9 @@ export default async function SettingsPage() {
                   <td className="num">{opened[c.code] ?? 0}</td>
                 </tr>
               ))}
-              {!channels.length && <tr><td colSpan={9} className="muted">{t("还没有渠道，请点上方“同步渠道”")}</td></tr>}
             </tbody>
+            ))}
+            {!channels.length && <tbody><tr><td colSpan={9} className="muted">{t("还没有渠道，请点上方“同步渠道”")}</td></tr></tbody>}
           </table>
         </div>
         <div style={{ height: 12 }} />

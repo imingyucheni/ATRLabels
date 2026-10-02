@@ -128,4 +128,8 @@ export const staff: Record<string, string> = {
   "SG 账户的套餐还没开通 API 查价 / 出单，请联系 SG（support@shipgrid.ai）开通": "The SG plan doesn't include API rating / labels yet; contact SG (support@shipgrid.ai) to enable it",
   "注意：测试密钥但 SG 返回的环境是 {m}，确认前不要用它出单": "Note: this is a test key but SG reports the {m} environment; don't buy labels with it until confirmed",
   "连接失败：{msg}": "Connection failed: {msg}",
+  "ShipBest（SB）": "ShipBest (SB)",
+  "嘉谷万邑（GDE）": "Jiagu (GDE)",
+  "DHL Express 国际": "DHL Express international",
+  "启用 {a} / 共 {b} 个": "{a} of {b} enabled",
 };
