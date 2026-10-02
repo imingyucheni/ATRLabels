@@ -2,10 +2,11 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getCustomer, getPasswordHash, type Customer } from "./db";
+import { ADMIN_COOKIE, adminMac, verifyAdminToken } from "./adminSession";
 
 // 沙盒站和正式站可能在同一个 IP 的不同端口上，浏览器 cookie 不分端口：沙盒站用不同的 cookie 名，两边可以同时登录
 const SFX = process.env.APP_ENV === "sandbox" ? "_sb" : "";
-const COOKIE = "atr_session" + SFX;
+const COOKIE = ADMIN_COOKIE;
 const MAX_AGE = 60 * 60 * 24 * 7; // 7 天
 
 /**
@@ -44,7 +45,6 @@ export function checkPassword(input: string): boolean {
 }
 
 /** 管理员会话里带上密码指纹：改了 ADMIN_PASSWORD 之后，旧的登录全部失效 */
-const adminMac = (exp: string | number) => mac(`admin.${exp}.${mac("pw:" + (process.env.ADMIN_PASSWORD ?? "")).slice(0, 16)}`);
 
 export async function createSession() {
   const exp = Math.floor(Date.now() / 1000) + MAX_AGE;
@@ -63,11 +63,7 @@ export async function destroySession() {
 }
 
 export async function isLoggedIn(): Promise<boolean> {
-  const token = (await cookies()).get(COOKIE)?.value;
-  if (!token) return false;
-  const [exp, sig] = token.split(".");
-  if (!exp || !sig || Number(exp) < Date.now() / 1000) return false;
-  return safeEqual(sig, adminMac(exp));
+  return verifyAdminToken((await cookies()).get(COOKIE)?.value);
 }
 
 /** 页面和 Server Action 开头调用：未登录则跳转到登录页。 */
