@@ -3,13 +3,13 @@ import { notFound } from "next/navigation";
 import FlashForm from "@/components/FlashForm";
 import PinField from "@/components/PinField";
 import StatusBadge from "@/components/StatusBadge";
-import { commissionLines, currentAssignment, getSales, listPayouts } from "@/lib/commission";
+import { commissionLines, currentAssignment, getSales, listPayouts, listSales } from "@/lib/commission";
 import { listCustomers } from "@/lib/db";
 import { money } from "@/lib/pricing";
 import { localDate } from "@/lib/reports";
 import { fmtTime } from "@/lib/time";
 import { getT } from "@/lib/prefs";
-import { saveSalesAction, settleCommissionAction } from "@/app/commissionActions";
+import { assignSalesAction, saveSalesAction, settleCommissionAction } from "@/app/commissionActions";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +26,7 @@ export default async function SalesDetail({ params, searchParams }: { params: Pr
   const dueTotal = allDue.reduce((a, l) => a + l.due, 0);
   const dueUpTo = allDue.filter((l) => l.date <= to).reduce((a, l) => a + l.due, 0);
   const payouts = listPayouts(rep.id);
+  const reps = listSales();
   const customers = listCustomers().map((c) => ({ c, a: currentAssignment(c.id) })).filter((x) => x.a?.salesId === rep.id);
   const sum = (k: "profit" | "commission" | "due") => lines.reduce((a, l) => a + l[k], 0);
   const qs = `from=${from}&to=${to}`;
@@ -35,7 +36,7 @@ export default async function SalesDetail({ params, searchParams }: { params: Pr
       <div className="page-head">
         <div>
           <h1>{t("销售：{name}", { name: rep.name })}{!rep.active && <> <span className="badge">{t("已停用")}</span></>}</h1>
-          <p className="page-sub">{[rep.phone, rep.email, t("默认比例 {n}%", { n: rep.rate })].filter(Boolean).join(" · ")}{rep.note ? ` · ${rep.note}` : ""}</p>
+          <p className="page-sub">{[rep.phone, rep.email, rep.rate === null ? t("比例按客户设置") : t("默认比例 {n}%", { n: rep.rate })].filter(Boolean).join(" · ")}{rep.note ? ` · ${rep.note}` : ""}</p>
         </div>
         <div className="row">
           <a className="btn" href={`/api/commissions/${rep.id}?${qs}`}>{t("导出明细 CSV")}</a>
@@ -44,28 +45,69 @@ export default async function SalesDetail({ params, searchParams }: { params: Pr
       </div>
 
       <div className="stats">
-        <div className="stat"><div className="muted">{t("本期订单")}</div><div className="v">{lines.filter((l) => l.rate > 0).length}</div></div>
+        <div className="stat"><div className="muted">{t("本期订单")}</div><div className="v">{lines.filter((l) => !l.reversed).length}</div></div>
         <div className="stat"><div className="muted">{t("本期利润")}</div><div className="v">{money(sum("profit"))}</div></div>
         <div className="stat"><div className="muted">{t("本期佣金")}</div><div className="v">{money(sum("commission"))}</div></div>
         <div className="stat"><div className="muted">{t("未结算（全部）")}</div><div className={`v ${dueTotal > 0 ? "warn-text" : ""}`}>{money(dueTotal)}</div></div>
       </div>
 
-      <div className="grid2">
-        <div className="card">
-          <h2 style={{ marginTop: 0 }}>{t("名下客户（{n}）", { n: customers.length })}</h2>
-          {customers.length ? (
-            <ul className="plain-list">
-              {customers.map(({ c, a }) => (
-                <li key={c.id}>
-                  <Link href={`/customers/${c.id}?tab=pricing#sales`}>{c.name}</Link>
-                  <span className="small muted"> · {a!.rate === null ? t("默认 {n}%", { n: rep.rate }) : `${a!.rate}%`} · {a!.startDate ? t("{d} 起", { d: a!.startDate }) : t("全部订单")}</span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="small muted">{t("还没有客户。到客户详情 → 渠道与价格 → 销售归属里选择这个销售。")}</p>
-          )}
-        </div>
+      <div className="card" id="customers">
+        <h2 style={{ marginTop: 0 }}>{t("名下客户和佣金比例（{n}）", { n: customers.length })}</h2>
+        {customers.length > 0 && (
+          <div className="table-wrap">
+            <table className="card-table">
+              <thead><tr><th>{t("客户")}</th><th className="num">{t("佣金比例")}</th><th>{t("从哪些订单开始算")}</th><th></th></tr></thead>
+              <tbody>
+                {customers.map(({ c, a }) => {
+                  const r = a!.rate ?? rep.rate;
+                  return (
+                    <tr key={c.id}>
+                      <td className="c-main"><Link href={`/customers/${c.id}`}>{c.name}</Link></td>
+                      <td className="num" data-label={t("佣金比例")}>{r === null ? <span className="warn-text">{t("未设比例")}</span> : <b>{r}%</b>}{a!.rate === null && r !== null && <span className="small muted"> {t("（默认）")}</span>}</td>
+                      <td className="small" data-label={t("从哪些订单开始算")}>{a!.startDate ? t("{d} 起", { d: a!.startDate }) : t("全部订单")}</td>
+                      <td className="c-act"><Link href={`/customers/${c.id}?tab=pricing#sales`}>{t("改比例 / 换销售")}</Link></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {(() => {
+          const others = listCustomers().filter((c) => !c.internal && currentAssignment(c.id)?.salesId !== rep.id);
+          if (!others.length) return <p className="small muted">{t("所有客户都已经归这个销售了")}</p>;
+          return (
+            <FlashForm action={assignSalesAction} submitLabel="添加客户" resetOnSuccess>
+              <h3 style={{ margin: "14px 0 8px" }}>{t("添加客户")}</h3>
+              <input type="hidden" name="salesId" value={rep.id} />
+              <div className="row" style={{ gap: 8, alignItems: "flex-end" }}>
+                <label className="f" style={{ minWidth: 220 }}><span className="req">{t("客户")}</span>
+                  <select name="customerId" required defaultValue="">
+                    <option value="" disabled>{t("选择客户…")}</option>
+                    {others.map((c) => {
+                      const cur = currentAssignment(c.id);
+                      const owner = cur?.salesId ? reps.find((x) => x.id === cur.salesId)?.name : null;
+                      return <option key={c.id} value={c.id}>{c.name}{owner ? ` · ${t("现在归 {name}", { name: owner })}` : ""}</option>;
+                    })}
+                  </select>
+                </label>
+                <label className="f" style={{ width: 170 }}>
+                  <span className={rep.rate === null ? "req" : ""}>{t("佣金比例 %")}</span>
+                  <input name="rate" type="number" min="0" max="100" step="0.01" required={rep.rate === null} placeholder={rep.rate === null ? t("例如 30") : t("留空用默认 {n}%", { n: rep.rate })} />
+                </label>
+                <label className="f" style={{ width: 210 }}>{t("从哪些订单开始算")}
+                  <select name="scope" defaultValue="all">
+                    <option value="all">{t("全部订单（包括以前的）")}</option>
+                    <option value="from">{t("从选的日期起")}</option>
+                  </select>
+                </label>
+                <label className="f" style={{ width: 170 }}>{t("日期（选“从日期起”时填）")}<input type="date" name="startDate" /></label>
+              </div>
+              <p className="small muted">{t("客户原来归别的销售时，选“从日期起”，之前的订单还归原来的人。")}</p>
+            </FlashForm>
+          );
+        })()}
+      </div>
 
         <FlashForm action={settleCommissionAction} submitLabel="确认结算" className="card" review confirm={t("结算【{name}】截至所选日期还没结的佣金。结算后这些订单记为已结，之后利润有变化（例如补差）会在下一次结算里补差额。", { name: rep.name })}>
           <h2 style={{ marginTop: 0 }}>{t("结算佣金")}</h2>
@@ -77,7 +119,6 @@ export default async function SalesDetail({ params, searchParams }: { params: Pr
             <PinField compact />
           </div>
         </FlashForm>
-      </div>
 
       <form className="card row" method="get">
         <label className="f">{t("开始日期")}<input type="date" name="from" defaultValue={from} /></label>
@@ -99,7 +140,7 @@ export default async function SalesDetail({ params, searchParams }: { params: Pr
                 <td data-label={t("客户")}>{l.shipment.customerName}</td>
                 <td data-label={t("状态")}><StatusBadge status={l.shipment.status} /></td>
                 <td className={`num ${l.profit < 0 ? "profit-neg" : ""}`} data-label={t("利润")}>{money(l.profit)}</td>
-                <td className="num" data-label={t("比例")}>{l.rate > 0 ? `${l.rate}%` : <span className="small muted" title={t("结算后改归了别的销售，冲回")}>{t("已改归他人")}</span>}</td>
+                <td className="num" data-label={t("比例")}>{l.reversed ? <span className="small muted" title={t("结算后改归了别的销售，冲回")}>{t("已改归他人")}</span> : l.rate === null ? <span className="small warn-text">{t("未设比例")}</span> : `${l.rate}%`}</td>
                 <td className="num" data-label={t("佣金")}><b>{money(l.commission)}</b></td>
                 <td className="num" data-label={t("已结")}>{l.paid ? money(l.paid) : "-"}</td>
                 <td className={`num ${l.due ? "warn-text" : ""}`} data-label={t("未结")}>{l.due ? money(l.due) : "-"}</td>
@@ -140,7 +181,7 @@ export default async function SalesDetail({ params, searchParams }: { params: Pr
           <input type="hidden" name="id" value={rep.id} />
           <div className="grid" style={{ marginTop: 12 }}>
             <label className="f"><span className="req">{t("姓名")}</span><input name="name" required maxLength={60} defaultValue={rep.name} /></label>
-            <label className="f"><span className="req">{t("默认佣金比例（利润的 %）")}</span><input name="rate" type="number" min="0" max="100" step="0.01" required defaultValue={rep.rate} /></label>
+            <label className="f">{t("默认佣金比例 %（选填）")}<input name="rate" type="number" min="0" max="100" step="0.01" defaultValue={rep.rate ?? ""} placeholder={t("一般按客户设，可以不填")} /></label>
             <label className="f">{t("电话")}<input name="phone" type="tel" maxLength={40} defaultValue={rep.phone ?? ""} /></label>
             <label className="f">{t("邮箱")}<input name="email" type="email" maxLength={120} defaultValue={rep.email ?? ""} /></label>
             <label className="f">{t("状态")}
@@ -148,7 +189,7 @@ export default async function SalesDetail({ params, searchParams }: { params: Pr
             </label>
             <label className="f" style={{ gridColumn: "1 / -1" }}>{t("备注")}<input name="note" maxLength={200} defaultValue={rep.note ?? ""} /></label>
           </div>
-          <p className="small muted">{t("改默认比例：没有单独设比例的客户，还没结算的佣金都按新比例算。只想从某天起改，请到客户详情里按日期设置。")}</p>
+          <p className="small muted">{t("默认比例只用在没有单独设比例的客户上；改了以后这些客户还没结算的佣金按新比例算。")}</p>
         </FlashForm>
       </details>
     </>

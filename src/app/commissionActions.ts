@@ -20,7 +20,7 @@ export async function saveSalesAction(_: FlashState, fd: FormData): Promise<Flas
       name: str(fd.get("name"), 60),
       phone: str(fd.get("phone"), 40) || null,
       email: str(fd.get("email"), 120) || null,
-      rate: Number(str(fd.get("rate"), 10)),
+      rate: str(fd.get("rate"), 10),
       note: str(fd.get("note"), 200) || null,
       active: fd.get("active") !== "0",
     });

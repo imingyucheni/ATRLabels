@@ -93,4 +93,38 @@ describe("销售佣金", () => {
     expect(amyLines[0]).toMatchObject({ commission: 0, paid: 3, due: -3 });
     expect(cm.commissionLines({ salesId: bob, customerId: c2 }).find((l) => l.date === "2026-08-10")!.commission).toBe(5);
   });
+
+  it("比例按客户：销售可以不设默认比例；这时分配客户必须填比例；没比例的单佣金算 0 并标出来", () => {
+    const base = { contact: null, phone: null, email: null, note: null, markup: {} };
+    const c3 = db.saveCustomer(null, { name: "客户三", ...base });
+    const c4 = db.saveCustomer(null, { name: "客户四", ...base });
+    const kim = cm.saveSales({ name: "Kim", rate: "" });
+    expect(cm.getSales(kim)!.rate).toBeNull();
+    expect(() => cm.assignCustomer(c3, { salesId: kim, rate: null, startDate: "" })).toThrow(/比例/);
+    ship(c3, "2026-08-05", 30, 10); // 利润 20
+    ship(c4, "2026-08-05", 30, 10);
+    cm.assignCustomer(c3, { salesId: kim, rate: 45, startDate: "" }); // 给的价高，提成高
+    cm.assignCustomer(c4, { salesId: kim, rate: 10, startDate: "" });
+    expect(cm.commissionLines({ salesId: kim }).map((l) => [l.shipment.customerId, l.rate, l.commission]).sort()).toEqual([[c3, 45, 9], [c4, 10, 2]].sort());
+    // 老数据：归属里没填比例、销售也没默认（例如默认比例后来被清空）
+    cm.saveSales({ id: amy, name: "Amy", rate: 30 });
+    const c5 = db.saveCustomer(null, { name: "客户五", ...base });
+    ship(c5, "2026-08-06", 30, 10);
+    cm.assignCustomer(c5, { salesId: amy, rate: null, startDate: "" });
+    cm.saveSales({ id: amy, name: "Amy", rate: null });
+    const l = cm.commissionLines({ salesId: amy, customerId: c5 })[0];
+    expect(l).toMatchObject({ rate: null, commission: 0, reversed: false });
+    expect(cm.salesSummaries().find((x) => x.rep.id === amy)!.noRate).toBeGreaterThan(0);
+  });
+
+  it("第一版的销售表（默认比例必填）会自动改成可以不填，数据保留", () => {
+    const conn = db.db();
+    conn.pragma("foreign_keys = OFF");
+    conn.exec("DROP TABLE sales_reps");
+    conn.exec(`CREATE TABLE sales_reps (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, phone TEXT, email TEXT, rate REAL NOT NULL DEFAULT 0, note TEXT, active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL DEFAULT (datetime('now')))`);
+    conn.prepare("INSERT INTO sales_reps (id, name, rate) VALUES (?, 'Old', 25)").run(amy);
+    conn.pragma("foreign_keys = ON");
+    expect(cm.getSales(amy)).toMatchObject({ name: "Old", rate: 25 });
+    expect(cm.saveSales({ name: "NoRate" })).toBeGreaterThan(0);
+  });
 });

@@ -20,7 +20,9 @@ export default async function SalesCard({ customerId }: { customerId: number }) 
         <h2 style={{ margin: 0 }}>{t("销售归属（佣金）")}</h2>
         <span className="small muted">
           {curRep
-            ? t("现在归 {name}，佣金 {rate}% × 利润", { name: curRep.name, rate: cur!.rate ?? curRep.rate })
+            ? (cur!.rate ?? curRep.rate) === null
+              ? t("现在归 {name}，还没设佣金比例", { name: curRep.name })
+              : t("现在归 {name}，佣金 {rate}% × 利润", { name: curRep.name, rate: cur!.rate ?? curRep.rate })
             : t("现在没有销售")}
         </span>
       </div>
@@ -33,11 +35,11 @@ export default async function SalesCard({ customerId }: { customerId: number }) 
             <label className="f">{t("销售")}
               <select name="salesId" defaultValue={cur?.salesId ?? ""}>
                 <option value="">{t("无销售")}</option>
-                {reps.filter((r) => r.active || r.id === cur?.salesId).map((r) => <option key={r.id} value={r.id}>{r.name} · {t("默认 {n}%", { n: r.rate })}</option>)}
+                {reps.filter((r) => r.active || r.id === cur?.salesId).map((r) => <option key={r.id} value={r.id}>{r.name}{r.rate !== null ? ` · ${t("默认 {n}%", { n: r.rate })}` : ""}</option>)}
               </select>
             </label>
-            <label className="f">{t("这个客户的佣金比例 %（可选）")}
-              <input name="rate" type="number" min="0" max="100" step="0.01" defaultValue={cur?.rate ?? ""} placeholder={t("留空 = 用销售的默认比例")} />
+            <label className="f">{t("这个客户的佣金比例 %")}
+              <input name="rate" type="number" min="0" max="100" step="0.01" defaultValue={cur?.rate ?? ""} placeholder={t("例如 30；留空用销售的默认比例")} />
             </label>
             <fieldset className="f" style={{ border: 0, padding: 0, margin: 0, gridColumn: "1 / -1" }}>
               <span>{t("从哪些订单开始算")}</span>

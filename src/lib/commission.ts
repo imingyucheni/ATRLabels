@@ -3,7 +3,8 @@
  *
  * - 归属按“生效日期”记历史：从某天起归谁、比例多少。第一次分配默认“全部订单”（包括以前的单）。
  *   换销售 / 改比例时选从哪天起生效，之前的单还算原来的人和比例。
- * - 比例不填 = 用销售的默认比例。
+ * - 比例按客户定（客户给的价高，提成可以高）；客户没单独设时用销售的默认比例（可以不设）。
+ *   两个都没有 = 未设比例，这个客户的单佣金算 0，页面上提示去设置。
  * - 佣金 = 单票利润（和报表里的利润一样：客户价 − 成本 + 补差，取消单算手续费差额）× 比例。
  *   亏损单是负数，冲减佣金。异常单（还没结果）不算。内部测试 / 模拟单不算。
  * - 结算：把截至某天还没结的佣金一次结清，按单记下结了多少。之后补差导致利润变了，
@@ -17,8 +18,8 @@ export interface SalesRep {
   name: string;
   phone: string | null;
   email: string | null;
-  /** 默认佣金比例（利润的百分比） */
-  rate: number;
+  /** 默认佣金比例（利润的百分比）；null = 不设默认，全部按客户设置 */
+  rate: number | null;
   note: string | null;
   active: boolean;
   createdAt: string;
@@ -41,7 +42,10 @@ export interface CommissionLine {
   shipment: Shipment;
   date: string;
   salesId: number;
-  rate: number;
+  /** 这单用的比例；null = 客户和销售都没设比例 */
+  rate: number | null;
+  /** 结算后改归别人，冲回的一行 */
+  reversed: boolean;
   profit: number;
   commission: number;
   paid: number;
@@ -67,7 +71,7 @@ function ensureTables() {
       name TEXT NOT NULL,
       phone TEXT,
       email TEXT,
-      rate REAL NOT NULL DEFAULT 0,
+      rate REAL,
       note TEXT,
       active INTEGER NOT NULL DEFAULT 1,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -100,6 +104,22 @@ function ensureTables() {
     );
     CREATE INDEX IF NOT EXISTS idx_commission_paid ON commission_paid(shipment_id);
   `);
+  // 第一版销售表的默认比例是必填（NOT NULL）：改成可以不填
+  const col = (conn.prepare("PRAGMA table_info(sales_reps)").all() as { name: string; notnull: number }[]).find((c) => c.name === "rate");
+  if (col?.notnull) {
+    // 重建表时先关掉外键检查（客户归属表引用了销售表），重建完再打开
+    const fk = conn.pragma("foreign_keys", { simple: true });
+    conn.pragma("foreign_keys = OFF");
+    conn.transaction(() => {
+      conn.exec(`CREATE TABLE sales_reps_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, phone TEXT, email TEXT, rate REAL, note TEXT,
+        active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL DEFAULT (datetime('now')));
+        INSERT INTO sales_reps_new SELECT id, name, phone, email, rate, note, active, created_at FROM sales_reps;
+        DROP TABLE sales_reps;
+        ALTER TABLE sales_reps_new RENAME TO sales_reps;`);
+    })();
+    if (fk) conn.pragma("foreign_keys = ON");
+  }
   return conn;
 }
 
@@ -112,7 +132,7 @@ export function shipmentLocalDate(s: Shipment): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-type RepRow = { id: number; name: string; phone: string | null; email: string | null; rate: number; note: string | null; active: number; created_at: string };
+type RepRow = { id: number; name: string; phone: string | null; email: string | null; rate: number | null; note: string | null; active: number; created_at: string };
 const toRep = (r: RepRow): SalesRep => ({ id: r.id, name: r.name, phone: r.phone, email: r.email, rate: r.rate, note: r.note, active: !!r.active, createdAt: r.created_at });
 
 export function listSales(): SalesRep[] {
@@ -130,13 +150,13 @@ export function parseRate(v: unknown): number {
   return round2(n);
 }
 
-export function saveSales(input: { id?: number; name: string; phone?: string | null; email?: string | null; rate: number; note?: string | null; active?: boolean }): number {
+export function saveSales(input: { id?: number; name: string; phone?: string | null; email?: string | null; rate?: number | string | null; note?: string | null; active?: boolean }): number {
   const conn = ensureTables();
   const name = input.name.trim();
   if (!name) throw new Error("请填写销售姓名");
   const dupe = conn.prepare("SELECT id FROM sales_reps WHERE name = ? AND id != ?").get(name, input.id ?? 0);
   if (dupe) throw new Error("已经有同名的销售了");
-  const rate = parseRate(input.rate);
+  const rate = input.rate === null || input.rate === undefined || String(input.rate).trim() === "" ? null : parseRate(input.rate);
   const vals = [name, input.phone || null, input.email || null, rate, input.note || null, input.active === false ? 0 : 1];
   if (input.id) {
     if (!conn.prepare("UPDATE sales_reps SET name = ?, phone = ?, email = ?, rate = ?, note = ?, active = ? WHERE id = ?").run(...vals, input.id).changes) throw new Error("销售不存在");
@@ -182,7 +202,9 @@ export function currentAssignment(customerId: number, today = localDate()) {
 export function assignCustomer(customerId: number, input: { salesId: number | null; rate: number | null; startDate: string; by?: string }) {
   const conn = ensureTables();
   if (!getCustomer(customerId)) throw new Error("客户不存在");
-  if (input.salesId !== null && !getSales(input.salesId)) throw new Error("销售不存在");
+  const rep = input.salesId === null ? null : getSales(input.salesId);
+  if (input.salesId !== null && !rep) throw new Error("销售不存在");
+  if (rep && input.rate === null && rep.rate === null) throw new Error("请填写这个客户的佣金比例");
   const start = input.startDate.trim();
   if (start && !isDate(start)) throw new Error("生效日期格式不对");
   const rate = input.rate === null ? null : parseRate(input.rate);
@@ -226,11 +248,11 @@ export function commissionLines(f: { salesId?: number; customerId?: number; from
       if (!rep) continue;
       const rate = a.rate ?? rep.rate;
       const profit = round2(shipmentProfit(s) ?? 0);
-      const commission = round2((profit * rate) / 100);
+      const commission = rate === null ? 0 : round2((profit * rate) / 100);
       const key = `${a.salesId}:${s.id}`;
       seen.add(key);
       const p = round2(paid.get(key) ?? 0);
-      if (!f.salesId || f.salesId === a.salesId) lines.push({ shipment: s, date, salesId: a.salesId, rate, profit, commission, paid: p, due: round2(commission - p) });
+      if (!f.salesId || f.salesId === a.salesId) lines.push({ shipment: s, date, salesId: a.salesId, rate, reversed: false, profit, commission, paid: p, due: round2(commission - p) });
     }
   }
   // 结算过但现在不归这个人了：冲回
@@ -242,7 +264,7 @@ export function commissionLines(f: { salesId?: number; customerId?: number; from
     if (!s || (f.customerId && s.customerId !== f.customerId)) continue;
     const date = shipmentLocalDate(s);
     if ((f.from && date < f.from) || (f.to && date > f.to)) continue;
-    lines.push({ shipment: s, date, salesId: sid, rate: 0, profit: round2(shipmentProfit(s) ?? 0), commission: 0, paid: round2(p), due: round2(-p) });
+    lines.push({ shipment: s, date, salesId: sid, rate: null, reversed: true, profit: round2(shipmentProfit(s) ?? 0), commission: 0, paid: round2(p), due: round2(-p) });
   }
   return lines.sort((a, b) => (a.date === b.date ? b.shipment.id - a.shipment.id : a.date < b.date ? 1 : -1));
 }
@@ -255,6 +277,8 @@ export interface SalesSummary {
   commission: number;
   /** 还没结算的（不限日期） */
   due: number;
+  /** 本期没有比例（客户、销售都没设）的订单数 */
+  noRate: number;
 }
 
 /** 销售列表页：每个销售的客户数、本期订单 / 利润 / 佣金、未结算金额 */
@@ -272,7 +296,8 @@ export function salesSummaries(from?: string, to?: string): SalesSummary[] {
     return {
       rep,
       customers: custCount.get(rep.id) ?? 0,
-      orders: period.filter((l) => l.rate > 0).length,
+      orders: period.filter((l) => !l.reversed).length,
+      noRate: period.filter((l) => !l.reversed && l.rate === null).length,
       profit: round2(period.reduce((a, l) => a + l.profit, 0)),
       commission: round2(period.reduce((a, l) => a + l.commission, 0)),
       due: round2(mine.reduce((a, l) => a + l.due, 0)),
