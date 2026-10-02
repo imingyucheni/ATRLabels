@@ -17,7 +17,7 @@ export default async function LoginPage() {
       points={["多渠道实时比价，按规则自动加价", "批量导入 ShipBest 导单表，一键合并打印", "官方账单补差自动对应到客户"].map((p) => t(p))}
     >
       <h1>{t("管理后台")}</h1>
-      <p className="sub">{t("使用后台密码登录")}</p>
+      <p className="sub">{t("主管理员只填后台密码；员工填自己的登录名和密码")}</p>
       <LoginForm />
     </AuthShell>
   );

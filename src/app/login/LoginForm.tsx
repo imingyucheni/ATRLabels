@@ -11,7 +11,8 @@ export default function LoginForm() {
   return (
     <form action={action}>
       {state?.error && <div className="alert err">{tm(state.error)}</div>}
-      <label className="f">{t("后台密码")}<input type="password" name="password" autoComplete="current-password" autoFocus required /></label>
+      <label className="f">{t("登录名")}<input name="username" autoComplete="username" autoCapitalize="none" spellCheck={false} placeholder={t("主管理员不用填")} /></label>
+      <label className="f">{t("密码")}<input type="password" name="password" autoComplete="current-password" autoFocus required /></label>
       <button className="primary" disabled={pending}>{pending ? t("登录中…") : t("登录")}</button>
     </form>
   );

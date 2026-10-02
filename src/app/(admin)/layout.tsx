@@ -30,7 +30,9 @@ export async function generateMetadata() {
 }
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  await requireAdmin();
+  // 员工（二级管理员）也能进后台，但只能开部分页面（proxy 里拦），菜单也只显示这些
+  const who = await requireAdmin({ staff: true });
+  const staff = who.role === "staff";
   const pendingTopups = pendingTopupCount();
   const resets = pendingResets().length;
   const leads = newLeadCount();
@@ -39,7 +41,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     <div className="shell">
       <Sidebar
         brand="ATRShip"
-        brandSub={version() ? t("管理后台 · 版本 {v}", { v: version() }) : "管理后台"}
+        brandSub={staff ? t("员工：{name}", { name: who.name }) : version() ? t("管理后台 · 版本 {v}", { v: version() }) : "管理后台"}
         siteLink={(() => {
           const sw = siteSwitch();
           return sw ? { href: sw.url, label: sw.toSandbox ? t("切换到沙盒站") : t("切换到正式站") } : undefined;
@@ -54,7 +56,18 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             : undefined
         }
         logout={logoutAction}
-        groups={[
+        groups={staff ? [
+          {
+            title: "客户",
+            items: [
+              { href: "/customers", label: "客户管理", icon: "customers", count: resets },
+              { href: "/leads", label: "客户咨询", icon: "leads", count: leads },
+              { href: "/quote", label: "运费试算", icon: "ship" },
+              { href: "/finance", label: "财务 · 充值审核", icon: "finance", count: pendingTopups },
+            ],
+          },
+          { title: "我的账号", items: [{ href: "/account", label: "我的账号 · 确认密码", icon: "account" }] },
+        ] : [
           { items: [{ href: "/", label: "概览", icon: "dashboard", exact: true }, { href: "/reports", label: "报表", icon: "reports" }, { href: "/reconcile", label: "服务商对账", icon: "billing" }] },
           {
             title: "客户",
@@ -80,7 +93,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           dhlSettings().enabled
             ? { title: "国际面单", items: [{ href: "/ship/intl", label: "国际下单（DHL）", icon: "globe" }] }
             : { title: "国际面单", soon: true, items: [{ href: "/settings#dhl", label: "国际下单", icon: "globe" }] },
-          { title: "系统", items: [{ href: "/settings#pricing", label: "渠道与价格", icon: "price" }, { href: "/settings", label: "设置", icon: "settings" }, { href: "/backups", label: "数据备份", icon: "backup" }] },
+          { title: "系统", items: [{ href: "/settings#pricing", label: "渠道与价格", icon: "price" }, { href: "/settings", label: "设置", icon: "settings" }, { href: "/staff", label: "员工账号", icon: "account" }, { href: "/backups", label: "数据备份", icon: "backup" }] },
         ]}
       />
       <main className="main">

@@ -290,6 +290,9 @@ function migrate(conn: Database.Database) {
   if (!chcols.includes("rebate_percent")) conn.exec("ALTER TABLE channels ADD COLUMN rebate_percent REAL");
   // 下单时的收件地址核对结果（JSON）
   if (!cols.includes("addr_check")) conn.exec("ALTER TABLE shipments ADD COLUMN addr_check TEXT");
+  // 充值申请：谁确认 / 拒绝的（主管理员或员工）
+  const tcols = (conn.prepare("PRAGMA table_info(topup_requests)").all() as { name: string }[]).map((c) => c.name);
+  if (tcols.length && !tcols.includes("handled_by")) conn.exec("ALTER TABLE topup_requests ADD COLUMN handled_by TEXT");
   conn.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_customers_email ON customers(portal_email) WHERE portal_email IS NOT NULL");
   // 客户可用渠道：新客户默认一个都不开，由管理员逐个开通。
   // 第一次建表时，给已有客户开通当前已启用的全部渠道，避免升级后老客户突然无法下单。

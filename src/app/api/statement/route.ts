@@ -1,5 +1,5 @@
 import { TZ_LABEL } from "@/lib/time";
-import { currentCustomerId, isLoggedIn } from "@/lib/auth";
+import { currentAdmin, currentCustomerId } from "@/lib/auth";
 import { csvResponse } from "@/lib/csv";
 import { buildStatement } from "@/lib/statement";
 import { balanceAt, balanceOf, topupsBetween } from "@/lib/ledger";
@@ -17,7 +17,7 @@ export async function GET(req: Request) {
   const detail = (s: string) => s.split(" · ").map((x) => translateMessage(lang, x)).join(" · ");
   const p = new URL(req.url).searchParams;
   let customerId = Number(p.get("customerId"));
-  const admin = await isLoggedIn();
+  const admin = !!(await currentAdmin());
   // 客户只能下载自己的对账单
   if (!admin) {
     const own = await currentCustomerId();

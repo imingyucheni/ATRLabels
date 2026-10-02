@@ -64,7 +64,9 @@ import { createBackup, deleteBackup, restoreBackup } from "@/lib/backup";
 import { getShipment, resetTestEnv, setStoredMode, setTestAccount } from "@/lib/db";
 import { getTerms, saveTerms } from "@/lib/terms";
 import { sendMail } from "@/lib/mailer";
-import { checkFinancePin, setFinancePin } from "@/lib/financePin";
+import { checkConfirmPin, checkFinancePin, setFinancePin } from "@/lib/financePin";
+import { actorOf } from "@/lib/actor";
+import { staffLogin } from "@/lib/staffStore";
 import { testAddressService } from "@/lib/addressCheck";
 import { listSenders, saveSender } from "@/lib/senders";
 import { clearCredentials, readablePassword, rememberCredentials } from "@/lib/credentials";
@@ -102,14 +104,18 @@ export async function loginAction(_: unknown, fd: FormData) {
   // 除了按 IP，还有一个全站的总次数限制：换 IP 也不能无限试密码
   const limited = checkRateLimit(key) ?? checkRateLimit("admin:*", 50);
   if (limited) return { error: limited };
-  if (!checkPassword(String(fd.get("password") ?? ""))) {
+  const username = String(fd.get("username") ?? "").trim().toLowerCase();
+  const password = String(fd.get("password") ?? "");
+  // 登录名留空（或填 admin）= 主管理员，用后台密码；否则是员工账号
+  const staff = username && username !== "admin" ? staffLogin(username, password) : null;
+  if (username && username !== "admin" ? !staff : !checkPassword(password)) {
     recordFailure(key);
     recordFailure("admin:*");
-    return { error: "密码错误" };
+    return { error: username && username !== "admin" ? "登录名或密码错误" : "密码错误" };
   }
   clearFailures(key);
-  await createSession();
-  redirect("/");
+  await createSession(staff ?? undefined);
+  redirect(staff ? "/customers" : "/");
 }
 
 export async function logoutAction() {
@@ -125,7 +131,7 @@ export async function quoteAction(
   raw: ShipmentRequest,
   markup?: PartialRule,
 ): Promise<{ errors?: string[]; quotes?: ChannelQuote[] }> {
-  await requireAdmin();
+  const who = await requireAdmin({ staff: true });
   // 运费试算只需要地址和包裹：不检查商品明细，缺的用样品补上（出单时仍然严格校验）
   const req = withQuoteSkus(cleanRequest(raw));
   const errors = validateRequest(req, { forQuote: true });
@@ -138,7 +144,9 @@ export async function quoteAction(
   const neg = negativeRule(m);
   if (neg) return { errors: [neg] };
   try {
-    return { quotes: customerId ? await quoteAll(customerId, req) : await quoteForProspect(req, m) };
+    const quotes = customerId ? await quoteAll(customerId, req) : await quoteForProspect(req, m);
+    // 员工（二级管理员）只看客户价，不把成本、利润发到浏览器
+    return { quotes: who.role === "staff" ? quotes.map((q) => ({ ...q, cost: undefined, listCost: undefined, profit: undefined }) as unknown as ChannelQuote) : quotes };
   } catch (e) {
     return { errors: [(e as Error).message] };
   }
@@ -337,7 +345,7 @@ export async function setTestAccountAction(_: FlashState, fd: FormData): Promise
 }
 
 export async function saveCustomerAction(_: FlashState, fd: FormData): Promise<FlashState> {
-  await requireAdmin();
+  await requireAdmin({ staff: true });
   const name = str(fd.get("name"));
   if (!name) return { error: "客户名称必填" };
   const idRaw = Number(fd.get("id"));
@@ -379,20 +387,22 @@ export async function saveCustomerAction(_: FlashState, fd: FormData): Promise<F
 }
 
 export async function hideCredentialsAction(id: number) {
-  await requireAdmin();
+  await requireAdmin({ staff: true });
   clearCredentials(id);
   revalidatePath(`/customers/${id}`);
 }
 
 export async function saveCustomerPortalAction(_: FlashState, fd: FormData): Promise<FlashState> {
-  await requireAdmin();
+  const who = await requireAdmin({ staff: true });
   const id = Number(fd.get("id"));
   const email = str(fd.get("portalEmail"), 100).toLowerCase() || null;
   const enabled = fd.get("portalEnabled") === "on";
   if (enabled && !email) return { error: "开通登录需要填写登录邮箱" };
   if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return { error: "登录邮箱格式不正确" };
   try {
-    updateCustomerPortal(id, { email, enabled, creditLimit: Math.max(0, optNum(fd.get("creditLimit")) ?? 0) });
+    // 信用额度（允许欠款多少）只有主管理员能改；员工保存时保留原来的
+    const creditLimit = who.role === "staff" ? getCustomer(id)?.creditLimit ?? 0 : Math.max(0, optNum(fd.get("creditLimit")) ?? 0);
+    updateCustomerPortal(id, { email, enabled, creditLimit });
   } catch (e) {
     return { error: (e as Error).message };
   }
@@ -401,7 +411,7 @@ export async function saveCustomerPortalAction(_: FlashState, fd: FormData): Pro
 }
 
 export async function setCustomerPasswordAction(_: FlashState, fd: FormData): Promise<FlashState> {
-  await requireAdmin();
+  await requireAdmin({ staff: true });
   const id = Number(fd.get("id"));
   const c = getCustomer(id);
   if (!c) return { error: "客户不存在" };
@@ -426,7 +436,7 @@ export async function setCustomerPasswordAction(_: FlashState, fd: FormData): Pr
 }
 
 export async function saveCustomerSenderAction(_: FlashState, fd: FormData): Promise<FlashState> {
-  await requireAdmin();
+  await requireAdmin({ staff: true });
   const id = Number(fd.get("id"));
   const sender = cleanAddress(Object.fromEntries([...fd.entries()].filter(([k]) => k.startsWith("sender.")).map(([k, v]) => [k.slice(7), v])) as Partial<Address>);
   // 国家下拉框默认就有值，不算“填了”；其余全部留空 = 清除，改用系统默认寄件地址
@@ -454,13 +464,15 @@ export async function saveCustomerSenderAction(_: FlashState, fd: FormData): Pro
 }
 
 export async function ledgerEntryAction(_: FlashState, fd: FormData): Promise<FlashState> {
-  await requireAdmin();
-  const pinErr = checkFinancePin(str(fd.get("financePin"), 10));
+  const who = await requireAdmin({ staff: true });
+  const pinErr = checkConfirmPin(who, str(fd.get("financePin"), 10));
   if (pinErr) return { error: pinErr };
   const id = Number(fd.get("id"));
   // 类型：充值 / 加款 / 扣款（金额都填正数，扣款时系统转成负数，不会因为漏打负号扣成加）；兼容旧的 manual（正负号）
   const kind = String(fd.get("type") ?? "");
   if (!["topup", "manual_add", "manual_sub", "manual"].includes(kind)) return { error: "请选择类型" };
+  // 员工只能记“充值”；加款、扣款只有主管理员能做
+  if (who.role === "staff" && kind !== "topup") return { error: "员工账号只能记充值，加款 / 扣款请找主管理员" };
   const type = kind === "topup" ? "topup" : "manual";
   const raw = optNum(fd.get("amount"));
   if (!raw) return { error: fd.get("amount") ? "金额不能为 0" : "请填写金额" };
@@ -468,7 +480,7 @@ export async function ledgerEntryAction(_: FlashState, fd: FormData): Promise<Fl
   const amount = kind === "manual_sub" ? -Math.abs(raw) : raw;
   const note = str(fd.get("note"), 200) || null;
   if (type === "manual" && !note) return { error: "手动调账请填写说明" };
-  addLedger({ customerId: id, type, amount, note, createdBy: "admin" });
+  addLedger({ customerId: id, type, amount, note, createdBy: actorOf(who) });
   revalidatePath(`/customers/${id}`);
   return { ok: `已${type === "topup" ? "充值" : "调账"} ${amount.toFixed(2)}，当前余额 ${balanceOf(id).toFixed(2)}` };
 }
@@ -875,7 +887,7 @@ export async function saveCustomerStampAction(_: FlashState, fd: FormData): Prom
 }
 
 export async function saveCustomerChannelsAction(_: FlashState, fd: FormData): Promise<FlashState> {
-  await requireAdmin();
+  await requireAdmin({ staff: true });
   const id = Number(fd.get("id"));
   if (!getCustomer(id)) return { error: "客户不存在" };
   const codes = fd.getAll("channels").map((v) => str(v, 50)).filter(Boolean);
@@ -889,7 +901,7 @@ export async function saveCustomerChannelsAction(_: FlashState, fd: FormData): P
 }
 
 export async function saveCustomerChannelMarkupAction(_: FlashState, fd: FormData): Promise<FlashState> {
-  await requireAdmin();
+  await requireAdmin({ staff: true });
   const id = Number(fd.get("id"));
   if (!getCustomer(id)) return { error: "客户不存在" };
   const rules: Record<string, PartialRule> = {};
@@ -931,13 +943,13 @@ export async function uploadChannelSampleAction(fd: FormData): Promise<FlashStat
 /* ---------------- 充值审核 / 收款设置 ---------------- */
 
 export async function approveTopupAction(_: FlashState, fd: FormData): Promise<FlashState> {
-  await requireAdmin();
-  const pinErr = checkFinancePin(str(fd.get("financePin"), 10));
+  const who = await requireAdmin({ staff: true });
+  const pinErr = checkConfirmPin(who, str(fd.get("financePin"), 10));
   if (pinErr) return { error: pinErr };
   let id = 0;
   try {
     id = Number(fd.get("id"));
-    approveTopup(id, n(fd.get("creditedUsd")), str(fd.get("adminNote"), 200) || null);
+    approveTopup(id, n(fd.get("creditedUsd")), str(fd.get("adminNote"), 200) || null, actorOf(who));
     revalidatePath("/finance");
   } catch (e) {
     return { error: (e as Error).message };
@@ -947,11 +959,11 @@ export async function approveTopupAction(_: FlashState, fd: FormData): Promise<F
 }
 
 export async function rejectTopupAction(_: FlashState, fd: FormData): Promise<FlashState> {
-  await requireAdmin();
+  const who = await requireAdmin({ staff: true });
   let id = 0;
   try {
     id = Number(fd.get("id"));
-    rejectTopup(id, str(fd.get("adminNote"), 200));
+    rejectTopup(id, str(fd.get("adminNote"), 200), actorOf(who));
     revalidatePath("/finance");
   } catch (e) {
     return { error: (e as Error).message };
@@ -1005,7 +1017,7 @@ export async function refreshFxAction(_: FlashState): Promise<FlashState> {
 }
 
 export async function handleResetRequestAction(_: FlashState, fd: FormData): Promise<FlashState> {
-  await requireAdmin();
+  await requireAdmin({ staff: true });
   try {
     const r = adminResetFromRequest(Number(fd.get("id")));
     revalidatePath("/customers");
@@ -1121,7 +1133,7 @@ export async function saveShipBestAction(_: FlashState, fd: FormData): Promise<F
 /* ---------------- 官网 ---------------- */
 
 export async function updateLeadAction(_: FlashState, fd: FormData): Promise<FlashState> {
-  await requireAdmin();
+  await requireAdmin({ staff: true });
   const raw = fd.get("status");
   const status = raw === "contacted" || raw === "done" || raw === "rejected" ? raw : "new";
   updateLead(Number(fd.get("id")), status, str(fd.get("adminNote"), 200) || null);

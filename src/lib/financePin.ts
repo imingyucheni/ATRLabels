@@ -5,6 +5,7 @@
  */
 import { getSettings, saveSettings } from "./db";
 import { hashPassword, verifyPassword } from "./password";
+import { verifyStaffPin } from "./staffStore";
 
 const MAX_FAILS = 5;
 const LOCK_MS = 30 * 60_000;
@@ -35,5 +36,28 @@ export function checkFinancePin(pin: string | null | undefined): string | null {
     return left > 0 ? `财务确认密码不正确（还可以再试 ${left} 次）` : "财务确认密码输错次数过多，请 30 分钟后再试";
   }
   fails = { count: 0, until: 0 };
+  return null;
+}
+
+const staffFails = new Map<number, { count: number; until: number }>();
+
+/**
+ * 按登录的人校验确认密码：主管理员用“设置 → 财务确认密码”，员工用自己设的 4 位确认密码。
+ * 通过返回 null，否则返回错误说明。
+ */
+export function checkConfirmPin(who: { role: "owner" | "staff"; id: number }, pin: string | null | undefined): string | null {
+  if (who.role === "owner") return checkFinancePin(pin);
+  const now = Date.now();
+  const f = staffFails.get(who.id) ?? { count: 0, until: 0 };
+  if (f.count >= MAX_FAILS && f.until > now) return "确认密码输错次数过多，请 30 分钟后再试";
+  const ok = verifyStaffPin(who.id, String(pin ?? ""));
+  if (ok === null) return "请先在“我的账号”里设置你的 4 位确认密码";
+  if (!ok) {
+    const next = { count: (f.until > now ? f.count : 0) + 1, until: now + LOCK_MS };
+    staffFails.set(who.id, next);
+    const left = MAX_FAILS - next.count;
+    return left > 0 ? `确认密码不正确（还可以再试 ${left} 次）` : "确认密码输错次数过多，请 30 分钟后再试";
+  }
+  staffFails.delete(who.id);
   return null;
 }

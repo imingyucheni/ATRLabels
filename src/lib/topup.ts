@@ -34,18 +34,20 @@ export interface TopupRequest {
   adminNote: string | null;
   createdAt: string;
   handledAt: string | null;
+  /** 谁处理的（见 actor.ts） */
+  handledBy: string | null;
 }
 
 interface Row {
   id: number; customer_id: number; customer_name: string; method: TopupMethod; amount_usd: number; pay_amount: number; pay_currency: string;
   fx_live: number | null; fx_rate: number | null; reference: string | null; proof_path: string | null; proof_mime: string | null; note: string | null;
-  status: TopupStatus; credited_usd: number | null; admin_note: string | null; created_at: string; handled_at: string | null;
+  status: TopupStatus; credited_usd: number | null; admin_note: string | null; created_at: string; handled_at: string | null; handled_by?: string | null;
 }
 
 const toReq = (r: Row): TopupRequest => ({
   id: r.id, customerId: r.customer_id, customerName: r.customer_name, method: r.method, amountUsd: r.amount_usd, payAmount: r.pay_amount,
   payCurrency: r.pay_currency, fxLive: r.fx_live, fxRate: r.fx_rate, reference: r.reference, hasProof: !!r.proof_path, proofMime: r.proof_mime,
-  note: r.note, status: r.status, creditedUsd: r.credited_usd, adminNote: r.admin_note, createdAt: r.created_at, handledAt: r.handled_at,
+  note: r.note, status: r.status, creditedUsd: r.credited_usd, adminNote: r.admin_note, createdAt: r.created_at, handledAt: r.handled_at, handledBy: r.handled_by ?? null,
 });
 
 function dir(sub: string) {
@@ -138,7 +140,7 @@ export function readTopupProof(id: number): { buf: Buffer; mime: string } | null
 }
 
 /** 确认到账：按实际到账金额（美元）记入钱包 */
-export function approveTopup(id: number, creditedUsd: number, adminNote: string | null) {
+export function approveTopup(id: number, creditedUsd: number, adminNote: string | null, by = "admin") {
   const t = getTopup(id);
   if (!t) throw new Error("申请不存在");
   if (t.status !== "pending") throw new Error("这笔申请已经处理过了");
@@ -153,11 +155,11 @@ export function approveTopup(id: number, creditedUsd: number, adminNote: string 
       note: `充值申请 #${t.id} · ${pay}${Math.abs(amount - t.amountUsd) > 0.005 ? ` · 申请 $${t.amountUsd.toFixed(2)}，实际入账 $${amount.toFixed(2)}` : ""}${
         t.reference ? ` · 参考号 ${t.reference}` : ""
       }${adminNote ? ` · ${adminNote}` : ""}`,
-      createdBy: "admin",
+      createdBy: by,
     });
     db()
-      .prepare("UPDATE topup_requests SET status = 'approved', credited_usd = ?, admin_note = ?, ledger_id = ?, handled_at = datetime('now') WHERE id = ? AND status = 'pending'")
-      .run(amount, adminNote, ledgerId, id);
+      .prepare("UPDATE topup_requests SET status = 'approved', credited_usd = ?, admin_note = ?, ledger_id = ?, handled_at = datetime('now'), handled_by = ? WHERE id = ? AND status = 'pending'")
+      .run(amount, adminNote, ledgerId, by, id);
   })();
   notifyLater(t.customerId, "topup", { zh: `充值 $${amount.toFixed(2)} 已到账`, en: `Top-up of $${amount.toFixed(2)} received` }, {
     zh: [`你的充值（申请 #${t.id}）已确认到账，$${amount.toFixed(2)} 已加到账户余额。`],
@@ -165,12 +167,12 @@ export function approveTopup(id: number, creditedUsd: number, adminNote: string 
   });
 }
 
-export function rejectTopup(id: number, adminNote: string) {
+export function rejectTopup(id: number, adminNote: string, by = "admin") {
   const t = getTopup(id);
   if (!t) throw new Error("申请不存在");
   if (t.status !== "pending") throw new Error("这笔申请已经处理过了");
   if (!adminNote.trim()) throw new Error("请填写不通过的原因，客户会看到");
-  db().prepare("UPDATE topup_requests SET status = 'rejected', admin_note = ?, handled_at = datetime('now') WHERE id = ?").run(adminNote, id);
+  db().prepare("UPDATE topup_requests SET status = 'rejected', admin_note = ?, handled_at = datetime('now'), handled_by = ? WHERE id = ?").run(adminNote, by, id);
   notifyLater(t.customerId, "topup", { zh: `充值申请 #${t.id} 未通过`, en: `Top-up request #${t.id} not approved` }, {
     zh: [`你的充值申请 #${t.id}（$${t.amountUsd.toFixed(2)}）没有通过。原因：${adminNote}`, "如有疑问请联系客服。"],
     en: [`Your top-up request #${t.id} ($${t.amountUsd.toFixed(2)}) was not approved. Reason: ${adminNote}`, "Please contact support if you have questions."],

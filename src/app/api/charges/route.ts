@@ -1,5 +1,5 @@
 import { fmtTime, TZ_LABEL } from "@/lib/time";
-import { currentCustomerId, isLoggedIn } from "@/lib/auth";
+import { currentAdmin, currentCustomerId } from "@/lib/auth";
 import { csvResponse } from "@/lib/csv";
 import { getCustomer, STATUS_LABEL, type ShipmentStatus } from "@/lib/db";
 import { listOrderCharges } from "@/lib/ledger";
@@ -15,7 +15,7 @@ export async function GET(req: Request) {
   const en = (await getLang()) === "en";
   const p = new URL(req.url).searchParams;
   let customerId = Number(p.get("customerId"));
-  if (!(await isLoggedIn())) {
+  if (!(await currentAdmin())) {
     const own = await currentCustomerId();
     if (!own) return new Response("Unauthorized", { status: 401 });
     customerId = own;

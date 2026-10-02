@@ -1,10 +1,10 @@
-import { currentCustomerId, isLoggedIn } from "@/lib/auth";
+import { currentAdmin, currentCustomerId } from "@/lib/auth";
 import { getTopup, readTopupProof } from "@/lib/topup";
 
-/** 充值凭证：后台可看全部，客户只能看自己的 */
+/** 充值凭证：后台（主管理员、员工确认充值时）可看全部，客户只能看自己的 */
 export async function GET(_: Request, ctx: { params: Promise<{ id: string }> }) {
   const id = Number((await ctx.params).id);
-  if (!(await isLoggedIn())) {
+  if (!(await currentAdmin())) {
     const own = await currentCustomerId();
     if (!own || getTopup(id)?.customerId !== own) return new Response("Not found", { status: 404 });
   }

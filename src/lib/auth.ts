@@ -2,7 +2,8 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getCustomer, getPasswordHash, type Customer } from "./db";
-import { ADMIN_COOKIE, adminMac, verifyAdminToken } from "./adminSession";
+import { ADMIN_COOKIE, adminMac, staffToken, verifyAdminToken, verifySession, type AdminPrincipal } from "./adminSession";
+import type { StaffAccount } from "./staffStore";
 
 // 沙盒站和正式站可能在同一个 IP 的不同端口上，浏览器 cookie 不分端口：沙盒站用不同的 cookie 名，两边可以同时登录
 const SFX = process.env.APP_ENV === "sandbox" ? "_sb" : "";
@@ -46,15 +47,17 @@ export function checkPassword(input: string): boolean {
 
 /** 管理员会话里带上密码指纹：改了 ADMIN_PASSWORD 之后，旧的登录全部失效 */
 
-export async function createSession() {
-  const exp = Math.floor(Date.now() / 1000) + MAX_AGE;
-  const token = `${exp}.${adminMac(exp)}`;
+/** 登录：不传 = 主管理员；传员工账号 = 员工登录（员工 12 小时后要重新登录） */
+export async function createSession(staff?: StaffAccount) {
+  const maxAge = staff ? 60 * 60 * 12 : MAX_AGE;
+  const exp = Math.floor(Date.now() / 1000) + maxAge;
+  const token = staff ? staffToken(staff.id, staff.ver, exp) : `${exp}.${adminMac(exp)}`;
   (await cookies()).set(COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
     secure: await cookieSecure(),
     path: "/",
-    maxAge: MAX_AGE,
+    maxAge,
   });
 }
 
@@ -62,13 +65,26 @@ export async function destroySession() {
   (await cookies()).delete(COOKIE);
 }
 
+/** 是否主管理员登录（接口默认只认主管理员） */
 export async function isLoggedIn(): Promise<boolean> {
   return verifyAdminToken((await cookies()).get(COOKIE)?.value);
 }
 
-/** 页面和 Server Action 开头调用：未登录则跳转到登录页。 */
-export async function requireAdmin() {
-  if (!(await isLoggedIn())) redirect("/login");
+/** 现在登录后台的是谁（主管理员 / 员工）；没登录返回 null */
+export async function currentAdmin(): Promise<AdminPrincipal | null> {
+  return verifySession((await cookies()).get(COOKIE)?.value);
+}
+
+/**
+ * 页面和 Server Action 开头调用：未登录跳登录页。
+ * 默认只有主管理员能用；员工也能做的操作（开客户账号、设置客户邮费、确认充值）传 { staff: true }。
+ * 返回登录的人（记录“谁操作的”用）。
+ */
+export async function requireAdmin(opts: { staff?: boolean } = {}): Promise<AdminPrincipal> {
+  const who = await currentAdmin();
+  if (!who) redirect("/login");
+  if (who.role === "staff" && !opts.staff) redirect("/customers?denied=1");
+  return who;
 }
 
 /* ---------------- 登录失败限制 ---------------- */

@@ -1,10 +1,10 @@
-import { currentCustomerId, isLoggedIn } from "@/lib/auth";
+import { currentAdmin, currentCustomerId } from "@/lib/auth";
 import { acceptanceById, acceptanceDocument, acceptanceFilename } from "@/lib/terms";
 
 /** 下载一份签署存档（HTML）：管理员可下载任何客户的；客户只能下载自己的 */
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const a = acceptanceById(Number((await ctx.params).id));
-  if (!(await isLoggedIn())) {
+  if (!(await currentAdmin())) {
     const own = await currentCustomerId();
     if (!own) return new Response("Unauthorized", { status: 401 });
     if (!a || a.customerId !== own) return new Response("Not found", { status: 404 });

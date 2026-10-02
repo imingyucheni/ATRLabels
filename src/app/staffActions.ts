@@ -1,0 +1,78 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { requireAdmin } from "@/lib/auth";
+import { verifyPassword } from "@/lib/password";
+import { getT } from "@/lib/prefs";
+import { str } from "@/lib/sanitize";
+import { createStaff, deleteStaff, getStaff, renameStaff, setStaffActive, setStaffPassword, setStaffPin } from "@/lib/staffStore";
+import type { FlashState } from "@/app/actions";
+
+const fail = async (e: unknown): Promise<FlashState> => ({ error: (await getT())((e as Error).message) });
+
+/* ---------- 主管理员管理员工账号 ---------- */
+
+export async function createStaffAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  await requireAdmin();
+  try {
+    createStaff({ name: str(fd.get("name"), 40), username: str(fd.get("username"), 32), password: String(fd.get("password") ?? "") });
+    revalidatePath("/staff");
+    return { ok: "已创建员工账号，把登录名和密码发给他。他第一次登录后要在“我的账号”里设置自己的 4 位确认密码" };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function updateStaffAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  await requireAdmin();
+  const id = Number(fd.get("id"));
+  try {
+    const op = String(fd.get("op") ?? "");
+    if (op === "rename") renameStaff(id, str(fd.get("name"), 40));
+    else if (op === "password") setStaffPassword(id, String(fd.get("password") ?? ""));
+    else if (op === "disable") setStaffActive(id, false);
+    else if (op === "enable") setStaffActive(id, true);
+    else if (op === "delete") deleteStaff(id);
+    else return { error: "未知操作" };
+    revalidatePath("/staff");
+    const msg: Record<string, string> = { rename: "已改名", password: "密码已重置，他之前的登录已失效", disable: "已停用，他之前的登录已失效", enable: "已启用", delete: "已删除" };
+    return { ok: msg[op] };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/* ---------- 员工自己：确认密码、登录密码 ---------- */
+
+async function me() {
+  const who = await requireAdmin({ staff: true });
+  if (who.role !== "staff") throw new Error("主管理员的确认密码在“设置 → 财务确认密码”里设置");
+  return getStaff(who.id)!;
+}
+
+export async function setMyPinAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  try {
+    const s = await me();
+    if (!verifyPassword(String(fd.get("password") ?? ""), s.pwHash)) return { error: (await getT())("登录密码不正确") };
+    const pin = str(fd.get("pin"), 4);
+    if (pin !== str(fd.get("pin2"), 4)) return { error: (await getT())("两次输入的确认密码不一样") };
+    setStaffPin(s.id, pin);
+    revalidatePath("/account");
+    return { ok: "确认密码已保存，确认充值时输入它" };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function changeMyPasswordAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  try {
+    const s = await me();
+    if (!verifyPassword(String(fd.get("old") ?? ""), s.pwHash)) return { error: (await getT())("原密码不正确") };
+    const pw = String(fd.get("password") ?? "");
+    if (pw !== String(fd.get("password2") ?? "")) return { error: (await getT())("两次输入的新密码不一样") };
+    setStaffPassword(s.id, pw);
+    return { ok: "密码已修改，请用新密码重新登录" };
+  } catch (e) {
+    return fail(e);
+  }
+}

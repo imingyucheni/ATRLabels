@@ -19,6 +19,8 @@ import PinField from "@/components/PinField";
 import StoresCard from "./StoresCard";
 import ApiCard from "./ApiCard";
 import SalesCard from "./SalesCard";
+import { currentAdmin } from "@/lib/auth";
+import { actorLabel } from "@/lib/actor";
 import { ledgerEntryAction, hideCredentialsAction, saveCustomerAction, saveCustomerChannelsAction, saveCustomerChannelMarkupAction, saveCustomerPortalAction, saveCustomerSenderAction, saveCustomerStampAction, setCustomerPasswordAction, setTestAccountAction } from "@/app/actions";
 
 const TABS = [
@@ -33,7 +35,10 @@ type Tab = (typeof TABS)[number][0];
 export default async function CustomerEdit({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string }> }) {
   const { id } = await params;
   const tabParam = (await searchParams).tab;
-  const tab: Tab = (TABS.find(([k]) => k === tabParam)?.[0] ?? "overview") as Tab;
+  // 员工（二级管理员）：只有概况（充值）、渠道与价格（设置邮费）、资料与登录（开户）三个页签
+  const staff = (await currentAdmin())?.role === "staff";
+  const tabs = TABS.filter(([k]) => !staff || ["overview", "pricing", "profile"].includes(k));
+  const tab: Tab = (tabs.find(([k]) => k === tabParam)?.[0] ?? "overview") as Tab;
   // 新客户只有资料表单；老客户按标签页分开显示，页面不再一长条
   const show = (k: Tab) => tab === k;
   const c = id === "new" ? null : getCustomer(Number(id));
@@ -58,7 +63,7 @@ export default async function CustomerEdit({ params, searchParams }: { params: P
         <h1 style={{ margin: 0 }}>{c ? t("编辑客户：{name}", { name: c.name }) : t("新增客户")}</h1>
         <div className="row">
           {/* 在当前标签页进入：OMS 里点“退出代操作”会直接回到后台，不会多出一个后台标签页 */}
-          {c && <a className="btn primary" href={`/api/customers/${c.id}/oms`}>{t("进入客户 OMS")}</a>}
+          {c && !staff && <a className="btn primary" href={`/api/customers/${c.id}/oms`}>{t("进入客户 OMS")}</a>}
           <Link href="/customers">{t("← 返回")}</Link>
         </div>
       </div>
@@ -68,7 +73,7 @@ export default async function CustomerEdit({ params, searchParams }: { params: P
       )}
       {c && (
         <nav className="tabs-bar" aria-label={t("客户详情")}>
-          {TABS.map(([k, label]) => (
+          {tabs.map(([k, label]) => (
             <Link key={k} href={`/customers/${c.id}?tab=${k}`} className={tab === k ? "on" : ""} aria-current={tab === k ? "page" : undefined}>
               {t(label)}
               {k === "overview" && <span className={`tab-note${c.balance < 0 ? " neg" : ""}`}>{money(c.balance)}</span>}
@@ -147,7 +152,7 @@ export default async function CustomerEdit({ params, searchParams }: { params: P
             </div>
           </FlashForm>}
 
-          {!c.internal && show("pricing") && <SalesCard customerId={c.id} />}
+          {!c.internal && !staff && show("pricing") && <SalesCard customerId={c.id} />}
 
           {!c.internal && show("pricing") && (() => {
             const open = customerChannels(c.id);
@@ -206,15 +211,16 @@ export default async function CustomerEdit({ params, searchParams }: { params: P
           })()}
 
           {show("overview") && <FlashForm action={ledgerEntryAction} submitLabel="确认" className="card" resetOnSuccess review confirm={t("给【{name}】入账：提交后立即计入客户余额（当前余额 {bal}）。请核对类型和金额。", { name: c.name, bal: money(c.balance) })}>
-              <h2>{t("充值 / 调账")}</h2>
+              <h2>{staff ? t("充值") : t("充值 / 调账")}</h2>
+              {staff && <p className="small muted" style={{ marginTop: -4 }}>{t("员工账号只能记充值；加款、扣款请找主管理员。确认人会记下你的名字。")}</p>}
               <input type="hidden" name="id" value={c.id} />
               <div className="grid" style={{ marginBottom: 12 }}>
                 <label className="f">{t("类型")}
                   <select name="type" defaultValue="" required>
                     <option value="" disabled>{t("请选择")}</option>
                     <option value="topup">{t("充值（客户付款到账）")}</option>
-                    <option value="manual_add">{t("加款（补偿、赠送等）")}</option>
-                    <option value="manual_sub">{t("扣款（从余额扣除）")}</option>
+                    {!staff && <option value="manual_add">{t("加款（补偿、赠送等）")}</option>}
+                    {!staff && <option value="manual_sub">{t("扣款（从余额扣除）")}</option>}
                   </select>
                 </label>
                 <label className="f"><span className="req">{t("金额（填正数）")}</span><input name="amount" type="number" step="0.01" min="0.01" required /></label>
@@ -230,7 +236,7 @@ export default async function CustomerEdit({ params, searchParams }: { params: P
                 <div className="grid" style={{ marginBottom: 12 }}>
                   <label className="f" style={{ gridColumn: "span 2" }}>{t("登录邮箱")}<input name="portalEmail" type="email" defaultValue={c.portalEmail ?? c.email ?? ""} /></label>
                   <label className="f">{t("信用额度")}
-                    <input name="creditLimit" type="number" step="0.01" min="0" defaultValue={c.creditLimit} />
+                    <input name="creditLimit" type="number" step="0.01" min="0" defaultValue={c.creditLimit} disabled={staff} title={staff ? t("信用额度只有主管理员能改") : undefined} />
                   </label>
                   <label className="f" style={{ justifyContent: "flex-end" }}>
                     <span><input type="checkbox" name="portalEnabled" defaultChecked={c.portalEnabled} /> {t("允许客户登录")}</span>
@@ -274,7 +280,7 @@ export default async function CustomerEdit({ params, searchParams }: { params: P
           {show("overview") && <div className="card table-wrap">
             <div className="row" style={{ justifyContent: "space-between" }}>
               <h2>{t("账户流水（最近 100 条）")}</h2>
-              <span><Link href={`/customers/${c.id}/charges`}>{t("按订单扣款明细")}</Link> · <Link href={`/customers/${c.id}/statement`}>{t("对账单")}</Link> · <Link href={`/shipments?customerId=${c.id}`}>{t("面单")}</Link></span>
+              <span><Link href={`/customers/${c.id}/charges`}>{t("按订单扣款明细")}</Link> · <Link href={`/customers/${c.id}/statement`}>{t("对账单")}</Link>{!staff && <> · <Link href={`/shipments?customerId=${c.id}`}>{t("面单")}</Link></>}</span>
             </div>
             <table>
               <thead><tr><th>{t("时间")}</th><th>{t("类型")}</th><th>{t("单号")}</th><th>{t("说明")}</th><th>{t("操作人")}</th><th className="num">{t("金额")}</th><th className="num">{t("余额")}</th></tr></thead>
@@ -283,9 +289,9 @@ export default async function CustomerEdit({ params, searchParams }: { params: P
                   <tr key={l.id}>
                     <td className="small muted">{fmtTime(l.createdAt)}</td>
                     <td>{t(LEDGER_TYPE_LABEL[l.type])}</td>
-                    <td>{l.shipmentId ? <Link href={`/shipments/${l.shipmentId}`}>{l.customNo}</Link> : "-"}</td>
+                    <td>{l.shipmentId ? staff ? l.customNo : <Link href={`/shipments/${l.shipmentId}`}>{l.customNo}</Link> : "-"}</td>
                     <td className="small">{note(l.note)}</td>
-                    <td className="small muted">{l.createdBy === "customer" ? t("客户") : l.createdBy === "system" ? t("系统") : t("后台")}</td>
+                    <td className="small muted">{t(actorLabel(l.createdBy))}</td>
                     <td className={`num ${l.amount >= 0 ? "profit-pos" : ""}`}>{l.amount >= 0 ? "+" : ""}{money(l.amount)}</td>
                     <td className="num">{money(l.balanceAfter)}</td>
                   </tr>

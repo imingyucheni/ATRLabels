@@ -1611,3 +1611,7 @@ table.list tr.on td { background: color-mix(in srgb, var(--series-1, #3b82f6) 5%
 .plain-list li:first-child { border-top: 0; }
 label.check { display: flex; align-items: center; gap: 6px; margin: 6px 0; font-weight: 400; }
 label.check input[type="radio"] { width: auto; }
+
+/* 员工账号 */
+.staff-ops details > summary { cursor: pointer; color: var(--accent); }
+.staff-op-box { display: grid; gap: 8px; padding: 10px 0 4px; }

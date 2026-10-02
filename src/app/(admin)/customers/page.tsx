@@ -8,12 +8,16 @@ import { handleResetRequestAction } from "@/app/actions";
 import { getT } from "@/lib/prefs";
 import { getTerms, lastAcceptance } from "@/lib/terms";
 import { salesNameByCustomer } from "@/lib/commission";
+import { currentAdmin } from "@/lib/auth";
 
 const show = (v: number | null | undefined, dflt: string, suffix = "") => (v === null || v === undefined ? <span className="muted">{dflt}</span> : `${v}${suffix}`);
 
-export default async function CustomersPage() {
+export default async function CustomersPage({ searchParams }: { searchParams: Promise<{ denied?: string }> }) {
+  const denied = (await searchParams).denied === "1";
   const customers = listCustomers();
-  const sales = salesNameByCustomer();
+  // 员工（二级管理员）看不到销售佣金、进不了客户 OMS、看不到面单记录（有成本）
+  const staff = (await currentAdmin())?.role === "staff";
+  const sales = staff ? new Map<number, string>() : salesNameByCustomer();
   const { markup } = getSettings();
   const resets = pendingResets();
   const t = await getT();
@@ -39,6 +43,7 @@ export default async function CustomersPage() {
           </table>
         </div>
       )}
+      {denied && <div className="alert warn">{t("这个功能只有主管理员能用。员工账号可以开客户账号、设置客户邮费、确认充值。")}</div>}
       <div className="row" style={{ justifyContent: "space-between", marginBottom: 16 }}>
         <h1 style={{ margin: 0 }}>{t("客户")}</h1>
         <Link className="btn primary" href="/customers/new">{t("＋ 新增客户")}</Link>
@@ -76,7 +81,7 @@ export default async function CustomersPage() {
                 <td className="num" data-label={t("信用额度")}>{c.creditLimit ? money(c.creditLimit) : "-"}</td>
                 <td className="hide-m">{show(c.markup.percent, t("默认"), "%")}</td><td className="hide-m">{show(c.markup.fixed, t("默认"))}</td><td className="hide-m">{show(c.markup.minProfit, t("默认"))}</td>
                 <td className="nowrap c-act c-links">
-                  <a href={`/api/customers/${c.id}/oms`}>{t("进入 OMS")}</a><i> · </i><Link href={`/customers/${c.id}`}>{t("管理")}</Link><i> · </i><Link href={`/shipments?customerId=${c.id}`}>{t("面单")}</Link><i> · </i><Link href={`/customers/${c.id}/charges`}>{t("扣款明细")}</Link><i> · </i><Link href={`/customers/${c.id}/statement`}>{t("对账单")}</Link>
+                  {!staff && <><a href={`/api/customers/${c.id}/oms`}>{t("进入 OMS")}</a><i> · </i></>}<Link href={`/customers/${c.id}`}>{t("管理")}</Link><i> · </i>{!staff && <><Link href={`/shipments?customerId=${c.id}`}>{t("面单")}</Link><i> · </i></>}<Link href={`/customers/${c.id}/charges`}>{t("扣款明细")}</Link><i> · </i><Link href={`/customers/${c.id}/statement`}>{t("对账单")}</Link>
                 </td>
               </tr>
             ))}

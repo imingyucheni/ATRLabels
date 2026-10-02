@@ -9,9 +9,12 @@ import { approveTopupAction, rejectTopupAction } from "@/app/actions";
 import PinField from "@/components/PinField";
 import { getLang } from "@/lib/prefs";
 import { makeT, translateMessage } from "@/lib/i18n";
+import { currentAdmin } from "@/lib/auth";
+import { actorLabel } from "@/lib/actor";
 
 export default async function FinancePage({ searchParams }: { searchParams: Promise<{ from?: string; to?: string; done?: string; id?: string }> }) {
   const sp = await searchParams;
+  const staff = (await currentAdmin())?.role === "staff";
   const lang = await getLang();
   const tr = makeT(lang);
   const note = (s: string | null) => (s ? s.split(" · ").map((x) => translateMessage(lang, x)).join(" · ") : s);
@@ -84,7 +87,7 @@ export default async function FinancePage({ searchParams }: { searchParams: Prom
           <>
             <h3>{tr("最近处理")}</h3>
             <table className="card-table">
-              <thead><tr><th>#</th><th>{tr("处理时间")}</th><th>{tr("客户")}</th><th>{tr("方式")}</th><th className="num">{tr("应收")}</th><th>{tr("状态")}</th><th className="num">{tr("入账（美元）")}</th><th>{tr("备注")}</th></tr></thead>
+              <thead><tr><th>#</th><th>{tr("处理时间")}</th><th>{tr("客户")}</th><th>{tr("方式")}</th><th className="num">{tr("应收")}</th><th>{tr("状态")}</th><th className="num">{tr("入账（美元）")}</th><th>{tr("确认人")}</th><th>{tr("备注")}</th></tr></thead>
               <tbody>
                 {handled.map((t) => (
                   <tr key={t.id}>
@@ -95,6 +98,7 @@ export default async function FinancePage({ searchParams }: { searchParams: Prom
                     <td className="num" data-label={tr("应收")}>{t.payCurrency === "CNY" ? `¥${t.payAmount.toFixed(2)}` : `$${t.payAmount.toFixed(2)}`}</td>
                     <td data-label={tr("状态")}>{tr(TOPUP_STATUS_LABEL[t.status])}</td>
                     <td className="num" data-label={tr("入账（美元）")}>{t.creditedUsd !== null ? money(t.creditedUsd) : "-"}</td>
+                    <td className="small" data-label={tr("确认人")}><b>{t.handledBy ? tr(actorLabel(t.handledBy)) : "-"}</b></td>
                     <td className="small" data-label={tr("备注")}>{t.adminNote || "-"}{t.hasProof && <> <a href={`/api/topup/${t.id}/proof`} target="_blank">{tr("凭证")}</a></>}</td>
                   </tr>
                 ))}
@@ -126,7 +130,7 @@ export default async function FinancePage({ searchParams }: { searchParams: Prom
         <label className="f">{tr("开始日期")}<input type="date" name="from" defaultValue={sp.from} /></label>
         <label className="f">{tr("结束日期")}<input type="date" name="to" defaultValue={sp.to} /></label>
         <button className="primary">{tr("筛选流水")}</button>
-        <a className="btn" href={`/api/ledger?${qs}`}>{tr("导出流水 CSV")}</a>
+        {!staff && <a className="btn" href={`/api/ledger?${qs}`}>{tr("导出流水 CSV")}</a>}
       </form>
       <div className="stats">
         {Object.entries(byType).map(([t, v]) => (
@@ -136,7 +140,7 @@ export default async function FinancePage({ searchParams }: { searchParams: Prom
       <div className="card table-wrap">
         <h2>{tr("全部流水（最近 300 条）")}</h2>
         <table className="card-table">
-          <thead><tr><th>{tr("时间")}</th><th>{tr("客户")}</th><th>{tr("类型")}</th><th>{tr("单号")}</th><th>{tr("说明")}</th><th className="num">{tr("金额")}</th></tr></thead>
+          <thead><tr><th>{tr("时间")}</th><th>{tr("客户")}</th><th>{tr("类型")}</th><th>{tr("单号")}</th><th>{tr("说明")}</th><th>{tr("操作人")}</th><th className="num">{tr("金额")}</th></tr></thead>
           <tbody>
             {ledger.map((l) => (
               <tr key={l.id}>
@@ -145,10 +149,11 @@ export default async function FinancePage({ searchParams }: { searchParams: Prom
                 <td data-label={tr("类型")}>{tr(LEDGER_TYPE_LABEL[l.type])}</td>
                 <td data-label={tr("单号")}>{l.shipmentId ? <Link href={`/shipments/${l.shipmentId}`}>{l.customNo}</Link> : "-"}</td>
                 <td className="small" data-label={tr("说明")}>{note(l.note) || "-"}</td>
+                <td className="small muted" data-label={tr("操作人")}>{tr(actorLabel(l.createdBy))}</td>
                 <td className={`num ${l.amount >= 0 ? "profit-pos" : ""}`} data-label={tr("金额")}>{money(l.amount)}</td>
               </tr>
             ))}
-            {!ledger.length && <tr><td colSpan={6} className="muted">{tr("没有流水")}</td></tr>}
+            {!ledger.length && <tr><td colSpan={7} className="muted">{tr("没有流水")}</td></tr>}
           </tbody>
         </table>
       </div>
