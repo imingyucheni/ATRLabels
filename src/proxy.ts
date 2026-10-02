@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { ADMIN_COOKIE, staffCanOpen, verifySession } from "@/lib/adminSession";
+import { ADMIN_COOKIE, customerAccess, customerIdInPath, staffCanOpen, verifySession } from "@/lib/adminSession";
 
 /**
  * 后台页面必须先登录：在这里拦，不能只靠 (admin)/layout 里的 requireAdmin。
@@ -26,6 +26,9 @@ function guardAdmin(req: NextRequest): NextResponse | null {
   const w = who(req);
   if (!w) return NextResponse.redirect(loginUrl(req));
   if (w.role === "staff" && !staffCanOpen(path)) return NextResponse.redirect(siteUrl(req, "/customers"));
+  // 员工打开没授权给他的客户（详情、对账单、扣款明细…）：跳回客户列表
+  const cid = w.role === "staff" ? customerIdInPath(path) : null;
+  if (cid && !customerAccess(w, cid)) return NextResponse.redirect(siteUrl(req, "/customers?denied=customer"));
   return null;
 }
 
@@ -54,8 +57,9 @@ function siteUrl(req: NextRequest, to: string): URL {
     /* 主机名不合法就用 Next 解析的地址 */
   }
   const u = req.nextUrl.clone();
-  u.pathname = to;
-  u.search = "";
+  const target = new URL(to, "http://x"); // to 可能带查询参数（/customers?denied=…）
+  u.pathname = target.pathname;
+  u.search = target.search;
   return u;
 }
 

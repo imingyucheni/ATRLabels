@@ -10,24 +10,30 @@ import PinField from "@/components/PinField";
 import { getLang } from "@/lib/prefs";
 import { makeT, translateMessage } from "@/lib/i18n";
 import { currentAdmin } from "@/lib/auth";
+import { customerAccess, customerFilter } from "@/lib/adminSession";
 import { actorLabel } from "@/lib/actor";
 
 export default async function FinancePage({ searchParams }: { searchParams: Promise<{ from?: string; to?: string; done?: string; id?: string }> }) {
   const sp = await searchParams;
-  const staff = (await currentAdmin())?.role === "staff";
+  const who = await currentAdmin();
+  const staff = who?.role === "staff";
+  // 员工只看得到授权给他的客户
+  const canSee = customerFilter(who);
+  const mine = canSee;
   const lang = await getLang();
   const tr = makeT(lang);
   const note = (s: string | null) => (s ? s.split(" · ").map((x) => translateMessage(lang, x)).join(" · ") : s);
-  const customers = listCustomers();
-  const ledger = listLedger({ from: sp.from, to: sp.to, limit: 300 });
+  const customers = listCustomers().filter((c) => mine(c.id));
+  const ledger = listLedger({ from: sp.from, to: sp.to, limit: 300 }).filter((l) => mine(l.customerId));
   const prepaid = customers.reduce((a, c) => a + Math.max(0, c.balance), 0);
   const owed = customers.reduce((a, c) => a + Math.min(0, c.balance), 0);
   const byType = ledger.reduce<Record<string, number>>((m, l) => ((m[l.type] = (m[l.type] ?? 0) + l.amount), m), {});
-  const pending = listTopups({ status: "pending" });
-  const handled = listTopups({ limit: 30 }).filter((t) => t.status !== "pending");
+  const pending = listTopups({ status: "pending" }).filter((t) => mine(t.customerId));
+  const handled = listTopups({ limit: 30 }).filter((t) => t.status !== "pending" && mine(t.customerId));
   const qs = new URLSearchParams(Object.entries({ from: sp.from, to: sp.to }).filter(([, v]) => v) as [string, string][]).toString();
   // 审核充值后跳回这里（?done=approved|rejected&id=N），在页面上显示处理结果
-  const done = sp.done === "approved" || sp.done === "rejected" ? getTopup(Number(sp.id)) : null;
+  const doneRaw = sp.done === "approved" || sp.done === "rejected" ? getTopup(Number(sp.id)) : null;
+  const done = doneRaw && mine(doneRaw.customerId) ? doneRaw : null;
 
   return (
     <>
@@ -61,6 +67,7 @@ export default async function FinancePage({ searchParams }: { searchParams: Prom
                   <td className="small" data-label={tr("参考号 / 备注")}>{t.reference || "-"}{t.note && <div className="muted">{t.note}</div>}</td>
                   <td data-label={tr("凭证")}>{t.hasProof ? <a href={`/api/topup/${t.id}/proof`} target="_blank">{tr("查看")}</a> : <span className="muted small">{tr("无")}</span>}</td>
                   <td className="c-review" style={{ minWidth: 300 }}>
+                    {customerAccess(who, t.customerId) !== "edit" ? <span className="small muted">{tr("只读：这个客户你只有查看权限，请找主管理员确认")}</span> : <>
                     <div className="review-box">
                       <FlashForm action={approveTopupAction} submitLabel="确认到账" submitClass="primary small" confirm="确认已收到这笔款项并入账？">
                         <input type="hidden" name="id" value={t.id} />
@@ -77,6 +84,7 @@ export default async function FinancePage({ searchParams }: { searchParams: Prom
                         <label className="f" style={{ marginBottom: 6 }}>{tr("不通过原因（客户可见）")}<input name="adminNote" maxLength={200} required /></label>
                       </FlashForm>
                     </div>
+                    </>}
                   </td>
                 </tr>
               ))}

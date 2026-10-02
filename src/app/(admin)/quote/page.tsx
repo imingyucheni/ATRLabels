@@ -3,11 +3,14 @@ import { customerChannels, getSettings, listChannels, listCustomers } from "@/li
 import ShipForm from "@/components/ShipForm";
 import { getT } from "@/lib/prefs";
 import { currentAdmin } from "@/lib/auth";
+import { customerFilter } from "@/lib/adminSession";
 
 /** 运费试算（销售用，不出单）：给新客户报价、比较渠道、测试加价幅度 */
 export default async function QuotePage({ searchParams }: { searchParams: Promise<{ customerId?: string }> }) {
   const { customerId } = await searchParams;
-  const customers = listCustomers();
+  // 员工只能选授权给他的客户
+  const canSee = customerFilter(await currentAdmin());
+  const customers = listCustomers().filter((c) => canSee(c.id));
   const s = getSettings();
   const hasChannels = listChannels(true).length > 0;
   const t = await getT();

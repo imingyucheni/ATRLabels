@@ -97,4 +97,34 @@ describe("员工账号（二级管理员）", () => {
     expect(actor.actorLabel("admin")).toBe("主管理员");
     expect(actor.actorLabel("customer")).toBe("客户");
   });
+
+  it("客户权限：新员工默认看不到；指定客户只能看 / 能操作；全部客户模式可以单独排除；自己新建的客户自动能操作", async () => {
+    const auth = await import("@/lib/auth");
+    const id = st.createStaff({ name: "Bob", username: "bob", password: "bob-pass-1" });
+    const who = { role: "staff" as const, id, name: "Bob", username: "bob" };
+    const see = () => [1, 2, 3, 4].filter(ses.customerFilter(who));
+    expect(see()).toEqual([]);
+    expect(auth.customerDenied(who, 1, "view")).toMatch(/没有这个客户的权限/);
+    st.setStaffAccess(id, { mode: "list", customers: { "1": "view", "2": "edit", "3": "none" } });
+    expect(see()).toEqual([1, 2]);
+    expect(auth.customerDenied(who, 1, "view")).toBeNull();
+    expect(auth.customerDenied(who, 1, "edit")).toMatch(/只有查看权限/);
+    expect(auth.customerDenied(who, 2, "edit")).toBeNull();
+    expect(st.getStaff(id)!.access).toEqual({ mode: "list", customers: { "1": "view", "2": "edit" } }); // none 不用存
+    st.setStaffAccess(id, { mode: "all", customers: { "1": "edit", "3": "none", "4": "view" } });
+    expect(see()).toEqual([1, 2, 4]);
+    expect(ses.customerAccess(who, 4)).toBe("view");
+    expect(ses.customerAccess(who, 99)).toBe("edit"); // 以后新增的客户默认能操作
+    // 员工新建客户：全部客户模式下去掉排除；指定客户模式下加进名单
+    st.grantCustomer(id, 3);
+    expect(ses.customerAccess(who, 3)).toBe("edit");
+    st.setStaffAccess(id, { mode: "list", customers: {} });
+    st.grantCustomer(id, 7);
+    expect(see()).toEqual([]);
+    expect(ses.customerAccess(who, 7)).toBe("edit");
+    // 主管理员不受限
+    expect(ses.customerAccess({ role: "owner", id: 0, name: "主管理员" }, 7)).toBe("edit");
+    // 第一版建的账号（没有 access 字段）= 全部客户
+    expect(st.customerLevel({}, 5)).toBe("edit");
+  });
 });

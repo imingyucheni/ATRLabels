@@ -5,7 +5,7 @@ import { requireAdmin } from "@/lib/auth";
 import { verifyPassword } from "@/lib/password";
 import { getT } from "@/lib/prefs";
 import { str } from "@/lib/sanitize";
-import { createStaff, deleteStaff, getStaff, renameStaff, setStaffActive, setStaffPassword, setStaffPin } from "@/lib/staffStore";
+import { accessOf, createStaff, deleteStaff, getStaff, listStaff, renameStaff, setStaffAccess, setStaffActive, setStaffPassword, setStaffPin } from "@/lib/staffStore";
 import type { FlashState } from "@/app/actions";
 
 const fail = async (e: unknown): Promise<FlashState> => ({ error: (await getT())((e as Error).message) });
@@ -72,6 +72,53 @@ export async function changeMyPasswordAction(_: FlashState, fd: FormData): Promi
     if (pw !== String(fd.get("password2") ?? "")) return { error: (await getT())("两次输入的新密码不一样") };
     setStaffPassword(s.id, pw);
     return { ok: "密码已修改，请用新密码重新登录" };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/* ---------- 主管理员设置员工的客户权限 ---------- */
+
+const LEVELS = ["none", "view", "edit"] as const;
+type Lv = (typeof LEVELS)[number];
+const lv = (v: FormDataEntryValue | null): Lv | null => (LEVELS.includes(String(v) as Lv) ? (String(v) as Lv) : null);
+
+/** 员工详情页：模式（全部客户 / 指定客户）+ 每个客户的权限 */
+export async function setStaffAccessAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  await requireAdmin();
+  const id = Number(fd.get("id"));
+  try {
+    const mode = fd.get("mode") === "all" ? "all" : "list";
+    const customers: Record<string, Lv> = {};
+    for (const [k, v] of fd.entries()) {
+      const m = k.match(/^c\.(\d+)$/);
+      const level = lv(v);
+      if (m && level) customers[m[1]] = level;
+    }
+    setStaffAccess(id, { mode, customers });
+    revalidatePath(`/staff/${id}`);
+    revalidatePath("/staff");
+    return { ok: "已保存客户权限" };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/** 客户详情页：这个客户哪些员工能看 / 能操作 */
+export async function setCustomerStaffAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  await requireAdmin();
+  const customerId = Number(fd.get("customerId"));
+  try {
+    for (const s of listStaff()) {
+      const level = lv(fd.get(`s.${s.id}`));
+      if (!level) continue;
+      const full = getStaff(s.id)!;
+      const a = accessOf(full);
+      setStaffAccess(s.id, { mode: a.mode, customers: { ...a.customers, [String(customerId)]: level } });
+    }
+    revalidatePath(`/customers/${customerId}`);
+    revalidatePath("/staff");
+    return { ok: "已保存员工权限" };
   } catch (e) {
     return fail(e);
   }

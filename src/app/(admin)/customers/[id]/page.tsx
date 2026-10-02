@@ -19,7 +19,9 @@ import PinField from "@/components/PinField";
 import StoresCard from "./StoresCard";
 import ApiCard from "./ApiCard";
 import SalesCard from "./SalesCard";
+import StaffAccessCard from "./StaffAccessCard";
 import { currentAdmin } from "@/lib/auth";
+import { customerAccess } from "@/lib/adminSession";
 import { actorLabel } from "@/lib/actor";
 import { ledgerEntryAction, hideCredentialsAction, saveCustomerAction, saveCustomerChannelsAction, saveCustomerChannelMarkupAction, saveCustomerPortalAction, saveCustomerSenderAction, saveCustomerStampAction, setCustomerPasswordAction, setTestAccountAction } from "@/app/actions";
 
@@ -36,13 +38,16 @@ export default async function CustomerEdit({ params, searchParams }: { params: P
   const { id } = await params;
   const tabParam = (await searchParams).tab;
   // 员工（二级管理员）：只有概况（充值）、渠道与价格（设置邮费）、资料与登录（开户）三个页签
-  const staff = (await currentAdmin())?.role === "staff";
+  const who = await currentAdmin();
+  const staff = who?.role === "staff";
   const tabs = TABS.filter(([k]) => !staff || ["overview", "pricing", "profile"].includes(k));
   const tab: Tab = (tabs.find(([k]) => k === tabParam)?.[0] ?? "overview") as Tab;
   // 新客户只有资料表单；老客户按标签页分开显示，页面不再一长条
   const show = (k: Tab) => tab === k;
   const c = id === "new" ? null : getCustomer(Number(id));
   if (id !== "new" && !c) notFound();
+  // 员工：没授权的客户 proxy 已经拦了；只读权限时页面上的表单全部禁用（服务端也会拒绝）
+  const ro = !!c && staff && customerAccess(who, c.id) === "view";
   const { markup } = getSettings();
   const h = await headers();
   const creds = c ? pendingCredentials(c.id) : null;
@@ -67,7 +72,7 @@ export default async function CustomerEdit({ params, searchParams }: { params: P
           <Link href="/customers">{t("← 返回")}</Link>
         </div>
       </div>
-      {c && creds && (
+      {c && creds && !ro && (
         <CredentialsCard brand={getSettings().brandName} name={c.name} url={omsLogin} email={creds.email} password={creds.password}
           onHide={hideCredentialsAction.bind(null, c.id)} noChannels={!usable} />
       )}
@@ -82,6 +87,8 @@ export default async function CustomerEdit({ params, searchParams }: { params: P
           ))}
         </nav>
       )}
+      {ro && <div className="alert warn">{t("这个客户你只有查看权限，不能修改、设置邮费或充值。需要操作请找主管理员授权。")}</div>}
+      <fieldset className="ro-wrap" disabled={ro}>
       {(!c || show("profile")) && <FlashForm action={saveCustomerAction} submitLabel={c ? "保存" : "创建客户并生成登录信息"} className="card" review={!!c}>
         <input type="hidden" name="id" value={c?.id ?? ""} />
         <div className="grid">
@@ -267,6 +274,8 @@ export default async function CustomerEdit({ params, searchParams }: { params: P
             </div>
           </FlashForm>}
 
+          {show("profile") && !staff && !c.internal && <StaffAccessCard customerId={c.id} />}
+
           {show("profile") && <FlashForm action={saveCustomerSenderAction} submitLabel="保存寄件地址" className="card" review>
             <h2>{t("客户默认寄件地址")}</h2>
             <p className="small muted">{t("客户下单时默认使用这个地址；客户也可以在客户端的寄件地址簿里自己添加和修改。")}</p>
@@ -302,6 +311,7 @@ export default async function CustomerEdit({ params, searchParams }: { params: P
           </div>}
         </>
       )}
+      </fieldset>
     </>
   );
 }

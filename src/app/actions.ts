@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { checkPassword, checkRateLimit, clearFailures, clientIp, createSession, destroySession, hashPassword, recordFailure, requireAdmin } from "@/lib/auth";
+import { checkPassword, checkRateLimit, clearFailures, clientIp, createSession, customerDenied, destroySession, hashPassword, recordFailure, requireAdmin } from "@/lib/auth";
 import { randomBytes } from "node:crypto";
 import { headers } from "next/headers";
 import {
@@ -66,7 +66,7 @@ import { getTerms, saveTerms } from "@/lib/terms";
 import { sendMail } from "@/lib/mailer";
 import { checkConfirmPin, checkFinancePin, setFinancePin } from "@/lib/financePin";
 import { actorOf } from "@/lib/actor";
-import { staffLogin } from "@/lib/staffStore";
+import { grantCustomer, staffLogin } from "@/lib/staffStore";
 import { testAddressService } from "@/lib/addressCheck";
 import { listSenders, saveSender } from "@/lib/senders";
 import { clearCredentials, readablePassword, rememberCredentials } from "@/lib/credentials";
@@ -75,9 +75,9 @@ import { addLedger, balanceOf, postAdjustment } from "@/lib/ledger";
 import { getT } from "@/lib/prefs";
 import { isUsZip } from "@/lib/geo";
 import { saveChannelSample } from "@/lib/labels";
-import { approveTopup, rejectTopup, saveQr, deleteQr } from "@/lib/topup";
+import { approveTopup, getTopup, rejectTopup, saveQr, deleteQr } from "@/lib/topup";
 import { usdCnyQuote } from "@/lib/fx";
-import { adminResetFromRequest } from "@/lib/passwordReset";
+import { adminResetFromRequest, resetRequestCustomer } from "@/lib/passwordReset";
 import type { Address, ShipmentRequest } from "@/lib/shipbest/types";
 import { cleanAddress, cleanRequest, n, optNum, str, unit } from "@/lib/sanitize";
 import type { StampConfig, StampOverride, StampSettings } from "@/lib/stampConfig";
@@ -132,6 +132,7 @@ export async function quoteAction(
   markup?: PartialRule,
 ): Promise<{ errors?: string[]; quotes?: ChannelQuote[] }> {
   const who = await requireAdmin({ staff: true });
+  if (customerId && customerDenied(who, customerId, "view")) return { errors: [customerDenied(who, customerId, "view")!] };
   // 运费试算只需要地址和包裹：不检查商品明细，缺的用样品补上（出单时仍然严格校验）
   const req = withQuoteSkus(cleanRequest(raw));
   const errors = validateRequest(req, { forQuote: true });
@@ -345,11 +346,13 @@ export async function setTestAccountAction(_: FlashState, fd: FormData): Promise
 }
 
 export async function saveCustomerAction(_: FlashState, fd: FormData): Promise<FlashState> {
-  await requireAdmin({ staff: true });
+  const who = await requireAdmin({ staff: true });
   const name = str(fd.get("name"));
   if (!name) return { error: "客户名称必填" };
   const idRaw = Number(fd.get("id"));
   const isNew = !(idRaw > 0);
+  const denied = isNew ? null : customerDenied(who, idRaw);
+  if (denied) return { error: denied };
   const email = str(fd.get("email"), 100).toLowerCase() || null;
   if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return { error: "邮箱格式不正确" };
   // 新客户：邮箱就是 OMS 登录账号，保存时直接开通登录并生成初始密码
@@ -373,6 +376,8 @@ export async function saveCustomerAction(_: FlashState, fd: FormData): Promise<F
   });
   logMarkupChange({ scope: "customer", customerId: savedId, label: name, before: beforeMarkup, after: ruleFromForm(fd) });
   revalidatePath("/customers");
+  // 员工新建的客户：自动加进他的名单（能操作），不然建完自己就看不到了
+  if (isNew && who.role === "staff") grantCustomer(who.id, savedId);
   if (isNew) {
     if (email) {
       updateCustomerPortal(savedId, { email, enabled: true, creditLimit: 0 });
@@ -387,7 +392,8 @@ export async function saveCustomerAction(_: FlashState, fd: FormData): Promise<F
 }
 
 export async function hideCredentialsAction(id: number) {
-  await requireAdmin({ staff: true });
+  const who = await requireAdmin({ staff: true });
+  if (customerDenied(who, id)) return;
   clearCredentials(id);
   revalidatePath(`/customers/${id}`);
 }
@@ -395,6 +401,8 @@ export async function hideCredentialsAction(id: number) {
 export async function saveCustomerPortalAction(_: FlashState, fd: FormData): Promise<FlashState> {
   const who = await requireAdmin({ staff: true });
   const id = Number(fd.get("id"));
+  const denied = customerDenied(who, id);
+  if (denied) return { error: denied };
   const email = str(fd.get("portalEmail"), 100).toLowerCase() || null;
   const enabled = fd.get("portalEnabled") === "on";
   if (enabled && !email) return { error: "开通登录需要填写登录邮箱" };
@@ -411,8 +419,10 @@ export async function saveCustomerPortalAction(_: FlashState, fd: FormData): Pro
 }
 
 export async function setCustomerPasswordAction(_: FlashState, fd: FormData): Promise<FlashState> {
-  await requireAdmin({ staff: true });
+  const who = await requireAdmin({ staff: true });
   const id = Number(fd.get("id"));
+  const denied = customerDenied(who, id);
+  if (denied) return { error: denied };
   const c = getCustomer(id);
   if (!c) return { error: "客户不存在" };
   // 还没填登录邮箱时用客户资料里的邮箱；生成密码时顺便开通登录
@@ -436,8 +446,10 @@ export async function setCustomerPasswordAction(_: FlashState, fd: FormData): Pr
 }
 
 export async function saveCustomerSenderAction(_: FlashState, fd: FormData): Promise<FlashState> {
-  await requireAdmin({ staff: true });
+  const who = await requireAdmin({ staff: true });
   const id = Number(fd.get("id"));
+  const denied = customerDenied(who, id);
+  if (denied) return { error: denied };
   const sender = cleanAddress(Object.fromEntries([...fd.entries()].filter(([k]) => k.startsWith("sender.")).map(([k, v]) => [k.slice(7), v])) as Partial<Address>);
   // 国家下拉框默认就有值，不算“填了”；其余全部留空 = 清除，改用系统默认寄件地址
   const filled = (Object.keys(sender) as (keyof Address)[]).some((k) => k !== "country" && !!sender[k]);
@@ -473,6 +485,8 @@ export async function ledgerEntryAction(_: FlashState, fd: FormData): Promise<Fl
   if (!["topup", "manual_add", "manual_sub", "manual"].includes(kind)) return { error: "请选择类型" };
   // 员工只能记“充值”；加款、扣款只有主管理员能做
   if (who.role === "staff" && kind !== "topup") return { error: "员工账号只能记充值，加款 / 扣款请找主管理员" };
+  const denied = customerDenied(who, id);
+  if (denied) return { error: denied };
   const type = kind === "topup" ? "topup" : "manual";
   const raw = optNum(fd.get("amount"));
   if (!raw) return { error: fd.get("amount") ? "金额不能为 0" : "请填写金额" };
@@ -887,8 +901,10 @@ export async function saveCustomerStampAction(_: FlashState, fd: FormData): Prom
 }
 
 export async function saveCustomerChannelsAction(_: FlashState, fd: FormData): Promise<FlashState> {
-  await requireAdmin({ staff: true });
+  const who = await requireAdmin({ staff: true });
   const id = Number(fd.get("id"));
+  const denied = customerDenied(who, id);
+  if (denied) return { error: denied };
   if (!getCustomer(id)) return { error: "客户不存在" };
   const codes = fd.getAll("channels").map((v) => str(v, 50)).filter(Boolean);
   // 同一个客户不能开通两个客户看起来一样的渠道（例如两家服务商的 USPS）：客户分不清，只能选一个
@@ -901,8 +917,10 @@ export async function saveCustomerChannelsAction(_: FlashState, fd: FormData): P
 }
 
 export async function saveCustomerChannelMarkupAction(_: FlashState, fd: FormData): Promise<FlashState> {
-  await requireAdmin({ staff: true });
+  const who = await requireAdmin({ staff: true });
   const id = Number(fd.get("id"));
+  const denied = customerDenied(who, id);
+  if (denied) return { error: denied };
   if (!getCustomer(id)) return { error: "客户不存在" };
   const rules: Record<string, PartialRule> = {};
   for (const c of customerChannels(id)) {
@@ -949,6 +967,8 @@ export async function approveTopupAction(_: FlashState, fd: FormData): Promise<F
   let id = 0;
   try {
     id = Number(fd.get("id"));
+    const denied = customerDenied(who, getTopup(id)?.customerId ?? 0);
+    if (denied) return { error: denied };
     approveTopup(id, n(fd.get("creditedUsd")), str(fd.get("adminNote"), 200) || null, actorOf(who));
     revalidatePath("/finance");
   } catch (e) {
@@ -963,6 +983,8 @@ export async function rejectTopupAction(_: FlashState, fd: FormData): Promise<Fl
   let id = 0;
   try {
     id = Number(fd.get("id"));
+    const denied = customerDenied(who, getTopup(id)?.customerId ?? 0);
+    if (denied) return { error: denied };
     rejectTopup(id, str(fd.get("adminNote"), 200), actorOf(who));
     revalidatePath("/finance");
   } catch (e) {
@@ -1017,7 +1039,10 @@ export async function refreshFxAction(_: FlashState): Promise<FlashState> {
 }
 
 export async function handleResetRequestAction(_: FlashState, fd: FormData): Promise<FlashState> {
-  await requireAdmin({ staff: true });
+  const who = await requireAdmin({ staff: true });
+  const owner = resetRequestCustomer(Number(fd.get("id")));
+  const denied = owner ? customerDenied(who, owner) : null;
+  if (denied) return { error: denied };
   try {
     const r = adminResetFromRequest(Number(fd.get("id")));
     revalidatePath("/customers");

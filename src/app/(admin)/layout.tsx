@@ -1,4 +1,6 @@
 import { requireAdmin } from "@/lib/auth";
+import { customerFilter } from "@/lib/adminSession";
+import { listTopups } from "@/lib/topup";
 import { isSandboxSite, shipbestMode } from "@/lib/shipbest/client";
 import { siteSwitch } from "@/lib/sites";
 import { currentEnv } from "@/lib/db";
@@ -33,8 +35,10 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   // 员工（二级管理员）也能进后台，但只能开部分页面（proxy 里拦），菜单也只显示这些
   const who = await requireAdmin({ staff: true });
   const staff = who.role === "staff";
-  const pendingTopups = pendingTopupCount();
-  const resets = pendingResets().length;
+  // 员工的待办数字只算授权给他的客户
+  const canSee = customerFilter(who);
+  const pendingTopups = who.role === "staff" ? listTopups({ status: "pending" }).filter((t) => canSee(t.customerId)).length : pendingTopupCount();
+  const resets = pendingResets().filter((r) => canSee(r.customer_id)).length;
   const leads = newLeadCount();
   const t = await getT();
   return (

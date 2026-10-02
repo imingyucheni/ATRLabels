@@ -1,5 +1,6 @@
 import { fmtTime, TZ_LABEL } from "@/lib/time";
 import { currentAdmin, currentCustomerId } from "@/lib/auth";
+import { customerAccess } from "@/lib/adminSession";
 import { csvResponse } from "@/lib/csv";
 import { getCustomer, STATUS_LABEL, type ShipmentStatus } from "@/lib/db";
 import { listOrderCharges } from "@/lib/ledger";
@@ -15,11 +16,12 @@ export async function GET(req: Request) {
   const en = (await getLang()) === "en";
   const p = new URL(req.url).searchParams;
   let customerId = Number(p.get("customerId"));
-  if (!(await currentAdmin())) {
+  const who = await currentAdmin();
+  if (!who) {
     const own = await currentCustomerId();
     if (!own) return new Response("Unauthorized", { status: 401 });
     customerId = own;
-  }
+  } else if (!customerAccess(who, customerId)) return new Response("Not found", { status: 404 }); // 员工没有这个客户的权限
   const c = getCustomer(customerId);
   if (!c) return new Response("Not found", { status: 404 });
   const from = p.get("from") || undefined;

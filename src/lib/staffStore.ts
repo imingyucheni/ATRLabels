@@ -12,6 +12,19 @@ import path from "node:path";
 import { randomBytes } from "node:crypto";
 import { hashPassword, verifyPassword } from "./password";
 
+/**
+ * 员工能看哪些客户、能不能操作：
+ * - all：全部客户（包括以后新增的）都能看能操作，customers 里可以单独把某些客户设成 view（只能看）或 none（看不到）
+ * - list：只能看列出来的客户，customers 里每个客户 view（只能看）或 edit（能看也能操作：改资料、设置邮费、确认充值）
+ * 员工自己新建的客户自动加进他的名单（能操作）。
+ */
+export type AccessLevel = "view" | "edit";
+export type AccessSetting = AccessLevel | "none";
+export interface StaffAccess {
+  mode: "all" | "list";
+  customers: Record<string, AccessSetting>;
+}
+
 export interface StaffAccount {
   id: number;
   name: string;
@@ -22,6 +35,8 @@ export interface StaffAccount {
   ver: string;
   createdAt: string;
   lastLoginAt: string | null;
+  /** 没有这个字段的（第一版建的账号）= 全部客户 */
+  access?: StaffAccess;
 }
 
 /** 页面上用的（不带哈希） */
@@ -95,7 +110,8 @@ export function createStaff(input: { name: string; username: string; password: s
   if (list.some((s) => s.username === username)) throw new Error("这个登录名已经有人用了");
   checkPassword(input.password);
   const id = Math.max(0, ...list.map((s) => s.id)) + 1;
-  save([...list, { id, name, username, pwHash: hashPassword(input.password), pinHash: null, active: true, ver: newVer(), createdAt: now(), lastLoginAt: null }]);
+  // 新员工默认一个客户都看不到，由主管理员授权
+  save([...list, { id, name, username, pwHash: hashPassword(input.password), pinHash: null, active: true, ver: newVer(), createdAt: now(), lastLoginAt: null, access: { mode: "list", customers: {} } }]);
   return id;
 }
 
@@ -150,4 +166,43 @@ export function staffLogin(username: string, password: string): StaffAccount | n
   if (!s || !ok || !s.active) return null;
   update(s.id, (x) => ({ ...x, lastLoginAt: now() }));
   return getStaff(s.id);
+}
+
+/* ---------------- 客户权限 ---------------- */
+
+export function accessOf(s: Pick<StaffAccount, "access"> | null | undefined): StaffAccess {
+  return s?.access ?? { mode: "all", customers: {} };
+}
+
+/** 员工对某个客户的权限：null = 看不到 */
+export function customerLevel(s: Pick<StaffAccount, "access"> | null | undefined, customerId: number): AccessLevel | null {
+  if (!s) return null;
+  const a = accessOf(s);
+  const v = a.customers[String(customerId)];
+  if (a.mode === "all") return v === "none" ? null : v === "view" ? "view" : "edit";
+  return v === "view" || v === "edit" ? v : null;
+}
+
+export function setStaffAccess(id: number, access: StaffAccess) {
+  const mode = access.mode === "all" ? "all" : "list";
+  // 只存跟默认不一样的：全部客户模式下默认能操作（只记 view / none），指定客户模式下默认看不到（只记 view / edit）
+  const customers: Record<string, AccessSetting> = {};
+  for (const [k, v] of Object.entries(access.customers ?? {})) {
+    if (!(Number(k) > 0)) continue;
+    if (mode === "all" ? v === "view" || v === "none" : v === "view" || v === "edit") customers[String(Number(k))] = v;
+  }
+  update(id, (s) => ({ ...s, access: { mode, customers } }));
+}
+
+/** 员工新建客户后：自动加进他的名单（能操作） */
+export function grantCustomer(id: number, customerId: number, level: AccessLevel = "edit") {
+  const s = getStaff(id);
+  if (!s) return;
+  const a = accessOf(s);
+  if (a.mode === "all") {
+    const rest = { ...a.customers };
+    delete rest[String(customerId)];
+    return setStaffAccess(id, { mode: "all", customers: rest });
+  }
+  setStaffAccess(id, { mode: "list", customers: { ...a.customers, [String(customerId)]: level } });
 }

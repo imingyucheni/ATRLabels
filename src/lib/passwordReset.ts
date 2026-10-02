@@ -68,6 +68,12 @@ export function pendingResets() {
 }
 
 /** 后台一键重置：生成新密码并标记申请已处理 */
+/** 重置密码申请是哪个客户的（权限检查用） */
+export function resetRequestCustomer(requestId: number): number | null {
+  const r = db().prepare("SELECT customer_id FROM password_resets WHERE id = ?").get(requestId) as { customer_id: number } | undefined;
+  return r?.customer_id ?? null;
+}
+
 export function adminResetFromRequest(requestId: number): { customerName: string; password: string } {
   const r = db().prepare("SELECT customer_id FROM password_resets WHERE id = ?").get(requestId) as { customer_id: number } | undefined;
   if (!r) throw new Error("申请不存在");

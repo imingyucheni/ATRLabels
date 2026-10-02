@@ -50,7 +50,15 @@ describe("后台页面要先登录（proxy 拦截，页面不渲染）", () => {
     const id = st.createStaff({ name: "Amy", username: "amy", password: "amy-pass-1" });
     const s = st.getStaff(id)!;
     const cookie = `atr_session=${staffToken(id, s.ver, Math.floor(Date.now() / 1000) + 3600)}`;
-    for (const p of ["/customers", "/customers/3?tab=pricing", "/finance", "/quote", "/leads", "/account"]) expect(proxy(req(p, { cookie })).headers.get("location"), p).toBeNull();
+    // 新员工默认一个客户都看不到：打开客户详情被挡回列表
+    expect(proxy(req("/customers/3", { cookie })).headers.get("location")).toBe("http://localhost:3000/customers?denied=customer");
+    st.setStaffAccess(id, { mode: "list", customers: { "3": "view" } });
+    for (const p of ["/customers", "/customers/3?tab=pricing", "/customers/3/statement", "/finance", "/quote", "/leads", "/account"]) expect(proxy(req(p, { cookie })).headers.get("location"), p).toBeNull();
+    expect(proxy(req("/customers/4", { cookie })).headers.get("location")).toBe("http://localhost:3000/customers?denied=customer");
+    // 全部客户模式，单独排除 4 号
+    st.setStaffAccess(id, { mode: "all", customers: { "4": "none" } });
+    expect(proxy(req("/customers/9", { cookie })).headers.get("location")).toBeNull();
+    expect(proxy(req("/customers/4/charges", { cookie })).headers.get("location")).toBe("http://localhost:3000/customers?denied=customer");
     for (const p of ["/", "/reports", "/shipments", "/settings", "/commissions", "/staff", "/backups"]) expect(proxy(req(p, { cookie })).headers.get("location"), p).toBe("http://localhost:3000/customers");
     // 停用后：直接跳登录页
     st.setStaffActive(id, false);

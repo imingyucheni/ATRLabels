@@ -1,5 +1,6 @@
 import { TZ_LABEL } from "@/lib/time";
 import { currentAdmin, currentCustomerId } from "@/lib/auth";
+import { customerAccess } from "@/lib/adminSession";
 import { csvResponse } from "@/lib/csv";
 import { buildStatement } from "@/lib/statement";
 import { balanceAt, balanceOf, topupsBetween } from "@/lib/ledger";
@@ -17,13 +18,14 @@ export async function GET(req: Request) {
   const detail = (s: string) => s.split(" · ").map((x) => translateMessage(lang, x)).join(" · ");
   const p = new URL(req.url).searchParams;
   let customerId = Number(p.get("customerId"));
-  const admin = !!(await currentAdmin());
-  // 客户只能下载自己的对账单
-  if (!admin) {
+  const who = await currentAdmin();
+  // 客户只能下载自己的对账单；员工只能下载授权给他的客户
+  if (!who) {
     const own = await currentCustomerId();
     if (!own) return new Response("Unauthorized", { status: 401 });
     customerId = own;
-  }
+  } else if (!customerAccess(who, customerId)) return new Response("Not found", { status: 404 });
+  const admin = !!who;
   const from = p.get("from") || undefined;
   const to = p.get("to") || undefined;
   const st = buildStatement(customerId, from, to);

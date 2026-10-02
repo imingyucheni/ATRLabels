@@ -4,7 +4,7 @@
  * - 员工（二级管理员）：`s.${id}.${会话版本}.${过期时间}.${HMAC}`；停用 / 改密码会换会话版本，旧登录失效。
  */
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { staffSessionValid } from "./staffStore";
+import { customerLevel, getStaff, staffSessionValid, type AccessLevel } from "./staffStore";
 
 // 沙盒站和正式站可能在同一个 IP 的不同端口上，浏览器 cookie 不分端口：沙盒站用不同的 cookie 名
 export const ADMIN_COOKIE = "atr_session" + (process.env.APP_ENV === "sandbox" ? "_sb" : "");
@@ -61,3 +61,24 @@ export function verifyAdminToken(token: string | undefined | null): boolean {
  */
 export const STAFF_PAGES = [/^\/customers(\/|$)/, /^\/leads(\/|$)/, /^\/quote(\/|$)/, /^\/finance(\/|$)/, /^\/account(\/|$)/];
 export const staffCanOpen = (path: string) => STAFF_PAGES.some((re) => re.test(path));
+
+/** 后台登录的人对某个客户的权限：主管理员全部能操作；员工按授权；null = 看不到 */
+export function customerAccess(who: AdminPrincipal | null, customerId: number): AccessLevel | null {
+  if (!who) return null;
+  if (who.role === "owner") return "edit";
+  return customerLevel(getStaff(who.id), customerId);
+}
+
+/** 列表过滤用：这个客户能不能看到（主管理员全部能看） */
+export function customerFilter(who: AdminPrincipal | null): (customerId: number) => boolean {
+  if (!who) return () => false;
+  if (who.role === "owner") return () => true;
+  const s = getStaff(who.id);
+  return (customerId) => customerLevel(s, customerId) !== null;
+}
+
+/** 客户详情这类带客户 id 的页面：/customers/123、/customers/123/statement … */
+export function customerIdInPath(path: string): number | null {
+  const m = path.match(/^\/customers\/(\d+)(\/|$)/);
+  return m ? Number(m[1]) : null;
+}

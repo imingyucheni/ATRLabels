@@ -2,7 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getCustomer, getPasswordHash, type Customer } from "./db";
-import { ADMIN_COOKIE, adminMac, staffToken, verifyAdminToken, verifySession, type AdminPrincipal } from "./adminSession";
+import { ADMIN_COOKIE, adminMac, customerAccess, staffToken, verifyAdminToken, verifySession, type AdminPrincipal } from "./adminSession";
 import type { StaffAccount } from "./staffStore";
 
 // 沙盒站和正式站可能在同一个 IP 的不同端口上，浏览器 cookie 不分端口：沙盒站用不同的 cookie 名，两边可以同时登录
@@ -85,6 +85,17 @@ export async function requireAdmin(opts: { staff?: boolean } = {}): Promise<Admi
   if (!who) redirect("/login");
   if (who.role === "staff" && !opts.staff) redirect("/customers?denied=1");
   return who;
+}
+
+/**
+ * 员工对这个客户有没有权限：need = "view" 只看，"edit" 要操作。
+ * 有权限返回 null；没有返回错误说明（Server Action 直接 return { error }）。主管理员永远有权限。
+ */
+export function customerDenied(who: AdminPrincipal, customerId: number, need: "view" | "edit" = "edit"): string | null {
+  const lvl = customerAccess(who, customerId);
+  if (!lvl) return "你没有这个客户的权限，请找主管理员授权";
+  if (need === "edit" && lvl !== "edit") return "这个客户你只有查看权限，不能操作";
+  return null;
 }
 
 /* ---------------- 登录失败限制 ---------------- */

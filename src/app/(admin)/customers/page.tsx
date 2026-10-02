@@ -9,17 +9,22 @@ import { getT } from "@/lib/prefs";
 import { getTerms, lastAcceptance } from "@/lib/terms";
 import { salesNameByCustomer } from "@/lib/commission";
 import { currentAdmin } from "@/lib/auth";
+import { customerAccess, customerFilter } from "@/lib/adminSession";
 
 const show = (v: number | null | undefined, dflt: string, suffix = "") => (v === null || v === undefined ? <span className="muted">{dflt}</span> : `${v}${suffix}`);
 
 export default async function CustomersPage({ searchParams }: { searchParams: Promise<{ denied?: string }> }) {
-  const denied = (await searchParams).denied === "1";
-  const customers = listCustomers();
+  const deniedParam = (await searchParams).denied;
+  const denied = deniedParam === "1";
+  const who = await currentAdmin();
+  // 员工只看得到授权给他的客户
+  const canSee = customerFilter(who);
+  const customers = listCustomers().filter((c) => canSee(c.id));
   // 员工（二级管理员）看不到销售佣金、进不了客户 OMS、看不到面单记录（有成本）
-  const staff = (await currentAdmin())?.role === "staff";
+  const staff = who?.role === "staff";
   const sales = staff ? new Map<number, string>() : salesNameByCustomer();
   const { markup } = getSettings();
-  const resets = pendingResets();
+  const resets = pendingResets().filter((r) => canSee(r.customer_id));
   const t = await getT();
   return (
     <>
@@ -43,6 +48,7 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
           </table>
         </div>
       )}
+      {deniedParam === "customer" && <div className="alert warn">{t("你没有这个客户的权限，请找主管理员授权。")}</div>}
       {denied && <div className="alert warn">{t("这个功能只有主管理员能用。员工账号可以开客户账号、设置客户邮费、确认充值。")}</div>}
       <div className="row" style={{ justifyContent: "space-between", marginBottom: 16 }}>
         <h1 style={{ margin: 0 }}>{t("客户")}</h1>
@@ -56,7 +62,7 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
           <tbody>
             {customers.map((c) => (
               <tr key={c.id}>
-                <td className="c-main"><Link href={`/customers/${c.id}`}>{c.name}</Link>{c.testAccount && <> <span className="badge test">{t("内部测试")}</span></>}{sales.get(c.id) && <div className="small muted">{t("销售：{name}", { name: sales.get(c.id)! })}</div>}</td><td data-label={t("联系人")}>{c.contact || "-"}</td><td data-label={t("电话")}>{c.phone || "-"}</td>
+                <td className="c-main"><Link href={`/customers/${c.id}`}>{c.name}</Link>{c.testAccount && <> <span className="badge test">{t("内部测试")}</span></>}{staff && customerAccess(who, c.id) === "view" && <> <span className="badge">{t("只读")}</span></>}{sales.get(c.id) && <div className="small muted">{t("销售：{name}", { name: sales.get(c.id)! })}</div>}</td><td data-label={t("联系人")}>{c.contact || "-"}</td><td data-label={t("电话")}>{c.phone || "-"}</td>
                 <td className="small" data-label={t("登录")}>{c.portalEnabled ? c.portalEmail : <span className="muted">{t("未开通")}</span>}</td>
                 <td className="small" data-label={t("合同")}>
                   {(() => {

@@ -1615,3 +1615,6 @@ label.check input[type="radio"] { width: auto; }
 /* 员工账号 */
 .staff-ops details > summary { cursor: pointer; color: var(--accent); }
 .staff-op-box { display: grid; gap: 8px; padding: 10px 0 4px; }
+/* 只读权限：整块表单禁用 */
+fieldset.ro-wrap { border: 0; padding: 0; margin: 0; min-width: 0; }
+fieldset.ro-wrap:disabled button[type="submit"], fieldset.ro-wrap:disabled form button.primary { display: none; }
