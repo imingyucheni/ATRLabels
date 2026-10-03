@@ -637,7 +637,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                       <td className="small muted" style={{ whiteSpace: "nowrap" }}>{fmtTime(l.createdAt)}</td>
                       <td className="small">{t(MARKUP_SCOPE_LABEL[l.scope])}</td>
                       <td className="small">{l.label}</td>
-                      <td className="small">{describeRule(l.before)} → <b>{describeRule(l.after)}</b></td>
+                      <td className="small">{describeRule(l.before, undefined, t)} → <b>{describeRule(l.after, undefined, t)}</b></td>
                     </tr>
                   ))}
                 </tbody>

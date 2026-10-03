@@ -1,3 +1,4 @@
+import { localDate } from "@/lib/reports";
 import { fmtTime, TZ_LABEL } from "@/lib/time";
 import { isLoggedIn } from "@/lib/auth";
 import { csvResponse } from "@/lib/csv";
@@ -21,7 +22,7 @@ export async function GET(req: Request) {
     to: p.get("to") || undefined,
     q: p.get("q") || undefined,
   });
-  const date = new Date().toISOString().slice(0, 10);
+  const date = localDate();
   const sku = (s: (typeof rows)[number]) => s.skuList.map((k) => (k.quantity > 1 ? `${k.sku} x${k.quantity}` : k.sku)).filter(Boolean).join("; ");
   const who = (s: (typeof rows)[number]) => `${s.recipient.nameFirst} ${s.recipient.nameLast}`;
 

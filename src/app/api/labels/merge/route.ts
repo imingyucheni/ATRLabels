@@ -1,3 +1,4 @@
+import { localDate } from "@/lib/reports";
 import { currentCustomerId, isLoggedIn } from "@/lib/auth";
 import { getCustomer, getShipment } from "@/lib/db";
 import { isPaperSize, layoutLabels, type PaperSize } from "@/lib/labelLayout";
@@ -24,7 +25,7 @@ export async function GET(req: Request) {
   const pdf = await layoutLabels(await mergeLabels(list), paper);
   // ?download=1 直接下载（文件名可以用 ?name= 指定，例如批次名）；默认在浏览器里打开打印
   const sp = new URL(req.url).searchParams;
-  const base = (sp.get("name") || `labels-${new Date().toISOString().slice(0, 10)}`).replace(/[\\/:*?"<>|\s]+/g, "_").slice(0, 80);
+  const base = (sp.get("name") || `labels-${localDate()}`).replace(/[\\/:*?"<>|\s]+/g, "_").slice(0, 80);
   const fname = `${base}-${list.length}.pdf`;
   return new Response(new Uint8Array(pdf), {
     headers: {

@@ -32,7 +32,7 @@ export default async function AdminShipPage({ searchParams }: { searchParams: Pr
           <Link className="btn" href={`/shipments?customerId=${houseId}`}>{t("我下的单")}</Link>
         </div>
       </div>
-      {!channels.length && <div className="alert warn" style={{ marginTop: 12 }}>{t("没有启用的渠道，请先到")} <Link href="/settings">{t("设置")}</Link> {t("同步渠道。")}</div>}
+      {!channels.length && <div className="alert warn" style={{ marginTop: 12 }}>{t("没有启用的渠道，请先到")} <Link href="/settings#shipbest">{t("设置")}</Link> {t("同步渠道。")}</div>}
       <div style={{ height: 12 }} />
       <DraftList scope="house" drafts={draftRows(houseId, { us: "/ship", intl: "/ship/intl" })} currentId={draft?.id} max={MAX_DRAFTS} newHref={`/ship?n=${Date.now()}`} />
       <ShipForm key={draft ? `d${draft.id}` : `new${sp.n ?? ""}`} mode="house" draftScope="house" draft={draft ?? undefined} recentPackages={recentPackages(houseId)} skuPresets={skuPresets(houseId)} defaultSender={s.sender} defaultUnit={s.defaultUnit} defaultCurrency={s.defaultCurrency} />

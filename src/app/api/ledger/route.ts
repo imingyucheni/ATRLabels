@@ -1,6 +1,8 @@
+import { localDate } from "@/lib/reports";
 import { fmtTime, TZ_LABEL } from "@/lib/time";
 import { isLoggedIn } from "@/lib/auth";
 import { csvResponse } from "@/lib/csv";
+import { actorLabel } from "@/lib/actor";
 import { LEDGER_TYPE_LABEL, listLedger } from "@/lib/ledger";
 import { getLang, getT } from "@/lib/prefs";
 import { translateMessage } from "@/lib/i18n";
@@ -17,8 +19,8 @@ export async function GET(req: Request) {
   const p = new URL(req.url).searchParams;
   const rows = listLedger({ from: p.get("from") || undefined, to: p.get("to") || undefined, customerId: Number(p.get("customerId")) || undefined });
   return csvResponse(
-    t("流水-{date}.csv", { date: new Date().toISOString().slice(0, 10) }),
+    t("流水-{date}.csv", { date: localDate() }),
     [t("时间({tz})", { tz: t(TZ_LABEL) }), ...["客户", "类型", "单号", "运单号", "说明", "操作人", "金额"].map((h) => cap(t(h)))],
-    rows.map((l) => [fmtTime(l.createdAt), l.customerName, t(LEDGER_TYPE_LABEL[l.type]), l.customNo, l.trackingNo, note(l.note), l.createdBy, l.amount.toFixed(2)]),
+    rows.map((l) => [fmtTime(l.createdAt), l.customerName, t(LEDGER_TYPE_LABEL[l.type]), l.customNo, l.trackingNo, note(l.note), t(actorLabel(l.createdBy)), l.amount.toFixed(2)]),
   );
 }

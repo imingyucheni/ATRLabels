@@ -14,7 +14,14 @@ export function csvResponse(filename: string, header: string[], rows: unknown[][
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
       // 老浏览器 / 部分下载工具不认 filename*：先给一个英文文件名兜底
-      "Content-Disposition": `attachment; filename="${filename.replace(/[^\w.-]+/g, "_").replace(/^_+/, "") || "export.csv"}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+      "Content-Disposition": `attachment; filename="${asciiName(filename)}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
     },
   });
+}
+
+/** 兜底的英文文件名：中文去掉后只剩日期时（例如“流水-2026-10-02.csv”），前面补上 export */
+function asciiName(filename: string) {
+  const a = filename.replace(/[^\w.-]+/g, "_").replace(/^[_-]+/, "");
+  if (!a || a.startsWith(".")) return "export.csv";
+  return /^[A-Za-z]/.test(a) ? a : `export-${a}`;
 }

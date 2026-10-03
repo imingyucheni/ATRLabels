@@ -10,6 +10,7 @@ import Profit from "@/components/Profit";
 import TrackingLink from "@/components/TrackingLink";
 import { getT } from "@/lib/prefs";
 import { listLabelFailures } from "@/lib/providerLog";
+import { customerLabeler } from "@/lib/customerLabel";
 
 type SP = { customerId?: string; status?: string; from?: string; to?: string; q?: string };
 
@@ -74,7 +75,7 @@ export default async function ShipmentsPage({ searchParams }: { searchParams: Pr
         <label className="f">{t("客户")}
           <select name="customerId" defaultValue={sp.customerId ?? ""}>
             <option value="">{t("全部")}</option>
-            {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            {customers.map((c, _i, all) => <option key={c.id} value={c.id}>{customerLabeler(all)(c)}</option>)}
           </select>
         </label>
         <label className="f">{t("状态")}
@@ -116,7 +117,7 @@ export default async function ShipmentsPage({ searchParams }: { searchParams: Pr
                 <td data-label={t("状态")}><StatusBadge status={s.status} test={s.isTest} /></td>
                 <td className="num" data-label={t("成本")}>{money(s.actualCost ?? s.quotedCost)}{s.actualCost === null && <div className="small muted">{t("试算")}</div>}</td>
                 <td className="num" data-label={t("客户价")}>{money(s.price, s.currency)}</td>
-                <td className="num small hide-m" title={`${describeRule(s.rule)}${s.rule.source ? ` · ${t(MARKUP_SOURCE_LABEL[s.rule.source as MarkupSource] ?? s.rule.source)}` : ""}`}>
+                <td className="num small hide-m" title={`${describeRule(s.rule, undefined, t)}${s.rule.source ? ` · ${t(MARKUP_SOURCE_LABEL[s.rule.source as MarkupSource] ?? s.rule.source)}` : ""}`}>
                   {signedPercent(s.rule.percent)}{s.rule.fixed ? <div className="muted">+{money(s.rule.fixed)}</div> : null}
                 </td>
                 <td className="num" data-label={t("补差(客户)")}>{s.costAdj || s.customerAdj ? <>{money(s.customerAdj)}<div className="small muted">{t("成本")} {money(s.costAdj)}</div></> : "-"}</td>

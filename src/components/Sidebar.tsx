@@ -46,7 +46,21 @@ export default function Sidebar(props: {
   }, [path]);
   // 带 ?tab= 的菜单（设置页的页签）：地址栏的 tab 一样才高亮
   const search = useSearchParams();
+  // 设置页的当前页签：页面里切页签只改地址栏不走路由，由 SettingsToc 发事件告诉这里
+  const [setTab, setSetTab] = useState<string | null>(null);
+  useEffect(() => {
+    setSetTab(search.get("tab"));
+    const on = (e: Event) => setSetTab((e as CustomEvent<string>).detail);
+    window.addEventListener("atr:settab", on);
+    return () => window.removeEventListener("atr:settab", on);
+  }, [search]);
   const match = (i: NavItem) => {
+    // 设置页：服务商、渠道与价格各有菜单，其他页签都算“更多设置”
+    if (path === "/settings" && i.href.startsWith("/settings?tab=")) {
+      const own = new URL(i.href, "http://x").searchParams.get("tab");
+      const cur = setTab ?? "providers";
+      return own === cur || (own === "customers" && !["providers", "pricing"].includes(cur));
+    }
     const [base, anchor] = i.href.split("#");
     if (anchor !== undefined) return path === base && hash === `#${anchor}`;
     if (i.href.includes("?")) {
@@ -58,7 +72,7 @@ export default function Sidebar(props: {
   const active = all.filter(match).sort((a, b) => b.href.length - a.href.length)[0]?.href;
   // 手机上菜单默认收起，点右上角按钮展开；切换页面后自动收起
   const [open, setOpen] = useState(false);
-  useEffect(() => setOpen(false), [path]);
+  useEffect(() => setOpen(false), [path, setTab]);
   const current = all.find((i) => i.href === active);
   // 电脑上可以把菜单收成只有图标（记在 cookie 里，下次打开保持）
   const [mini, setMini] = useState(false);

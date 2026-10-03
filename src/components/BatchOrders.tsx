@@ -24,6 +24,7 @@ import { money } from "@/lib/pricing";
 import FilePick from "@/components/FilePick";
 import { useLang, useT } from "@/components/I18n";
 import { translateMessage } from "@/lib/i18n";
+import { customerLabeler } from "@/lib/customerLabel";
 
 const ROW_STATUS: Record<string, [string, string]> = {
   pending: ["试算中", "pending"],
@@ -185,7 +186,7 @@ export default function BatchOrders(props: {
               <label className="f"><span className="req">{t("客户")}</span>
                 <select name="customerId" required value={custId ?? ""} onChange={(e) => setCustId(Number(e.target.value))}>
                   <option value="" disabled>{t("请选择客户")}</option>
-                  {props.customers?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  {props.customers?.map((c, _i, all) => <option key={c.id} value={c.id}>{customerLabeler(all)(c)}</option>)}
                 </select>
               </label>
             )}

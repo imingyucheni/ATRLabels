@@ -1,3 +1,4 @@
+import { localDate } from "@/lib/reports";
 import { fmtTime, TZ_LABEL } from "@/lib/time";
 import { currentCustomerId } from "@/lib/auth";
 import { csvResponse } from "@/lib/csv";
@@ -33,7 +34,7 @@ export async function GET(req: Request) {
   ].map((h) => (h === "__time" ? t("下单时间({tz})", { tz: t(TZ_LABEL) }) : cap(t(h))));
 
   return csvResponse(
-    t("面单-{date}.csv", { date: new Date().toISOString().slice(0, 10) }),
+    t("面单-{date}.csv", { date: localDate() }),
     head,
     rows.map((s) => {
       const r = s.recipient;

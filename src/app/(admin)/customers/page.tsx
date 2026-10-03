@@ -31,13 +31,13 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
       {resets.length > 0 && (
         <div className="card" style={{ borderColor: "var(--warn)" }}>
           <div className="card-head"><h2>{t("客户申请重置密码（{n}）", { n: resets.length })}</h2><span className="small muted">{t("没有配置邮件发送时，由这里生成新密码后告诉客户")}</span></div>
-          <table className="list">
+          <table className="list card-table">
             <tbody>
               {resets.map((r) => (
                 <tr key={r.id}>
-                  <td>{r.name}<div className="small muted">{r.portal_email}</div></td>
+                  <td className="c-main">{r.name}<div className="small muted">{r.portal_email}</div></td>
                   <td className="small muted">{fmtTime(r.created_at)}</td>
-                  <td style={{ width: 380 }}>
+                  <td className="c-act" style={{ width: 380 }}>
                     <FlashForm action={handleResetRequestAction} submitLabel="生成新密码" submitClass="small" confirm="为这个客户生成新密码？旧密码会失效。">
                       <input type="hidden" name="id" value={r.id} />
                     </FlashForm>

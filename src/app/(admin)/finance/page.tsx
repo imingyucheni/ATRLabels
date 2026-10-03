@@ -29,7 +29,10 @@ export default async function FinancePage({ searchParams }: { searchParams: Prom
   const owed = customers.reduce((a, c) => a + Math.min(0, c.balance), 0);
   const byType = ledger.reduce<Record<string, number>>((m, l) => ((m[l.type] = (m[l.type] ?? 0) + l.amount), m), {});
   const pending = listTopups({ status: "pending" }).filter((t) => mine(t.customerId));
-  const handled = listTopups({ limit: 30 }).filter((t) => t.status !== "pending" && mine(t.customerId));
+  // 按处理时间排（不是申请顺序）：先申请的可能后处理
+  const handled = listTopups({ limit: 30 })
+    .filter((t) => t.status !== "pending" && mine(t.customerId))
+    .sort((a, b) => (b.handledAt ?? "").localeCompare(a.handledAt ?? "") || b.id - a.id);
   const qs = new URLSearchParams(Object.entries({ from: sp.from, to: sp.to }).filter(([, v]) => v) as [string, string][]).toString();
   // 审核充值后跳回这里（?done=approved|rejected&id=N），在页面上显示处理结果
   const doneRaw = sp.done === "approved" || sp.done === "rejected" ? getTopup(Number(sp.id)) : null;

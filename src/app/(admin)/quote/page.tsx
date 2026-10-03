@@ -22,7 +22,7 @@ export default async function QuotePage({ searchParams }: { searchParams: Promis
         {t("只试算、不出单。可以按新客户临时设的加价试算所有渠道，也可以选已有客户看他实际的价格。")}
         {!staff && t("出单在客户自己的 OMS 里进行（需要代客户出单时，在“客户管理”点“进入 OMS”）。")}
       </p>
-      {!hasChannels && <div className="alert warn">{t("没有启用的渠道，请先到")} <Link href="/settings">{t("设置")}</Link> {t("同步渠道。")}</div>}
+      {!hasChannels && <div className="alert warn">{t("没有启用的渠道，请先到")} <Link href="/settings#shipbest">{t("设置")}</Link> {t("同步渠道。")}</div>}
       <ShipForm
         customers={customers.map((c) => ({ id: c.id, name: c.name, sender: c.sender, channelCount: customerChannels(c.id).length }))}
         defaultCustomerId={Number(customerId) || undefined}

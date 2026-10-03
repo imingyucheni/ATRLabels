@@ -20,6 +20,8 @@ function snapshot(form: HTMLFormElement): Snap {
   for (const el of Array.from(form.elements)) {
     if (!(el instanceof HTMLInputElement || el instanceof HTMLSelectElement || el instanceof HTMLTextAreaElement)) continue;
     if (!el.name || el.type === "hidden" || el.type === "submit" || el.type === "button") continue;
+    // 财务确认密码是确认身份用的，不是要保存的设置
+    if (el.name === "financePin") continue;
     let value: string;
     let key = el.name;
     if (el instanceof HTMLSelectElement) value = el.selectedOptions[0]?.textContent?.trim() ?? "";
@@ -94,6 +96,7 @@ export default function FlashForm({
   id,
   locked,
   review,
+  alwaysSubmit,
 }: {
   action: (state: FlashState, fd: FormData) => Promise<FlashState>;
   children?: React.ReactNode;
@@ -108,6 +111,8 @@ export default function FlashForm({
   locked?: string;
   /** 保存前列出改动并确认 */
   review?: boolean;
+  /** 配合 review：没改动也能提交（按预填的值确认，例如“确认已取消”） */
+  alwaysSubmit?: boolean;
 }) {
   const t = useT();
   const tMsg = useTMsg();
@@ -121,9 +126,10 @@ export default function FlashForm({
   const base = useRef<Snap | null>(null);
   const reviewing = review || !!locked;
 
-  // 记下“修改前”的值：页面加载时、以及每次保存成功后（页面数据已刷新）
+  // 记下“修改前”的值：页面加载时、以及每次保存成功后（页面数据已刷新）。
+  // 保存失败时不更新：数据没变，原来的值还是原来的
   useEffect(() => {
-    if (reviewing && ref.current) base.current = snapshot(ref.current);
+    if (reviewing && ref.current && (!state || state.ok)) base.current = snapshot(ref.current);
   }, [reviewing, state]);
 
   useEffect(() => {
@@ -144,7 +150,8 @@ export default function FlashForm({
     if (locked && !editing) return;
     if (reviewing && base.current) {
       const c = diff(base.current, snapshot(e.currentTarget));
-      if (!c.length) return setNoChange(true);
+      // 动作类表单（确认取消、充值、结算…）按预填的值也可以直接提交
+      if (!c.length && !alwaysSubmit && !e.currentTarget.elements.namedItem("financePin")) return setNoChange(true);
       return setChanges(c);
     }
     if (confirm && !window.confirm(t(confirm))) return;
@@ -157,9 +164,9 @@ export default function FlashForm({
   const dialog = changes && (
     <div className="modal-back" role="presentation" onClick={() => setChanges(null)}>
       <div className="modal" role="dialog" aria-modal="true" aria-label={t("确认修改")} onClick={(e) => e.stopPropagation()}>
-        <h3 style={{ marginTop: 0 }}>{t("确认修改以下 {n} 项？", { n: changes.length })}</h3>
+        <h3 style={{ marginTop: 0 }}>{changes.length ? t("确认修改以下 {n} 项？", { n: changes.length }) : t("确认提交？")}</h3>
         {confirm && <div className="alert warn">{t(confirm)}</div>}
-        <div className="table-wrap" style={{ maxHeight: "50vh", overflow: "auto" }}>
+        {changes.length > 0 && <div className="table-wrap" style={{ maxHeight: "50vh", overflow: "auto" }}>
           <table className="list change-list">
             <thead><tr><th>{t("项目")}</th><th>{t("原来")}</th><th></th><th>{t("改成")}</th></tr></thead>
             <tbody>
@@ -173,10 +180,10 @@ export default function FlashForm({
               ))}
             </tbody>
           </table>
-        </div>
+        </div>}
         <div className="row" style={{ justifyContent: "flex-end", marginTop: 14 }}>
           <button type="button" onClick={() => setChanges(null)}>{t("返回修改")}</button>
-          <button type="button" className="primary" autoFocus onClick={send}>{t("确认保存")}</button>
+          <button type="button" className="primary" autoFocus onClick={send}>{changes.length ? t("确认保存") : t("确认")}</button>
         </div>
       </div>
     </div>

@@ -675,7 +675,9 @@ export async function testMailAction(_: FlashState, fd: FormData): Promise<Flash
 export async function resetTestEnvAction(_: FlashState, fd?: FormData): Promise<FlashState> {
   await requireAdmin();
   if (isProductionSite()) return { error: "正式站没有测试环境，测试请到沙盒站" };
-  if (String(fd?.get("confirmText") ?? "").trim() !== "重置测试环境") return { error: "请输入“重置测试环境”确认" };
+  // 中文界面输入“重置测试环境”，英文界面输入 reset sandbox
+  const confirmText = String(fd?.get("confirmText") ?? "").trim().toLowerCase();
+  if (confirmText !== "重置测试环境" && confirmText !== "reset sandbox") return { error: "请输入“重置测试环境”确认" };
   resetTestEnv();
   clearChannelNameCache();
   revalidatePath("/", "layout");

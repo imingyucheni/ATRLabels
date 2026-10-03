@@ -21,6 +21,7 @@ import { DIM_UNITS, isDimUnit, isWeightUnit, toSystem, unitsOf, WEIGHT_UNITS, ty
 
 const UNIT_PREF = "atr_pkg_units";
 import { deleteDraftAction, saveDraftAction, type DraftScope } from "@/app/draftActions";
+import { customerLabeler } from "@/lib/customerLabel";
 
 type Sku = Record<"sku" | "productNameCn" | "productNameEn" | "quantity" | "declaredUnitPrice" | "hsCode" | "productNature" | "originCountry" | "material", string>;
 
@@ -504,7 +505,7 @@ export default function ShipForm(props: {
                 }}
               >
                 <option value={0}>{t("新客户 / 自定义加价")}</option>
-                {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                {customers.map((c, _i, all) => <option key={c.id} value={c.id}>{customerLabeler(all)(c)}</option>)}
               </select>
               {(() => {
                 const c = customers.find((x) => x.id === customerId);

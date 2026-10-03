@@ -21,7 +21,7 @@ export default function ZipLookup() {
           start(async () => setRows(await lookupZipAction(zip)));
         }}
       >
-        <input value={zip} onChange={(e) => setZip(e.target.value)} placeholder={t("例如 10001")} maxLength={10} style={{ width: 160 }} />
+        <input value={zip} onChange={(e) => setZip(e.target.value)} placeholder={t("例如 10001")} maxLength={10} pattern="\s*\d{5}(-?\d{4})?\s*" title={t("5 位美国邮编，例如 10001")} style={{ width: 160 }} />
         <button disabled={busy || !zip.trim()}>{t("查询")}</button>
       </form>
       {rows && (

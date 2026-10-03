@@ -87,7 +87,7 @@ export default async function SalesDetail({ params, searchParams }: { params: Pr
                     {others.map((c) => {
                       const cur = currentAssignment(c.id);
                       const owner = cur?.salesId ? reps.find((x) => x.id === cur.salesId)?.name : null;
-                      return <option key={c.id} value={c.id}>{c.name}{owner ? ` · ${t("现在归 {name}", { name: owner })}` : ""}</option>;
+                      return <option key={c.id} value={c.id}>{c.name} #{c.id}{owner ? ` · ${t("现在归 {name}", { name: owner })}` : ""}</option>;
                     })}
                   </select>
                 </label>

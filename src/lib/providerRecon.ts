@@ -1,5 +1,5 @@
 /**
- * 服务商对账：按周期统计向每家服务商（ShipBest / 嘉谷）买了多少面单、花了多少邮费，按渠道细分。
+ * 服务商对账：按周期统计向每家服务商（ShipBest / 嘉谷 / DHL）买了多少面单、花了多少邮费，按渠道细分。
  * - 出单和邮费：按下单日期归属（有实扣用实扣，否则用下单时的试算成本）
  * - 取消的单：服务商退回邮费，只算服务商收的取消费
  * - 补差：按导入日期归属（服务商出账单、我们导入的那天），和服务商的账单周期对得上
@@ -9,16 +9,18 @@
 import { currentEnv, db, getChannel, listShipments, type Shipment } from "./db";
 import { stripProviderTag } from "./carriers";
 import { isJiaguCode } from "./shipbest/jiagu";
+import { isDhlCode } from "./shipbest/dhl";
 import { localDate } from "./reports";
 
-export type ProviderKey = "shipbest" | "jiagu";
+export type ProviderKey = "shipbest" | "jiagu" | "dhl";
 
 export const PROVIDERS: { key: ProviderKey; name: string; tag: string }[] = [
   { key: "shipbest", name: "ShipBest", tag: "SB" },
   { key: "jiagu", name: "嘉谷万邑", tag: "GDE" },
+  { key: "dhl", name: "DHL Express", tag: "DHL" },
 ];
 
-export const providerKeyOf = (channelCode: string): ProviderKey => (isJiaguCode(channelCode) ? "jiagu" : "shipbest");
+export const providerKeyOf = (channelCode: string): ProviderKey => (isDhlCode(channelCode) ? "dhl" : isJiaguCode(channelCode) ? "jiagu" : "shipbest");
 
 export interface ReconTotals {
   /** 出单数（不含取消、异常） */

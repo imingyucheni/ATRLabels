@@ -22,6 +22,8 @@ export default function SettingsToc({ initial }: { initial: SettingsTab }) {
     url.searchParams.set("tab", k);
     if (push) url.hash = "";
     window.history.replaceState(null, "", url);
+    // 告诉左侧菜单现在是哪个页签（replaceState 不会触发路由更新）
+    window.dispatchEvent(new CustomEvent("atr:settab", { detail: k }));
   };
 
   // 左侧菜单点“服务商 / 渠道与价格”：同一页面换了 ?tab=，跟着切

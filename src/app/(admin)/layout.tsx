@@ -103,7 +103,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             items: [
               { href: "/settings?tab=providers", label: "服务商", icon: "provider" },
               { href: "/settings?tab=pricing", label: "渠道与价格", icon: "price" },
-              { href: "/settings", label: "更多设置", icon: "settings" },
+              { href: "/settings?tab=customers", label: "更多设置", icon: "settings" },
               { href: "/staff", label: "员工账号", icon: "account" },
               { href: "/backups", label: "数据备份", icon: "backup" },
             ],

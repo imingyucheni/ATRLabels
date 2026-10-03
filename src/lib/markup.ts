@@ -153,7 +153,7 @@ export function listMarkupLog(opts: { customerId?: number; limit?: number } = {}
 }
 
 /** 规则显示成一行字：+12% + $0.50，最低利润 $1.00；没设置的项显示“沿用” */
-export function describeRule(r: PartialRule | null | undefined, inherit = "沿用"): string {
-  const f = (v: number | null | undefined, fmt: (n: number) => string) => (v === null || v === undefined ? inherit : fmt(v));
-  return `${f(r?.percent, (n) => `${n < 0 ? "-" : "+"}${Math.abs(n)}%`)} · ${f(r?.fixed, (n) => `+$${n.toFixed(2)}`)} · 最低利润 ${f(r?.minProfit, (n) => `$${n.toFixed(2)}`)}`;
+export function describeRule(r: PartialRule | null | undefined, inherit = "沿用", t: (s: string) => string = (s) => s): string {
+  const f = (v: number | null | undefined, fmt: (n: number) => string) => (v === null || v === undefined ? t(inherit) : fmt(v));
+  return `${f(r?.percent, (n) => `${n < 0 ? "-" : "+"}${Math.abs(n)}%`)} · ${f(r?.fixed, (n) => `+$${n.toFixed(2)}`)} · ${t("最低利润")} ${f(r?.minProfit, (n) => `$${n.toFixed(2)}`)}`;
 }

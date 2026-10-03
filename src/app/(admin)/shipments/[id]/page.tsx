@@ -5,7 +5,7 @@ import { fmtTime, TZ_LABEL } from "@/lib/time";
 import Link from "next/link";
 import { MARKUP_SOURCE_LABEL, type MarkupSource } from "@/lib/markup";
 import { notFound } from "next/navigation";
-import { getCustomer, getSettings, getShipment, listAdjustments, replacedFrom, shipmentProfit, STATUS_LABEL } from "@/lib/db";
+import { getCustomer, getSettings, getShipment, isInternalCustomer, listAdjustments, replacedFrom, shipmentProfit, STATUS_LABEL } from "@/lib/db";
 import { isPaperSize } from "@/lib/labelLayout";
 import { money, signedPercent } from "@/lib/pricing";
 import { defaultCancelFees, JG_LABEL_TIMEOUT_MIN, JG_LABEL_TIMEOUT_MSG, JG_TIMEOUT_VOIDED_MSG, providerOf } from "@/lib/service";
@@ -201,10 +201,14 @@ export default async function ShipmentDetail({ params }: { params: Promise<{ id:
             <div className="card" style={{ marginTop: 12, background: "var(--warn-soft)" }}>
               <h2>{t("确认已取消")}</h2>
               <p className="small">{t("在 OMS 联系 ShipBest 完成取消后，填写费用并确认。退款 = 客户价 - 客户取消手续费。")}</p>
-              <FlashForm action={confirmCancelAction} submitLabel="确认已取消" review confirm={t("作废这张面单并退款给【{name}】：退款 = 客户价 {price} − 客户取消手续费。确认后不能撤回。", { name: s.customerName ?? "", price: money(s.price, s.currency) })}>
+              <FlashForm action={confirmCancelAction} submitLabel="确认已取消" review alwaysSubmit confirm={t("作废这张面单并退款给【{name}】：退款 = 客户价 {price} − 客户取消手续费。确认后不能撤回。", { name: s.customerName ?? "", price: money(s.price, s.currency) })}>
                 <input type="hidden" name="id" value={s.id} />
                 <div className="row" style={{ marginBottom: 8 }}>
-                  <label className="f">{t("向客户收取的取消手续费")}<input name="cancelFee" type="number" step="0.01" defaultValue={fees.cancelFee} /></label>
+                  {isInternalCustomer(s.customerId) ? (
+                    <input type="hidden" name="cancelFee" value="0" />
+                  ) : (
+                    <label className="f">{t("向客户收取的取消手续费")}<input name="cancelFee" type="number" step="0.01" min={0} max={s.price} defaultValue={fees.cancelFee} /><span className="field-hint muted">{t("不能超过客户价 {price}", { price: money(s.price, s.currency) })}</span></label>
+                  )}
                   <label className="f">{t("ShipBest 收取的取消费")}<input name="sbCancelFee" type="number" step="0.01" defaultValue={fees.sbCancelFee} /><span className="field-hint muted">{t("预填的是按比例估算的金额，请按 ShipBest 实际收取的填写")}</span></label>
                 </div>
               </FlashForm>

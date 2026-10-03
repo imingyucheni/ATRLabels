@@ -213,7 +213,7 @@ export default async function CustomerEdit({ params, searchParams }: { params: P
                           <tr key={l.id}>
                             <td className="small muted" style={{ whiteSpace: "nowrap" }}>{fmtTime(l.createdAt)}</td>
                             <td className="small">{l.label}</td>
-                            <td className="small">{t(describeRule(l.before))} → <b>{t(describeRule(l.after))}</b></td>
+                            <td className="small">{describeRule(l.before, undefined, t)} → <b>{describeRule(l.after, undefined, t)}</b></td>
                           </tr>
                         ))}
                       </tbody>
@@ -224,7 +224,7 @@ export default async function CustomerEdit({ params, searchParams }: { params: P
             );
           })()}
 
-          {show("overview") && <FlashForm action={ledgerEntryAction} submitLabel="确认" className="card" resetOnSuccess review confirm={t("给【{name}】入账：提交后立即计入客户余额（当前余额 {bal}）。请核对类型和金额。", { name: c.name, bal: money(c.balance) })}>
+          {show("overview") && <FlashForm action={ledgerEntryAction} submitLabel="确认" className="card" resetOnSuccess review confirm={t("给【{name}】记一笔账：提交后立即改变客户余额（当前余额 {bal}）。请核对类型和金额：充值加钱，扣款减钱。", { name: c.name, bal: money(c.balance) })}>
               <h2>{staff ? t("充值") : t("充值 / 调账")}</h2>
               {staff && <p className="small muted" style={{ marginTop: -4 }}>{t("员工账号只能记充值；加款、扣款请找主管理员。确认人会记下你的名字。")}</p>}
               <input type="hidden" name="id" value={c.id} />

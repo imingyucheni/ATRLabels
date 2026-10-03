@@ -5,6 +5,7 @@ import { buildReport, localDate, presetRanges, type Totals } from "@/lib/reports
 import { ChannelBars, DailyBars, RevenueLines } from "@/components/charts";
 import { getLang, getT } from "@/lib/prefs";
 import type { T as Translate } from "@/lib/i18n";
+import { customerLabeler } from "@/lib/customerLabel";
 
 type SP = { from?: string; to?: string; customerId?: string; range?: string };
 
@@ -39,8 +40,10 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const cancelledHead = (await getLang()) === "en" ? "Cancelled" : "取消";
   const presets = presetRanges();
   const preset = presets.find((p) => p.key === (sp.range ?? (sp.from ? "" : "30d")));
-  let from = preset?.from ?? sp.from ?? presets[2].from;
-  let to = preset?.to ?? sp.to ?? localDate();
+  // 日期格式不对（手改了网址）时按默认范围
+  const day = (v?: string) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : undefined);
+  let from = preset?.from ?? day(sp.from) ?? presets[2].from;
+  let to = preset?.to ?? day(sp.to) ?? localDate();
   // 开始日期晚于结束日期时自动对调
   if (from > to) [from, to] = [to, from];
   const customerId = Number(sp.customerId) || undefined;
@@ -82,7 +85,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           <input type="date" name="to" defaultValue={to} aria-label={tr("结束日期")} />
           <select name="customerId" defaultValue={customerId ?? ""} aria-label={tr("客户")}>
             <option value="">{tr("全部客户")}</option>
-            {listCustomers({ includeInternal: true }).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            {listCustomers({ includeInternal: true }).map((c, _i, all) => <option key={c.id} value={c.id}>{customerLabeler(all)(c)}</option>)}
           </select>
           <button>{tr("应用")}</button>
         </form>
