@@ -99,7 +99,7 @@ body {
 }
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; text-underline-offset: 3px; }
-h1 { font-size: 22px; line-height: 1.3; font-weight: 650; letter-spacing: -0.01em; margin: 0 0 18px; }
+h1 { font-size: 22px; line-height: 1.3; font-weight: 650; letter-spacing: -0.01em; margin: 0 0 18px; overflow-wrap: anywhere; }
 h2 { font-size: 15px; font-weight: 600; margin: 0 0 12px; letter-spacing: -0.005em; }
 h3 { font-size: 12px; font-weight: 600; margin: 20px 0 10px; color: var(--muted); letter-spacing: 0.02em; }
 code { font: 12.5px ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--sunken); padding: 1px 6px; border-radius: 5px; }
@@ -554,7 +554,7 @@ html[lang="en"] .kpi-label { line-height: 1.3; }
 @media (max-width: 900px) { .nav-collapse { display: none; } }
 
 /* 测试单标记 */
-.badge-pair { display: inline-flex; gap: 4px; align-items: center; flex-wrap: nowrap; }
+.badge-pair { display: inline-flex; gap: 4px; align-items: center; flex-wrap: wrap; }
 .badge.test { background: var(--info-soft); color: var(--series-1); border: 1px dashed color-mix(in srgb, var(--series-1) 45%, transparent); }
 
 /* 沙盒站横幅 / 切换站点 / 模式说明 */
@@ -651,7 +651,7 @@ tr.row-disabled td:first-child { opacity: 0.55; }
 .site {
   --us-navy: #0b1b34; --us-navy-2: #13294d; --us-blue: #2251e0; --us-blue-soft: #eef2fe;
   --us-ink: #0f172a; --us-text: #334155; --us-muted: #64748b; --us-line: #e2e8f0; --us-bg: #ffffff; --us-bg-2: #f8fafc; --us-panel: #ffffff;
-  background: var(--us-bg); color: var(--us-ink); min-height: 100vh; overflow-x: hidden;
+  background: var(--us-bg); color: var(--us-ink); min-height: 100vh; overflow-x: clip;
   font-feature-settings: "ss01", "cv11";
 }
 @media (prefers-color-scheme: dark) {
@@ -864,7 +864,7 @@ tr.row-disabled td:first-child { opacity: 0.55; }
 .us-hero h1 .l.accent { color: var(--us-blue); }
 .us-hero h1 .l { color: var(--us-ink); }
 .us-hero h1 .l.accent { color: var(--us-blue); }
-@media (max-width: 760px) { .us-rates td b { white-space: nowrap; font-size: 13px; } }
+@media (max-width: 760px) { .us-rates td b { font-size: 13px; } }
 
 /* ---------- 官网：高级质感与互动组件 ---------- */
 /* 首屏背景：柔光 + 细颗粒 */
@@ -1025,6 +1025,7 @@ tr.row-disabled td:first-child { opacity: 0.55; }
 .cov-city circle:first-child, .cov-city text { pointer-events: all; }
 .pt-tabs button { justify-content: flex-start; }
 .us-map-grid { grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr); }
+@media (max-width: 1000px) { .us-map-grid { grid-template-columns: minmax(0, 1fr); } }
 .us-map-band h2 { font-size: clamp(28px, 3vw, 40px); }
 /* 合并打印示意：按真实比例（Letter 8.5×11"，半张 8.5×5.5"，面单 4×6"） */
 .pp-thermal .ship-label { width: 200px; height: auto; display: block; filter: drop-shadow(0 20px 30px rgba(15, 23, 42, 0.25)); }
@@ -1667,3 +1668,12 @@ tbody.ch-group + tbody.ch-group .ch-group-head td { border-top-width: 10px; bord
 .ch-check-group { margin: 10px 0 14px; }
 .ch-check-head { margin-bottom: 6px; }
 .settings-body { display: flex; flex-direction: column; }
+
+/* 手机端测试修正 */
+@media (max-width: 760px) {
+  .card-table td .track-link { white-space: normal; overflow-wrap: anywhere; }
+}
+@media (max-width: 900px) {
+  /* 展开的手机菜单：最高一屏，菜单内部滚动，矮屏也能点到底部的语言切换和退出 */
+  .sidebar.open { max-height: 100dvh; overflow-y: auto; overscroll-behavior: contain; }
+}

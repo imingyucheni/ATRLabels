@@ -380,7 +380,7 @@ export default function ShipForm(props: {
       }
       // 页面上方的草稿列表由服务端刷新（saveDraftAction 里 revalidatePath）；表单不重新加载，填的内容和报价都保留
       setDraftId(r.id);
-      setDraftMsg(t("草稿已保存（{time}）。下次在页面上方的“草稿”里点“继续填写”。", { time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) }));
+      setDraftMsg(t("草稿已保存（{time}）。下次在页面上方的“草稿”里点“继续填写”。", { time: new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "America/Los_Angeles" }) }));
     });
   }
 

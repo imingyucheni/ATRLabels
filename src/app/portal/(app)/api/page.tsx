@@ -48,18 +48,18 @@ export default async function PortalApiPage() {
 
       <div className="card table-wrap">
         <h2 style={{ marginTop: 0 }}>{t("我的密钥")}</h2>
-        <table>
+        <table className="card-table">
           <thead><tr><th>{t("名称")}</th><th>{t("类型")}</th><th>{t("密钥")}</th><th>{t("IP 白名单")}</th><th>{t("创建时间")}</th><th>{t("最近使用")}</th><th></th></tr></thead>
           <tbody>
             {keys.map((k) => (
               <tr key={k.id} style={k.revokedAt ? { opacity: 0.55 } : undefined}>
-                <td>{k.name}</td>
-                <td><span className={`badge ${k.mode === "live" ? "ok" : "test"}`}>{k.mode === "live" ? t("正式") : t("测试")}</span></td>
-                <td><code>{k.prefix}…</code></td>
-                <td className="small">{k.ipAllow.length ? k.ipAllow.join(", ") : <span className="muted">{t("不限制")}</span>}</td>
-                <td className="small muted">{fmtTime(k.createdAt)}</td>
-                <td className="small muted">{k.lastUsedAt ? fmtTime(k.lastUsedAt) : "-"}</td>
-                <td>
+                <td className="c-main">{k.name}</td>
+                <td data-label={t("类型")}><span className={`badge ${k.mode === "live" ? "ok" : "test"}`}>{k.mode === "live" ? t("正式") : t("测试")}</span></td>
+                <td data-label={t("密钥")}><code>{k.prefix}…</code></td>
+                <td data-label={t("IP 白名单")} className="small">{k.ipAllow.length ? k.ipAllow.join(", ") : <span className="muted">{t("不限制")}</span>}</td>
+                <td data-label={t("创建时间")} className="small muted">{fmtTime(k.createdAt)}</td>
+                <td data-label={t("最近使用")} className="small muted">{k.lastUsedAt ? fmtTime(k.lastUsedAt) : "-"}</td>
+                <td className="c-act">
                   {k.revokedAt ? <span className="small muted">{t("已作废")}</span> : (
                     <FlashForm action={revokeApiKeyAction} submitLabel="作废" submitClass="small" inline confirm="作废后用这个密钥的系统会马上调用失败，确定作废吗？">
                       <input type="hidden" name="id" value={k.id} />
@@ -75,20 +75,20 @@ export default async function PortalApiPage() {
 
       <div className="card table-wrap">
         <h2 style={{ marginTop: 0 }}>{t("最近调用（最多 50 条，保留 30 天）")}</h2>
-        <table>
+        <table className="card-table">
           <thead><tr><th>{t("时间")}</th><th>{t("密钥")}</th><th>{t("请求")}</th><th>{t("结果")}</th><th className="num">{t("耗时")}</th><th>IP</th></tr></thead>
           <tbody>
             {logs.map((l) => (
               <tr key={l.id}>
-                <td className="small muted">{fmtTime(l.createdAt)}</td>
-                <td className="small"><code>{l.keyPrefix ? `${l.keyPrefix}…` : "-"}</code></td>
-                <td className="small"><code>{l.method} {l.path.replace("/api/v1", "")}</code></td>
-                <td className="small">
+                <td data-label={t("时间")} className="small muted">{fmtTime(l.createdAt)}</td>
+                <td data-label={t("密钥")} className="small"><code>{l.keyPrefix ? `${l.keyPrefix}…` : "-"}</code></td>
+                <td className="c-main small"><code>{l.method} {l.path.replace("/api/v1", "")}</code></td>
+                <td data-label={t("结果")} className="small">
                   <span className={`badge ${l.status < 300 ? "ok" : l.status < 500 ? "pending" : "exception"}`}>{l.status} {l.code}</span>
                   {l.message && l.status >= 300 && <div className="muted" style={{ maxWidth: 360 }}>{l.message}</div>}
                 </td>
-                <td className="num small muted">{l.ms ?? "-"} ms</td>
-                <td className="small muted">{l.ip ?? "-"}</td>
+                <td data-label={t("耗时")} className="num small muted">{l.ms ?? "-"} ms</td>
+                <td data-label="IP" className="small muted">{l.ip ?? "-"}</td>
               </tr>
             ))}
             {!logs.length && <tr><td colSpan={6} className="muted">{t("还没有调用记录")}</td></tr>}

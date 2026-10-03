@@ -62,17 +62,17 @@ export default async function PortalBilling({ searchParams }: { searchParams: Pr
 
       <div className="card table-wrap">
         <h2>{t("账户流水")}</h2>
-        <table>
+        <table className="card-table">
           <thead><tr><th>{t("时间")}</th><th>{t("类型")}</th><th>{t("单号")}</th><th>{t("说明")}</th><th className="num">{t("金额")}</th><th className="num">{t("余额")}</th></tr></thead>
           <tbody>
             {ledger.map((l) => (
               <tr key={l.id}>
-                <td className="small muted">{fmtTime(l.createdAt)}</td>
-                <td>{t(LEDGER_TYPE_LABEL[l.type])}</td>
-                <td>{l.shipmentId ? <Link href={`/portal/shipments/${l.shipmentId}`}>{l.customNo}</Link> : "-"}</td>
-                <td className="small">{note(l.note)}</td>
-                <td className={`num ${l.amount >= 0 ? "profit-pos" : ""}`}>{l.amount >= 0 ? "+" : ""}{money(l.amount)}</td>
-                <td className="num">{usd(l.balanceAfter)}</td>
+                <td data-label={t("时间")} className="small muted">{fmtTime(l.createdAt)}</td>
+                <td data-label={t("类型")}>{t(LEDGER_TYPE_LABEL[l.type])}</td>
+                <td className="c-main">{l.shipmentId ? <Link href={`/portal/shipments/${l.shipmentId}`}>{l.customNo}</Link> : "-"}</td>
+                <td data-label={t("说明")} className="small">{note(l.note)}</td>
+                <td data-label={t("金额")} className={`num ${l.amount >= 0 ? "profit-pos" : ""}`}>{l.amount >= 0 ? "+" : ""}{money(l.amount)}</td>
+                <td data-label={t("余额")} className="num">{usd(l.balanceAfter)}</td>
               </tr>
             ))}
             {!ledger.length && <tr><td colSpan={6} className="muted">{t("这个期间没有流水")}</td></tr>}

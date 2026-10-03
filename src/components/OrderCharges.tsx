@@ -19,7 +19,7 @@ export default async function OrderCharges({ rows, linkBase, exportHref }: { row
         <a className="btn small" href={exportHref}>{t("导出 CSV")}</a>
       </div>
       <p className="small muted" style={{ marginTop: 0 }}>{t("每一单的运费扣款、账单补差（补收为正、退还为负）、取消退款，以及这一单实际扣款合计。按下单日期筛选。")}</p>
-      <table>
+      <table className="card-table">
         <thead>
           <tr>
             <th>{t("下单时间")}</th><th>{t("单号")}</th><th>{t("运单号")}</th><th>{t("渠道")}</th><th>{t("状态")}</th>
@@ -29,15 +29,15 @@ export default async function OrderCharges({ rows, linkBase, exportHref }: { row
         <tbody>
           {rows.map((r) => (
             <tr key={r.shipmentId}>
-              <td className="small muted">{fmtTime(r.createdAt)}</td>
-              <td><Link href={`${linkBase}/${r.shipmentId}`}>{r.customerRef || r.customNo}</Link>{r.customerRef && <div className="small muted">{r.customNo}</div>}</td>
-              <td>{r.trackingNo ?? "-"}</td>
-              <td>{r.channelName}</td>
-              <td className="small">{STATUS_LABEL[r.status as ShipmentStatus] ? t(STATUS_LABEL[r.status as ShipmentStatus]) : r.status}</td>
-              <td className="num">{money(r.freight)}</td>
-              <td className="num">{r.adjustment ? money(r.adjustment) : "-"}</td>
-              <td className="num">{Math.abs(r.refund) >= 0.005 ? <span className="profit-pos">-{money(r.refund)}</span> : "-"}</td>
-              <td className="num"><b>{money(r.net)}</b></td>
+              <td data-label={t("下单时间")} className="small muted">{fmtTime(r.createdAt)}</td>
+              <td className="c-main"><Link href={`${linkBase}/${r.shipmentId}`}>{r.customerRef || r.customNo}</Link>{r.customerRef && <div className="small muted">{r.customNo}</div>}</td>
+              <td data-label={t("运单号")}>{r.trackingNo ?? "-"}</td>
+              <td data-label={t("渠道")}>{r.channelName}</td>
+              <td data-label={t("状态")} className="small">{STATUS_LABEL[r.status as ShipmentStatus] ? t(STATUS_LABEL[r.status as ShipmentStatus]) : r.status}</td>
+              <td data-label={t("运费")} className="num">{money(r.freight)}</td>
+              <td data-label={t("补差")} className="num">{r.adjustment ? money(r.adjustment) : "-"}</td>
+              <td data-label={t("取消退款")} className="num">{Math.abs(r.refund) >= 0.005 ? <span className="profit-pos">-{money(r.refund)}</span> : "-"}</td>
+              <td data-label={t("实际扣款")} className="num"><b>{money(r.net)}</b></td>
             </tr>
           ))}
           {!rows.length && <tr><td colSpan={9} className="muted">{t("这个期间没有订单扣款")}</td></tr>}

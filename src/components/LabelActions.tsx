@@ -19,7 +19,7 @@ export default function LabelActions({ id, defaultPaper, preview = true, extra }
           <span className="small muted">{t("纸张")}</span>
           <select value={paper} onChange={(e) => setPaper(e.target.value as PaperSize)}>
             {PAPER_SIZES.map((p) => (
-              <option key={p} value={p}>{t(PAPER_LABEL[p])}{p === defaultPaper ? t("（账户默认）") : ""}</option>
+              <option key={p} value={p}>{p === defaultPaper ? t(PAPER_LABEL[p]).replace(/（默认）|\s*\(default\)/i, "") + t("（账户默认）") : t(PAPER_LABEL[p])}</option>
             ))}
           </select>
         </label>

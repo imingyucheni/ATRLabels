@@ -68,7 +68,7 @@ export default function CoverageMap() {
           <path key={c.id} d={arc(c.x, c.y)} className={`cov-arc${hover && hover !== c.id ? " dim" : ""}${hover === c.id ? " on" : ""}`} style={{ animationDelay: `${i * 0.35}s` }} />
         ))}
         {CITIES.map((c) => (
-          <g key={c.id} className="cov-city" onMouseEnter={() => setHover(c.id)} onMouseLeave={() => setHover(null)} onFocus={() => setHover(c.id)} onBlur={() => setHover(null)} tabIndex={0}>
+          <g key={c.id} className="cov-city" onMouseEnter={() => setHover(c.id)} onMouseLeave={() => setHover(null)} onFocus={() => setHover(c.id)} onBlur={() => setHover(null)} onClick={() => setHover(c.id)} tabIndex={0}>
             <circle cx={c.x} cy={c.y} r={18} fill="transparent" />
             <circle cx={c.x} cy={c.y} r={5} className="cov-pin" />
             <circle cx={c.x} cy={c.y} r={5} className="cov-ping" />
@@ -87,7 +87,7 @@ export default function CoverageMap() {
             <span>Zone {cur.zone} · {t("常见 {d} 天送达", { d: cur.days })}</span>
           </>
         ) : (
-          <span>{t("把鼠标移到城市上看分区和时效")}</span>
+          <span>{t("点一下城市（或把鼠标移上去）看分区和时效")}</span>
         )}
       </div>
     </div>

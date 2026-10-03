@@ -28,7 +28,7 @@ export default function ProductTabs() {
   }, [tab, paused]);
 
   return (
-    <div className="pt" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}>
+    <div className="pt" onPointerEnter={(e) => e.pointerType === "mouse" && setPaused(true)} onPointerLeave={(e) => e.pointerType === "mouse" && setPaused(false)}>
       <div className="pt-tabs" role="tablist">
         {tabs.map((x) => (
           <button key={x.id} type="button" role="tab" aria-selected={tab === x.id} className={tab === x.id ? "on" : ""} onClick={() => setTab(x.id)}>

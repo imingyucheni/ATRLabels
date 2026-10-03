@@ -26,20 +26,20 @@ export default async function PortalTopup() {
 
       <div className="card table-wrap">
         <h2>{tr("充值记录")}</h2>
-        <table>
+        <table className="card-table">
           <thead><tr><th>#</th><th>{tr("提交时间")}</th><th>{tr("方式")}</th><th className="num">{tr("充值（美元）")}</th><th className="num">{tr("支付金额")}</th><th>{tr("状态")}</th><th className="num">{tr("到账（美元）")}</th><th>{tr("说明")}</th></tr></thead>
           <tbody>
             {list.map((t) => (
               <tr key={t.id}>
-                <td className="muted">{t.id}</td>
-                <td className="small muted">{fmtTime(t.createdAt)}</td>
-                <td>{tr(TOPUP_METHOD_LABEL[t.method])}</td>
-                <td className="num">{money(t.amountUsd)}</td>
+                <td className="hide-m muted">{t.id}</td>
+                <td className="c-main small muted">{fmtTime(t.createdAt)}</td>
+                <td data-label={tr("方式")}>{tr(TOPUP_METHOD_LABEL[t.method])}</td>
+                <td data-label={tr("充值（美元）")} className="num">{money(t.amountUsd)}</td>
                 {/* 支付金额只对支付宝（人民币）有意义；Zelle 付的就是美元充值金额，不重复显示 */}
-                <td className="num">{t.payCurrency === "CNY" ? <>¥{t.payAmount.toFixed(2)}{t.fxRate && <div className="small muted">{tr("汇率 {rate}", { rate: t.fxRate })}</div>}</> : <span className="muted">-</span>}</td>
-                <td><span className={`badge ${t.status === "approved" ? "labeled" : t.status === "pending" ? "pending" : "exception"}`}>{tr(TOPUP_STATUS_LABEL[t.status])}</span></td>
-                <td className="num">{t.creditedUsd !== null ? money(t.creditedUsd) : "-"}</td>
-                <td className="small">{t.adminNote}{t.hasProof && <> <a href={`/api/topup/${t.id}/proof`} target="_blank">{tr("凭证")}</a></>}</td>
+                <td data-label={tr("支付金额")} className="num">{t.payCurrency === "CNY" ? <>¥{t.payAmount.toFixed(2)}{t.fxRate && <div className="small muted">{tr("汇率 {rate}", { rate: t.fxRate })}</div>}</> : <span className="muted">-</span>}</td>
+                <td data-label={tr("状态")}><span className={`badge ${t.status === "approved" ? "labeled" : t.status === "pending" ? "pending" : "exception"}`}>{tr(TOPUP_STATUS_LABEL[t.status])}</span></td>
+                <td data-label={tr("到账（美元）")} className="num">{t.creditedUsd !== null ? money(t.creditedUsd) : "-"}</td>
+                <td data-label={tr("说明")} className="small">{t.adminNote}{t.hasProof && <> <a href={`/api/topup/${t.id}/proof`} target="_blank">{tr("凭证")}</a></>}</td>
               </tr>
             ))}
             {!list.length && <tr><td colSpan={8} className="muted">{tr("还没有充值记录")}</td></tr>}

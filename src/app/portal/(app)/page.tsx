@@ -181,19 +181,19 @@ export default async function PortalHome() {
 
       <div className="card table-wrap">
         <h2>{tr("最近面单")}</h2>
-        <table className="list">
+        <table className="list card-table">
           <thead><tr><th>{tr("时间")}</th><th>{tr("单号")}</th><th>{tr("收件人")}</th><th>{tr("渠道")}</th><th>{tr("运单号")}</th><th>{tr("状态")}</th><th className="num">{tr("运费")}</th><th>{tr("面单")}</th></tr></thead>
           <tbody>
             {recent.map((s) => (
               <tr key={s.id}>
-                <td className="small muted">{fmtTime(s.createdAt)}</td>
-                <td><Link href={`/portal/shipments/${s.id}`}>{s.customerRef || s.customNo}</Link></td>
-                <td className="wrap">{s.recipient.nameFirst} {s.recipient.nameLast}<div className="small muted">{s.recipient.city}, {s.recipient.province ?? ""} {s.recipient.zipCode}</div></td>
-                <td className="wrap"><ChannelLabel code={s.channelCode} name={s.channelName} /></td>
-                <td><TrackingLink channelCode={s.channelCode} trackingNo={s.trackingNo} title={tr("查物流轨迹")} /></td>
-                <td><StatusBadge status={s.status} test={s.isTest} /></td>
-                <td className="num">{money(s.price, s.currency)}</td>
-                <td>{s.hasLabel ? <a href={`/api/labels/${s.id}`} target="_blank">{tr("打印")}</a> : "-"}</td>
+                <td data-label={tr("时间")} className="small muted">{fmtTime(s.createdAt)}</td>
+                <td className="c-main"><Link href={`/portal/shipments/${s.id}`}>{s.customerRef || s.customNo}</Link></td>
+                <td data-label={tr("收件人")} className="wrap">{s.recipient.nameFirst} {s.recipient.nameLast}<div className="small muted">{s.recipient.city}, {s.recipient.province ?? ""} {s.recipient.zipCode}</div></td>
+                <td data-label={tr("渠道")} className="wrap"><ChannelLabel code={s.channelCode} name={s.channelName} /></td>
+                <td data-label={tr("运单号")}><TrackingLink channelCode={s.channelCode} trackingNo={s.trackingNo} title={tr("查物流轨迹")} /></td>
+                <td data-label={tr("状态")}><StatusBadge status={s.status} test={s.isTest} /></td>
+                <td data-label={tr("运费")} className="num">{money(s.price, s.currency)}</td>
+                <td className="c-act">{s.hasLabel ? <a href={`/api/labels/${s.id}`} target="_blank">{tr("打印")}</a> : "-"}</td>
               </tr>
             ))}
             {!recent.length && <tr><td colSpan={8} className="muted">{tr("还没有面单，点“下单”开始")}</td></tr>}

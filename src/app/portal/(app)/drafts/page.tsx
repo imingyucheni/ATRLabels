@@ -48,19 +48,19 @@ export default async function DraftsPage() {
               <h2>{j.filename || t("批量导入")}</h2>
               <Link className="btn small primary" href={`/portal/batch?job=${j.job_id}`}>{t("选渠道 / 提交 / 删除 →")}</Link>
             </div>
-            <table>
+            <table className="card-table">
               <thead><tr><th>{t("行")}</th><th>{t("自定义单号")}</th><th>{t("收件人")}</th><th>{t("已选渠道")}</th><th className="num">{t("运费")}</th><th>{t("状态")}</th></tr></thead>
               <tbody>
                 {list.map((r) => {
                   const [label, cls] = LABEL[r.status] ?? [r.status, ""];
                   return (
                     <tr key={r.id}>
-                      <td className="muted">{r.row_no}</td>
-                      <td>{r.customer_ref ?? "-"}</td>
-                      <td className="small">{r.recipient}</td>
-                      <td>{r.channel_code ? <ChannelLabel code={r.channel_code} /> : "-"}</td>
-                      <td className="num">{r.price !== null ? money(r.price) : "-"}</td>
-                      <td><span className={`badge ${cls}`}>{t(label)}</span>{r.error && <div className="small neg">{tr(publicRowError(r.error))}</div>}</td>
+                      <td className="hide-m muted">{r.row_no}</td>
+                      <td className="c-main">{r.customer_ref ?? "-"}</td>
+                      <td data-label={t("收件人")} className="small">{r.recipient}</td>
+                      <td data-label={t("已选渠道")}>{r.channel_code ? <ChannelLabel code={r.channel_code} /> : "-"}</td>
+                      <td data-label={t("运费")} className="num">{r.price !== null ? money(r.price) : "-"}</td>
+                      <td data-label={t("状态")}><span className={`badge ${cls}`}>{t(label)}</span>{r.error && <div className="small neg">{tr(publicRowError(r.error))}</div>}</td>
                     </tr>
                   );
                 })}

@@ -142,4 +142,5 @@ export const staff: Record<string, string> = {
   "设置": "Settings",
   "eBay 店铺对接": "eBay store integration",
   "清空沙盒": "Reset sandbox",
+  "点一下城市（或把鼠标移上去）看分区和时效": "Tap a city (or hover) to see its zone and transit time",
 };

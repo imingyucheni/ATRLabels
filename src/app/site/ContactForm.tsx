@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect, useRef } from "react";
 import { CheckCircle2 } from "lucide-react";
 import { useT, useTMsg } from "@/components/I18n";
 import { applyAction } from "./actions";
@@ -9,6 +9,11 @@ export default function ContactForm({ volumes }: { volumes: string[] }) {
   const t = useT();
   const tMsg = useTMsg();
   const [state, action, pending] = useActionState(applyAction, null);
+  // 报错显示在表单顶部：滚过去，手机上不会看起来像“点了没反应”
+  const errRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (state?.error) errRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [state]);
   if (state?.ok) {
     return (
       <div className="site-apply-done">
@@ -21,7 +26,7 @@ export default function ContactForm({ volumes }: { volumes: string[] }) {
   return (
     <form action={action} className="site-apply-form">
       <h2>{t("联系我们")}</h2>
-      {state?.error && <div className="alert err">{tMsg(state.error)}</div>}
+      {state?.error && <div ref={errRef} className="alert err" role="alert">{tMsg(state.error)}</div>}
       <label className="f"><span className="req">{t("公司 / 店铺名称")}</span><input name="company" required maxLength={80} defaultValue={state?.values?.company} /></label>
       <label className="f"><span className="req">{t("联系人")}</span><input name="contact" required maxLength={40} defaultValue={state?.values?.contact} /></label>
       <div className="grid2 tight">
