@@ -241,7 +241,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                         return (
                           <tr key={c.code} className={c.enabled ? "" : "muted"}>
                             <td>{c.name.replace(JG_SUFFIX, "")}{!c.enabled && <span className="badge pending" style={{ marginLeft: 6 }}>{t("已停用")}</span>}</td>
-                            <td className="small muted">{pid}</td>
+                            <td className="small muted">{fixedWh ? parseJgCode(c.code).productId : pid}</td>
                             <td>
                               {fixedWh ? <b className="small">{fixedWh}</b> : <input name={`wh_${pid}`} list="jg-warehouses" defaultValue={jg.warehouses?.[pid] ?? DEFAULT_JG_WAREHOUSES[pid] ?? ""} inputMode="numeric" autoComplete="off" style={{ width: 120 }} placeholder={jg.warehouseId || t("未填写")} />}
                               {(() => {
