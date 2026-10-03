@@ -27,6 +27,16 @@ export const DEFAULT_JG_WAREHOUSES: Record<string, string> = {
   "580469": "230759", // Ontrac-SG-B-XT · Ontrac-91710-230490（4820 Dorina Ct, Chino CA 91710）
 };
 
+/** 嘉谷的仓库（设置页选仓库时显示名称和地址，方便核对） */
+export const JG_WAREHOUSE_INFO: Record<string, { name: string; address: string }> = {
+  "221121": { name: "GDE-ONE-91761", address: "2155 S Excise Ave Ste B, Ontario, CA 91761" },
+  "196845": { name: "GALAX", address: "" },
+  "229615": { name: "CA-92374", address: "" },
+  "230759": { name: "Ontrac-91710-230490", address: "4820 Dorina Ct, Chino, CA 91710" },
+  // 第二个 FedEx NG 渠道（备用）的仓库
+  "230206": { name: "SG-HX-CA 91762", address: "1380 W Mission Blvd, Ontario, CA 91762" },
+};
+
 export interface JiaguConfig {
   clientId: string;
   secret: string;

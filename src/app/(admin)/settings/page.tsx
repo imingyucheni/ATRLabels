@@ -24,7 +24,7 @@ import SettingsToc from "@/components/SettingsToc";
 import { DEFAULT_SETTINGS_TAB, isSettingsTab, type SettingsTab } from "@/lib/settingsTabs";
 import FlashForm from "@/components/FlashForm";
 import RuleInputs from "@/components/RuleInputs";
-import { DEFAULT_JG_WAREHOUSES, isJiaguCode, JG_PREFIX, JG_SUFFIX } from "@/lib/shipbest/jiagu";
+import { DEFAULT_JG_WAREHOUSES, JG_WAREHOUSE_INFO, isJiaguCode, JG_PREFIX, JG_SUFFIX } from "@/lib/shipbest/jiagu";
 import { saveTermsAction, saveSiteAction, saveJiaguAction, testJiaguAction, saveDhlAction, testDhlAction, saveEbayAction, resetTestEnvAction, resetSandboxAction, resetTermsAction, saveChannelLimitsAction, savePromotionAction, togglePromotionAction, saveSmtpAction, testMailAction, setFinancePinAction, clearTestDataAction, saveAddrCheckAction, testAddrAction, refreshFxAction, saveChannelsAction, savePaymentSettingsAction, saveSettingsAction, saveShipBestAction, syncChannelsAction, verifyAction } from "@/app/actions";
 import { cnyToPay, usdCnyQuote } from "@/lib/fx";
 import FilePick from "@/components/FilePick";
@@ -239,12 +239,21 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                           <tr key={c.code} className={c.enabled ? "" : "muted"}>
                             <td>{c.name.replace(JG_SUFFIX, "")}{!c.enabled && <span className="badge pending" style={{ marginLeft: 6 }}>{t("已停用")}</span>}</td>
                             <td className="small muted">{pid}</td>
-                            <td><input name={`wh_${pid}`} defaultValue={jg.warehouses?.[pid] ?? DEFAULT_JG_WAREHOUSES[pid] ?? ""} inputMode="numeric" autoComplete="off" style={{ width: 120 }} placeholder={jg.warehouseId || t("未填写")} /></td>
+                            <td>
+                              <input name={`wh_${pid}`} list="jg-warehouses" defaultValue={jg.warehouses?.[pid] ?? DEFAULT_JG_WAREHOUSES[pid] ?? ""} inputMode="numeric" autoComplete="off" style={{ width: 120 }} placeholder={jg.warehouseId || t("未填写")} />
+                              {(() => {
+                                const w = JG_WAREHOUSE_INFO[String(jgWarehouse(c.code) ?? "")];
+                                return w ? <div className="small muted">{w.name}{w.address ? ` · ${w.address}` : ""}</div> : null;
+                              })()}
+                            </td>
                           </tr>
                         );
                       })}
                     </tbody>
                   </table>
+                  <datalist id="jg-warehouses">
+                    {Object.entries(JG_WAREHOUSE_INFO).map(([id, w]) => <option key={id} value={id}>{w.name}{w.address ? ` · ${w.address}` : ""}</option>)}
+                  </datalist>
                   <p className="small muted" style={{ margin: "6px 0 0" }}>{t("渠道的启用 / 停用在下面“物流渠道”里统一设置。")} <a href="#channels">{t("去设置 ↓")}</a></p>
                 </div>
               )}
