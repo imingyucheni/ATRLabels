@@ -1231,7 +1231,8 @@ export async function addJiaguVariantAction(_: FlashState, fd: FormData): Promis
   if (main === warehouseId) return { error: "这个渠道本来就是从这个仓库发的，不需要再加" };
   // 已经加过的：更新名字（也可以用来改名）
   const others = (cur.variants ?? []).filter((v) => !(v.productId === productId && v.warehouseId === warehouseId));
-  saveSettings({ jiagu: { ...cur, variants: [...others, { productId, warehouseId, ...(name ? { name } : {}) }] } });
+  const autoFailover = fd.get("autoFailover") === "on";
+  saveSettings({ jiagu: { ...cur, variants: [...others, { productId, warehouseId, ...(name ? { name } : {}), ...(autoFailover ? { autoFailover } : {}) }] } });
   clearChannelNameCache();
   try {
     await syncChannels();

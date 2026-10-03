@@ -47,7 +47,7 @@ export interface JiaguConfig {
   /** 产品 ID → 仓库 ID */
   warehouses: Record<string, number>;
   /** 备用仓库：同一个产品再从这些仓库发，各自算一个渠道 */
-  variants: { productId: number; warehouseId: number; name?: string }[];
+  variants: { productId: number; warehouseId: number; name?: string; autoFailover?: boolean }[];
   authUrl: string;
   apiUrl: string;
 }
@@ -66,7 +66,7 @@ export function jiaguConfig(): JiaguConfig | null {
         .map(([k, v]) => [k, Number(v)] as const)
         .filter(([, v]) => v > 0),
     ),
-    variants: (j.variants ?? []).map((v) => ({ productId: Number(v.productId), warehouseId: Number(v.warehouseId), name: v.name?.trim() || undefined })).filter((v) => v.productId > 0 && v.warehouseId > 0),
+    variants: (j.variants ?? []).map((v) => ({ productId: Number(v.productId), warehouseId: Number(v.warehouseId), name: v.name?.trim() || undefined, autoFailover: !!v.autoFailover })).filter((v) => v.productId > 0 && v.warehouseId > 0),
     authUrl: (j.authUrl || "http://authorization.iot-easy.cn").replace(/\/+$/, ""),
     apiUrl: (j.apiUrl || "http://dragon.iot-easy.cn").replace(/\/+$/, ""),
   };
@@ -86,6 +86,15 @@ export function parseJgCode(code: string | null | undefined): { productId: numbe
 }
 
 export const jgVariantCode = (productId: number | string, warehouseId: number | string) => `${JG_PREFIX}${productId}-W${warehouseId}`;
+
+/** 主渠道下单被拒时自动改用的备用渠道（备用仓库里勾了“自动备用”的第一个） */
+export function failoverFor(cfg: JiaguConfig | null, code: string): string | null {
+  if (!cfg) return null;
+  const { productId, warehouseId } = parseJgCode(code);
+  if (!productId || warehouseId) return null;
+  const v = cfg.variants.find((x) => x.productId === productId && x.autoFailover);
+  return v ? jgVariantCode(v.productId, v.warehouseId) : null;
+}
 
 /** 仓库的显示名：登记过的用名称，否则“仓库 ID” */
 export const jgWarehouseName = (id: number | string) => JG_WAREHOUSE_INFO[String(id)]?.name ?? `仓库 ${id}`;
@@ -327,7 +336,8 @@ export class JiaguClient {
   async createOrder(customNo: string, code: string, req: ShipmentRequest, productName = code) {
     const { productId: id, warehouseId: wh } = parseJgCode(code);
     // 提交前先记下这是嘉谷的单：万一提交超时、结果未知，之后刷新也知道去嘉谷查（查不到面单 5 分钟后转异常）
-    if (!jgOrders.get(customNo)) jgOrders.save({ customNo, productCode: code, productName, status: 2 });
+    // 主渠道被拒后自动改用备用渠道时，同一个单号再提交一次：记录改成备用渠道（取消时用对仓库）
+    if (jgOrders.get(customNo)?.productCode !== code) jgOrders.save({ customNo, productCode: code, productName, status: 2 });
     const r = await this.call<{ Identifier?: string; MasterTrackingNbr?: string; TrackingNbr?: string; MasterLabelUrl?: string; labels?: { labelUri?: string }[] }>(
       "/api/gts/ShippingLabel",
       { ...buildJiaguBody(this.cfg, req, id, wh), OrderNbr: customNo, ProductID: id },

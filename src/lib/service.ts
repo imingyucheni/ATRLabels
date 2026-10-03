@@ -16,6 +16,7 @@ import {
   type ShipmentPatch,
   activeShipmentByRef,
   isInternalCustomer,
+  switchShipmentChannel,
   isTestAccount,
   TEST_ACCOUNT_ENV,
   duplicateRefMessage,
@@ -32,7 +33,7 @@ import { effectiveRule } from "./markup";
 import { getPromotion } from "./promotions";
 import { checkLimits, checkMinSize } from "./channelLimits";
 import { getShipBestClient, getTestAccountClient, shipbestMode, ShipBestError } from "./shipbest/client";
-import { isJiaguCode } from "./shipbest/jiagu";
+import { failoverFor, isJiaguCode, jiaguConfig } from "./shipbest/jiagu";
 import { aesRequired, hsDigits, isDhlCode, isInternational } from "./shipbest/dhl";
 import { guessCarrier } from "./carriers";
 import { publicError } from "./portal";
@@ -512,6 +513,17 @@ export async function createLabel(input: CreateInput): Promise<number> {
     await (testAccount ? getTestAccountClient() : getShipBestClient()).createOrder(customNo, channelCode, req, input.remark);
     if (!isJiaguCode(channelCode)) logProviderEvent(customNo, providerOf(channelCode), "提交订单", null, "成功");
   } catch (e) {
+    // 主渠道明确拒绝：有设置自动备用的，备用还能赚（利润率 ≥ 5%）就改用备用渠道出单，客户价不变
+    if (e instanceof ShipBestError && !testAccount && (await tryFailover(id, customNo, customerId, channelCode, quote, req, input.remark, e))) {
+      if (ref) await closeSupersededExceptions(customerId, ref, id).catch(() => null);
+      if (input.waitForLabel === false) return id;
+      for (let i = 0; i < 8; i++) {
+        await new Promise((r) => setTimeout(r, i === 0 ? 1200 : 2000));
+        const s = await refreshShipment(id).catch(() => null);
+        if (s && s.status !== "pending") break;
+      }
+      return id;
+    }
     if (e instanceof ShipBestError) {
       // ShipBest 明确拒绝：订单没有建成，退回扣款、删掉本地记录，修改后重试
       // 后台留一条出单失败记录（渠道、收件地、包裹、品名、对方原话）
@@ -547,6 +559,53 @@ export async function createLabel(input: CreateInput): Promise<number> {
     if (s && s.status !== "pending") break;
   }
   return id;
+}
+
+/** 自动备用：备用渠道的利润率至少要有这么多才切（按客户价算） */
+export const FAILOVER_MIN_MARGIN = 0.05;
+
+/**
+ * 主渠道下单被拒后，改用备用渠道（同一个嘉谷产品的备用仓库）出单。
+ * 客户价不变；渠道、成本、利润按实际出单的备用渠道记。备用会亏（利润率不到 5%）、报不出价或也被拒，返回 false，按原来的失败处理。
+ */
+async function tryFailover(
+  id: number, customNo: string, customerId: number, mainCode: string,
+  quote: ChannelQuote, req: ShipmentRequest, remark: string | undefined, err: Error,
+): Promise<boolean> {
+  const backup = failoverFor(jiaguConfig(), mainCode);
+  const ch = backup ? getChannel(backup) : null;
+  if (!backup || !ch?.enabled) return false;
+  const log = (msg: string) => logProviderEvent(customNo, "嘉谷", "自动备用", null, msg);
+  let cost: number;
+  let zone: string | null = null;
+  try {
+    const q = await getShipBestClient().trialPrice(backup, req);
+    cost = q ? q.totalDiscountShippingFee || q.totalShippingFee : 0;
+    zone = q?.zone ?? null;
+  } catch (e2) {
+    log(`主渠道被拒（${err.message}），备用渠道 ${ch.name} 报价失败：${(e2 as Error).message}，没有切换`);
+    return false;
+  }
+  const price = quote.price ?? 0;
+  // 公司自用账号按成本价收：不看利润，只要备用不比主渠道贵
+  const ok = isInternalCustomer(customerId) ? cost > 0 && cost <= (quote.cost ?? 0) : cost > 0 && price - cost >= price * FAILOVER_MIN_MARGIN;
+  if (!ok) {
+    log(`主渠道被拒（${err.message}），备用渠道 ${ch.name} 成本 ${cost.toFixed(2)}，客户价 ${price.toFixed(2)}，利润率不到 ${FAILOVER_MIN_MARGIN * 100}%，没有切换`);
+    return false;
+  }
+  try {
+    await getShipBestClient().createOrder(customNo, backup, req, remark);
+  } catch (e2) {
+    log(`主渠道被拒（${err.message}），备用渠道 ${ch.name} 也下单失败：${(e2 as Error).message}`);
+    if (e2 instanceof ShipBestError) return false;
+    // 备用提交结果未知：订单可能已经在嘉谷建好，按备用渠道留着，稍后刷新
+    switchShipmentChannel(id, backup, ch.name, cost, zone);
+    updateShipment(id, { errorMsg: `提交结果未知（${(e2 as Error).message}），请稍后点“刷新状态”` });
+    return true;
+  }
+  switchShipmentChannel(id, backup, ch.name, cost, zone);
+  log(`主渠道 ${getChannel(mainCode)?.name ?? mainCode} 被拒（${err.message}），已自动改用 ${ch.name} 出单：成本 ${cost.toFixed(2)}（原 ${(quote.cost ?? 0).toFixed(2)}），客户价 ${price.toFixed(2)} 不变`);
+  return true;
 }
 
 /* ---------------- 刷新状态 ---------------- */

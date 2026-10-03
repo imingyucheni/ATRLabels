@@ -458,7 +458,7 @@ export interface Settings {
   /** 客户服务条款：留空用系统默认；version 变了客户要重新同意 */
   terms?: { zh: string; en: string; version: number; updatedAt: string; changeNote?: string } | null;
   /** 嘉谷万邑（Dragon Open API）尾程面单：第二个服务商 */
-  jiagu: { enabled: boolean; clientId: string; secret: string; ownershipId: string; customerId: string; warehouseId: string; warehouses?: Record<string, string>; variants?: { productId: string; warehouseId: string; name?: string }[]; authUrl?: string; apiUrl?: string };
+  jiagu: { enabled: boolean; clientId: string; secret: string; ownershipId: string; customerId: string; warehouseId: string; warehouses?: Record<string, string>; variants?: { productId: string; warehouseId: string; name?: string; autoFailover?: boolean }[]; authUrl?: string; apiUrl?: string };
   /** ShipGrid（SG）：API 密钥 ak_test_… / ak_live_…（测试 / 正式由前缀决定） */
   shipgrid?: { enabled: boolean; apiKey: string };
   /** DHL Express 官方账号（MyDHL API）国际快递 */
@@ -1149,6 +1149,13 @@ export function updateShipment(id: number, patch: ShipmentPatch) {
   db()
     .prepare(`UPDATE shipments SET ${sets}, updated_at = datetime('now') WHERE id = ?`)
     .run(...entries.map(([, v]) => v as string | number | null), id);
+}
+
+/** 自动改用备用渠道出单后：渠道和成本按实际出单的记（客户价不变） */
+export function switchShipmentChannel(id: number, channelCode: string, channelName: string, quotedCost: number, zone: string | null) {
+  db()
+    .prepare("UPDATE shipments SET channel_code = ?, channel_name = ?, quoted_cost = ?, zone = COALESCE(?, zone), updated_at = datetime('now') WHERE id = ?")
+    .run(channelCode, channelName, quotedCost, zone, id);
 }
 
 export function setLabelNote(id: number, note: string | null) {

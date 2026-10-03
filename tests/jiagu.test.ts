@@ -131,6 +131,54 @@ describe("嘉谷万邑接口", () => {
     }
   });
 
+  it("自动备用：主渠道下单被拒，备用利润率 ≥ 5% 就改用备用出单（客户价不变，成本按备用记）；会亏就不切", async () => {
+    const cur = db.getSettings().jiagu;
+    db.saveSettings({ jiagu: { ...cur, variants: [{ productId: "569599", warehouseId: "230206", name: "Fedex NG 2", autoFailover: true }] } });
+    const svc = await import("@/lib/service");
+    const ledger = await import("@/lib/ledger");
+    const { listProviderEvents } = await import("@/lib/providerLog");
+    try {
+      db.upsertChannels([{ code: "JG-569599", name: "Fedex NG末端-N · GDE" }, { code: "JG-569599-W230206", name: "Fedex NG 2 · GDE" }]);
+      const cid = db.saveCustomer(null, { name: "备用客户", contact: null, phone: null, email: null, note: null, markup: { percent: 0, fixed: 1, minProfit: 0 } });
+      db.setCustomerChannels(cid, ["JG-569599"]);
+      ledger.addLedger({ customerId: cid, type: "topup", amount: 100 });
+      const req2 = { ...req, skuList: req.skuList.map((k) => ({ ...k, productNature: "2,4", hsCode: "6109100000" })) };
+      let backupCost = 0;
+      const calls = fakeServer({
+        "/api/gts/CalculateRates": (b) => {
+          const amt = b.WarehouseID === 230206 ? backupCost : 8;
+          return { IsSuccess: true, Result: [{ ID: 569599, TotalCharge: amt, RatesList: [{ Currency: "USD", ZoneCode: "5", Amount: amt }] }] };
+        },
+        "/api/gts/ShippingLabel": (b) => b.WarehouseID === 221121
+          ? { IsSuccess: false, ErrorCode: "500", Message: "仓库暂停收货" }
+          : { IsSuccess: true, Result: { Identifier: "GD-B", MasterTrackingNbr: "FXB", MasterLabelUrl: "http://x/b.pdf" } },
+      });
+      svc.clearQuoteCache();
+      const q = (await svc.quoteAll(cid, req2)).find((x) => x.channelCode === "JG-569599")!;
+      expect(q.ok).toBe(true);
+      const price = q.price!;
+
+      // 备用成本让利润率约 10%：自动改用备用
+      backupCost = Math.round(price * 0.9 * 100) / 100;
+      const id = await svc.createLabel({ customerId: cid, channelCode: "JG-569599", req: req2, expectedPrice: price, customerRef: "FO-1", waitForLabel: false });
+      const s = db.getShipment(id)!;
+      expect(s).toMatchObject({ channelCode: "JG-569599-W230206", channelName: "Fedex NG 2 · GDE", quotedCost: backupCost, price });
+      expect(ledger.balanceOf(cid)).toBeCloseTo(100 - price, 2);
+      expect(calls.filter((c) => c.path === "/api/gts/ShippingLabel").map((c) => c.body.WarehouseID)).toEqual([221121, 230206]);
+      expect(jg.jgOrders.get(s.customNo)?.productCode).toBe("JG-569599-W230206");
+      expect(listProviderEvents(s.customNo).find((e) => e.action === "自动备用")?.message).toMatch(/已自动改用 Fedex NG 2/);
+
+      // 备用利润率不到 5%：不切，按原来的失败处理（不扣钱、不留单）
+      backupCost = Math.round(price * 0.97 * 100) / 100;
+      svc.clearQuoteCache();
+      await expect(svc.createLabel({ customerId: cid, channelCode: "JG-569599", req: req2, expectedPrice: price, customerRef: "FO-2", waitForLabel: false })).rejects.toThrow(/仓库暂停收货/);
+      expect(db.activeShipmentByRef(cid, "FO-2")).toBeUndefined();
+      expect(ledger.balanceOf(cid)).toBeCloseTo(100 - price, 2);
+    } finally {
+      db.saveSettings({ jiagu: cur });
+    }
+  });
+
   it("下单被拒绝时抛错（订单没建成），取消失败也抛错", async () => {
     fakeServer({
       "/api/gts/ShippingLabel": () => ({ IsSuccess: false, ErrorCode: "100002", Message: "订单重复" }),

@@ -272,7 +272,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                       const w = JG_WAREHOUSE_INFO[v.warehouseId];
                       return (
                         <li key={`${v.productId}-${v.warehouseId}`} style={{ marginBottom: 6 }}>
-                          {v.name ? <b>{v.name}</b> : null}{v.name ? "：" : ""}{base ? base.name.replace(JG_SUFFIX, "") : v.productId} → {t("仓库")} {v.warehouseId}{w ? `（${w.name}${w.address ? ` · ${w.address}` : ""}）` : ""}
+                          {v.name ? <b>{v.name}</b> : null}{v.name ? "：" : ""}{v.autoFailover && <span className="badge ok" style={{ marginRight: 6 }}>{t("自动备用")}</span>}{base ? base.name.replace(JG_SUFFIX, "") : v.productId} → {t("仓库")} {v.warehouseId}{w ? `（${w.name}${w.address ? ` · ${w.address}` : ""}）` : ""}
                           <FlashForm action={removeJiaguVariantAction} submitLabel="删除" submitClass="small link-btn" inline confirm="删除这个备用仓库渠道？已经开通给客户的也会一起停掉。">
                             <input type="hidden" name="productId" value={v.productId} />
                             <input type="hidden" name="warehouseId" value={v.warehouseId} />
@@ -294,6 +294,9 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                   </label>
                   <label className="f">{t("仓库 ID")}
                     <input name="warehouseId" list="jg-warehouses-all" required inputMode="numeric" pattern="\d{3,12}" autoComplete="off" style={{ width: 140 }} />
+                  </label>
+                  <label className="f" style={{ alignSelf: "end", maxWidth: 360 }}>
+                    <span><input type="checkbox" name="autoFailover" defaultChecked /> {t("自动备用：原渠道下单被拒时，自动改用这个渠道出单（利润率至少 5% 才切，客户价不变）")}</span>
                   </label>
                   <datalist id="jg-warehouses-all">
                     {Object.entries(JG_WAREHOUSE_INFO).map(([id, w]) => <option key={id} value={id}>{w.name}{w.address ? ` · ${w.address}` : ""}</option>)}

@@ -30,4 +30,10 @@ export const qa3: Record<string, string> = {
   "分区差异": "Zone difference",
   "5 位美国邮编，例如 10001": "5-digit US ZIP code, e.g. 10001",
   "邮编 {zip} 一般在 {want}，和选的州 {st} 对不上，请核对": "ZIP {zip} is usually in {want}, not {st}. Please check the address.",
+  "自动备用": "Auto backup",
+  "自动备用：原渠道下单被拒时，自动改用这个渠道出单（利润率至少 5% 才切，客户价不变）": "Auto backup: if the original service rejects an order, ship with this one instead (only with at least 5% margin; customer price unchanged)",
+  "备用仓库渠道": "Backup-warehouse services",
+  "保存备用仓库渠道": "Save backup service",
+  "渠道名称（可选，只有后台看得到）": "Service name (optional, admin only)",
+  "例如 Fedex NG 2": "e.g. Fedex NG 2",
 };
