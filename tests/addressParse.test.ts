@@ -67,4 +67,16 @@ describe("体验官反馈的写法", () => {
     });
     expect(parseAddress("test\n19515 E WALNUT DR N\nWALNUT CA   91789-281").address2).toBeUndefined();
   });
+
+  it("一行里带中文标签：收件人 / 电话 / 地址分开识别", () => {
+    expect(parseAddress("收件人: Mike Chen 电话: 6265550123 地址: 123 Main St Unit 4, Los Angeles, CA 90012")).toMatchObject({
+      nameFirst: "Mike", nameLast: "Chen", phone: "6265550123", address1: "123 Main St", address2: "Unit 4", city: "Los Angeles", province: "CA", zipCode: "90012",
+    });
+  });
+
+  it("没有逗号的单行地址，行尾带 USA", () => {
+    expect(parseAddress("Bob Smith 742 Evergreen Terrace Springfield IL 62704 USA")).toMatchObject({
+      nameFirst: "Bob", nameLast: "Smith", address1: "742 Evergreen Terrace", city: "Springfield", province: "IL", zipCode: "62704", country: "US",
+    });
+  });
 });

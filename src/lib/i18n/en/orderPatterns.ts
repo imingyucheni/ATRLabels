@@ -17,6 +17,7 @@ const REQUIRED: [string, string][] = [
   ["名", "first name"],
   ["姓", "last name"],
   ["国家二字码", "country code"],
+  ["国家", "country"],
   ["城市", "city"],
   ["地址1", "address line 1"],
   ["邮编", "ZIP code"],

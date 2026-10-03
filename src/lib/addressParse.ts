@@ -43,6 +43,8 @@ const EMAIL = /[\w.+-]+@[\w-]+(\.[\w-]+)+/;
 // 电话：+1 (512) 555-0100 / 512.555.0100 / 5125550100 / 带分机
 const PHONE = /(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}(?:\s*(?:ext\.?|x|#)\s*\d{1,6})?/i;
 const LABEL = /^\s*(ship\s*to|shipping\s*address|recipient|sender|name|full\s*name|contact|address(\s*line)?\s*\d?|addr|phone(\s*number)?|tel(ephone)?|mobile|email|e-mail|收件人|寄件人|联系人|姓名|名字|电话|手机|联系电话|地址|详细地址|邮箱|邮编|城市|州)\s*[:：]\s*/i;
+/** 行中间的标签（前面有空格才算，避免把开头的标签也断开） */
+const INLINE_LABEL = /[ \t]+(?=(?:收件人|寄件人|联系人|姓名|电话|手机|联系电话|地址|详细地址|邮箱|邮编|phone(?:\s*number)?|tel|mobile|e-?mail|address)\s*[:：])/gi;
 const UNIT = /^(apt|apartment|suite|ste|unit|#|bldg|building|fl|floor|rm|room|dept|po box|p\.o\. box)\b\.?/i;
 const GLUED_SUFFIX = /\b(St|Ave|Rd|Blvd|Dr|Ln|Ct|Way|Pl|Pkwy|Hwy|Cir|Ter|Trl|Street|Avenue|Road|Drive|Lane|Court|Place|Boulevard)(?=[A-Z][a-z])/g;
 const STREET_HINT = /\b(st|street|ave|avenue|rd|road|blvd|boulevard|dr|drive|ln|lane|ct|court|way|pl|place|pkwy|parkway|hwy|highway|cir|circle|ter|terrace|trl|trail|loop|sq|square)\b\.?/i;
@@ -104,9 +106,21 @@ export function parseAddress(text: string): Partial<Address> {
     raw = raw.replace(email, " ");
   }
 
+  // 一行里写了好几个“标签：”（收件人: Mike 电话: 626… 地址: 123 Main St）：在每个标签前断行
+  raw = raw.replace(INLINE_LABEL, "\n");
+
   // 2) 分行，每行再按逗号 / 分号拆开（城市、州、邮编后面会重新拼起来识别）
   let lines = raw
     .split(/\n+/)
+    // 行尾带国家（… IL 62704 USA）：去掉国家，记下美国
+    .map((l) => {
+      const m = l.match(/^(.*\S)[,\s]+(USA|U\.S\.A\.?|United States( of America)?)\.?\s*$/i);
+      if (m && /\d/.test(m[1])) {
+        out.country = "US";
+        return m[1];
+      }
+      return l;
+    })
     // 从网页复制时换行丢了，街道后缀和城市粘在一起（“8th AveWest Bend”）：在中间补一个空格
     .map((l) => l.replace(GLUED_SUFFIX, "$1 "))
     .map((l) => l.replace(LABEL, ""))

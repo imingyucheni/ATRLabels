@@ -1195,10 +1195,13 @@ export function listShipments(f: ShipmentFilter = {}): Shipment[] {
     where.push("date(s.created_at, 'localtime') <= ?");
     args.push(f.to);
   }
-  if (f.q) {
-    where.push("(s.custom_no LIKE ? OR s.order_no LIKE ? OR s.tracking_no LIKE ? OR s.recipient_json LIKE ? OR s.customer_ref LIKE ?)");
-    const like = `%${f.q}%`;
-    args.push(like, like, like, like, like);
+  const q = f.q?.trim();
+  if (q) {
+    // 收件人名和姓分开存：拼成全名再比（搜 “John Doe” 也能找到）
+    where.push(`(s.custom_no LIKE ? OR s.order_no LIKE ? OR s.tracking_no LIKE ? OR s.recipient_json LIKE ? OR s.customer_ref LIKE ?
+      OR (COALESCE(json_extract(s.recipient_json, '$.nameFirst'), '') || ' ' || COALESCE(json_extract(s.recipient_json, '$.nameLast'), '')) LIKE ?)`);
+    const like = `%${q}%`;
+    args.push(like, like, like, like, like, like);
   }
   const sql = `${SHIPMENT_SELECT}
     ${where.length ? "WHERE " + where.join(" AND ") : ""} ORDER BY s.id DESC ${f.limit ? `LIMIT ${Number(f.limit)}` : ""}`;

@@ -25,6 +25,8 @@ export async function applyAction(_: ApplyState, fd: FormData): Promise<ApplySta
   if (!values.company || !values.contact) return { error: "请填写公司 / 店铺名称和联系人", values };
   if (!values.wechat && !values.phone && !values.email) return { error: "微信、电话、邮箱至少填一个", values };
   if (values.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email)) return { error: "邮箱格式不对", values };
+  // 电话至少 7 位数字，避免收到联系不上的线索
+  if (values.phone && values.phone.replace(/\D/g, "").length < 7) return { error: "电话号码看起来不对，请检查", values };
   const ip = await clientIp();
   try {
     createLead({ ...values, wechat: values.wechat || null, phone: values.phone || null, email: values.email || null, volume: values.volume || null, note: values.note || null, lang: await getLang() }, ip);

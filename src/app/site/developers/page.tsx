@@ -63,7 +63,9 @@ export default async function DevelopersPage() {
 curl -H "Authorization: Bearer ${key}" -o label.pdf ${base}/orders/SO-1001/label
 # base64 (JSON)
 curl -H "Authorization: Bearer ${key}" "${base}/orders/SO-1001/label?format=base64"`;
-  const errRes = `{ "success": false, "code": "INSUFFICIENT_BALANCE", "message": "余额不足：当前余额 1.20，本单需要 3.82，请先充值" }`;
+  const errRes = en
+    ? `{ "success": false, "code": "INSUFFICIENT_BALANCE", "message": "Insufficient balance: current balance 1.20, this order needs 3.82. Please top up." }`
+    : `{ "success": false, "code": "INSUFFICIENT_BALANCE", "message": "余额不足：当前余额 1.20，本单需要 3.82，请先充值" }`;
 
   const endpoints: [string, string, string, string][] = [
     ["GET", "/channels", "账户可用的渠道（ERP“同步物流方式”用）", "Channels available to the account"],

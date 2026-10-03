@@ -164,7 +164,7 @@ export default async function PortalShipmentDetail({ params }: { params: Promise
           <h2>{t("费用")}</h2>
           <dl className="kv">
             <dt>{t("渠道")}</dt><dd><ChannelLabel code={s.channelCode} name={s.channelName} /></dd>
-            <dt>{t("分区")}</dt><dd>{s.zone ?? "-"}</dd>
+            <dt>{isDhlCode(s.channelCode) ? t("时效") : t("分区")}</dt><dd>{s.zone ?? "-"}</dd>
             <dt>{t("运单号")}</dt><dd><TrackingLink channelCode={s.channelCode} trackingNo={s.trackingNo} title={t("查物流轨迹")} /></dd>
             <dt>{t("运费")}</dt><dd><b>{money(s.price, s.currency)}</b></dd>
             {s.status === "cancelled" && (

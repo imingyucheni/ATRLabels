@@ -30,7 +30,7 @@ export const api: Record<string, string> = {
   "最近调用（最多 50 条，保留 30 天）": "Recent calls (latest 50, kept 30 days)",
   "请求": "Request",
   "结果": "Result",
-  "耗时": "Time",
+  "耗时": "Duration",
   "还没有调用记录": "No calls yet",
   "作废": "Revoke",
   "作废后用这个密钥的系统会马上调用失败，确定作废吗？": "Systems using this key will fail immediately. Revoke it?",

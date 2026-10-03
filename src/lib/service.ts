@@ -52,7 +52,7 @@ function checkAddress(a: Address | undefined, who: string, errors: string[], zip
   const req: [keyof Address, string][] = [
     ["nameFirst", "名"],
     ["nameLast", "姓"],
-    ["country", "国家二字码"],
+    ["country", "国家"],
     ["city", "城市"],
     ["address1", "地址1"],
   ];

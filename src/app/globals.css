@@ -683,6 +683,10 @@ tr.row-disabled td:first-child { opacity: 0.55; }
 .site-brand .brand-mark { background: var(--us-navy); color: #fff; border: 0; border-radius: 7px; }
 .site-links { display: flex; gap: 22px; flex: 1; min-width: 0; }
 .site-links a { color: var(--us-text); font-size: 14.5px; font-weight: 500; white-space: nowrap; }
+/* 英文菜单词长：收紧间距和字号，避免最后一项被右侧按钮盖住 */
+html[lang="en"] .site-links { gap: 14px; }
+html[lang="en"] .site-links a { font-size: 14px; }
+html[lang="en"] .site-nav-in { gap: 20px; }
 .site-links a:hover { color: var(--us-ink); text-decoration: none; }
 .site-nav-right { display: flex; align-items: center; gap: 14px; flex-shrink: 0; white-space: nowrap; }
 .site-nav-right .prefs { margin: 0; }
@@ -1640,16 +1644,16 @@ fieldset.ro-wrap:disabled button[type="submit"], fieldset.ro-wrap:disabled form 
 .pkg-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
 .pkg-head h2 { margin: 0; }
 .unit-toggles { display: flex; gap: 8px; flex-wrap: wrap; }
-.seg { display: inline-flex; padding: 3px; gap: 2px; background: var(--sunken); border: 1px solid var(--line); border-radius: 9px; }
-.seg button { all: unset; cursor: pointer; padding: 4px 11px; border-radius: 6px; font-size: 13px; font-weight: 600; color: var(--text-2); line-height: 1.4; }
-.seg button:hover { color: var(--text); }
-.seg button.on { background: var(--accent); color: var(--on-accent); }
-.seg button:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: 1px; }
+.unit-toggles .seg { display: inline-flex; padding: 3px; gap: 2px; background: var(--sunken); border: 1px solid var(--line); border-radius: 9px; }
+.unit-toggles .seg button { all: unset; cursor: pointer; padding: 4px 11px; border-radius: 6px; font-size: 13px; font-weight: 600; color: var(--text-2); line-height: 1.4; }
+.unit-toggles .seg button:hover { color: var(--text); }
+.unit-toggles .seg button.on { background: var(--accent); color: var(--on-accent); }
+.unit-toggles .seg button:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: 1px; }
 .unit-input { display: flex; align-items: stretch; }
 .unit-input input { flex: 1; min-width: 0; border-top-right-radius: 0 !important; border-bottom-right-radius: 0 !important; }
 .unit-input i { display: flex; align-items: center; padding: 0 10px; font-style: normal; font-size: 13px; font-weight: 600; color: var(--text-2); background: var(--sunken); border: 1px solid var(--line-strong); border-left: 0; border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
 @media (max-width: 760px) {
-  .seg button { padding: 7px 12px; }
+  .unit-toggles .seg button { padding: 7px 12px; }
   .pkg-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 #shipgrid .alert { white-space: pre-line; }
@@ -1676,4 +1680,9 @@ tbody.ch-group + tbody.ch-group .ch-group-head td { border-top-width: 10px; bord
 @media (max-width: 900px) {
   /* 展开的手机菜单：最高一屏，菜单内部滚动，矮屏也能点到底部的语言切换和退出 */
   .sidebar.open { max-height: 100dvh; overflow-y: auto; overscroll-behavior: contain; }
+}
+
+/* 电脑端：订单号这类主列太长时换行，不把整张表撑出屏幕 */
+@media (min-width: 761px) {
+  .card-table td.c-main { max-width: 220px; overflow-wrap: anywhere; }
 }
