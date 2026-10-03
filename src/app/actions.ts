@@ -59,9 +59,9 @@ import { activePromotion, deletePromotion, getPromotion, savePromotion, validate
 import { isProductionSite } from "@/lib/sites";
 import { checkAddress, needsAck, type AddressCheck } from "@/lib/addressCheck";
 import { updateLead } from "@/lib/leads";
-import { getJiaguClient, jiaguConfig, JG_PREFIX, JG_SUFFIX, warehouseFor } from "@/lib/shipbest/jiagu";
+import { DEFAULT_JG_WAREHOUSES, getJiaguClient, jgVariantCode, jiaguConfig, JG_SUFFIX, warehouseOfCode } from "@/lib/shipbest/jiagu";
 import { createBackup, deleteBackup, restoreBackup } from "@/lib/backup";
-import { getShipment, resetTestEnv, setStoredMode, setTestAccount } from "@/lib/db";
+import { getShipment, resetTestEnv, setChannelEnabled, setStoredMode, setTestAccount } from "@/lib/db";
 import { getTerms, saveTerms } from "@/lib/terms";
 import { sendMail } from "@/lib/mailer";
 import { checkConfirmPin, checkFinancePin, setFinancePin } from "@/lib/financePin";
@@ -1218,6 +1218,44 @@ export async function saveJiaguAction(_: FlashState, fd: FormData): Promise<Flas
   return jiaguStatus("已保存");
 }
 
+/** 备用仓库：同一个嘉谷渠道再从另一个仓库发，添加后自动同步渠道 */
+export async function addJiaguVariantAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  await requireAdmin();
+  const cur = getSettings().jiagu;
+  if (!cur) return { error: "请先配置嘉谷" };
+  const productId = str(fd.get("productId"), 20).replace(/\D/g, "");
+  const warehouseId = str(fd.get("warehouseId"), 20).replace(/\D/g, "");
+  if (!productId || !warehouseId) return { error: "请选择渠道并填写仓库 ID" };
+  const main = cur.warehouses?.[productId] || DEFAULT_JG_WAREHOUSES[productId] || cur.warehouseId;
+  if (main === warehouseId) return { error: "这个渠道本来就是从这个仓库发的，不需要再加" };
+  const variants = cur.variants ?? [];
+  if (variants.some((v) => v.productId === productId && v.warehouseId === warehouseId)) return { error: "已经添加过了" };
+  saveSettings({ jiagu: { ...cur, variants: [...variants, { productId, warehouseId }] } });
+  clearChannelNameCache();
+  try {
+    await syncChannels();
+  } catch (e) {
+    revalidatePath("/settings");
+    return { error: `已添加，但同步渠道失败：${(e as Error).message}。稍后在 ShipBest 连接里点“同步渠道”` };
+  }
+  revalidatePath("/", "layout");
+  return { ok: "已添加备用仓库，新渠道已出现在渠道列表里（默认启用，需要到客户详情里给客户开通）" };
+}
+
+export async function removeJiaguVariantAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  await requireAdmin();
+  const cur = getSettings().jiagu;
+  if (!cur) return { error: "请先配置嘉谷" };
+  const productId = str(fd.get("productId"), 20);
+  const warehouseId = str(fd.get("warehouseId"), 20);
+  saveSettings({ jiagu: { ...cur, variants: (cur.variants ?? []).filter((v) => !(v.productId === productId && v.warehouseId === warehouseId)) } });
+  // 渠道记录留着（历史订单要显示渠道名），只是停用
+  setChannelEnabled(jgVariantCode(productId, warehouseId), false);
+  clearChannelNameCache();
+  revalidatePath("/", "layout");
+  return { ok: "已删除备用仓库，对应渠道已停用" };
+}
+
 export async function saveDhlAction(_: FlashState, fd: FormData): Promise<FlashState> {
   await requireAdmin();
   const cur = dhlSettings();
@@ -1272,7 +1310,7 @@ async function jiaguStatus(prefix: string): Promise<FlashState> {
     const products = await c.getProducts();
     const bal = await c.balance().catch(() => null);
     const cfg = jiaguConfig()!;
-    const noWh = products.filter((p) => !warehouseFor(cfg, Number(p.code.slice(JG_PREFIX.length)))).map((p) => p.name.replace(JG_SUFFIX, ""));
+    const noWh = products.filter((p) => !warehouseOfCode(cfg, p.code)).map((p) => p.name.replace(JG_SUFFIX, ""));
     // 还没同步进渠道列表的新渠道：用一个示例包裹试算一次（只算价，不下单），确认接口和仓库都通
     const known = new Set(listChannels().map((c) => c.code));
     const fresh = products.filter((p) => !known.has(p.code)).slice(0, 5);

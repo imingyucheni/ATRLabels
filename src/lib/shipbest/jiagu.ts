@@ -46,6 +46,8 @@ export interface JiaguConfig {
   warehouseId: number;
   /** 产品 ID → 仓库 ID */
   warehouses: Record<string, number>;
+  /** 备用仓库：同一个产品再从这些仓库发，各自算一个渠道 */
+  variants: { productId: number; warehouseId: number }[];
   authUrl: string;
   apiUrl: string;
 }
@@ -64,6 +66,7 @@ export function jiaguConfig(): JiaguConfig | null {
         .map(([k, v]) => [k, Number(v)] as const)
         .filter(([, v]) => v > 0),
     ),
+    variants: (j.variants ?? []).map((v) => ({ productId: Number(v.productId), warehouseId: Number(v.warehouseId) })).filter((v) => v.productId > 0 && v.warehouseId > 0),
     authUrl: (j.authUrl || "http://authorization.iot-easy.cn").replace(/\/+$/, ""),
     apiUrl: (j.apiUrl || "http://dragon.iot-easy.cn").replace(/\/+$/, ""),
   };
@@ -72,6 +75,20 @@ export function jiaguConfig(): JiaguConfig | null {
 export function isJiaguCode(code: string | null | undefined) {
   return !!code && code.startsWith(JG_PREFIX);
 }
+
+/**
+ * 渠道代码：JG-产品ID；同一个产品从另一个仓库发（备用仓库）时是 JG-产品ID-W仓库ID。
+ * 嘉谷按“产品 + 仓库”报价和出单，所以同一个产品换仓库在我们这边算一个单独的渠道。
+ */
+export function parseJgCode(code: string | null | undefined): { productId: number; warehouseId: number | null } {
+  const m = (code ?? "").match(/^JG-(\d+)(?:-W(\d+))?$/);
+  return m ? { productId: Number(m[1]), warehouseId: m[2] ? Number(m[2]) : null } : { productId: 0, warehouseId: null };
+}
+
+export const jgVariantCode = (productId: number | string, warehouseId: number | string) => `${JG_PREFIX}${productId}-W${warehouseId}`;
+
+/** 仓库的显示名：登记过的用名称，否则“仓库 ID” */
+export const jgWarehouseName = (id: number | string) => JG_WAREHOUSE_INFO[String(id)]?.name ?? `仓库 ${id}`;
 
 /* ---------------- 请求体 ---------------- */
 
@@ -95,12 +112,18 @@ function signService(t: number) {
   return t === 3 ? "10" : t === 1 || t === 2 ? "20" : "";
 }
 
-/** 这个产品从哪个仓库出 */
-export function warehouseFor(cfg: JiaguConfig, productId: number) {
-  return cfg.warehouses[String(productId)] || cfg.warehouseId;
+/** 这个产品从哪个仓库出；备用仓库渠道（JG-产品-W仓库）固定用代码里的仓库 */
+export function warehouseFor(cfg: JiaguConfig, productId: number, override?: number | null) {
+  return override || cfg.warehouses[String(productId)] || cfg.warehouseId;
 }
 
-export function buildJiaguBody(cfg: JiaguConfig, req: ShipmentRequest, productId: number) {
+/** 按渠道代码取仓库 */
+export function warehouseOfCode(cfg: JiaguConfig, code: string) {
+  const { productId, warehouseId } = parseJgCode(code);
+  return warehouseFor(cfg, productId, warehouseId);
+}
+
+export function buildJiaguBody(cfg: JiaguConfig, req: ShipmentRequest, productId: number, warehouseId?: number | null) {
   const { sender: s, recipient: r, pkg } = req;
   const u = units(req);
   const declared = req.skuList.reduce((a, i) => a + i.declaredUnitPrice * i.quantity, 0);
@@ -110,7 +133,7 @@ export function buildJiaguBody(cfg: JiaguConfig, req: ShipmentRequest, productId
   const phone = cut(r.phone || s.phone || "", 20);
   return {
     CustomerID: cfg.customerId,
-    WarehouseID: warehouseFor(cfg, productId),
+    WarehouseID: warehouseFor(cfg, productId, warehouseId),
     OwnershipID: cfg.ownershipId,
     OrderType: ORDER_TYPE_LASTMILE,
     NeedSignService: signService(pkg.signServiceType),
@@ -254,14 +277,20 @@ export class JiaguClient {
   async getProducts(): Promise<Product[]> {
     const r = await this.call<{ ID: number; ProductName: string }[]>("/api/gts/ListProductSubscribe", { ownershipID: this.cfg.ownershipId, customerID: this.cfg.customerId });
     if (!r.ok) throw new JiaguError(r.code, r.message || "获取渠道失败");
-    return (r.result ?? []).map((p) => ({ code: `${JG_PREFIX}${p.ID}`, name: `${p.ProductName}${JG_SUFFIX}` }));
+    const list = r.result ?? [];
+    // 备用仓库：同一个产品换个仓库发，名字后面带上仓库名（只有后台看得到）
+    const variants = this.cfg.variants.flatMap((v) => {
+      const p = list.find((x) => x.ID === v.productId);
+      return p ? [{ code: jgVariantCode(p.ID, v.warehouseId), name: `${p.ProductName}（${jgWarehouseName(v.warehouseId)}）${JG_SUFFIX}` }] : [];
+    });
+    return [...list.map((p) => ({ code: `${JG_PREFIX}${p.ID}`, name: `${p.ProductName}${JG_SUFFIX}` })), ...variants];
   }
 
   async trialPrice(code: string, req: ShipmentRequest): Promise<FeeQuote | null> {
-    const id = Number(code.slice(JG_PREFIX.length));
+    const { productId: id, warehouseId: wh } = parseJgCode(code);
     const r = await this.call<{ ID: number; ProductName: string | null; TotalCharge: number; Message: string | null; RatesList: { Currency: string; ZoneCode: string; Amount: number }[] | null }[]>(
       "/api/gts/CalculateRates",
-      { ...buildJiaguBody(this.cfg, req, id), Products: [{ ID: id }] },
+      { ...buildJiaguBody(this.cfg, req, id, wh), Products: [{ ID: id }] },
       true,
       // 只是查价：最多等 25 秒，不让一个慢渠道拖住整个报价（下单仍等 45 秒）
       25_000,
@@ -269,7 +298,7 @@ export class JiaguClient {
     if (!r.ok) throw new JiaguError(r.code, r.message || "算价失败");
     const q = (r.result ?? []).find((x) => x.ID === id) ?? r.result?.[0];
     if (!q) return null;
-    if (!warehouseFor(this.cfg, id)) throw new JiaguError(10061, `渠道 ${id} 还没有设置仓库 ID（设置 → 嘉谷万邑）`);
+    if (!warehouseFor(this.cfg, id, wh)) throw new JiaguError(10061, `渠道 ${id} 还没有设置仓库 ID（设置 → 嘉谷万邑）`);
     if (!q.TotalCharge || q.Message) {
       const msg = q.Message || "算价失败";
       // 分区匹配不到：一般是邮编不在派送范围（客户端显示“地址未覆盖”）；后台保留嘉谷原话，方便和嘉谷核对
@@ -295,12 +324,12 @@ export class JiaguClient {
   }
 
   async createOrder(customNo: string, code: string, req: ShipmentRequest, productName = code) {
-    const id = Number(code.slice(JG_PREFIX.length));
+    const { productId: id, warehouseId: wh } = parseJgCode(code);
     // 提交前先记下这是嘉谷的单：万一提交超时、结果未知，之后刷新也知道去嘉谷查（查不到面单 5 分钟后转异常）
     if (!jgOrders.get(customNo)) jgOrders.save({ customNo, productCode: code, productName, status: 2 });
     const r = await this.call<{ Identifier?: string; MasterTrackingNbr?: string; TrackingNbr?: string; MasterLabelUrl?: string; labels?: { labelUri?: string }[] }>(
       "/api/gts/ShippingLabel",
-      { ...buildJiaguBody(this.cfg, req, id), OrderNbr: customNo, ProductID: id },
+      { ...buildJiaguBody(this.cfg, req, id, wh), OrderNbr: customNo, ProductID: id },
     );
     const x = r.result ?? {};
     const tracking = x.MasterTrackingNbr || x.TrackingNbr || null;
@@ -357,9 +386,8 @@ export class JiaguClient {
 
   async cancelOrder(customNo: string) {
     const o = jgOrders.get(customNo);
-    const pid = o ? Number(o.productCode.slice(JG_PREFIX.length)) : 0;
     const r = await this.call<boolean>("/api/gts/VoidShipment", {
-      ownershipID: this.cfg.ownershipId, warehouseID: warehouseFor(this.cfg, pid), customerID: this.cfg.customerId, orderNbr: customNo,
+      ownershipID: this.cfg.ownershipId, warehouseID: warehouseOfCode(this.cfg, o?.productCode ?? ""), customerID: this.cfg.customerId, orderNbr: customNo,
     });
     if (!r.ok || r.result === false) throw new JiaguError(r.code ?? 11203, r.message || "该订单不支持取消");
     if (o) jgOrders.save({ ...o, status: 6 });

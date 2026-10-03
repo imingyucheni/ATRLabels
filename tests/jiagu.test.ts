@@ -97,6 +97,38 @@ describe("嘉谷万邑接口", () => {
     expect((await client.getOrder({ customNo: "C-1" })).status).toBe(6);
   });
 
+  it("备用仓库：同一个产品换仓库算一个渠道，报价 / 下单 / 取消都用那个仓库", async () => {
+    const cur = db.getSettings().jiagu;
+    db.saveSettings({ jiagu: { ...cur, variants: [{ productId: "569599", warehouseId: "230206" }] } });
+    try {
+      expect(jg.parseJgCode("JG-569599-W230206")).toEqual({ productId: 569599, warehouseId: 230206 });
+      expect(jg.parseJgCode("JG-569599")).toEqual({ productId: 569599, warehouseId: null });
+      const cfg = jg.jiaguConfig()!;
+      expect(jg.warehouseOfCode(cfg, "JG-569599")).toBe(221121);
+      expect(jg.warehouseOfCode(cfg, "JG-569599-W230206")).toBe(230206);
+      const calls = fakeServer({
+        "/api/gts/ListProductSubscribe": () => ({ IsSuccess: true, Result: [{ ID: 569599, ProductName: "Fedex NG末端-N" }] }),
+        "/api/gts/CalculateRates": (b) => ({ IsSuccess: true, Result: [{ ID: (b.Products as { ID: number }[])[0].ID, TotalCharge: 8.1, RatesList: [{ Currency: "USD", ZoneCode: "5", Amount: 8.1 }] }] }),
+        "/api/gts/ShippingLabel": () => ({ IsSuccess: true, Result: { Identifier: "GD1", MasterTrackingNbr: "FX1", MasterLabelUrl: "http://x/l.pdf" } }),
+        "/api/gts/VoidShipment": () => ({ IsSuccess: true, Result: true }),
+      });
+      const client = sb.getShipBestClient();
+      const products = await client.getProducts();
+      expect(products).toEqual([
+        { code: "JG-569599", name: "Fedex NG末端-N · GDE" },
+        { code: "JG-569599-W230206", name: "Fedex NG末端-N（SG-HX-CA 91762） · GDE" },
+      ]);
+      await client.trialPrice("JG-569599-W230206", req);
+      expect(calls.find((c) => c.path === "/api/gts/CalculateRates")!.body).toMatchObject({ WarehouseID: 230206, Products: [{ ID: 569599 }] });
+      await client.createOrder("C-W", "JG-569599-W230206", req);
+      expect(calls.find((c) => c.path === "/api/gts/ShippingLabel")!.body).toMatchObject({ ProductID: 569599, WarehouseID: 230206 });
+      await client.cancelOrder({ customNo: "C-W" });
+      expect(calls.find((c) => c.path === "/api/gts/VoidShipment")!.body).toMatchObject({ warehouseID: 230206 });
+    } finally {
+      db.saveSettings({ jiagu: cur });
+    }
+  });
+
   it("下单被拒绝时抛错（订单没建成），取消失败也抛错", async () => {
     fakeServer({
       "/api/gts/ShippingLabel": () => ({ IsSuccess: false, ErrorCode: "100002", Message: "订单重复" }),

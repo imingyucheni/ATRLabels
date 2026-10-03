@@ -156,7 +156,7 @@ export function publicError(msg?: string | null): string {
     .replace(/(^|[：:]\s*)\[-?\d+\]\s*/g, "$1")
     .replace(/(嘉谷万邑|嘉谷|万邑|Jiagu|ShipBest)\s*[：:]\s*/gi, "")
     .replace(/嘉谷万邑|嘉谷|万邑|Jiagu/gi, "")
-    .replace(/\bJG-\d+\b/g, "")
+    .replace(/\bJG-\d+(-W\d+)?\b/g, "")
     .replace(/\s*·\s*(SB|GDE)\b/g, "")
     .replace(/[（(]设置\s*→[^）)]*[）)]/g, "");
   // 服务商接口异常（带着对方返回的原文）、后台配置问题：不给客户看细节

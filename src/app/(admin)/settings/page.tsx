@@ -24,8 +24,8 @@ import SettingsToc from "@/components/SettingsToc";
 import { DEFAULT_SETTINGS_TAB, isSettingsTab, type SettingsTab } from "@/lib/settingsTabs";
 import FlashForm from "@/components/FlashForm";
 import RuleInputs from "@/components/RuleInputs";
-import { DEFAULT_JG_WAREHOUSES, JG_WAREHOUSE_INFO, isJiaguCode, JG_PREFIX, JG_SUFFIX } from "@/lib/shipbest/jiagu";
-import { saveTermsAction, saveSiteAction, saveJiaguAction, testJiaguAction, saveDhlAction, testDhlAction, saveEbayAction, resetTestEnvAction, resetSandboxAction, resetTermsAction, saveChannelLimitsAction, savePromotionAction, togglePromotionAction, saveSmtpAction, testMailAction, setFinancePinAction, clearTestDataAction, saveAddrCheckAction, testAddrAction, refreshFxAction, saveChannelsAction, savePaymentSettingsAction, saveSettingsAction, saveShipBestAction, syncChannelsAction, verifyAction } from "@/app/actions";
+import { DEFAULT_JG_WAREHOUSES, JG_WAREHOUSE_INFO, isJiaguCode, parseJgCode, JG_PREFIX, JG_SUFFIX } from "@/lib/shipbest/jiagu";
+import { saveTermsAction, saveSiteAction, saveJiaguAction, testJiaguAction, addJiaguVariantAction, removeJiaguVariantAction, saveDhlAction, testDhlAction, saveEbayAction, resetTestEnvAction, resetSandboxAction, resetTermsAction, saveChannelLimitsAction, savePromotionAction, togglePromotionAction, saveSmtpAction, testMailAction, setFinancePinAction, clearTestDataAction, saveAddrCheckAction, testAddrAction, refreshFxAction, saveChannelsAction, savePaymentSettingsAction, saveSettingsAction, saveShipBestAction, syncChannelsAction, verifyAction } from "@/app/actions";
 import { cnyToPay, usdCnyQuote } from "@/lib/fx";
 import FilePick from "@/components/FilePick";
 import { CarrierMark } from "@/components/ChannelLabel";
@@ -182,9 +182,11 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         const ready = !!(jg.clientId && jg.secret && jg.ownershipId && jg.customerId);
         const jgChannels = listChannels().filter((c) => isJiaguCode(c.code));
         const jgWarehouse = (code: string) => {
-          const pid = code.slice(JG_PREFIX.length);
-          return jg.warehouses?.[pid] || DEFAULT_JG_WAREHOUSES[pid] || jg.warehouseId;
+          const { productId, warehouseId } = parseJgCode(code);
+          const pid = String(productId);
+          return (warehouseId ? String(warehouseId) : "") || jg.warehouses?.[pid] || DEFAULT_JG_WAREHOUSES[pid] || jg.warehouseId;
         };
+        const jgBase = jgChannels.filter((c) => !parseJgCode(c.code).warehouseId);
         const jgMissing = jgChannels.filter((c) => !jgWarehouse(c.code));
         return (
           <SettingsSection
@@ -235,12 +237,13 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                     <tbody>
                       {jgChannels.map((c) => {
                         const pid = c.code.slice(JG_PREFIX.length);
+                        const fixedWh = parseJgCode(c.code).warehouseId;
                         return (
                           <tr key={c.code} className={c.enabled ? "" : "muted"}>
                             <td>{c.name.replace(JG_SUFFIX, "")}{!c.enabled && <span className="badge pending" style={{ marginLeft: 6 }}>{t("已停用")}</span>}</td>
                             <td className="small muted">{pid}</td>
                             <td>
-                              <input name={`wh_${pid}`} list="jg-warehouses" defaultValue={jg.warehouses?.[pid] ?? DEFAULT_JG_WAREHOUSES[pid] ?? ""} inputMode="numeric" autoComplete="off" style={{ width: 120 }} placeholder={jg.warehouseId || t("未填写")} />
+                              {fixedWh ? <b className="small">{fixedWh}</b> : <input name={`wh_${pid}`} list="jg-warehouses" defaultValue={jg.warehouses?.[pid] ?? DEFAULT_JG_WAREHOUSES[pid] ?? ""} inputMode="numeric" autoComplete="off" style={{ width: 120 }} placeholder={jg.warehouseId || t("未填写")} />}
                               {(() => {
                                 const w = JG_WAREHOUSE_INFO[String(jgWarehouse(c.code) ?? "")];
                                 return w ? <div className="small muted">{w.name}{w.address ? ` · ${w.address}` : ""}</div> : null;
@@ -258,6 +261,43 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                 </div>
               )}
             </FlashForm>
+            {jgBase.length > 0 && (
+              <div className="card" style={{ marginTop: 12 }}>
+                <h3 style={{ marginTop: 0 }}>{t("备用仓库")}</h3>
+                <p className="small muted" style={{ marginTop: 0 }}>{t("同一个嘉谷渠道再从另一个仓库发（例如主仓库爆仓时备用）。添加后会多出一个渠道，名称后面带仓库名，价格和面单都按那个仓库算；和普通渠道一样在“物流渠道”里启用，再给客户开通。")}</p>
+                {(jg.variants ?? []).length > 0 && (
+                  <ul className="small" style={{ paddingLeft: 18 }}>
+                    {(jg.variants ?? []).map((v) => {
+                      const base = jgBase.find((c) => c.code === `${JG_PREFIX}${v.productId}`);
+                      const w = JG_WAREHOUSE_INFO[v.warehouseId];
+                      return (
+                        <li key={`${v.productId}-${v.warehouseId}`} style={{ marginBottom: 6 }}>
+                          {base ? base.name.replace(JG_SUFFIX, "") : v.productId} → {t("仓库")} {v.warehouseId}{w ? `（${w.name}${w.address ? ` · ${w.address}` : ""}）` : ""}
+                          <FlashForm action={removeJiaguVariantAction} submitLabel="删除" submitClass="small link-btn" inline confirm="删除这个备用仓库渠道？已经开通给客户的也会一起停掉。">
+                            <input type="hidden" name="productId" value={v.productId} />
+                            <input type="hidden" name="warehouseId" value={v.warehouseId} />
+                          </FlashForm>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+                <FlashForm action={addJiaguVariantAction} submitLabel="添加备用仓库" submitClass="" className="row">
+                  <label className="f">{t("渠道")}
+                    <select name="productId" required defaultValue="">
+                      <option value="" disabled>{t("请选择")}</option>
+                      {jgBase.map((c) => <option key={c.code} value={c.code.slice(JG_PREFIX.length)}>{c.name.replace(JG_SUFFIX, "")}</option>)}
+                    </select>
+                  </label>
+                  <label className="f">{t("仓库 ID")}
+                    <input name="warehouseId" list="jg-warehouses-all" required inputMode="numeric" pattern="\d{3,12}" autoComplete="off" style={{ width: 140 }} />
+                  </label>
+                  <datalist id="jg-warehouses-all">
+                    {Object.entries(JG_WAREHOUSE_INFO).map(([id, w]) => <option key={id} value={id}>{w.name}{w.address ? ` · ${w.address}` : ""}</option>)}
+                  </datalist>
+                </FlashForm>
+              </div>
+            )}
             <div className="row" style={{ marginTop: 8 }}>
               <FlashForm action={testJiaguAction} submitLabel="测试连接 / 查余额" submitClass="" inline />
             </div>
