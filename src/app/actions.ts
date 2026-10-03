@@ -100,17 +100,19 @@ import {
 /* ---------------- 登录 ---------------- */
 
 export async function loginAction(_: unknown, fd: FormData) {
-  const key = "admin:" + (await clientIp());
-  // 除了按 IP，还有一个全站的总次数限制：换 IP 也不能无限试密码
-  const limited = checkRateLimit(key) ?? checkRateLimit("admin:*", 50);
-  if (limited) return { error: limited };
   const username = String(fd.get("username") ?? "").trim().toLowerCase();
   const password = String(fd.get("password") ?? "");
+  const key = "admin:" + (await clientIp());
+  // 除了按 IP，每个登录名还有一个总次数限制：换 IP 也不能无限试密码。
+  // 按登录名分开算：有人乱试某个员工账号，不会把主管理员和其他员工一起锁住
+  const acct = "admin:acct:" + (username || "admin");
+  const limited = checkRateLimit(key) ?? checkRateLimit(acct, 50);
+  if (limited) return { error: limited };
   // 登录名留空（或填 admin）= 主管理员，用后台密码；否则是员工账号
   const staff = username && username !== "admin" ? staffLogin(username, password) : null;
   if (username && username !== "admin" ? !staff : !checkPassword(password)) {
     recordFailure(key);
-    recordFailure("admin:*");
+    recordFailure(acct);
     return { error: username && username !== "admin" ? "登录名或密码错误" : "密码错误" };
   }
   clearFailures(key);
