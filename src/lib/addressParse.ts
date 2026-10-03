@@ -114,8 +114,10 @@ export function parseAddress(text: string): Partial<Address> {
     .split(/\n+/)
     // 行尾带国家（… IL 62704 USA）：去掉国家，记下美国
     .map((l) => {
-      const m = l.match(/^(.*\S)[,\s]+(USA|U\.S\.A\.?|United States( of America)?)\.?\s*$/i);
-      if (m && /\d/.test(m[1])) {
+      const m = l.match(/^(.*\S)[,\s]+(USA|U\.S\.A\.?|United States( of America)?|U\.?S\.?)\s*$/i);
+      // 只写“US”的：前面必须紧跟着邮编（… CA 91706 US），避免把街道名里的 US（US Highway）当成国家
+      const bare = m && /^U\.?S\.?$/i.test(m[2]);
+      if (m && /\d/.test(m[1]) && (!bare || /\b\d{5}(-?\d{4})?$/.test(m[1]))) {
         out.country = "US";
         return m[1];
       }

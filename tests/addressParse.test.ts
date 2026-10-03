@@ -9,6 +9,14 @@ describe("智能识别地址", () => {
     });
   });
 
+  it("邮编后面跟着国家二字码 US（… CA 91706 US）", () => {
+    const want = { nameFirst: "Yixi", nameLast: "Mei", address1: "13725 los angeles st.", address2: "APT J", city: "BALDWIN PARK", province: "CA", zipCode: "91706", country: "US" };
+    expect(parseAddress("Yixi Mei\n13725 los angeles st., APT J\nBALDWIN PARK, CA 91706 US")).toEqual(want);
+    expect(parseAddress("Yixi Mei\n13725 los angeles st., APT J\nBALDWIN PARK, CA 91706, U.S.")).toEqual(want);
+    // 街道名里的 US 不是国家
+    expect(parseAddress("Ann Lee\n100 Old US\nAustin, TX 78701").address1).toBe("100 Old US");
+  });
+
   it("一行逗号分隔，州写全称，带邮箱", () => {
     expect(parseAddress("Mary Ann Smith, 123 Main St, Suite 200, Los Angeles, California 90001, (213) 555-0199, mary@example.com")).toMatchObject({
       nameFirst: "Mary Ann", nameLast: "Smith", address1: "123 Main St", address2: "Suite 200",
