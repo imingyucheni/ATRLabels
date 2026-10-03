@@ -263,8 +263,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             </FlashForm>
             {jgBase.length > 0 && (
               <div className="card" style={{ marginTop: 12 }}>
-                <h3 style={{ marginTop: 0 }}>{t("备用仓库")}</h3>
-                <p className="small muted" style={{ marginTop: 0 }}>{t("同一个嘉谷渠道再从另一个仓库发（例如主仓库爆仓时备用）。添加后会多出一个渠道，名称后面带仓库名，价格和面单都按那个仓库算；和普通渠道一样在“物流渠道”里启用，再给客户开通。")}</p>
+                <h3 style={{ marginTop: 0 }}>{t("备用仓库渠道")}</h3>
+                <p className="small muted" style={{ marginTop: 0 }}>{t("同一个嘉谷渠道再从另一个仓库发，作为单独的渠道（例如 Fedex NG 2）：报价和面单都按那个仓库算，可以在运费试算里和原渠道对比价格；和普通渠道一样在“物流渠道”里启用、给客户开通。同一渠道 + 仓库再保存一次可以改名。")}</p>
                 {(jg.variants ?? []).length > 0 && (
                   <ul className="small" style={{ paddingLeft: 18 }}>
                     {(jg.variants ?? []).map((v) => {
@@ -272,7 +272,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                       const w = JG_WAREHOUSE_INFO[v.warehouseId];
                       return (
                         <li key={`${v.productId}-${v.warehouseId}`} style={{ marginBottom: 6 }}>
-                          {base ? base.name.replace(JG_SUFFIX, "") : v.productId} → {t("仓库")} {v.warehouseId}{w ? `（${w.name}${w.address ? ` · ${w.address}` : ""}）` : ""}
+                          {v.name ? <b>{v.name}</b> : null}{v.name ? "：" : ""}{base ? base.name.replace(JG_SUFFIX, "") : v.productId} → {t("仓库")} {v.warehouseId}{w ? `（${w.name}${w.address ? ` · ${w.address}` : ""}）` : ""}
                           <FlashForm action={removeJiaguVariantAction} submitLabel="删除" submitClass="small link-btn" inline confirm="删除这个备用仓库渠道？已经开通给客户的也会一起停掉。">
                             <input type="hidden" name="productId" value={v.productId} />
                             <input type="hidden" name="warehouseId" value={v.warehouseId} />
@@ -282,12 +282,15 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                     })}
                   </ul>
                 )}
-                <FlashForm action={addJiaguVariantAction} submitLabel="添加备用仓库" submitClass="" className="row">
+                <FlashForm action={addJiaguVariantAction} submitLabel="保存备用仓库渠道" submitClass="" className="row">
                   <label className="f">{t("渠道")}
                     <select name="productId" required defaultValue="">
                       <option value="" disabled>{t("请选择")}</option>
                       {jgBase.map((c) => <option key={c.code} value={c.code.slice(JG_PREFIX.length)}>{c.name.replace(JG_SUFFIX, "")}</option>)}
                     </select>
+                  </label>
+                  <label className="f">{t("渠道名称（可选，只有后台看得到）")}
+                    <input name="name" maxLength={60} placeholder={t("例如 Fedex NG 2")} style={{ width: 180 }} />
                   </label>
                   <label className="f">{t("仓库 ID")}
                     <input name="warehouseId" list="jg-warehouses-all" required inputMode="numeric" pattern="\d{3,12}" autoComplete="off" style={{ width: 140 }} />

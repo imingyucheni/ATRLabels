@@ -1225,12 +1225,13 @@ export async function addJiaguVariantAction(_: FlashState, fd: FormData): Promis
   if (!cur) return { error: "请先配置嘉谷" };
   const productId = str(fd.get("productId"), 20).replace(/\D/g, "");
   const warehouseId = str(fd.get("warehouseId"), 20).replace(/\D/g, "");
+  const name = str(fd.get("name"), 60).replace(/\s*·\s*(GDE|SB)\s*$/i, "");
   if (!productId || !warehouseId) return { error: "请选择渠道并填写仓库 ID" };
   const main = cur.warehouses?.[productId] || DEFAULT_JG_WAREHOUSES[productId] || cur.warehouseId;
   if (main === warehouseId) return { error: "这个渠道本来就是从这个仓库发的，不需要再加" };
-  const variants = cur.variants ?? [];
-  if (variants.some((v) => v.productId === productId && v.warehouseId === warehouseId)) return { error: "已经添加过了" };
-  saveSettings({ jiagu: { ...cur, variants: [...variants, { productId, warehouseId }] } });
+  // 已经加过的：更新名字（也可以用来改名）
+  const others = (cur.variants ?? []).filter((v) => !(v.productId === productId && v.warehouseId === warehouseId));
+  saveSettings({ jiagu: { ...cur, variants: [...others, { productId, warehouseId, ...(name ? { name } : {}) }] } });
   clearChannelNameCache();
   try {
     await syncChannels();
@@ -1238,8 +1239,10 @@ export async function addJiaguVariantAction(_: FlashState, fd: FormData): Promis
     revalidatePath("/settings");
     return { error: `已添加，但同步渠道失败：${(e as Error).message}。稍后在 ShipBest 连接里点“同步渠道”` };
   }
+  // 之前删过再加回来：重新启用
+  setChannelEnabled(jgVariantCode(productId, warehouseId), true);
   revalidatePath("/", "layout");
-  return { ok: "已添加备用仓库，新渠道已出现在渠道列表里（默认启用，需要到客户详情里给客户开通）" };
+  return { ok: "已保存备用仓库渠道，已出现在渠道列表里（默认启用，需要到客户详情里给客户开通）。运费试算里不选客户可以和原渠道对比价格。" };
 }
 
 export async function removeJiaguVariantAction(_: FlashState, fd: FormData): Promise<FlashState> {

@@ -118,6 +118,8 @@ describe("嘉谷万邑接口", () => {
         { code: "JG-569599", name: "Fedex NG末端-N · GDE" },
         { code: "JG-569599-W230206", name: "Fedex NG末端-N（SG-HX-CA 91762） · GDE" },
       ]);
+      db.saveSettings({ jiagu: { ...db.getSettings().jiagu, variants: [{ productId: "569599", warehouseId: "230206", name: "Fedex NG 2" }] } });
+      expect((await sb.getShipBestClient().getProducts())[1]).toEqual({ code: "JG-569599-W230206", name: "Fedex NG 2 · GDE" });
       await client.trialPrice("JG-569599-W230206", req);
       expect(calls.find((c) => c.path === "/api/gts/CalculateRates")!.body).toMatchObject({ WarehouseID: 230206, Products: [{ ID: 569599 }] });
       await client.createOrder("C-W", "JG-569599-W230206", req);

@@ -458,7 +458,7 @@ export interface Settings {
   /** 客户服务条款：留空用系统默认；version 变了客户要重新同意 */
   terms?: { zh: string; en: string; version: number; updatedAt: string; changeNote?: string } | null;
   /** 嘉谷万邑（Dragon Open API）尾程面单：第二个服务商 */
-  jiagu: { enabled: boolean; clientId: string; secret: string; ownershipId: string; customerId: string; warehouseId: string; warehouses?: Record<string, string>; variants?: { productId: string; warehouseId: string }[]; authUrl?: string; apiUrl?: string };
+  jiagu: { enabled: boolean; clientId: string; secret: string; ownershipId: string; customerId: string; warehouseId: string; warehouses?: Record<string, string>; variants?: { productId: string; warehouseId: string; name?: string }[]; authUrl?: string; apiUrl?: string };
   /** ShipGrid（SG）：API 密钥 ak_test_… / ak_live_…（测试 / 正式由前缀决定） */
   shipgrid?: { enabled: boolean; apiKey: string };
   /** DHL Express 官方账号（MyDHL API）国际快递 */

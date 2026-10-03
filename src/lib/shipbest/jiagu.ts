@@ -47,7 +47,7 @@ export interface JiaguConfig {
   /** 产品 ID → 仓库 ID */
   warehouses: Record<string, number>;
   /** 备用仓库：同一个产品再从这些仓库发，各自算一个渠道 */
-  variants: { productId: number; warehouseId: number }[];
+  variants: { productId: number; warehouseId: number; name?: string }[];
   authUrl: string;
   apiUrl: string;
 }
@@ -66,7 +66,7 @@ export function jiaguConfig(): JiaguConfig | null {
         .map(([k, v]) => [k, Number(v)] as const)
         .filter(([, v]) => v > 0),
     ),
-    variants: (j.variants ?? []).map((v) => ({ productId: Number(v.productId), warehouseId: Number(v.warehouseId) })).filter((v) => v.productId > 0 && v.warehouseId > 0),
+    variants: (j.variants ?? []).map((v) => ({ productId: Number(v.productId), warehouseId: Number(v.warehouseId), name: v.name?.trim() || undefined })).filter((v) => v.productId > 0 && v.warehouseId > 0),
     authUrl: (j.authUrl || "http://authorization.iot-easy.cn").replace(/\/+$/, ""),
     apiUrl: (j.apiUrl || "http://dragon.iot-easy.cn").replace(/\/+$/, ""),
   };
@@ -281,7 +281,8 @@ export class JiaguClient {
     // 备用仓库：同一个产品换个仓库发，名字后面带上仓库名（只有后台看得到）
     const variants = this.cfg.variants.flatMap((v) => {
       const p = list.find((x) => x.ID === v.productId);
-      return p ? [{ code: jgVariantCode(p.ID, v.warehouseId), name: `${p.ProductName}（${jgWarehouseName(v.warehouseId)}）${JG_SUFFIX}` }] : [];
+      // 后台起的名字（例如 Fedex NG 2）优先；没起名就用“原渠道名（仓库名）”
+      return p ? [{ code: jgVariantCode(p.ID, v.warehouseId), name: `${v.name || `${p.ProductName}（${jgWarehouseName(v.warehouseId)}）`}${JG_SUFFIX}` }] : [];
     });
     return [...list.map((p) => ({ code: `${JG_PREFIX}${p.ID}`, name: `${p.ProductName}${JG_SUFFIX}` })), ...variants];
   }
