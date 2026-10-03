@@ -5,7 +5,7 @@
  * - 回传：createShippingFulfillment 写入物流商和运单号
  * - 合规：eBay 要求订阅“账户删除通知”，收到后删除相关买家数据（见 /api/stores/ebay/deletion）
  */
-import { createHash } from "node:crypto";
+import { createHash, createVerify } from "node:crypto";
 import type { Address } from "../shipbest/types";
 import type { FetchedOrders, PlatformAdapter, StoreOrder, TrackingPush } from "./types";
 
@@ -72,6 +72,57 @@ export async function ebayUsername(s: EbaySettings, accessToken: string): Promis
     return j.username ?? null;
   } catch {
     return null;
+  }
+}
+
+/**
+ * 验证 eBay 通知的签名（X-EBAY-SIGNATURE 头：base64 的 JSON {alg, kid, signature, digest}）。
+ * 公钥按 kid 从 eBay Notification API 取（用应用自己的 client credentials 令牌），缓存起来。
+ * 签名对的返回 true；头缺失 / 格式不对 / 验不过返回 false；取公钥失败抛错（让 eBay 稍后重试）。
+ */
+const keyCache = new Map<string, { pem: string; at: number }>();
+let appToken: { token: string; exp: number } | null = null;
+
+async function ebayAppToken(s: EbaySettings): Promise<string> {
+  if (appToken && appToken.exp > Date.now() + 60_000) return appToken.token;
+  const j = await tokenCall(s, new URLSearchParams({ grant_type: "client_credentials", scope: "https://api.ebay.com/oauth/api_scope" }));
+  appToken = { token: j.access_token, exp: Date.now() + Number(j.expires_in ?? 7200) * 1000 };
+  return appToken.token;
+}
+
+export async function verifyEbayNotification(s: EbaySettings, signatureHeader: string | null, rawBody: string, fetchKey?: (kid: string) => Promise<string>): Promise<boolean> {
+  if (!signatureHeader) return false;
+  let sig: { alg?: string; kid?: string; signature?: string; digest?: string };
+  try {
+    sig = JSON.parse(Buffer.from(signatureHeader, "base64").toString("utf8"));
+  } catch {
+    return false;
+  }
+  if (!sig.kid || !sig.signature || !/^[\w-]{1,100}$/.test(sig.kid)) return false;
+  let pem = keyCache.get(sig.kid)?.pem;
+  if (!pem) {
+    pem = fetchKey
+      ? await fetchKey(sig.kid)
+      : await (async () => {
+          const res = await fetch(`${host(s.env, "api")}/commerce/notification/v1/public_key/${sig.kid}`, {
+            headers: { Authorization: `Bearer ${await ebayAppToken(s)}` },
+            signal: AbortSignal.timeout(20_000),
+            cache: "no-store",
+          });
+          const j = (await res.json().catch(() => ({}))) as { key?: string };
+          if (!res.ok || !j.key) throw new Error(`取 eBay 公钥失败：HTTP ${res.status}`);
+          return j.key;
+        })();
+    keyCache.set(sig.kid, { pem, at: Date.now() });
+  }
+  // eBay 返回的公钥有时没有换行：整理成标准 PEM
+  const body64 = pem.replace(/-----(BEGIN|END) PUBLIC KEY-----/g, "").replace(/\s+/g, "");
+  const keyPem = `-----BEGIN PUBLIC KEY-----\n${body64.match(/.{1,64}/g)?.join("\n")}\n-----END PUBLIC KEY-----\n`;
+  try {
+    const algo = (sig.digest ?? "SHA1").toUpperCase() === "SHA256" ? "sha256" : "sha1";
+    return createVerify(algo).update(rawBody).verify(keyPem, Buffer.from(sig.signature, "base64"));
+  } catch {
+    return false;
   }
 }
 
