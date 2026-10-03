@@ -5,6 +5,7 @@ import { parseAddress } from "@/lib/addressParse";
 import { useT } from "@/components/I18n";
 import { COMMON_COUNTRIES, isCountryCode, isUsZip, US_STATES, usStateCode } from "@/lib/geo";
 import type { Address } from "@/lib/shipbest/types";
+import { zipStateMismatch } from "@/lib/zipState";
 
 type Field = { k: keyof Address; label: string; req?: boolean; wide?: boolean; ph?: string };
 
@@ -135,6 +136,9 @@ export default function AddressFields({
   };
 
   const zipHint = controlled && isUS && value?.zipCode && !isUsZip(value.zipCode) ? t("美国邮编是 5 位数字（可以带 4 位，例如 78701-1234）") : null;
+  // 邮编和州对不上：只提醒，不拦（少数跨州邮编可能误报）
+  const want = controlled && isUS && !zipHint ? zipStateMismatch(value?.zipCode, usStateCode(value?.province ?? "")) : null;
+  const stateHint = want ? t("邮编 {zip} 一般在 {want}，和选的州 {st} 对不上，请核对", { zip: value?.zipCode ?? "", want: want.join(" / "), st: usStateCode(value?.province ?? "") ?? "" }) : null;
 
   return (
     <>
@@ -146,6 +150,7 @@ export default function AddressFields({
             <span className={f.req && (f.k !== "province" || isUS) ? "req" : ""}>{t(f.label)}</span>
             {f.k === "country" ? countryField() : f.k === "province" ? stateField() : input(f)}
             {f.k === "zipCode" && zipHint && <span className="field-hint">{zipHint}</span>}
+            {f.k === "zipCode" && stateHint && <span className="field-hint warn-text">⚠ {stateHint}</span>}
           </label>
         ))}
       </div>

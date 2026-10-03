@@ -29,4 +29,5 @@ export const qa3: Record<string, string> = {
   "重量差异": "Weight difference",
   "分区差异": "Zone difference",
   "5 位美国邮编，例如 10001": "5-digit US ZIP code, e.g. 10001",
+  "邮编 {zip} 一般在 {want}，和选的州 {st} 对不上，请核对": "ZIP {zip} is usually in {want}, not {st}. Please check the address.",
 };
