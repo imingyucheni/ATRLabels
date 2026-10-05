@@ -789,7 +789,8 @@ export default function ShipForm(props: {
                 )}
               </thead>
               <tbody>
-                {quotes.filter((q) => q.ok || !onlyAvailable).map((q) =>
+                {/* 一个能下的都没有时，不管勾没勾“只显示可下单渠道”，都列出每个渠道的原因 */}
+                {quotes.filter((q) => q.ok || !onlyAvailable || !quotes.some((x) => x.ok)).map((q) =>
                   q.ok ? (
                     costTable || re ? (
                       <tr key={q.channelCode} className={q.price === bestPrice ? "best" : ""}>
