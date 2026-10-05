@@ -304,6 +304,18 @@ describe("模拟模式完整流程", () => {
     job = await wait(jobId, ["done"]);
     expect(job.rows.filter((r) => r.status === "created").length).toBe(3);
 
+    // 老批次里“下单失败”（没建成单）的订单：打开批次时退回待确认，可以修改后重新提交
+    const failedRow = job.rows.find((r) => r.status === "created")!;
+    const dbm = await import("@/lib/db");
+    const extra = dbm.db().prepare("INSERT INTO batch_job_rows (job_id, row_no, customer_ref, req_json, channel_code, channel_name, price, currency, status, error, selected) SELECT job_id, 99, 'FAILED-1', req_json, channel_code, channel_name, price, currency, 'failed', '嘉谷：The package dimensions are invalid', 1 FROM batch_job_rows WHERE id = ?").run(failedRow.id);
+    const reopened = batch.getJob(jobId)!;
+    expect(reopened.status).toBe("ready");
+    const back = reopened.rows.find((r) => r.id === Number(extra.lastInsertRowid))!;
+    expect(back).toMatchObject({ status: "quoted", selected: false });
+    expect(back.error).toBe("上次下单失败：嘉谷：The package dimensions are invalid");
+    dbm.db().prepare("DELETE FROM batch_job_rows WHERE id = ?").run(back.id);
+    dbm.db().prepare("UPDATE batch_jobs SET status = 'done' WHERE id = ?").run(jobId);
+
     const pdf = await mergeLabels(job.rows.filter((r) => r.shipmentId).map((r) => db.getShipment(r.shipmentId!)!));
     expect((await PDFDocument.load(pdf)).getPageCount()).toBe(3);
 

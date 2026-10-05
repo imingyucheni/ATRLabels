@@ -583,7 +583,20 @@ function setRow(id: number, p: RowPatch) {
 
 const UNIT_TXT: Record<UnitSystem, [string, string]> = { 1: ["cm", "g"], 2: ["cm", "kg"], 3: ["in", "lb"] };
 
+const failedMsg = (m: string) => `上次下单失败：${m}`.slice(0, 1000);
+
+/** 老批次里“下单失败”的订单（没建成单的）：退回待确认，批次重新打开，可以修改后重新提交 */
+function reopenFailed(jobId: number, status: JobStatus) {
+  if (status !== "done" && status !== "ready") return;
+  const failed = jobRows(jobId).filter((r) => r.status === "failed" && !r.shipment_id && r.channel_code);
+  if (!failed.length) return;
+  for (const r of failed) setRow(r.id, { status: "quoted", selected: 0, error: r.error?.startsWith("上次下单失败") ? r.error : failedMsg(r.error ?? "") });
+  if (status === "done") setJob(jobId, "ready");
+}
+
 export function getJob(jobId: number): BatchJob | null {
+  const st = db().prepare("SELECT status FROM batch_jobs WHERE id = ?").get(jobId) as { status: JobStatus } | undefined;
+  if (st) reopenFailed(jobId, st.status);
   const j = db()
     .prepare("SELECT j.*, c.name AS customer_name FROM batch_jobs j JOIN customers c ON c.id = j.customer_id WHERE j.id = ?")
     .get(jobId) as
@@ -880,7 +893,7 @@ async function createJobLabels(jobId: number) {
     const req = JSON.parse(r.req_json) as ShipmentRequest;
     const channel = getChannel(r.channel_code!);
     if (!channel?.enabled) {
-      setRow(r.id, { status: "failed", error: "渠道已停用" });
+      setRow(r.id, { status: "quoted", selected: 0, error: failedMsg("渠道已停用，请换一个渠道") });
       continue;
     }
     try {
@@ -907,7 +920,8 @@ async function createJobLabels(jobId: number) {
         const done = r.customer_ref ? activeShipmentByRef(job.customerId, r.customer_ref) : undefined;
         const linked = done && (db().prepare("SELECT 1 FROM batch_job_rows WHERE shipment_id = ?").get(done.id) as unknown);
         if (done && !linked && done.created_at >= job.createdAt) setRow(r.id, { status: "created", shipment_id: done.id, error: null });
-        else setRow(r.id, { status: "failed", error: (e as Error).message });
+        // 服务商拒绝（尺寸不对、对方系统临时出错…）：订单没建成、没扣钱。退回“待确认”（不勾选），可以修改或换渠道后重新提交
+        else setRow(r.id, { status: "quoted", selected: 0, error: failedMsg((e as Error).message) });
       }
     }
   }
