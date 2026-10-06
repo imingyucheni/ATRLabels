@@ -281,7 +281,9 @@ function migrate(conn: Database.Database) {
   const chcols = (conn.prepare("PRAGMA table_info(channels)").all() as { name: string }[]).map((c) => c.name);
   if (!chcols.includes("stamp_json")) conn.exec("ALTER TABLE channels ADD COLUMN stamp_json TEXT");
   // FedEx SmartPost 以前套的是普通 FedEx 的位置（会盖住收件人）：还是那个默认值、没手动改过的，换成 SmartPost 的位置
-  for (const r of conn.prepare("SELECT code, name FROM channels WHERE stamp_json = ?").all(JSON.stringify(FEDEX_PRESET)) as { code: string; name: string }[]) {
+  // （上一版 SmartPost 位置 y = 2.05 会压到面单的横线，也一起换）
+  const oldPresets = [FEDEX_PRESET, { x: 0.42, y: 2.05, maxWidth: 2.35, fontSize: 9, maxLines: 1 }].map((p) => JSON.stringify(p));
+  for (const r of conn.prepare(`SELECT code, name FROM channels WHERE stamp_json IN (${oldPresets.map(() => "?").join(",")})`).all(...oldPresets) as { code: string; name: string }[]) {
     if (isSmartPostName(r.name)) conn.prepare("UPDATE channels SET stamp_json = ? WHERE code = ?").run(JSON.stringify(FEDEX_SMARTPOST_PRESET), r.code);
   }
   if (!cols.includes("label_note")) conn.exec("ALTER TABLE shipments ADD COLUMN label_note TEXT");

@@ -213,7 +213,7 @@ describe("FedEx 面单默认加印位置", () => {
     // SmartPost 面单版式不同：放在上面 CUST REF 条码下方，不盖住收件人
     expect(presetForChannel("Fedex-Economy-SMP-TY · GDE")).toBe(FEDEX_SMARTPOST_PRESET);
     expect(presetForChannel("FedEx Economy (SmartPost) · SB")).toBe(FEDEX_SMARTPOST_PRESET);
-    expect(FEDEX_SMARTPOST_PRESET).toMatchObject({ y: 2.05, maxLines: 1 });
+    expect(FEDEX_SMARTPOST_PRESET).toMatchObject({ y: 1.98, maxLines: 1 });
     expect(FEDEX_PRESET).toMatchObject({ x: 0.2, y: 3.9 });
     expect(FEDEX_PRESET.enabled).toBeUndefined(); // 不强制开启，自动检查 / 全局开关决定
     expect(presetForChannel("USPS-（91710） · SB")).toBe(USPS_PRESET);

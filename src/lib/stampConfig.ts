@@ -69,7 +69,7 @@ export const FEDEX_PRESET: StampOverride = { x: 0.2, y: 3.9, maxWidth: 2.5, font
  * 运单号那块下面是收件人（USPS DELIVER TO），放 FedEx 的位置会盖住收件人。
  * 改放在上面 CUST REF 条码下方、“FedEx Tracking ID#” 上方的空白里，只放一行（放不下自动缩小字号）。
  */
-export const FEDEX_SMARTPOST_PRESET: StampOverride = { x: 0.42, y: 2.05, maxWidth: 2.35, fontSize: 9, maxLines: 1 };
+export const FEDEX_SMARTPOST_PRESET: StampOverride = { x: 0.42, y: 1.98, maxWidth: 2.35, fontSize: 9, maxLines: 1 };
 
 export const isSmartPostName = (name: string) => /fedex/i.test(name) && /smart\s*post|\bsmp\b|economy/i.test(name);
 
