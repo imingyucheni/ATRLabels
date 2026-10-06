@@ -3,7 +3,7 @@ import { fmtTime } from "./time";
 import fs from "node:fs";
 import path from "node:path";
 import { seedDemo } from "./demo";
-import { DEFAULT_STAMP, presetForChannel, type StampOverride, type StampSettings } from "./stampConfig";
+import { DEFAULT_STAMP, FEDEX_PRESET, FEDEX_SMARTPOST_PRESET, isSmartPostName, presetForChannel, type StampOverride, type StampSettings } from "./stampConfig";
 import type { MarkupRule, PartialRule } from "./pricing";
 import type { Address, PackageInfo, SkuItem, UnitSystem } from "./shipbest/types";
 
@@ -280,6 +280,10 @@ function migrate(conn: Database.Database) {
   if (!ccols.includes("label_paper")) conn.exec("ALTER TABLE customers ADD COLUMN label_paper TEXT NOT NULL DEFAULT '4x6'");
   const chcols = (conn.prepare("PRAGMA table_info(channels)").all() as { name: string }[]).map((c) => c.name);
   if (!chcols.includes("stamp_json")) conn.exec("ALTER TABLE channels ADD COLUMN stamp_json TEXT");
+  // FedEx SmartPost 以前套的是普通 FedEx 的位置（会盖住收件人）：还是那个默认值、没手动改过的，换成 SmartPost 的位置
+  for (const r of conn.prepare("SELECT code, name FROM channels WHERE stamp_json = ?").all(JSON.stringify(FEDEX_PRESET)) as { code: string; name: string }[]) {
+    if (isSmartPostName(r.name)) conn.prepare("UPDATE channels SET stamp_json = ? WHERE code = ?").run(JSON.stringify(FEDEX_SMARTPOST_PRESET), r.code);
+  }
   if (!cols.includes("label_note")) conn.exec("ALTER TABLE shipments ADD COLUMN label_note TEXT");
   // 下单时的接口模式：mock / sandbox / live（老数据为空：面单地址是 mock:// 的就是模拟单）
   if (!cols.includes("env")) conn.exec("ALTER TABLE shipments ADD COLUMN env TEXT");

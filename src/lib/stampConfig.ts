@@ -49,7 +49,7 @@ export interface StampSettings extends StampConfig {
  * 渠道单独设置（不同承运商面单版式不同）。
  * enabled：true 该渠道加印 / false 不加印（例如 ShipBest 已在备注里印了 SKU）/ 不设置则跟随全局。
  */
-export type StampOverride = Partial<Pick<StampConfig, "x" | "y" | "fontSize" | "maxWidth" | "rotate">> & { enabled?: boolean };
+export type StampOverride = Partial<Pick<StampConfig, "x" | "y" | "fontSize" | "maxWidth" | "rotate" | "maxLines">> & { enabled?: boolean };
 
 /**
  * USPS 面单的默认加印位置：最下面一栏的左侧空白（条码框下方、右下角二维码左边）。
@@ -64,8 +64,18 @@ export const USPS_PRESET: StampOverride = { enabled: true, x: 0.15, y: 5.45, max
  */
 export const FEDEX_PRESET: StampOverride = { x: 0.2, y: 3.9, maxWidth: 2.5, fontSize: 10 };
 
+/**
+ * FedEx SmartPost（FedEx Economy / Ground Economy，最后一段由 USPS 派送）面单版式不一样：
+ * 运单号那块下面是收件人（USPS DELIVER TO），放 FedEx 的位置会盖住收件人。
+ * 改放在上面 CUST REF 条码下方、“FedEx Tracking ID#” 上方的空白里，只放一行（放不下自动缩小字号）。
+ */
+export const FEDEX_SMARTPOST_PRESET: StampOverride = { x: 0.42, y: 2.05, maxWidth: 2.35, fontSize: 9, maxLines: 1 };
+
+export const isSmartPostName = (name: string) => /fedex/i.test(name) && /smart\s*post|\bsmp\b|economy/i.test(name);
+
 export function presetForChannel(name: string): StampOverride | null {
   if (/usps/i.test(name)) return USPS_PRESET;
+  if (isSmartPostName(name)) return FEDEX_SMARTPOST_PRESET;
   if (/fedex/i.test(name)) return FEDEX_PRESET;
   // DHL 国际件：面单版式紧凑，品名 / SKU 在商业发票上，默认不加印
   if (/\bDHL\b/i.test(name)) return { enabled: false };
