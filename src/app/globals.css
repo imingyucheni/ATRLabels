@@ -414,7 +414,7 @@ tr.row-warn > td { background: var(--warn-soft); }
 /* 列表表格：单元格不折行（避免中文客户名、按钮被挤成竖排），放不下时横向滚动 */
 table.list td { white-space: nowrap; }
 /* 文字多的列（收件人、客户、渠道…）允许折行，金额等其他列保持一行；表格宽度够时不会折 */
-table.list td.wrap, table.list .cell-wrap { white-space: normal; overflow-wrap: anywhere; }
+table.list td.wrap, table.list .cell-wrap { white-space: normal; overflow-wrap: break-word; }
 table.list td.wrap { min-width: 6.5em; }
 table.list td.wrap.wide { min-width: 13em; }
 table.list .cell-wrap:not(td) { display: block; min-width: 6.5em; }
@@ -1685,4 +1685,13 @@ tbody.ch-group + tbody.ch-group .ch-group-head td { border-top-width: 10px; bord
 /* 电脑端：订单号这类主列太长时换行，不把整张表撑出屏幕 */
 @media (min-width: 761px) {
   .card-table td.c-main { max-width: 220px; overflow-wrap: anywhere; }
+}
+
+/* 面单记录：运单号可以折行（很长的数字），打印链接放在运单号下面，省一列 */
+table.list td.ship-trk { min-width: 8.5em; max-width: 10em; }
+table.list td.ship-trk .track-link { white-space: normal; word-break: break-all; }
+.ship-print:empty { display: none; }
+@media (min-width: 761px) {
+  table.ship-list th, table.ship-list td { padding-left: 8px; padding-right: 8px; }
+  table.ship-list td.wrap { min-width: 7em; max-width: 11em; }
 }

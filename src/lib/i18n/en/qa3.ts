@@ -36,4 +36,5 @@ export const qa3: Record<string, string> = {
   "保存备用仓库渠道": "Save backup service",
   "渠道名称（可选，只有后台看得到）": "Service name (optional, admin only)",
   "例如 Fedex NG 2": "e.g. Fedex NG 2",
+  "打印面单": "Print label",
 };

@@ -25,6 +25,7 @@ export default async function ShipmentsPage({ searchParams }: { searchParams: Pr
     q: sp.q || undefined,
   };
   const rows = listShipments({ ...filter, limit: 500 });
+  const hasAdj = rows.some((s) => s.costAdj || s.customerAdj);
   // 按单号 / 运单号搜到唯一一单：直接打开详情（手机上查件少点一步）
   if (filter.q && rows.length === 1 && !filter.status && !filter.from && !filter.to && !filter.customerId) redirect(`/shipments/${rows[0].id}`);
   const customers = listCustomers({ includeInternal: true });
@@ -98,12 +99,13 @@ export default async function ShipmentsPage({ searchParams }: { searchParams: Pr
         <div className="stat"><div className="muted">{t("利润合计")}</div><div className="v">{money(totals.profit)}</div></div>
       </div>
 
+      {/* 补差列只在有补差的记录时显示；加价并到客户价下面：列少一些，1440 宽的屏幕不用横向滚动 */}
       <div className="card table-wrap">
-        <table className="list card-table">
+        <table className="list card-table ship-list">
           <thead>
             <tr>
               <th>{t("单号")} / {t("时间")}</th><th>{t("客户")}</th><th>{t("收件人")}</th><th>{t("渠道")}</th><th>{t("运单号")}</th><th>{t("状态")}</th>
-              <th className="num">{t("成本")}</th><th className="num">{t("客户价")}</th><th className="num">{t("加价")}</th><th className="num">{t("补差(客户)")}</th><th className="num">{t("利润")}</th><th>{t("面单")}</th>
+              <th className="num">{t("成本")}</th><th className="num">{t("客户价")}</th>{hasAdj && <th className="num" title={t("补差(客户)")}>{t("补差")}</th>}<th className="num">{t("利润")}</th>
             </tr>
           </thead>
           <tbody>
@@ -112,20 +114,24 @@ export default async function ShipmentsPage({ searchParams }: { searchParams: Pr
                 <td className="c-main"><Link href={`/shipments/${s.id}`}>{s.customNo}</Link><div className="small muted">{fmtTime(s.createdAt)}</div></td>
                 <td className="wrap" data-label={t("客户")}>{s.customerName}</td>
                 <td className="wrap" data-label={t("收件人")}>{s.recipient.nameFirst} {s.recipient.nameLast}<div className="small muted">{s.recipient.city}, {s.recipient.province ?? s.recipient.country} {s.recipient.zipCode}</div></td>
-                <td className="nowrap" data-label={t("渠道")} title={s.channelName ?? undefined}>{displayChannel(s.channelCode).name || s.channelName}</td>
-                <td data-label={t("运单号")}><TrackingLink channelCode={s.channelCode} trackingNo={s.trackingNo} title={t("查物流轨迹")} /></td>
+                <td className="wrap" data-label={t("渠道")} title={s.channelName ?? undefined}>{displayChannel(s.channelCode).name || s.channelName}</td>
+                <td data-label={t("运单号")} className="small ship-trk">
+                  <TrackingLink channelCode={s.channelCode} trackingNo={s.trackingNo} title={t("查物流轨迹")} />
+                  <div className="ship-print">{s.labelPath && s.status !== "cancelled" ? <a href={`/api/labels/${s.id}`} target="_blank">{t("打印面单")}</a> : s.status === "cancelled" ? <span className="muted">{t("已作废")}</span> : null}</div>
+                </td>
                 <td data-label={t("状态")}><StatusBadge status={s.status} test={s.isTest} /></td>
                 <td className="num" data-label={t("成本")}>{money(s.actualCost ?? s.quotedCost)}{s.actualCost === null && <div className="small muted">{t("试算")}</div>}</td>
-                <td className="num" data-label={t("客户价")}>{money(s.price, s.currency)}</td>
-                <td className="num small hide-m" title={`${describeRule(s.rule, undefined, t)}${s.rule.source ? ` · ${t(MARKUP_SOURCE_LABEL[s.rule.source as MarkupSource] ?? s.rule.source)}` : ""}`}>
-                  {signedPercent(s.rule.percent)}{s.rule.fixed ? <div className="muted">+{money(s.rule.fixed)}</div> : null}
+                <td className="num nowrap" data-label={t("客户价")}>
+                  {money(s.price, s.currency)}
+                  <div className="small muted" title={`${describeRule(s.rule, undefined, t)}${s.rule.source ? ` · ${t(MARKUP_SOURCE_LABEL[s.rule.source as MarkupSource] ?? s.rule.source)}` : ""}`}>
+                    {t("加价")} {signedPercent(s.rule.percent)}{s.rule.fixed ? ` +${money(s.rule.fixed)}` : ""}
+                  </div>
                 </td>
-                <td className="num" data-label={t("补差(客户)")}>{s.costAdj || s.customerAdj ? <>{money(s.customerAdj)}<div className="small muted">{t("成本")} {money(s.costAdj)}</div></> : "-"}</td>
+                {hasAdj && <td className="num" data-label={t("补差(客户)")}>{s.costAdj || s.customerAdj ? <>{money(s.customerAdj)}<div className="small muted">{t("成本")} {money(s.costAdj)}</div></> : "-"}</td>}
                 <td className="num" data-label={t("利润")}><Profit value={shipmentProfit(s)} /></td>
-                <td className="nowrap c-act">{s.labelPath && s.status !== "cancelled" ? <a href={`/api/labels/${s.id}`} target="_blank">{t("打印")}</a> : s.status === "cancelled" ? <span className="muted small">{t("已作废")}</span> : "-"}</td>
               </tr>
             ))}
-            {!rows.length && <tr><td colSpan={12} className="muted">{t("没有符合条件的记录")}</td></tr>}
+            {!rows.length && <tr><td colSpan={hasAdj ? 10 : 9} className="muted">{t("没有符合条件的记录")}</td></tr>}
           </tbody>
         </table>
       </div>
