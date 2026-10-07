@@ -42,8 +42,9 @@ export const MULTI_BOX_RULES: MultiBoxRule[] = [
     id: "ups-hwt",
     match: /\bHWT\b/i,
     label: "UPS HWT",
-    minTotalLb: 220,
-    maxTotalLb: 1700,
+    // 按嘉谷结算价格表：200–2000 lb（不在区间按 Ground 公布价计费；更细的限制以接口返回为准）
+    minTotalLb: 200,
+    maxTotalLb: 2000,
     maxBoxLb: 50,
     minBoxes: 2,
     dimDivisor: 250,
@@ -51,7 +52,7 @@ export const MULTI_BOX_RULES: MultiBoxRule[] = [
     noAhs: true,
     hsMinDigits: 8,
     notes: [
-      "一票总重量 220–1700 lb（含 UPS 审计后的重量），不在这个区间按 UPS Ground 公布价计费",
+      "一票总重量 200–2000 lb（含 UPS 审计后的重量），不在这个区间按 UPS Ground 公布价计费",
       "至少 2 箱一起下单，单箱不超过 50 lb",
       "不能有额外处理费（AHS）和超尺寸（Oversize）的箱子：最长边 ≤ 48 in、次长边 ≤ 30 in、长 + 2×宽 + 2×高 ≤ 105 in、体积 ≤ 10,368 立方英寸",
       "英文品名必填，不能有中文；海关编码（HS）至少 8 位",

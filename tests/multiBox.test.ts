@@ -32,12 +32,13 @@ describe("多箱寄出：渠道规则", () => {
     expect(s.billable).toBe(250);
   });
 
-  it("UPS HWT：总重 220–1700 lb、至少 2 箱、单箱 ≤ 50 lb、不能有 AHS / Oversize、英文品名、HS ≥ 8 位", () => {
+  it("UPS HWT：总重 200–2000 lb、至少 2 箱、单箱 ≤ 50 lb、不能有 AHS / Oversize、英文品名、HS ≥ 8 位", () => {
     const ok = [{ length: 18, width: 14, height: 12, weight: 40, qty: 6 }];
     expect(checkMultiBox(hwt, ok, [{ productNameEn: "Cotton T-shirts", hsCode: "61091000" }], { forOrder: true })).toEqual([]);
-    expect(checkMultiBox(hwt, [{ length: 18, width: 14, height: 12, weight: 40, qty: 5 }]).join()).toMatch(/至少 220 lb/);
-    expect(checkMultiBox(hwt, [{ length: 18, width: 14, height: 12, weight: 45, qty: 40 }]).join()).toMatch(/最多 1700 lb/);
-    expect(checkMultiBox(hwt, [{ length: 18, width: 14, height: 12, weight: 230, qty: 1 }]).join()).toMatch(/至少 2 箱/);
+    expect(checkMultiBox(hwt, [{ length: 18, width: 14, height: 12, weight: 40, qty: 5 }])).toEqual([]); // 200 lb 可以
+    expect(checkMultiBox(hwt, [{ length: 18, width: 14, height: 12, weight: 39, qty: 5 }]).join()).toMatch(/至少 200 lb/);
+    expect(checkMultiBox(hwt, [{ length: 18, width: 14, height: 12, weight: 45, qty: 45 }]).join()).toMatch(/最多 2000 lb/);
+    expect(checkMultiBox(hwt, [{ length: 18, width: 14, height: 12, weight: 210, qty: 1 }]).join()).toMatch(/至少 2 箱/);
     expect(checkMultiBox(hwt, [{ length: 18, width: 14, height: 12, weight: 55, qty: 5 }]).join()).toMatch(/单箱不能超过 50 lb/);
     expect(checkMultiBox(hwt, [{ length: 50, width: 14, height: 12, weight: 40, qty: 6 }]).join()).toMatch(/最长边 50 in 超过 48 in/);
     expect(checkMultiBox(hwt, [{ length: 40, width: 32, height: 6, weight: 40, qty: 6 }]).join()).toMatch(/次长边/);
@@ -75,7 +76,7 @@ describe("多箱寄出：报价和下单（模拟模式）", () => {
     // 不符合要求的直接显示原因，不去问服务商
     const light = await svc.quoteMulti(cid, req([{ length: 18, width: 14, height: 12, weight: 20, qty: 3 }]));
     expect(light[0].ok).toBe(false);
-    expect(light[0].error).toMatch(/至少 220 lb/);
+    expect(light[0].error).toMatch(/至少 200 lb/);
   });
 
   it("下单：一票多箱，扣一次钱，记下箱规；品名有中文 / HS 不够 8 位不能下单", async () => {
