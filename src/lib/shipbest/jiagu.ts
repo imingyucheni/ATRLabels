@@ -25,6 +25,7 @@ export const DEFAULT_JG_WAREHOUSES: Record<string, string> = {
   "581808": "196845", // Swiftx-LAX-917 · GALAX
   "580914": "196845", // USPS-D价-GA-917不预上网 · GALAX
   "580469": "230759", // Ontrac-SG-B-XT · Ontrac-91710-230490（4820 Dorina Ct, Chino CA 91710）
+  "591208": "230759", // Ontrac-SG-B-XT-预上网 · Ontrac-91710-230490（同一个仓库）
 };
 
 /** 嘉谷的仓库（设置页选仓库时显示名称和地址，方便核对） */
