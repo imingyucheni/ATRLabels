@@ -85,6 +85,8 @@ export function defaultPublicName(channelName: string, carrierId?: string | null
   // FedEx 分 Ground（NG / Ground）和 Economy（SmartPost）两种服务，名称要分开，同一个客户可以同时开通
   const service = c.id === "fedex" ? fedexService(own) : null;
   if (service) return `${c.fullName} ${service}`;
+  // 同一物流商有“预上网”和普通两种（例如 OnTrac）：预上网的名字后面带上，客户看得出是两个渠道，也可以同时开通
+  if (/(?<!不)预上网/.test(own)) return `${c.fullName} 预上网`;
   if (tagged || /[\u3400-\u9fff]/.test(clean)) return c.fullName;
   const short = c.name.toUpperCase();
   const up = clean.toUpperCase();

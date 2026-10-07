@@ -287,6 +287,8 @@ describe("嘉谷万邑接口", () => {
     expect(defaultPublicName("uniuni-LAX-917(不预上网) · GDE")).toBe("UniUni Express");
     expect(defaultPublicName("UPS-D价-GROUND-923 · GDE")).toBe("UPS");
     expect(defaultPublicName("Ontrac-SG-B-XT · GDE")).toBe("OnTrac");
+    // 预上网和普通的分成两个渠道名（“不预上网”不算）
+    expect(defaultPublicName("Ontrac-SG-B-XT-预上网 · GDE")).toBe("OnTrac 预上网");
     // ShipBest 的名称照旧（带不带“· SB”标记都一样）
     expect(defaultPublicName("GOFO-（91710）")).toBe("Gofo Express");
     expect(defaultPublicName("GOFO-（91710） · SB")).toBe("Gofo Express");
