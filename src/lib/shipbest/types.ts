@@ -1,3 +1,4 @@
+import type { Piece } from "../multiBox";
 /** 单位制：1=g/cm，2=kg/cm，3=lb/in */
 export type UnitSystem = 1 | 2 | 3;
 
@@ -55,6 +56,8 @@ export interface PackageInfo {
   insuranceService: 0 | 1;
   insuranceFee?: number;
   currency: string;
+  /** 多箱寄出：每种箱规（英寸 / 磅）和箱数；这时 length / width / height 是最大那箱的尺寸，weight 是总重量 */
+  pieces?: Piece[];
 }
 
 export interface ShipmentRequest {

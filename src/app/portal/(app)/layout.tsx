@@ -1,6 +1,6 @@
 import { impersonatedCustomerId, requireCustomer } from "@/lib/auth";
 import { isSandboxSite, shipbestMode } from "@/lib/shipbest/client";
-import { getSettings } from "@/lib/db";
+import { customerChannels, getSettings } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { hasAcceptedTerms } from "@/lib/terms";
 import { money, usd } from "@/lib/pricing";
@@ -14,6 +14,8 @@ import { apiEnabled } from "@/lib/api/keys";
 import { ChannelNamesProvider } from "@/components/ChannelLabel";
 import { getT } from "@/lib/prefs";
 import { leaveCustomerAction, portalLogoutAction } from "../actions";
+import { isMultiBoxName } from "@/lib/multiBox";
+import { multiEnabled } from "@/lib/multiAccess";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +29,7 @@ export default async function PortalLayout({ children }: { children: React.React
   // 角标只数能直接提交的（已试算成功）；出错 / 失败 / 还在试算的不算
   const drafts = listDraftRows(me.id).filter((r) => r.status === "quoted").length;
   const storesOn = storesEnabled(me.id);
+  const multiOn = multiEnabled(me.id) && customerChannels(me.id).some((c) => isMultiBoxName(c.name));
   const storeOpen = storesOn ? listStores(me.id).reduce((n, s) => n + s.openCount, 0) : 0;
   const acting = !!(await impersonatedCustomerId());
   // 还没同意（当前版本的）服务条款：先去同意；管理员代操作不拦
@@ -49,6 +52,8 @@ export default async function PortalLayout({ children }: { children: React.React
             items: [
               { href: "/portal/ship", label: "单个下单", icon: "ship" },
               { href: "/portal/batch", label: "批量导入", icon: "batch" },
+              // 开通了多箱渠道（UPS HWT / FedEx MWT）的客户才显示
+              ...(multiOn ? [{ href: "/portal/multi", label: "多箱寄出", icon: "boxes" as const }] : []),
               // 店铺对接测试阶段：后台开放了的客户才显示
               ...(storesOn ? [{ href: "/portal/stores", label: "店铺订单", icon: "store" as const, count: storeOpen }] : []),
               { href: "/portal/drafts", label: "待出单", icon: "sheet", count: drafts },

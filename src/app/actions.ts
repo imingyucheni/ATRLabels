@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { setMultiEnabled } from "@/lib/multiAccess";
 import { redirect } from "next/navigation";
 import { checkPassword, checkRateLimit, clearFailures, clientIp, createSession, customerDenied, destroySession, hashPassword, recordFailure, requireAdmin } from "@/lib/auth";
 import { randomBytes } from "node:crypto";
@@ -1469,6 +1470,16 @@ export async function setStoresEnabledAction(_: FlashState, fd: FormData): Promi
   setStoresEnabled(id, on);
   revalidatePath(`/customers/${id}`);
   return { ok: on ? "已开放：客户 OMS 侧边栏会出现“店铺订单”" : "已关闭：客户看不到“店铺订单”，已连接的店铺暂停同步" };
+}
+
+export async function setMultiEnabledAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  await requireAdmin();
+  const id = Number(fd.get("customerId"));
+  if (!getCustomer(id)) return { error: "客户不存在" };
+  const on = fd.get("on") === "1";
+  setMultiEnabled(id, on);
+  revalidatePath(`/customers/${id}`);
+  return { ok: on ? "已开放：客户 OMS 侧边栏会出现“多箱寄出”（需要同时开通多箱渠道）" : "已关闭：客户看不到“多箱寄出”" };
 }
 
 export async function saveEbayAction(_: FlashState, fd: FormData): Promise<FlashState> {

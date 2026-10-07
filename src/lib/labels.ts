@@ -24,7 +24,26 @@ export function sniffMime(buf: Buffer, headerType: string | null): { mime: strin
 export async function downloadLabel(url: string, customNo: string, extra: { from?: string[] } = {}): Promise<{ path: string; mime: string }> {
   let buf: Buffer;
   let headerType: string | null = null;
-  if (url.startsWith("dhl://")) {
+  if (url.startsWith("multi:")) {
+    // 多箱寄出：每箱一张面单，合成一个 PDF（按箱子顺序）
+    const urls = JSON.parse(url.slice("multi:".length)) as string[];
+    const { PDFDocument } = await import("pdf-lib");
+    const out = await PDFDocument.create();
+    for (const u of urls) {
+      const one = await downloadLabel(u, `${customNo}-part`, extra);
+      const b = readLabel(one.path);
+      if (one.mime === "application/pdf") {
+        const src = await PDFDocument.load(b, { ignoreEncryption: true });
+        (await out.copyPages(src, src.getPageIndices())).forEach((p) => out.addPage(p));
+      } else if (one.mime === "image/png" || one.mime === "image/jpeg") {
+        const img = one.mime === "image/png" ? await out.embedPng(b) : await out.embedJpg(b);
+        const scale = Math.min(288 / img.width, 432 / img.height);
+        out.addPage([288, 432]).drawImage(img, { x: (288 - img.width * scale) / 2, y: (432 - img.height * scale) / 2, width: img.width * scale, height: img.height * scale });
+      }
+      fs.rmSync(path.resolve(dataDir(), one.path), { force: true });
+    }
+    buf = Buffer.from(await out.save());
+  } else if (url.startsWith("dhl://")) {
     // DHL 出单时直接返回了面单内容，存在本地订单记录里
     const { dhlLabelBytes } = await import("./shipbest/dhl");
     const b = dhlLabelBytes(url.slice("dhl://".length));

@@ -18,6 +18,7 @@ import { isDhlCode } from "../shipbest/dhl";
 import { readLabel } from "../labels";
 import { stampedLabel } from "../stamp";
 import type { ApiKey } from "./keys";
+import { isMultiBoxName } from "../multiBox";
 
 /** 接口错误：code 给程序判断，message 给人看 */
 export class ApiError extends Error {
@@ -173,7 +174,8 @@ export function orderView(s: Shipment, base: string) {
 export function channels(key: ApiKey) {
   const enabled = new Set(listChannels(true).map((c) => c.code));
   return customerChannels(key.customerId)
-    .filter((c) => enabled.has(c.code))
+    // 多箱渠道接口还不支持（一票多箱）
+    .filter((c) => enabled.has(c.code) && !isMultiBoxName(c.name))
     .map((c) => {
       const d = displayChannel(c.code);
       return { channel: c.code, name: d.name || c.name, carrier: d.carrier, international: isDhlCode(c.code) };

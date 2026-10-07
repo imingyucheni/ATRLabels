@@ -82,6 +82,9 @@ export function defaultPublicName(channelName: string, carrierId?: string | null
   const clean = cleanChannelName(own);
   const c = carrierById(carrierId || guessCarrier(own));
   if (!c.fullName) return tagged ? own.replace(/[\u3400-\u9fff（）()]+.*$/, "").trim() || own : clean;
+  // 多箱渠道（一票多箱按总重量计价）：名字里带上，和普通的 UPS / FedEx 分开
+  if (/\bHWT\b/i.test(own)) return `${c.fullName} Ground 多箱 (HWT)`;
+  if (/\bMWT\b/i.test(own)) return `${c.fullName} Ground 多箱 (MWT)`;
   // FedEx 分 Ground（NG / Ground）和 Economy（SmartPost）两种服务，名称要分开，同一个客户可以同时开通
   const service = c.id === "fedex" ? fedexService(own) : null;
   if (service) return `${c.fullName} ${service}`;

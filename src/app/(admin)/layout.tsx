@@ -79,6 +79,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             items: [
               { href: "/ship", label: "管理员下单", icon: "ship", exact: true },
               { href: "/ship/batch", label: "管理员批量下单", icon: "batch" },
+              { href: "/ship/multi", label: "多箱寄出", icon: "boxes" },
               dhlSettings().enabled
                 ? { href: "/ship/intl", label: "国际下单（DHL）", icon: "globe" }
                 : { href: "/ship/intl", label: "国际下单（DHL）", icon: "globe", soon: true },

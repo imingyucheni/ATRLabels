@@ -17,6 +17,7 @@ import { dhlDocInfo, isDhlCode } from "@/lib/shipbest/dhl";
 import { getSettings } from "@/lib/db";
 import { makeT, translateMessage, type T } from "@/lib/i18n";
 import { getLang } from "@/lib/prefs";
+import PiecesInfo from "@/components/PiecesInfo";
 
 const UNITS = { 1: ["g", "cm"], 2: ["kg", "cm"], 3: ["lb", "in"] } as const;
 const SIGN = ["不需要签名", "直接签名", "间接签名", "成人签名"];
@@ -220,6 +221,7 @@ export default async function PortalShipmentDetail({ params }: { params: Promise
       <div className="card">
         <h2>{t("包裹")}</h2>
         <p>{s.pkg.length} × {s.pkg.width} × {s.pkg.height} {lu}{t("，")}{s.pkg.weight} {wu} · {SIGN[s.pkg.signServiceType] ? t(SIGN[s.pkg.signServiceType]) : ""}</p>
+        <PiecesInfo pieces={s.pkg.pieces} channelName={s.channelName} />
         <div className="table-wrap">
           <table>
             <thead><tr><th>SKU</th><th>{t("品名")}</th><th>{t("海关编码")}</th><th className="num">{t("数量")}</th><th className="num">{t("申报单价")}</th></tr></thead>

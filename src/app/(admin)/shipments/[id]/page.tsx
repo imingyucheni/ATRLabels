@@ -23,6 +23,7 @@ import { stampFor, stampText } from "@/lib/stamp";
 import { LEDGER_TYPE_LABEL, listLedger } from "@/lib/ledger";
 import { getLang } from "@/lib/prefs";
 import { makeT, translateMessage, type T } from "@/lib/i18n";
+import PiecesInfo from "@/components/PiecesInfo";
 
 const UNITS = { 1: ["g", "cm"], 2: ["kg", "cm"], 3: ["lb", "in"] } as const;
 const SIGN = ["不需要签名", "直接签名", "间接签名", "成人签名"];
@@ -349,6 +350,7 @@ export default async function ShipmentDetail({ params }: { params: Promise<{ id:
           {s.pkg.length} × {s.pkg.width} × {s.pkg.height} {lu}{t("，")}{s.pkg.weight} {wu} · {t(SIGN[s.pkg.signServiceType])}
           {s.pkg.insuranceService ? ` · ${t("保险")} ${money(s.pkg.insuranceFee ?? 0, s.pkg.currency)}` : ""}
         </p>
+        <PiecesInfo pieces={s.pkg.pieces} channelName={s.channelName} />
         <div className="table-wrap">
           <table>
             <thead><tr><th>SKU</th><th>{t("品名")}</th><th>{t("海关编码")}</th><th>{t("性质")}</th><th className="num">{t("数量")}</th><th className="num">{t("申报单价")}</th></tr></thead>

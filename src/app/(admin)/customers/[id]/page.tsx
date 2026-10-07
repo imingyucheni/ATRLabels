@@ -17,6 +17,7 @@ import { getT, getLang } from "@/lib/prefs";
 import { translateMessage } from "@/lib/i18n";
 import PinField from "@/components/PinField";
 import StoresCard from "./StoresCard";
+import MultiAccessCard from "./MultiAccessCard";
 import ApiCard from "./ApiCard";
 import SalesCard from "./SalesCard";
 import { groupChannels } from "@/lib/channelGroups";
@@ -166,6 +167,7 @@ export default async function CustomerEdit({ params, searchParams }: { params: P
             {!allChannels.length && <span className="small muted">{t("还没有渠道，请先到")} <Link href="/settings?tab=providers">{t("设置")}</Link> {t("同步渠道。")}</span>}
           </FlashForm>}
 
+          {!c.internal && !staff && show("pricing") && <MultiAccessCard customerId={c.id} />}
           {!c.internal && !staff && show("pricing") && <SalesCard customerId={c.id} />}
 
           {!c.internal && show("pricing") && (() => {

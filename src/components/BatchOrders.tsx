@@ -25,6 +25,7 @@ import FilePick from "@/components/FilePick";
 import { useLang, useT } from "@/components/I18n";
 import { translateMessage } from "@/lib/i18n";
 import { customerLabeler } from "@/lib/customerLabel";
+import { isMultiBoxName } from "@/lib/multiBox";
 
 const ROW_STATUS: Record<string, [string, string]> = {
   pending: ["试算中", "pending"],
@@ -82,8 +83,9 @@ export default function BatchOrders(props: {
   const [draft, setDraft] = useState<Draft | null>(null);
   const house = props.mode === "house";
   const [custId, setCustId] = useState<number | undefined>(house ? props.customers?.[0]?.id : undefined);
+  // 多箱渠道（UPS HWT / FedEx MWT）只在“多箱寄出”里用，批量下单不列出
   const channelsOf = (id?: number) =>
-    props.mode !== "portal" ? props.customers?.find((c) => c.id === id)?.channels ?? [] : props.channels ?? [];
+    (props.mode !== "portal" ? props.customers?.find((c) => c.id === id)?.channels ?? [] : props.channels ?? []).filter((c) => !isMultiBoxName(c.name) && !isMultiBoxName(c.code));
   const uploadChannels = channelsOf(custId);
 
   const load = useCallback(async (id: number) => {

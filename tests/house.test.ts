@@ -33,7 +33,8 @@ describe("管理员下单（公司自用账户，成本价）", () => {
     expect(db.listCustomers().some((c) => c.id === id)).toBe(false);
     expect(db.listCustomers({ includeInternal: true }).some((c) => c.id === id)).toBe(true);
     const quotes = await svc.quoteAll(id, req);
-    expect(quotes.length).toBe(db.listChannels(true).length); // 没有开通限制
+    // 没有开通限制（多箱渠道只在“多箱寄出”里报价，不算）
+    expect(quotes.length).toBe(db.listChannels(true).filter((c) => !/HWT|MWT/.test(c.name)).length);
     for (const q of quotes.filter((x) => x.ok)) {
       expect(q.price).toBe(q.cost); // 不加价、不取整
       expect(q.profit).toBe(0);
@@ -82,7 +83,7 @@ describe("管理员下单（公司自用账户，成本价）", () => {
     const quoted = job.rows.filter((r) => r.status === "quoted");
     expect(quoted.length).toBeGreaterThan(0);
     // 每单都按所有已启用渠道试算，价格 = 成本
-    expect(quoted[0].quotes.length).toBe(db.listChannels(true).length);
+    expect(quoted[0].quotes.length).toBe(db.listChannels(true).filter((c) => !/HWT|MWT/.test(c.name)).length);
     for (const q of quoted[0].quotes.filter((x) => x.ok)) expect(q.price).toBe(q.cost);
     // 待提交的订单可以直接改收件人 / 包裹，改完自动重新试算
     const row = quoted[0];

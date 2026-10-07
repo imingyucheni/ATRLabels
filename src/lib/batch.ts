@@ -12,6 +12,7 @@ import { createLabel, PriceChangedError, quoteChannel, refreshShipment, validate
 import type { Address, ShipmentRequest, SkuItem, UnitSystem } from "./shipbest/types";
 import { usStateCode } from "./geo";
 import { JOB_STATUS_LABEL, type JobStatus } from "./batchLabels";
+import { isMultiBoxName } from "./multiBox";
 
 export { JOB_STATUS_LABEL, type JobStatus };
 
@@ -491,7 +492,7 @@ export function createJob(input: {
   pickMode: PickMode;
   orders: ParsedOrder[];
 }): number {
-  const enabled = customerChannels(input.customerId).map((c) => c.code);
+  const enabled = customerChannels(input.customerId).filter((c) => !isMultiBoxName(c.name)).map((c) => c.code);
   if (!enabled.length) throw new Error("该客户还没有开通任何物流渠道，请到客户详情里开通");
   const channels = input.channels.filter((c) => enabled.includes(c));
   return db().transaction(() => {
@@ -792,7 +793,7 @@ export function listDraftRows(customerId?: number) {
 /** 换一组渠道重新试算（未下单的订单） */
 export function requote(jobId: number, channels: string[]) {
   assertEditable(jobId);
-  const enabled = customerChannels(getJob(jobId)!.customerId).map((c) => c.code);
+  const enabled = customerChannels(getJob(jobId)!.customerId).filter((c) => !isMultiBoxName(c.name)).map((c) => c.code);
   const list = channels.filter((c) => enabled.includes(c));
   if (!list.length) throw new Error("请至少选择一个渠道");
   db().prepare("UPDATE batch_jobs SET channels_json = ? WHERE id = ?").run(JSON.stringify(list), jobId);

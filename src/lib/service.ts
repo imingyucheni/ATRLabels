@@ -34,6 +34,7 @@ import { getPromotion } from "./promotions";
 import { checkLimits, checkMinSize } from "./channelLimits";
 import { getShipBestClient, getTestAccountClient, shipbestMode, ShipBestError } from "./shipbest/client";
 import { failoverFor, isJiaguCode, jiaguConfig } from "./shipbest/jiagu";
+import { checkMultiBox, isMultiBoxName, multiBoxRule, pkgFromPieces } from "./multiBox";
 import { aesRequired, hsDigits, isDhlCode, isInternational } from "./shipbest/dhl";
 import { guessCarrier } from "./carriers";
 import { publicError } from "./portal";
@@ -276,6 +277,16 @@ export async function quoteChannel(customerId: number, channelCode: string, req:
 }
 
 async function quoteOne(customerId: number, channelCode: string, channelName: string, req: ShipmentRequest, rule?: MarkupRule) {
+  // 多箱渠道（UPS HWT / FedEx MWT）只在“多箱寄出”里用；多箱的货只能走多箱渠道，并且要符合渠道的重量 / 箱数 / 尺寸要求
+  const mb = multiBoxRule(getChannel(channelCode)?.name ?? channelName);
+  if (req.pkg.pieces?.length) {
+    if (!mb) return { channelCode, channelName, ok: false, error: "这个渠道不支持多箱下单" } satisfies ChannelQuote;
+    const errs = checkMultiBox(mb, req.pkg.pieces);
+    if (errs.length) return { channelCode, channelName, ok: false, error: errs[0] } satisfies ChannelQuote;
+    const res = await quoteRemote(customerId, channelCode, channelName, req, rule);
+    return res;
+  }
+  if (mb) return { channelCode, channelName, ok: false, error: "多箱渠道请在“多箱寄出”里下单" } satisfies ChannelQuote;
   // 最近查过“不通邮”的邮编（或打开了邮编表预筛）直接判定送不到，不再调接口
   const zip = req.recipient?.zipCode ?? "";
   // 渠道的重量 / 尺寸限制（例如 GOFO 计费重 20 磅以内）：超出的直接不报价
@@ -394,11 +405,27 @@ export async function quoteAll(customerId: number, req: ShipmentRequest): Promis
   if (!listChannels(true).length) throw new Error("没有启用的物流渠道，请先到“设置”里同步渠道");
   const all = customerChannels(customerId);
   if (!all.length) throw new NoChannelsError();
-  // 寄往美国以外：只用国际快递渠道（DHL）；寄美国：只用尾程渠道
-  const channels = forDestination(all, req);
+  // 寄往美国以外：只用国际快递渠道（DHL）；寄美国：只用尾程渠道。多箱渠道不参与普通下单报价
+  const channels = forDestination(all, req).filter((c) => !isMultiBoxName(c.name));
   if (!channels.length) throw new Error(isInternational(req) ? "您的账户还没有开通国际快递渠道（DHL），请联系客服开通" : "您的账户还没有开通美国本土渠道，请联系客服开通");
   const results = await quoteChannels(channels, (c) => quoteOne(customerId, c.code, c.name, req));
   return flagJiaguCoverage(fillZones(results)).sort((a, b) => Number(b.ok) - Number(a.ok) || (a.price ?? 0) - (b.price ?? 0));
+}
+
+/** 多箱寄出：包裹字段按箱规算成汇总（最大那箱的尺寸 + 总重量，英寸 / 磅） */
+function withPieceTotals(req: ShipmentRequest): ShipmentRequest {
+  const pieces = req.pkg.pieces;
+  return pieces?.length ? { ...req, pkg: { ...req.pkg, ...pkgFromPieces(pieces), displayUnitSystem: 3 } } : req;
+}
+
+/** 多箱寄出：只用客户开通的多箱渠道（UPS HWT / FedEx MWT）报价 */
+export async function quoteMulti(customerId: number, raw: ShipmentRequest): Promise<ChannelQuote[]> {
+  if (!raw.pkg.pieces?.length) throw new Error("请填写箱规和箱数");
+  const req = withPieceTotals(raw);
+  const channels = customerChannels(customerId).filter((c) => isMultiBoxName(c.name) && !isDhlCode(c.code));
+  if (!channels.length) throw new Error("还没有开通多箱渠道（UPS HWT / FedEx MWT），请联系客服开通");
+  const results = await quoteChannels(channels, (c) => quoteOne(customerId, c.code, c.name, req));
+  return results.sort((a, b) => Number(b.ok) - Number(a.ok) || (a.price ?? 0) - (b.price ?? 0));
 }
 
 /** 客户还没有开通任何渠道（门户里提示“请联系客服开通”） */
@@ -413,7 +440,7 @@ export class NoChannelsError extends Error {
  * 方便给新客户报价、比较渠道和加价幅度。
  */
 export async function quoteForProspect(req: ShipmentRequest, markup: PartialRule): Promise<ChannelQuote[]> {
-  const channels = forDestination(listChannels(true), req);
+  const channels = forDestination(listChannels(true), req).filter((c) => !isMultiBoxName(c.name));
   if (!channels.length) throw new Error("没有启用的物流渠道，请先到“设置”里同步渠道");
   const gm = getSettings().markup;
   const results = await quoteChannels(channels, (c) => quoteOne(0, c.code, c.name, req, resolveRule(gm, c.markup, markup)));
@@ -458,7 +485,7 @@ export const API_TEST_ENV = "api-test";
 
 export async function createLabel(input: CreateInput): Promise<number> {
   const { customerId, channelCode } = input;
-  const req: ShipmentRequest = { ...input.req, skuList: input.req.skuList.map(fillProductNames) };
+  const req: ShipmentRequest = withPieceTotals({ ...input.req, skuList: input.req.skuList.map(fillProductNames) });
   if (!getCustomer(customerId)) throw new Error("客户不存在");
   const ref = input.customerRef?.trim() || "";
   // 同一个订单号不能重复下单（取消后可以重新下）
@@ -470,6 +497,13 @@ export async function createLabel(input: CreateInput): Promise<number> {
   const channel = getChannel(channelCode);
   if (!channel?.enabled) throw new Error("渠道不存在或已停用");
   if (!customerCanUse(customerId, channelCode)) throw new Error("该客户未开通此渠道");
+  // 多箱寄出：出单前再检查一遍渠道要求（含英文品名、海关编码）
+  if (req.pkg.pieces?.length) {
+    const mb = multiBoxRule(channel.name);
+    if (!mb) throw new Error("这个渠道不支持多箱下单");
+    const errs = checkMultiBox(mb, req.pkg.pieces, req.skuList, { forOrder: true });
+    if (errs.length) throw new Error(errs.join("；"));
+  }
 
   // 下单前重新试算一次，价格有变化则让员工确认
   const quote = await quoteOne(customerId, channelCode, channel.name, req);

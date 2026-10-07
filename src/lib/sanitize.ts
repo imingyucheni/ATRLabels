@@ -1,5 +1,6 @@
 import { usStateCode } from "./geo";
 import type { Address, ShipmentRequest, SkuItem, UnitSystem } from "./shipbest/types";
+import { pkgFromPieces } from "./multiBox";
 
 /** 表单/客户端输入的清洗工具（后台和客户端共用） */
 
@@ -78,6 +79,19 @@ function domesticItems(req: ShipmentRequest): ShipmentRequest {
 export function cleanRequest(raw: ShipmentRequest): ShipmentRequest {
   const p = raw?.pkg ?? ({} as ShipmentRequest["pkg"]);
   const sig = Number(p.signServiceType);
+  // 多箱寄出：箱规列表（英寸 / 磅），包裹字段换成汇总（最大那箱的尺寸 + 总重量）
+  const pieces = Array.isArray(p.pieces)
+    ? p.pieces.slice(0, 50).map((x) => ({ length: n(x?.length), width: n(x?.width), height: n(x?.height), weight: n(x?.weight), qty: Math.min(500, Math.max(0, Math.round(n(x?.qty)))) })).filter((x) => x.qty > 0)
+    : null;
+  if (pieces?.length) {
+    const sum = pkgFromPieces(pieces);
+    return domesticItems({
+      sender: cleanAddress(raw?.sender),
+      recipient: cleanAddress(raw?.recipient),
+      pkg: { ...sum, displayUnitSystem: 3, signServiceType: (sig >= 0 && sig <= 3 ? sig : 0) as 0 | 1 | 2 | 3, insuranceService: 0, currency: "USD", pieces },
+      skuList: cleanSkus(raw),
+    });
+  }
   return domesticItems({
     sender: cleanAddress(raw?.sender),
     recipient: cleanAddress(raw?.recipient),
@@ -92,7 +106,12 @@ export function cleanRequest(raw: ShipmentRequest): ShipmentRequest {
       insuranceFee: n(p.insuranceFee) || undefined,
       currency: str(p.currency, 3).toUpperCase() || "USD",
     },
-    skuList: (Array.isArray(raw?.skuList) ? raw.skuList : []).slice(0, 50).map(
+    skuList: cleanSkus(raw),
+  });
+}
+
+function cleanSkus(raw: ShipmentRequest): SkuItem[] {
+  return (Array.isArray(raw?.skuList) ? raw.skuList : []).slice(0, 50).map(
       (s: Partial<SkuItem>): SkuItem => fillProductNames({
         sku: str(s.sku, 100),
         productNameCn: str(s.productNameCn),
@@ -110,7 +129,6 @@ export function cleanRequest(raw: ShipmentRequest): ShipmentRequest {
         weight: n(s.weight),
         unit: unit(s.unit),
       }),
-    ),
-  });
+    );
 }
 

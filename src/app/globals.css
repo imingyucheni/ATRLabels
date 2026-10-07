@@ -1695,3 +1695,23 @@ table.list td.ship-trk .track-link { white-space: normal; word-break: break-all;
   table.ship-list th, table.ship-list td { padding-left: 8px; padding-right: 8px; }
   table.ship-list td.wrap { min-width: 7em; max-width: 11em; }
 }
+
+/* 多箱寄出 */
+.multi-box .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.multi-box .grid-2 > .card { margin-bottom: 0; }
+.multi-box .grid-2 { margin-bottom: 16px; }
+@media (max-width: 1000px) { .multi-box .grid-2 { grid-template-columns: 1fr; } }
+.multi-box .card-head h2 { display: inline-flex; align-items: center; gap: 6px; }
+.multi-box .mb-lines td { padding-top: 6px; padding-bottom: 6px; vertical-align: middle; }
+.multi-box .mb-lines input { width: 90px; min-width: 0; }
+@media (max-width: 760px) {
+  .multi-box .mb-lines th, .multi-box .mb-lines td { padding-left: 3px; padding-right: 3px; }
+  .multi-box .mb-lines input { width: 100%; min-width: 44px; padding-left: 6px; padding-right: 4px; }
+  .multi-box .mb-lines .mb-sub { display: none; }
+}
+.multi-box .mb-sum { margin: 14px 0 10px; }
+.multi-box .mb-sum .stat .v { font-size: 22px; }
+.multi-box .mb-rules summary { cursor: pointer; }
+.multi-box .mb-rules ul { margin: 8px 0 0; padding-left: 18px; }
+.multi-box .alert ul { margin: 6px 0 0; padding-left: 18px; }
+.multi-box .alert b svg { vertical-align: -2px; }

@@ -9,6 +9,7 @@ import { db, getSettings } from "../db";
 import { ShipBestError } from "./errors";
 import type { FeeQuote, OrderDetail, Product, ShipmentRequest } from "./types";
 import { logProviderEvent } from "../providerLog";
+import { expandPieces } from "../multiBox";
 
 export const JG_PREFIX = "JG-";
 export const JG_SUFFIX = " · GDE";
@@ -26,6 +27,7 @@ export const DEFAULT_JG_WAREHOUSES: Record<string, string> = {
   "580914": "196845", // USPS-D价-GA-917不预上网 · GALAX
   "580469": "230759", // Ontrac-SG-B-XT · Ontrac-91710-230490（4820 Dorina Ct, Chino CA 91710）
   "591208": "230759", // Ontrac-SG-B-XT-预上网 · Ontrac-91710-230490（同一个仓库）
+  "582918": "230496", // UPS-NEW-HWT-XT（多箱）· SG-UPS-92335（9774 Calabash Ave, Fontana CA 92335）
 };
 
 /** 嘉谷的仓库（设置页选仓库时显示名称和地址，方便核对） */
@@ -34,6 +36,7 @@ export const JG_WAREHOUSE_INFO: Record<string, { name: string; address: string }
   "196845": { name: "GALAX", address: "" },
   "229615": { name: "CA-92374", address: "" },
   "230759": { name: "Ontrac-91710-230490", address: "4820 Dorina Ct, Chino, CA 91710" },
+  "230496": { name: "SG-UPS-92335", address: "9774 Calabash Ave, Fontana, CA 92335" },
   // 第二个 FedEx NG 渠道（备用）的仓库
   "230206": { name: "SG-HX-CA 91762", address: "1380 W Mission Blvd, Ontario, CA 91762" },
 };
@@ -166,7 +169,7 @@ export function buildJiaguBody(cfg: JiaguConfig, req: ShipmentRequest, productId
     ShipToCountry: cut(r.country || "US", 2),
     IsBuyInsurance: pkg.insuranceService ? 1 : 0,
     IsReturn: 0,
-    Packages: [
+    Packages: pkg.pieces?.length ? multiPackages(req) : [
       {
         PackageIdentifier: "P1",
         Length: pkg.length,
@@ -184,6 +187,32 @@ export function buildJiaguBody(cfg: JiaguConfig, req: ShipmentRequest, productId
       },
     ],
   };
+}
+
+/**
+ * 多箱寄出（UPS HWT / FedEx MWT）：一箱一个 Package（P1、P2…），英寸 / 磅。
+ * 申报价值按箱平均分；品名、SKU、海关编码每箱都带上。
+ */
+function multiPackages(req: ShipmentRequest) {
+  const boxes = expandPieces(req.pkg.pieces ?? []);
+  const declared = req.skuList.reduce((a, i) => a + i.declaredUnitPrice * i.quantity, 0);
+  const per = Math.max(0.01, Math.round((declared / Math.max(1, boxes.length)) * 100) / 100);
+  const first = req.skuList[0];
+  const hs = (first?.hsCode ?? "").replace(/\D/g, "");
+  return boxes.map((b, i) => ({
+    PackageIdentifier: `P${i + 1}`,
+    Length: b.length,
+    Width: b.width,
+    Height: b.height,
+    Weight: b.weight,
+    LengthUnit: "IN",
+    WeightUnit: "LB",
+    Qty: 1,
+    DeclareValue: per,
+    ...(first?.sku && /^[\x20-\x7e]+$/.test(first.sku) ? { SKU: cut(first.sku, 64) } : {}),
+    ...(first?.productNameEn ? { DeclareEnName: cut(first.productNameEn, 50) } : {}),
+    ...(hs ? { HSCode: hs } : {}),
+  }));
 }
 
 /* ---------------- 接口 ---------------- */
@@ -345,7 +374,9 @@ export class JiaguClient {
     );
     const x = r.result ?? {};
     const tracking = x.MasterTrackingNbr || x.TrackingNbr || null;
-    const label = x.MasterLabelUrl || x.labels?.[0]?.labelUri || null;
+    // 多箱：每箱一张面单，全部记下来，下载时合成一个 PDF（主面单不一定包含所有箱子）
+    const uris = (x.labels ?? []).map((l) => l.labelUri).filter((u): u is string => !!u);
+    const label = uris.length > 1 ? `multi:${JSON.stringify(uris)}` : x.MasterLabelUrl || uris[0] || null;
     logProviderEvent(customNo, "嘉谷", "提交订单", r.code, [
       r.ok ? "成功" : r.code === "100" ? "已接单，面单稍后生成" : "失败",
       r.message,
