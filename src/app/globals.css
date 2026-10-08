@@ -1403,6 +1403,15 @@ html[lang="en"] .site-nav-in { gap: 20px; }
 /* 运单号追踪链接 */
 .track-link { white-space: nowrap; font-variant-numeric: tabular-nums; }
 .track-link span { font-size: 0.85em; opacity: 0.7; }
+/* 运单号 + 复制按钮 */
+.track-wrap { display: inline-flex; align-items: center; gap: 2px; max-width: 100%; vertical-align: middle; }
+.track-wrap .track-link, .track-wrap .track-no { min-width: 0; font-variant-numeric: tabular-nums; }
+button.copy-btn {
+  height: 26px; width: 26px; padding: 0; flex: none;
+  border: none; background: transparent; box-shadow: none;
+  color: var(--muted); border-radius: 6px;
+}
+button.copy-btn:hover { background: var(--sunken); color: var(--accent); }
 
 /* 常用包裹尺寸 */
 .pkg-presets { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: -4px 0 12px; }

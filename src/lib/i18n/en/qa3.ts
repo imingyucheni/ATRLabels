@@ -97,6 +97,8 @@ export const qa3: Record<string, string> = {
   "自动备用（客户价按原渠道的限时活动价）": "Auto backup (customer price from the original service's promotion)",
   "新客户试算": "Prospect quote",
   // 全面检查后修复
+  "复制运单号": "Copy tracking number",
+  "已复制": "Copied",
   // 开放 API 调用记录（客户中心 API 页面）
   "这张面单当前不能取消": "This label can't be cancelled in its current state",
   "这个账户没有开通该渠道": "This service isn't enabled for the account",

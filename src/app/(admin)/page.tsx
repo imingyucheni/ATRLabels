@@ -11,6 +11,7 @@ import Profit from "@/components/Profit";
 import { getT, tMsg } from "@/lib/prefs";
 import { providerOf } from "@/lib/service";
 import { jiaguBalance, LOW_BALANCE_USD } from "@/lib/providerBalance";
+import TrackingLink from "@/components/TrackingLink";
 
 /** 和“报表”同一口径：订单数不含已取消 / 异常，含面单生成中的 */
 function summarize(from: string, to: string) {
@@ -146,7 +147,7 @@ export default async function Dashboard() {
                   <td className="c-main"><Link href={`/shipments/${s.id}`}>{s.customNo}</Link></td>
                   <td data-label={t("客户")}>{s.customerName}</td>
                   <td data-label={t("渠道")}>{s.channelName}</td>
-                  <td data-label={t("运单号")}>{s.trackingNo ?? "-"}</td>
+                  <td data-label={t("运单号")}><TrackingLink channelCode={s.channelCode} trackingNo={s.trackingNo} title={t("查物流轨迹")} /></td>
                   <td data-label={t("状态")}><StatusBadge status={s.status} test={s.isTest} /></td>
                   <td className="num" data-label={t("客户价")}>{money(s.price, s.currency)}</td>
                   <td className="num" data-label={t("利润")}><Profit value={shipmentProfit(s)} /></td>
