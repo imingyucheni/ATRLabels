@@ -29,7 +29,7 @@ describe("限时活动价", () => {
     promo = await import("@/lib/promotions");
     svc = await import("@/lib/service");
     await svc.syncChannels();
-    code = db.listChannels()[0].code;
+    code = db.listChannels().filter((c) => !/HWT|MWT/.test(c.name))[0].code;
     cid = db.saveCustomer(null, { name: "活动客户", contact: null, phone: null, email: null, note: null, markup: { percent: 12 } });
     db.setCustomerChannels(cid, [code]);
     const { addLedger } = await import("@/lib/ledger");

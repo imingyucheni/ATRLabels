@@ -31,6 +31,12 @@ export interface MultiBoxRule {
   minAvgLb: number;
   /** 不能触发额外处理费（AHS）和超尺寸（Oversize） */
   noAhs: boolean;
+  /** 收额外处理费（AHS）的箱子计费重最低按这个数（磅） */
+  ahsMinBillLb: number;
+  /** 收超尺寸附加费（Oversize）的箱子计费重最低按这个数（磅） */
+  oversizeMinBillLb: number;
+  /** 只发美国本土 48 州（不含阿拉斯加、夏威夷、波多黎各、关岛等海外地区和军邮） */
+  contiguousOnly: boolean;
   /** 海关编码至少几位（0 = 不要求） */
   hsMinDigits: number;
   /** 说明（下单页显示给客户） */
@@ -50,6 +56,9 @@ export const MULTI_BOX_RULES: MultiBoxRule[] = [
     dimDivisor: 250,
     minAvgLb: 25,
     noAhs: true,
+    ahsMinBillLb: 40,
+    oversizeMinBillLb: 90,
+    contiguousOnly: false,
     hsMinDigits: 8,
     notes: [
       "一票总重量 200–2000 lb（含 UPS 审计后的重量），不在这个区间按 UPS Ground 公布价计费",
@@ -60,6 +69,7 @@ export const MULTI_BOX_RULES: MultiBoxRule[] = [
     ],
   },
   {
+    // 按嘉谷 FedEx MWT 结算价格表：200–500 lb / 500 lb 以上两档按每 100 lb 计价，最低收费 83.13；DIM 225
     id: "fedex-mwt",
     match: /\bMWT\b/i,
     label: "FedEx MWT",
@@ -70,11 +80,18 @@ export const MULTI_BOX_RULES: MultiBoxRule[] = [
     dimDivisor: 225,
     minAvgLb: 25,
     noAhs: false,
+    ahsMinBillLb: 40,
+    oversizeMinBillLb: 90,
+    contiguousOnly: true,
     hsMinDigits: 0,
     notes: [
-      "一票总重量 200 lb 起，同一天寄同一个地址",
-      "至少 2 箱一起下单，单箱不超过 150 lb；超过 50 lb 的箱子另收超重附加费",
-      "每箱平均计费重不足 25 lb 按 25 lb 计",
+      "一票总重量 200 lb 起（200–500 lb、500 lb 以上两档，按每 100 lb 计价，最低收费 $83.13），至少 2 箱，同一天寄同一个地址",
+      "体积重 = 长×宽×高 ÷ 225（英寸），每箱取实重和体积重中较大的；每箱平均不足 25 lb 按 25 lb 计",
+      "单箱超过 50 lb，或最长边 > 48 in、次长边 > 30 in、长 + 2×宽 + 2×高 > 105 in，要另收额外处理费（AHS），这箱最低按 40 lb 计费",
+      "超尺寸（Oversize：长 + 2×宽 + 2×高 > 130 in、最长边 > 96 in 或实重 > 110 lb）另收超尺寸费，最低按 90 lb 计费",
+      "单箱计费重超过 150 lb、最长边超过 108 in、长 + 2×宽 + 2×高超过 165 in 的不能发",
+      "只发美国本土 48 州（不含阿拉斯加、夏威夷、波多黎各等）",
+      "运费不含燃油附加费，以及住宅、偏远地区、旺季等附加费（多箱有收费上限），以 FedEx 实际账单为准",
     ],
   },
 ];
@@ -92,20 +109,54 @@ export function expandPieces(pieces: Piece[]): Omit<Piece, "qty">[] {
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
-/** 箱数、实重、体积重、预计计费重（每箱取实重和体积重中较大的、进位取整；平均不足最低平均重按最低算） */
-export function summarizePieces(pieces: Piece[], rule?: Pick<MultiBoxRule, "dimDivisor" | "minAvgLb"> | null) {
+/** 一箱的计费重：实重和体积重中较大的（进位取整）；收 AHS / 超尺寸的箱子有最低计费重 */
+export function boxBillLb(b: Omit<Piece, "qty">, rule?: Partial<Pick<MultiBoxRule, "dimDivisor" | "ahsMinBillLb" | "oversizeMinBillLb">> | null) {
+  let w = Math.max(Math.ceil(b.weight), Math.ceil((b.length * b.width * b.height) / (rule?.dimDivisor ?? 250)));
+  if (rule?.oversizeMinBillLb && oversizeReason(b)) w = Math.max(w, rule.oversizeMinBillLb);
+  else if (rule?.ahsMinBillLb && ahsReason(b)) w = Math.max(w, rule.ahsMinBillLb);
+  return w;
+}
+
+/** 箱数、实重、体积重、预计计费重（每箱计费重相加；平均不足最低平均重按最低算） */
+export function summarizePieces(pieces: Piece[], rule?: Partial<Pick<MultiBoxRule, "dimDivisor" | "minAvgLb" | "ahsMinBillLb" | "oversizeMinBillLb">> | null) {
   const boxes = expandPieces(pieces);
   const actual = r2(boxes.reduce((a, b) => a + b.weight, 0));
   const divisor = rule?.dimDivisor ?? 250;
   const dim = boxes.reduce((a, b) => a + Math.ceil((b.length * b.width * b.height) / divisor), 0);
-  let billable = boxes.reduce((a, b) => a + Math.max(Math.ceil(b.weight), Math.ceil((b.length * b.width * b.height) / divisor)), 0);
+  let billable = boxes.reduce((a, b) => a + boxBillLb(b, rule), 0);
   if (rule?.minAvgLb) billable = Math.max(billable, rule.minAvgLb * boxes.length);
   return { boxes: boxes.length, actual, dim, billable };
 }
 
+const sorted = (b: Omit<Piece, "qty">) => [b.length, b.width, b.height].sort((x, y) => y - x);
+const girth = (b: Omit<Piece, "qty">) => { const [l, w, h] = sorted(b); return l + 2 * w + 2 * h; };
+
+/** 超尺寸（Oversize）：长 + 2×宽 + 2×高 > 130 in、最长边 > 96 in、体积 > 17,280 立方英寸或实重 > 110 lb */
+export function oversizeReason(b: Omit<Piece, "qty">): string | null {
+  const [l, w, h] = sorted(b);
+  if (girth(b) > 130) return `长 + 2×宽 + 2×高 = ${r2(girth(b))} in 超过 130 in`;
+  if (l > 96) return `最长边 ${l} in 超过 96 in`;
+  if (l * w * h > 17280) return `体积 ${Math.round(l * w * h)} 立方英寸超过 17,280`;
+  if (b.weight > 110) return `单箱 ${b.weight} lb 超过 110 lb`;
+  return null;
+}
+
+/** 超出承运商最大限制（Unauthorized，罚款很高）：计费重 > 150 lb、最长边 > 108 in、长 + 2×宽 + 2×高 > 165 in */
+export function unauthorizedReason(b: Omit<Piece, "qty">, dimDivisor: number): string | null {
+  const [l] = sorted(b);
+  const bill = Math.max(Math.ceil(b.weight), Math.ceil((b.length * b.width * b.height) / dimDivisor));
+  if (bill > 150) return `计费重 ${bill} lb 超过 150 lb`;
+  if (l > 108) return `最长边 ${l} in 超过 108 in`;
+  if (girth(b) > 165) return `长 + 2×宽 + 2×高 = ${r2(girth(b))} in 超过 165 in`;
+  return null;
+}
+
+/** 美国本土 48 州以外（阿拉斯加、夏威夷、海外地区、军邮） */
+const NON_CONTIGUOUS = new Set(["AK", "HI", "PR", "VI", "GU", "AS", "MP", "AA", "AE", "AP", "FM", "MH", "PW"]);
+
 /** 一箱会不会触发额外处理费（AHS）/ 超尺寸：返回原因，没有返回 null */
 export function ahsReason(b: Omit<Piece, "qty">): string | null {
-  const [l, w, h] = [b.length, b.width, b.height].sort((x, y) => y - x);
+  const [l, w, h] = sorted(b);
   if (l > 48) return `最长边 ${l} in 超过 48 in`;
   if (w > 30) return `次长边 ${w} in 超过 30 in`;
   if (l + 2 * w + 2 * h > 105) return `长 + 2×宽 + 2×高 = ${r2(l + 2 * w + 2 * h)} in 超过 105 in`;
@@ -131,7 +182,7 @@ export function checkMultiBox(
   rule: MultiBoxRule,
   pieces: Piece[],
   items: { productNameEn?: string; hsCode?: string }[] = [],
-  opts: { forOrder?: boolean } = {},
+  opts: { forOrder?: boolean; state?: string | null } = {},
 ): string[] {
   const errs: string[] = [];
   const bad = pieces.filter((p) => !(p.length > 0 && p.width > 0 && p.height > 0 && p.weight > 0 && p.qty >= 1));
@@ -147,6 +198,17 @@ export function checkMultiBox(
   if (rule.maxTotalLb && s.billable > rule.maxTotalLb && s.actual <= rule.maxTotalLb) errs.push(`按体积算的计费重 ${s.billable} lb 超过 ${rule.maxTotalLb} lb，会按公布价计费，请分票或换小一点的箱子`);
   const heavy = pieces.find((p) => p.weight > rule.maxBoxLb);
   if (heavy) errs.push(`${rule.label} 单箱不能超过 ${rule.maxBoxLb} lb（有一种箱子 ${heavy.weight} lb）`);
+  if (rule.contiguousOnly && opts.state && NON_CONTIGUOUS.has(opts.state.trim().toUpperCase())) {
+    errs.push(`${rule.label} 只发美国本土 48 州，不能寄到 ${opts.state.trim().toUpperCase()}`);
+  }
+  // 允许 AHS 的渠道（FedEx MWT）：超出承运商最大限制的箱子不能发（会被罚 $1,875 / 箱）
+  for (const p of rule.noAhs ? [] : pieces) {
+    const why = unauthorizedReason(p, rule.dimDivisor);
+    if (why) {
+      errs.push(`${p.length}×${p.width}×${p.height} in 的箱子超出 ${rule.label} 的最大限制（${why}），不能发`);
+      break;
+    }
+  }
   if (rule.noAhs) {
     for (const p of pieces) {
       const why = ahsReason(p);
@@ -170,4 +232,18 @@ export function checkMultiBox(
     });
   }
   return errs;
+}
+
+/**
+ * 不拦下单、但会多收钱的情况（允许 AHS / 超尺寸的渠道，例如 FedEx MWT）：下单页和报价上提醒。
+ */
+export function multiBoxWarnings(rule: MultiBoxRule, pieces: Piece[]): string[] {
+  if (rule.noAhs) return [];
+  const out: string[] = [];
+  const over = pieces.filter((p) => oversizeReason(p) && !unauthorizedReason(p, rule.dimDivisor));
+  const ahs = pieces.filter((p) => !oversizeReason(p) && ahsReason(p) && !unauthorizedReason(p, rule.dimDivisor));
+  const n = (list: Piece[]) => list.reduce((a, p) => a + Math.max(0, Math.floor(p.qty)), 0);
+  if (ahs.length) out.push(`${n(ahs)} 箱会另收额外处理费（AHS，${ahsReason(ahs[0])}），每箱计费重最低按 ${rule.ahsMinBillLb} lb`);
+  if (over.length) out.push(`${n(over)} 箱会另收超尺寸费（Oversize，${oversizeReason(over[0])}），每箱计费重最低按 ${rule.oversizeMinBillLb} lb`);
+  return out;
 }

@@ -14,7 +14,7 @@ import { providerFetch, ShipBestError } from "./errors";
 import { getJiaguClient, isJiaguCode, jgOrders, type JiaguClient } from "./jiagu";
 import { DhlClient, dhlConfig, dhlOrders, dhlSettings, isDhlCode, mockDhlTransport, type DhlConfig } from "./dhl";
 import { mockLabelPdf } from "../labels";
-import { summarizePieces } from "../multiBox";
+import { multiBoxRule, summarizePieces } from "../multiBox";
 
 /** ShipBest 渠道名后面加的标记（只有后台看得到，客户看到的是物流商名称） */
 export const SB_SUFFIX = " · SB";
@@ -162,6 +162,12 @@ const mockOrders = {
 };
 
 /** 离线模拟：不调用真实接口，用于本地试用和测试。 */
+/** 演示用的多箱渠道价格（嘉谷结算价表，每 100 磅，Zone 2–8） */
+const MOCK_MULTI_RATES = [
+  { match: /HWT/, upTo500: [16.6585, 18.4842, 19.7089, 23.5192, 29.6087, 34.2922, 39.9508], over500: [12.8255, 16.0688, 17.1347, 20.4574, 25.6851, 29.6087, 34.4736], min: 81.6026 },
+  { match: /MWT/, upTo500: [16.968, 18.5745, 19.8135, 23.625, 29.757, 34.44, 40.131], over500: [12.8835, 16.1385, 17.2095, 20.559, 25.7985, 29.757, 34.6605], min: 83.1285 },
+];
+
 export class MockShipBestClient implements ShipBestClient {
   private seq = 0;
   // 与真实账号的渠道名一致，方便演示和导入 ShipBest 导单表
@@ -175,9 +181,10 @@ export class MockShipBestClient implements ShipBestClient {
     { code: "LP10210701", name: "SPX-LAX" },
     // 多箱渠道（一票多箱，演示用）：按 UPS HWT 结算价表算
     { code: "LP10219918", name: "UPS-NEW-HWT-XT" },
+    { code: "LP10219919", name: "FEDEX-MWT-XT" },
   ];
   /** 没有导入报价表时的粗略价格：[基础价, 每磅] —— 不同重量下最便宜的渠道不同 */
-  private rates: [number, number][] = [[3.0, 0.55], [3.2, 0.45], [4.6, 0.8], [2.9, 0.75], [3.1, 0.62], [3.3, 0.6], [3.0, 0.5], [0, 0]];
+  private rates: [number, number][] = [[3.0, 0.55], [3.2, 0.45], [4.6, 0.8], [2.9, 0.75], [3.1, 0.62], [3.3, 0.6], [3.0, 0.5], [0, 0], [0, 0]];
 
   async verify() {}
 
@@ -192,12 +199,13 @@ export class MockShipBestClient implements ShipBestClient {
     const idx = this.products.findIndex((p) => p.code === productCode);
     if (idx < 0) throw new ShipBestError(10022, "Logistics product not exist!");
     const zoneN = Math.min(8, 2 + (req.recipient.zipCode.charCodeAt(0) % 7));
-    if (/HWT/.test(this.products[idx].name)) {
-      // UPS HWT（每 100 磅）：200–500 lb / 500 lb 以上两档，最低收费 81.60；每箱取实重和体积重（÷250）较大的，平均不足 25 lb 按 25 lb
+    const mbRate = MOCK_MULTI_RATES.find((m) => m.match.test(this.products[idx].name));
+    if (mbRate) {
+      // 多箱（每 100 磅）：200–500 lb / 500 lb 以上两档，有最低收费；计费重按渠道规则（体积重、平均 25 lb、AHS / 超尺寸最低计费重）
       if (!req.pkg.pieces?.length) throw new ShipBestError(10061, "多箱渠道需要多个包裹");
-      const s = summarizePieces(req.pkg.pieces, { dimDivisor: 250, minAvgLb: 25 });
-      const tier = s.billable >= 500 ? [12.8255, 16.0688, 17.1347, 20.4574, 25.6851, 29.6087, 34.4736] : [16.6585, 18.4842, 19.7089, 23.5192, 29.6087, 34.2922, 39.9508];
-      const fee = Math.round(Math.max(81.6026, (s.billable / 100) * tier[zoneN - 2]) * 100) / 100;
+      const s = summarizePieces(req.pkg.pieces, multiBoxRule(this.products[idx].name));
+      const tier = s.billable >= 500 ? mbRate.over500 : mbRate.upTo500;
+      const fee = Math.round(Math.max(mbRate.min, (s.billable / 100) * tier[zoneN - 2]) * 100) / 100;
       return { logisticsProductId: idx + 1, logisticsProductName: this.products[idx].name, baseShippingFee: fee, baseDiscountShippingFee: fee, extraShippingFee: 0, extraDiscountShippingFee: 0, totalShippingFee: fee, totalDiscountShippingFee: fee, currency: "USD", zone: `zone${zoneN}` };
     }
     const { weight, displayUnitSystem: u } = req.pkg;

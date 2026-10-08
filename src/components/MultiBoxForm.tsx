@@ -8,7 +8,7 @@ import ChannelLabel from "@/components/ChannelLabel";
 import { useT, useTMsg } from "@/components/I18n";
 import { money } from "@/lib/pricing";
 import { DEFAULT_ITEM_SKU } from "@/lib/sanitize";
-import { checkMultiBox, expandPieces, multiBoxRule, summarizePieces, type MultiBoxRule, type Piece } from "@/lib/multiBox";
+import { checkMultiBox, expandPieces, multiBoxRule, multiBoxWarnings, summarizePieces, type MultiBoxRule, type Piece } from "@/lib/multiBox";
 import { multiCreateAction, multiQuoteAction, type MultiQuote } from "@/app/multiActions";
 import type { Address, ShipmentRequest } from "@/lib/shipbest/types";
 
@@ -222,7 +222,9 @@ export default function MultiBoxForm(props: {
         </div>
 
         {rules.map((r) => {
-          const errs = filled.length ? checkMultiBox(r, filled, items, { forOrder: true }) : [];
+          const errs = filled.length ? checkMultiBox(r, filled, items, { forOrder: true, state: recipient.province }) : [];
+          const warns = filled.length && !errs.length ? multiBoxWarnings(r, filled) : [];
+          const bill = summarizePieces(filled, r).billable;
           return (
             <div key={r.id} className={`alert ${!filled.length ? "info" : errs.length ? "warn" : "ok"} small`}>
               {!filled.length ? (
@@ -233,7 +235,10 @@ export default function MultiBoxForm(props: {
                   <ul>{errs.map((e) => <li key={e}>{tm(e)}</li>)}</ul>
                 </>
               ) : (
-                <b><CheckCircle2 size={14} aria-hidden="true" /> {t("{label}：{boxes} 箱 · {lb} lb，符合要求", { label: r.label, boxes: expandPieces(filled).length, lb: sum.actual })}</b>
+                <>
+                  <b><CheckCircle2 size={14} aria-hidden="true" /> {t("{label}：{boxes} 箱 · {lb} lb · 计费重约 {bill} lb，符合要求", { label: r.label, boxes: expandPieces(filled).length, lb: sum.actual, bill })}</b>
+                  {warns.length > 0 && <ul className="warn-text">{warns.map((w) => <li key={w}>⚠ {tm(w)}</li>)}</ul>}
+                </>
               )}
             </div>
           );
@@ -267,7 +272,7 @@ export default function MultiBoxForm(props: {
                     {quotes.map((q) => (
                       <tr key={q.channelCode} style={{ opacity: q.ok ? 1 : 0.65 }}>
                         <td className="c-check"><input type="radio" name="mb-ch" disabled={!q.ok} checked={picked === q.channelCode} onChange={() => setPicked(q.channelCode)} /></td>
-                        <td className="c-main"><ChannelLabel code={q.channelCode} name={q.channelName} size="md" />{!q.ok && <div className="small warn-text">{q.error}</div>}</td>
+                        <td className="c-main"><ChannelLabel code={q.channelCode} name={q.channelName} size="md" />{!q.ok && <div className="small warn-text">{q.error}</div>}{q.ok && q.warning && <div className="small warn-text">⚠ {q.warning}</div>}</td>
                         <td data-label={t("分区")}>{q.zone ?? "-"}</td>
                         {props.showCost && <td className="num muted" data-label={t("我们的成本")}>{q.cost !== undefined ? money(q.cost) : "-"}</td>}
                         <td className="num" data-label={t("运费")}><b>{q.ok ? money(q.price, q.currency) : t("不可用")}</b>{q.ok && sum.billable > 0 && q.price !== undefined && <div className="small muted">{t("约 {p}/lb", { p: (q.price / sum.billable).toFixed(2) })}</div>}</td>

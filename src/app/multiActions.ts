@@ -26,6 +26,8 @@ export interface MultiQuote {
   price?: number;
   currency?: string;
   zone?: string | null;
+  /** 会多收钱的提醒（例如超重 / 超尺寸箱子的附加费） */
+  warning?: string;
   /** 只有主管理员看得到 */
   cost?: number;
 }
@@ -65,6 +67,7 @@ export async function multiQuoteAction(input: { customerId?: number; req: Shipme
         price: q.price,
         currency: q.currency,
         zone: q.zone,
+        ...(q.ok && q.warning ? { warning: await tMsg(q.warning) } : {}),
         ...(w.showCost && q.ok ? { cost: q.cost } : {}),
       });
     }

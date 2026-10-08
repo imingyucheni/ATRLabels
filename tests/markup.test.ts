@@ -27,7 +27,7 @@ describe("按渠道加价", () => {
     mk = await import("@/lib/markup");
     svc = await import("@/lib/service");
     await svc.syncChannels();
-    codes = db.listChannels().map((c) => c.code);
+    codes = db.listChannels().filter((c) => !/HWT|MWT/.test(c.name)).map((c) => c.code);
     cid = db.saveCustomer(null, { name: "加价客户", contact: null, phone: null, email: null, note: null, markup: {} });
     db.setCustomerChannels(cid, codes);
     db.saveSettings({ markup: { percent: 10, fixed: 0, minProfit: 0 } });

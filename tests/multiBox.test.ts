@@ -10,6 +10,7 @@ process.env.DATA_DIR = dir;
 process.env.SHIPBEST_MOCK = "1";
 
 const hwt = MULTI_BOX_RULES.find((r) => r.id === "ups-hwt")!;
+const mwt = MULTI_BOX_RULES.find((r) => r.id === "fedex-mwt")!;
 const sender = { nameFirst: "Ware", nameLast: "House", phone: "9095550100", country: "US", city: "Ontario", address1: "1 Main St", zipCode: "91761", province: "CA" };
 const recipient = { nameFirst: "Store", nameLast: "Manager", phone: "5125550100", country: "US", city: "Austin", address1: "2 Elm St", zipCode: "73301", province: "TX" };
 const req = (pieces: ShipmentRequest["pkg"]["pieces"], item: { name?: string; hs?: string } = {}): ShipmentRequest => ({
@@ -46,6 +47,32 @@ describe("多箱寄出：渠道规则", () => {
   });
 });
 
+describe("多箱寄出：FedEx MWT 规则（按结算价格表）", () => {
+  it("DIM 225；超重 / 超尺寸照样能发但提醒另收费、按最低计费重算；超出最大限制、寄 48 州以外不能发", async () => {
+    const { multiBoxWarnings } = await import("@/lib/multiBox");
+    // 普通箱子：没有提醒
+    const ok = [{ length: 18, width: 14, height: 12, weight: 40, qty: 6 }];
+    expect(checkMultiBox(mwt, ok, [], { state: "TX" })).toEqual([]);
+    expect(multiBoxWarnings(mwt, ok)).toEqual([]);
+    expect(summarizePieces(ok, mwt).billable).toBe(240); // 每箱 max(40, ceil(3024/225)=14)
+    // 单箱 60 lb：可以发，提醒 AHS
+    const heavy = [{ length: 18, width: 14, height: 12, weight: 60, qty: 4 }];
+    expect(checkMultiBox(mwt, heavy)).toEqual([]);
+    expect(multiBoxWarnings(mwt, heavy).join()).toMatch(/4 箱会另收额外处理费（AHS，单箱 60 lb 超过 50 lb）/);
+    // 小而长的箱子（最长边 50 in）收 AHS，计费重最低按 40 lb
+    const long = [{ length: 50, width: 10, height: 10, weight: 20, qty: 10 }];
+    expect(summarizePieces(long, mwt).billable).toBe(400);
+    // 超尺寸（实重 120 lb）：提醒，最低 90 lb
+    expect(multiBoxWarnings(mwt, [{ length: 30, width: 20, height: 20, weight: 120, qty: 2 }]).join()).toMatch(/超尺寸/);
+    // 超出最大限制：不能发
+    expect(checkMultiBox(mwt, [{ length: 110, width: 10, height: 10, weight: 40, qty: 6 }]).join()).toMatch(/最长边 110 in 超过 108 in/);
+    expect(checkMultiBox(mwt, [{ length: 48, width: 40, height: 30, weight: 100, qty: 3 }]).join()).toMatch(/计费重 256 lb 超过 150 lb/);
+    // 只发本土 48 州
+    expect(checkMultiBox(mwt, ok, [], { state: "HI" }).join()).toMatch(/只发美国本土 48 州/);
+    expect(checkMultiBox(hwt, ok, [], { state: "HI" })).toEqual([]);
+  });
+});
+
 describe("多箱寄出：报价和下单（模拟模式）", () => {
   let db: typeof import("@/lib/db");
   let svc: typeof import("@/lib/service");
@@ -67,9 +94,10 @@ describe("多箱寄出：报价和下单（模拟模式）", () => {
     const single: ShipmentRequest = { sender, recipient, pkg: { length: 10, width: 8, height: 4, weight: 2, displayUnitSystem: 3, signServiceType: 0, insuranceService: 0, currency: "USD" }, skuList: req([]).skuList };
     const normal = await svc.quoteAll(cid, single);
     expect(normal.some((q) => /HWT/.test(q.channelName))).toBe(false);
-    const multi = await svc.quoteMulti(cid, req([{ length: 18, width: 14, height: 12, weight: 40, qty: 6 }]));
-    expect(multi.length).toBe(1);
-    expect(multi[0]).toMatchObject({ ok: true, channelCode: "LP10219918" });
+    const all = await svc.quoteMulti(cid, req([{ length: 18, width: 14, height: 12, weight: 40, qty: 6 }]));
+    expect(all.map((q) => q.channelCode).sort()).toEqual(["LP10219918", "LP10219919"]); // UPS HWT + FedEx MWT
+    expect(all.every((q) => q.ok)).toBe(true);
+    const multi = all.filter((q) => q.channelCode === "LP10219918");
     // 240 lb：200–500 档，按每 100 lb 计价，最低 81.60
     expect(multi[0].cost).toBeGreaterThanOrEqual(81.6);
     expect(multi[0].price).toBeCloseTo(Math.ceil(multi[0].cost! * 1.1 * 100) / 100, 1);
@@ -81,7 +109,7 @@ describe("多箱寄出：报价和下单（模拟模式）", () => {
 
   it("下单：一票多箱，扣一次钱，记下箱规；品名有中文 / HS 不够 8 位不能下单", async () => {
     const pieces = [{ length: 18, width: 14, height: 12, weight: 40, qty: 4 }, { length: 16, width: 12, height: 10, weight: 30, qty: 3 }];
-    const q = (await svc.quoteMulti(cid, req(pieces)))[0];
+    const q = (await svc.quoteMulti(cid, req(pieces))).find((x) => x.channelCode === "LP10219918")!;
     await expect(svc.createLabel({ customerId: cid, channelCode: q.channelCode, req: req(pieces, { name: "棉 T 恤" }), expectedPrice: q.price! })).rejects.toThrow(/不能有中文/);
     await expect(svc.createLabel({ customerId: cid, channelCode: q.channelCode, req: req(pieces, { hs: "610910" }), expectedPrice: q.price! })).rejects.toThrow(/至少 8 位/);
     const before = ledger.balanceOf(cid);

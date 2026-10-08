@@ -476,7 +476,8 @@ describe("按客户开通渠道", () => {
     expect(db.customerChannels(id)).toHaveLength(0);
     await expect(svc.quoteAll(id, req)).rejects.toThrow("还没有开通任何物流渠道");
 
-    const [first, second] = db.listChannels(true);
+    // 多箱渠道（UPS HWT / FedEx MWT）不参与普通下单，选普通渠道
+    const [first, second] = db.listChannels(true).filter((c) => !/HWT|MWT/.test(c.name));
     db.setCustomerChannels(id, [first.code, "NOT_A_CHANNEL"]);
     expect(db.customerChannelCodes(id)).toEqual([first.code]);
     const quotes = await svc.quoteAll(id, req);

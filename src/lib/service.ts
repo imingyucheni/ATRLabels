@@ -34,7 +34,7 @@ import { getPromotion } from "./promotions";
 import { checkLimits, checkMinSize } from "./channelLimits";
 import { getShipBestClient, getTestAccountClient, shipbestMode, ShipBestError } from "./shipbest/client";
 import { failoverFor, isJiaguCode, jiaguConfig } from "./shipbest/jiagu";
-import { checkMultiBox, isMultiBoxName, multiBoxRule, pkgFromPieces } from "./multiBox";
+import { checkMultiBox, isMultiBoxName, multiBoxRule, multiBoxWarnings, pkgFromPieces } from "./multiBox";
 import { aesRequired, hsDigits, isDhlCode, isInternational } from "./shipbest/dhl";
 import { guessCarrier } from "./carriers";
 import { publicError } from "./portal";
@@ -292,10 +292,12 @@ async function quoteOne(customerId: number, channelCode: string, channelName: st
   const mb = multiBoxRule(getChannel(channelCode)?.name ?? channelName);
   if (req.pkg.pieces?.length) {
     if (!mb) return { channelCode, channelName, ok: false, error: "这个渠道不支持多箱下单" } satisfies ChannelQuote;
-    const errs = checkMultiBox(mb, req.pkg.pieces);
+    const errs = checkMultiBox(mb, req.pkg.pieces, [], { state: req.recipient?.province });
     if (errs.length) return { channelCode, channelName, ok: false, error: errs[0] } satisfies ChannelQuote;
     const res = await quoteRemote(customerId, channelCode, channelName, req, rule);
-    return res;
+    // 会多收钱的情况（例如 FedEx MWT 的超重 / 超尺寸箱子）：照常报价，加提醒
+    const warn = res.ok ? multiBoxWarnings(mb, req.pkg.pieces) : [];
+    return warn.length ? { ...res, warning: warn.join("；") } : res;
   }
   if (mb) return { channelCode, channelName, ok: false, error: "多箱渠道请在“多箱寄出”里下单" } satisfies ChannelQuote;
   // 最近查过“不通邮”的邮编（或打开了邮编表预筛）直接判定送不到，不再调接口
@@ -555,7 +557,7 @@ export async function createLabel(input: CreateInput): Promise<number> {
   if (req.pkg.pieces?.length) {
     const mb = multiBoxRule(channel.name);
     if (!mb) throw new Error("这个渠道不支持多箱下单");
-    const errs = checkMultiBox(mb, req.pkg.pieces, req.skuList, { forOrder: true });
+    const errs = checkMultiBox(mb, req.pkg.pieces, req.skuList, { forOrder: true, state: req.recipient?.province });
     if (errs.length) throw new Error(errs.join("；"));
   }
 
