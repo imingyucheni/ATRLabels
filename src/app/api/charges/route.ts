@@ -6,6 +6,7 @@ import { getCustomer, STATUS_LABEL, type ShipmentStatus } from "@/lib/db";
 import { listOrderCharges } from "@/lib/ledger";
 import { displayChannel } from "@/lib/channelDisplay";
 import { getLang, getT } from "@/lib/prefs";
+import { localizeChannelName } from "@/lib/carriers";
 
 /** 表头首字母大写（中文不受影响） */
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -27,7 +28,7 @@ export async function GET(req: Request) {
   const from = p.get("from") || undefined;
   const to = p.get("to") || undefined;
   // 导出给客户的渠道名用对外名称（不含服务商标记）
-  const rows = listOrderCharges(customerId, { from, to }).map((r) => ({ ...r, channelName: displayChannel(r.channelCode).name }));
+  const rows = listOrderCharges(customerId, { from, to }).map((r) => ({ ...r, channelName: localizeChannelName(displayChannel(r.channelCode).name, en ? "en" : "zh") }));
   const t = (k: "freight" | "adjustment" | "refund" | "net") => rows.reduce((a, r) => a + r[k], 0).toFixed(2);
   return csvResponse(
     tr("扣款明细-{name}-{from}_{to}.csv", { name: c.name, from: from ?? (en ? "start" : "开始"), to: to ?? (en ? "now" : "至今") }),

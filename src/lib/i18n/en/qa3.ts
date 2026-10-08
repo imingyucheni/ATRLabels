@@ -70,4 +70,7 @@ export const qa3: Record<string, string> = {
   "还要在上面“可用渠道”里开通多箱渠道（UPS HWT / FedEx MWT），客户才能下单。": "Also enable a multi-box service (UPS HWT / FedEx MWT) under Services above so the customer can order.",
   "代客户下多箱单 →": "Create a multi-box order →",
   "多箱寄出还没有开放，请联系客服": "Multi-box shipping isn't enabled for your account. Please contact support",
+  // 渠道名里的服务说明（鼠标放在渠道名上显示）
+  "预上网：出单后运单号会提前有物流记录（上网），不用等快递揽收扫描": "Pre-scan: the tracking number shows carrier activity soon after the label is created, without waiting for the pickup scan",
+  "多箱：一票多箱寄同一个地址，按总重量计价": "Multi-box: several boxes to one address in a single shipment, priced by total weight",
 };

@@ -8,15 +8,17 @@ import { money, signedPercent } from "@/lib/pricing";
 import StatusBadge from "@/components/StatusBadge";
 import Profit from "@/components/Profit";
 import TrackingLink from "@/components/TrackingLink";
-import { getT } from "@/lib/prefs";
+import { getLang, getT } from "@/lib/prefs";
 import { listLabelFailures } from "@/lib/providerLog";
 import { customerLabeler } from "@/lib/customerLabel";
+import { localizeChannelName } from "@/lib/carriers";
 
 type SP = { customerId?: string; status?: string; from?: string; to?: string; q?: string };
 
 export default async function ShipmentsPage({ searchParams }: { searchParams: Promise<SP> }) {
   const sp = await searchParams;
   const t = await getT();
+  const lang = await getLang();
   const filter = {
     customerId: Number(sp.customerId) || undefined,
     status: sp.status || undefined,
@@ -114,7 +116,7 @@ export default async function ShipmentsPage({ searchParams }: { searchParams: Pr
                 <td className="c-main"><Link href={`/shipments/${s.id}`}>{s.customNo}</Link><div className="small muted">{fmtTime(s.createdAt)}</div></td>
                 <td className="wrap" data-label={t("客户")}>{s.customerName}</td>
                 <td className="wrap" data-label={t("收件人")}>{s.recipient.nameFirst} {s.recipient.nameLast}<div className="small muted">{s.recipient.city}, {s.recipient.province ?? s.recipient.country} {s.recipient.zipCode}</div></td>
-                <td className="wrap" data-label={t("渠道")} title={s.channelName ?? undefined}>{displayChannel(s.channelCode).name || s.channelName}</td>
+                <td className="wrap" data-label={t("渠道")} title={s.channelName ?? undefined}>{localizeChannelName(displayChannel(s.channelCode).name || s.channelName || "", lang)}</td>
                 <td data-label={t("运单号")} className="small ship-trk">
                   <TrackingLink channelCode={s.channelCode} trackingNo={s.trackingNo} title={t("查物流轨迹")} />
                   <div className="ship-print">{s.labelPath && s.status !== "cancelled" ? <a href={`/api/labels/${s.id}`} target="_blank">{t("打印面单")}</a> : s.status === "cancelled" ? <span className="muted">{t("已作废")}</span> : null}</div>

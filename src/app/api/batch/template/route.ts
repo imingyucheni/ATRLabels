@@ -1,8 +1,9 @@
 import { currentCustomerId, isLoggedIn } from "@/lib/auth";
 import { buildTemplate, senderFor } from "@/lib/batch";
 import { customerChannels, getSettings, listChannels } from "@/lib/db";
-import { getT } from "@/lib/prefs";
-import { publicChannel } from "@/lib/carriers";
+import { getLang, getT } from "@/lib/prefs";
+import { localizeChannelName, publicChannel } from "@/lib/carriers";
+import { isMultiBoxName } from "@/lib/multiBox";
 
 export async function GET() {
   const admin = await isLoggedIn();
@@ -11,7 +12,9 @@ export async function GET() {
   // 客户下载的模板预填他自己的寄件地址
   // 物流产品下拉框：客户已开通的渠道
   // 客户看到的是干净的渠道名（不带仓库邮编），导入时也认这个名称
-  const channels = own ? customerChannels(own).map((c) => publicChannel(c).name) : listChannels(true).map((c) => c.name);
+  // 英文界面下载的模板里，渠道名的中文说明（预上网等）换成英文；导入时中英文名称都认
+  const lang = await getLang();
+  const channels = own ? customerChannels(own).filter((c) => !isMultiBoxName(c.name)).map((c) => localizeChannelName(publicChannel(c).name, lang)) : listChannels(true).filter((c) => !isMultiBoxName(c.name)).map((c) => c.name);
   const buf = await buildTemplate(own ? senderFor(own) : getSettings().sender, { channels });
   return new Response(new Uint8Array(buf), {
     headers: {

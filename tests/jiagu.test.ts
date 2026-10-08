@@ -289,6 +289,24 @@ describe("嘉谷万邑接口", () => {
     expect(defaultPublicName("Ontrac-SG-B-XT · GDE")).toBe("OnTrac");
     // 预上网和普通的分成两个渠道名（“不预上网”不算）
     expect(defaultPublicName("Ontrac-SG-B-XT-预上网 · GDE")).toBe("OnTrac 预上网");
+    // 英文界面：“预上网 / 多箱”换成英文，鼠标放上去有说明
+    const { localizeChannelName, channelNameHint } = await import("@/lib/carriers");
+    expect(localizeChannelName("OnTrac 预上网", "en")).toBe("OnTrac Pre-scan");
+    expect(localizeChannelName("OnTrac 预上网", "zh")).toBe("OnTrac 预上网");
+    expect(localizeChannelName("UPS Ground 多箱 (HWT)", "en")).toBe("UPS Ground Multi-box (HWT)");
+    expect(localizeChannelName("USPS-D价-GA-917不预上网 · GDE", "en")).toContain("No pre-scan");
+    expect(channelNameHint("OnTrac 预上网")).toMatch(/^预上网/);
+    expect(channelNameHint("OnTrac Pre-scan")).toMatch(/^预上网/);
+    expect(channelNameHint("Gofo Express")).toBeNull();
+    expect(channelNameHint("USPS-D价-GA-917不预上网 · GDE")).toBeNull();
+    const { translateMessage } = await import("@/lib/i18n");
+    expect(translateMessage("en", "OnTrac 预上网")).toBe("OnTrac Pre-scan"); // 流水说明、对账单明细
+    // 批量导入：客户模板里的中文名或英文名都能认出渠道
+    db.upsertChannels([{ code: "JG-591208", name: "Ontrac-SG-B-XT-预上网 · GDE" }, { code: "JG-580469", name: "Ontrac-SG-B-XT · GDE" }]);
+    const { matchChannel } = await import("@/lib/batch");
+    expect(matchChannel("OnTrac Pre-scan")).toBe("JG-591208");
+    expect(matchChannel("OnTrac 预上网")).toBe("JG-591208");
+    expect(matchChannel("OnTrac")).toBe("JG-580469");
     // ShipBest 的名称照旧（带不带“· SB”标记都一样）
     expect(defaultPublicName("GOFO-（91710）")).toBe("Gofo Express");
     expect(defaultPublicName("GOFO-（91710） · SB")).toBe("Gofo Express");

@@ -76,6 +76,10 @@ const FRAGMENTS: [string, string][] = [
   ["订单异常，不支持取消", "Order has an exception and can't be cancelled"],
   ["创建订单异常", "Order creation error"],
   ["不通邮", "not serviceable"],
+  // 客户看到的渠道名里的服务说明（先换“不预上网”，再换“预上网”）
+  ["不预上网", "No pre-scan"],
+  ["预上网", "Pre-scan"],
+  ["多箱", "Multi-box"],
 ];
 function fragments(msg: string) {
   let out = msg;

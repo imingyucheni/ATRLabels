@@ -1715,3 +1715,6 @@ table.list td.ship-trk .track-link { white-space: normal; word-break: break-all;
 .multi-box .mb-rules ul { margin: 8px 0 0; padding-left: 18px; }
 .multi-box .alert ul { margin: 6px 0 0; padding-left: 18px; }
 .multi-box .alert b svg { vertical-align: -2px; }
+
+/* 渠道名后面的说明图标（预上网、多箱）：鼠标放上去显示是什么意思 */
+.channel-label .channel-hint { flex: none; color: var(--muted); cursor: help; margin-left: -4px; }

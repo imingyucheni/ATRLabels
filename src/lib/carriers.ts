@@ -103,6 +103,31 @@ export function defaultPublicName(channelName: string, carrierId?: string | null
   return rest ? `${c.fullName} ${rest}` : c.fullName;
 }
 
+/**
+ * 客户看到的渠道名里有中文的服务说明（“预上网”“多箱”）：英文界面换成英文。
+ * 中文界面原样显示。后台、OMS、导出、对账单都用这个。
+ */
+const NAME_EN: [RegExp, string][] = [
+  [/不预上网/g, "No pre-scan"],
+  [/预上网/g, "Pre-scan"],
+  [/多箱/g, "Multi-box"],
+];
+
+export function localizeChannelName(name: string, lang: string | null | undefined): string {
+  if (lang !== "en" || !name) return name;
+  let s = name;
+  for (const [re, en] of NAME_EN) s = s.replace(re, en);
+  return s;
+}
+
+/** 渠道名里服务说明的解释（鼠标放在渠道名上显示，中文原文，页面上再翻译） */
+export function channelNameHint(name: string | null | undefined): string | null {
+  const n = name ?? "";
+  if (/(?<!不)预上网|Pre-scan/i.test(n) && !/No pre-scan/i.test(n)) return "预上网：出单后运单号会提前有物流记录（上网），不用等快递揽收扫描";
+  if (/多箱|Multi-box/i.test(n)) return "多箱：一票多箱寄同一个地址，按总重量计价";
+  return null;
+}
+
 /** FedEx 的服务类型：Economy / SmartPost / SMP → Economy (SmartPost)；NG / Ground → Ground */
 function fedexService(name: string): string | null {
   const n = name.toUpperCase();

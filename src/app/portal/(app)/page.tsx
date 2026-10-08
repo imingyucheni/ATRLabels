@@ -11,8 +11,9 @@ import { listDraftRows } from "@/lib/batch";
 import { ChannelBars, DailyBars } from "@/components/charts";
 import StatusBadge from "@/components/StatusBadge";
 import TrackingLink from "@/components/TrackingLink";
-import { getT } from "@/lib/prefs";
+import { getLang, getT } from "@/lib/prefs";
 import type { T } from "@/lib/i18n";
+import { localizeChannelName } from "@/lib/carriers";
 
 /** n 天前的日期（yyyy-mm-dd） */
 function dayOffset(n: number) {
@@ -54,6 +55,7 @@ function Trend({ now, prev, unit = "", upBad = false, t }: { now: number; prev: 
 export default async function PortalHome() {
   const me = await requireCustomer();
   const tr = await getT();
+  const lang = await getLang();
   const today = dayOffset(0);
   const t = buildReport(today, today, me.id, { includeTest: true }).totals;
   const y = buildReport(dayOffset(1), dayOffset(1), me.id, { includeTest: true }).totals;
@@ -154,7 +156,7 @@ export default async function PortalHome() {
             {r30.totals.orders ? tr("平均每单 {amount}", { amount: usd(r30.totals.revenue / r30.totals.orders) }) : tr("还没有出单")}
           </p>
           {r30.channels.length ? (
-            <ChannelBars data={r30.channels.map((c) => ({ name: displayChannel(c.code).name, orders: c.orders, share: c.share, revenue: c.revenue }))} revenueLabel={tr("运费")} />
+            <ChannelBars data={r30.channels.map((c) => ({ name: localizeChannelName(displayChannel(c.code).name, lang), orders: c.orders, share: c.share, revenue: c.revenue }))} revenueLabel={tr("运费")} />
           ) : (
             <div className="muted small">{tr("出单后这里会显示各渠道的单量")}</div>
           )}

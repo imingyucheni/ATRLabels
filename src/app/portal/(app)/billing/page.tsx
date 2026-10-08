@@ -9,6 +9,7 @@ import { buildStatement } from "@/lib/statement";
 import { displayChannel } from "@/lib/channelDisplay";
 import { getLang, getT } from "@/lib/prefs";
 import { translateMessage } from "@/lib/i18n";
+import { localizeChannelName } from "@/lib/carriers";
 
 function monthRange(offset = 0) {
   const d = new Date();
@@ -30,7 +31,7 @@ export default async function PortalBilling({ searchParams }: { searchParams: Pr
   const st = buildStatement(me.id, from, to)!;
   const ledger = listLedger({ customerId: me.id, from, to });
   // 客户只看到对外的渠道名（不含服务商标记）
-  const charges = listOrderCharges(me.id, { from, to }).map((r) => ({ ...r, channelName: displayChannel(r.channelCode).name }));
+  const charges = listOrderCharges(me.id, { from, to }).map((r) => ({ ...r, channelName: localizeChannelName(displayChannel(r.channelCode).name, lang) }));
   const { supportContact } = getSettings();
 
   return (
