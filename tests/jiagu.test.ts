@@ -180,6 +180,48 @@ describe("嘉谷万邑接口", () => {
     }
   });
 
+  it("合并报价：同一个仓库的渠道一个请求、不同仓库同时发；合并请求失败时退回逐个报价", async () => {
+    let failBatch = false;
+    const calls = fakeServer({
+      "/api/gts/CalculateRates": (b) => {
+        const ids = (b.Products as { ID: number }[]).map((p) => p.ID);
+        if (failBatch && ids.length > 1) return { IsSuccess: false, Message: "批量失败" };
+        return { IsSuccess: true, Result: ids.map((ID) => (ID === 307699 ? { ID, TotalCharge: 0, Message: "订单未匹配到分区" } : { ID, TotalCharge: ID % 7 + 3, RatesList: [{ Currency: "USD", ZoneCode: "5", Amount: ID % 7 + 3 }] })) };
+      },
+    });
+    const client = jg.getJiaguClient()!;
+    // GOFO / UniUni / USPS 都是 196845 仓库，OnTrac 是 230759，FedEx 是 221121
+    const codes = ["JG-579181", "JG-307699", "JG-580914", "JG-580469", "JG-568995"];
+    const m = client.trialPriceMany(codes, req);
+    const res = await Promise.allSettled(codes.map((c) => m.get(c)!));
+    const rateCalls = calls.filter((c) => c.path === "/api/gts/CalculateRates");
+    expect(rateCalls.length).toBe(3); // 3 个仓库 → 3 个请求（以前是 5 个）
+    expect(rateCalls.find((c) => c.body.WarehouseID === 196845)!.body.Products).toEqual([{ ID: 579181 }, { ID: 307699 }, { ID: 580914 }]);
+    expect(res[0]).toMatchObject({ status: "fulfilled", value: { totalDiscountShippingFee: 579181 % 7 + 3, zone: "zone5" } });
+    expect(res[1].status).toBe("rejected"); // 不在派送范围：和单个报价一样抛错
+    expect((res[1] as PromiseRejectedResult).reason.message).toMatch(/不在派送范围/);
+
+    // 合并请求被拒：那几个渠道逐个再问一次，结果照样拿到
+    failBatch = true;
+    calls.length = 0;
+    const m2 = client.trialPriceMany(["JG-579181", "JG-580914"], req);
+    const r2 = await Promise.all([m2.get("JG-579181")!, m2.get("JG-580914")!]);
+    expect(r2.map((q) => q?.totalDiscountShippingFee)).toEqual([579181 % 7 + 3, 580914 % 7 + 3]);
+    expect(calls.filter((c) => c.path === "/api/gts/CalculateRates").length).toBe(3); // 1 次合并 + 2 次单独
+
+    // 报价页：所有嘉谷渠道先合并发出去，每个渠道不再单独请求
+    failBatch = false;
+    calls.length = 0;
+    const svc = await import("@/lib/service");
+    svc.clearQuoteCache();
+    db.upsertChannels(codes.map((code) => ({ code, name: `${code} · GDE` })));
+    const cid = db.saveCustomer(null, { name: "合并报价客户", contact: null, phone: null, email: null, note: null, markup: {} });
+    db.setCustomerChannels(cid, codes);
+    const quotes = await svc.quoteAll(cid, { ...req, skuList: req.skuList.map((k) => ({ ...k, productNature: "2,4" })) });
+    expect(quotes.filter((q) => q.ok).length).toBe(4);
+    expect(calls.filter((c) => c.path === "/api/gts/CalculateRates").length).toBe(3);
+  });
+
   it("下单被拒绝时抛错（订单没建成），取消失败也抛错", async () => {
     fakeServer({
       "/api/gts/ShippingLabel": () => ({ IsSuccess: false, ErrorCode: "100002", Message: "订单重复" }),

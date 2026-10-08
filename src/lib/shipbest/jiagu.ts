@@ -217,6 +217,14 @@ function multiPackages(req: ShipmentRequest) {
 
 /* ---------------- 接口 ---------------- */
 
+interface JgRate {
+  ID: number;
+  ProductName: string | null;
+  TotalCharge: number;
+  Message: string | null;
+  RatesList: { Currency: string; ZoneCode: string; Amount: number }[] | null;
+}
+
 interface JgResult<T> {
   IsSuccess?: boolean;
   isSuccess?: boolean;
@@ -263,10 +271,17 @@ export const jgOrders = {
 
 export class JiaguClient {
   private token: { value: string; exp: number } | null = null;
+  private tokenLoading: Promise<string> | null = null;
   constructor(private cfg: JiaguConfig) {}
 
+  /** 访问令牌：缓存到过期前 5 分钟；同时几个请求要换令牌时只换一次 */
   private async accessToken(): Promise<string> {
     if (this.token && Date.now() < this.token.exp) return this.token.value;
+    this.tokenLoading ??= this.fetchToken().finally(() => (this.tokenLoading = null));
+    return this.tokenLoading;
+  }
+
+  private async fetchToken(): Promise<string> {
     const res = await fetch(`${this.cfg.authUrl}/connect/token`, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -328,7 +343,7 @@ export class JiaguClient {
 
   async trialPrice(code: string, req: ShipmentRequest): Promise<FeeQuote | null> {
     const { productId: id, warehouseId: wh } = parseJgCode(code);
-    const r = await this.call<{ ID: number; ProductName: string | null; TotalCharge: number; Message: string | null; RatesList: { Currency: string; ZoneCode: string; Amount: number }[] | null }[]>(
+    const r = await this.call<JgRate[]>(
       "/api/gts/CalculateRates",
       { ...buildJiaguBody(this.cfg, req, id, wh), Products: [{ ID: id }] },
       true,
@@ -338,6 +353,50 @@ export class JiaguClient {
     if (!r.ok) throw new JiaguError(r.code, r.message || "算价失败");
     const q = (r.result ?? []).find((x) => x.ID === id) ?? r.result?.[0];
     if (!q) return null;
+    return this.toQuote(code, q, req);
+  }
+
+  /**
+   * 一次给多个渠道报价：同一个仓库的产品合成一个请求（CalculateRates 的 Products 本来就是列表），
+   * 不同仓库的请求同时发。以前每个渠道一个请求、同时最多 4 个，渠道一多要排好几轮。
+   * 合并的请求整个失败（或某个产品没返回）时，那几个渠道退回逐个报价，结果和以前一样。
+   * 返回：渠道代码 → 报价（Promise，失败时 reject，和 trialPrice 一样）
+   */
+  trialPriceMany(codes: string[], req: ShipmentRequest): Map<string, Promise<FeeQuote | null>> {
+    const out = new Map<string, Promise<FeeQuote | null>>();
+    const groups = new Map<number, string[]>();
+    for (const code of new Set(codes)) {
+      const wh = warehouseOfCode(this.cfg, code) || 0;
+      groups.set(wh, [...(groups.get(wh) ?? []), code]);
+    }
+    for (const [wh, list] of groups) {
+      // 没设置仓库的、只有一个渠道的：照旧单独报价
+      if (!wh || list.length === 1) {
+        for (const code of list) out.set(code, this.trialPrice(code, req));
+        continue;
+      }
+      const ids = list.map((c) => parseJgCode(c).productId);
+      const first = parseJgCode(list[0]);
+      const batch = this.call<JgRate[]>(
+        "/api/gts/CalculateRates",
+        { ...buildJiaguBody(this.cfg, req, first.productId, first.warehouseId), Products: ids.map((ID) => ({ ID })) },
+        true,
+        25_000,
+      ).then((r) => (r.ok ? r.result ?? [] : null), () => null);
+      for (const code of list) {
+        const id = parseJgCode(code).productId;
+        out.set(code, batch.then((rows) => {
+          const q = rows?.find((x) => x.ID === id);
+          return q ? this.toQuote(code, q, req) : this.trialPrice(code, req);
+        }));
+      }
+    }
+    return out;
+  }
+
+  /** 嘉谷一条报价结果 → 我们的报价（没有价格 / 有错误说明时抛错） */
+  private toQuote(code: string, q: JgRate, req: ShipmentRequest): FeeQuote {
+    const { productId: id, warehouseId: wh } = parseJgCode(code);
     if (!warehouseFor(this.cfg, id, wh)) throw new JiaguError(10061, `渠道 ${id} 还没有设置仓库 ID（设置 → 嘉谷万邑）`);
     if (!q.TotalCharge || q.Message) {
       const msg = q.Message || "算价失败";

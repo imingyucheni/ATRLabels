@@ -321,10 +321,51 @@ export function clearQuoteCache() {
   quoteCache.clear();
 }
 
+/** 正在进行的合并报价（primeQuotes 发出去的）：同一个渠道 + 同一个包裹直接等它，不再单独请求 */
+const gi = globalThis as unknown as { __quoteInflight?: Map<string, Promise<FeeQuote | null>> };
+const inflight = (gi.__quoteInflight ??= new Map());
+
+/**
+ * 报价前先把能合并的渠道一次问完（目前是嘉谷：同一个仓库的渠道一个请求，不同仓库同时发）。
+ * 之后每个渠道照常走 quoteOne / trialPriceCached，拿的是这里已经在路上的结果。
+ */
+export function primeQuotes(codes: string[], req: ShipmentRequest) {
+  let client: ReturnType<typeof getShipBestClient>;
+  try {
+    client = getShipBestClient();
+  } catch {
+    return;
+  }
+  if (!client.trialPriceMany) return;
+  const todo = codes.filter((code) => {
+    const key = quoteKey(code, req);
+    const hit = quoteCache.get(key);
+    return !(hit && Date.now() - hit.at < QUOTE_TTL) && !inflight.has(key);
+  });
+  if (todo.length < 2) return;
+  const t0 = Date.now();
+  for (const [code, p] of client.trialPriceMany(todo, req)) {
+    const key = quoteKey(code, req);
+    const done = p.then(
+      (q) => {
+        const ms = Date.now() - t0;
+        if (ms > 5000) console.warn(`[报价] ${getChannel(code)?.name ?? code} 用了 ${(ms / 1000).toFixed(1)} 秒（合并请求）`);
+        if (q) quoteCache.set(key, { at: Date.now(), q });
+        return q;
+      },
+    );
+    inflight.set(key, done);
+    // 没有渠道来取（例如被重量限制挡掉了）也不能留下未处理的错误
+    done.catch(() => null).finally(() => inflight.delete(key));
+  }
+}
+
 async function trialPriceCached(channelCode: string, req: ShipmentRequest): Promise<FeeQuote | null> {
   const key = quoteKey(channelCode, req);
   const hit = quoteCache.get(key);
   if (hit && Date.now() - hit.at < QUOTE_TTL) return hit.q;
+  const pending = inflight.get(key);
+  if (pending) return pending;
   const t0 = Date.now();
   const q = await getShipBestClient().trialPrice(channelCode, req);
   const ms = Date.now() - t0;
@@ -383,7 +424,9 @@ async function quoteRemote(customerId: number, channelCode: string, channelName:
  * 并发试算多个渠道：ShipBest 和嘉谷各走各的队列（两家的频率限制互不影响），
  * ShipBest 同时 3 个（避免触发频率限制 11005），嘉谷同时 4 个；总时间约等于最慢那家的时间。
  */
-async function quoteChannels<C extends { code: string; name: string }>(channels: C[], fn: (c: C) => Promise<ChannelQuote>): Promise<ChannelQuote[]> {
+async function quoteChannels<C extends { code: string; name: string }>(channels: C[], fn: (c: C) => Promise<ChannelQuote>, req?: ShipmentRequest): Promise<ChannelQuote[]> {
+  // 嘉谷的渠道先合并成几个请求一起发出去，下面逐个渠道处理时直接用结果
+  if (req) primeQuotes(channels.map((c) => c.code).filter((c) => isJiaguCode(c)), req);
   const results: ChannelQuote[] = [];
   const run = async (list: C[], size: number) => {
     const queue = [...list];
@@ -408,7 +451,7 @@ export async function quoteAll(customerId: number, req: ShipmentRequest): Promis
   // 寄往美国以外：只用国际快递渠道（DHL）；寄美国：只用尾程渠道。多箱渠道不参与普通下单报价
   const channels = forDestination(all, req).filter((c) => !isMultiBoxName(c.name));
   if (!channels.length) throw new Error(isInternational(req) ? "您的账户还没有开通国际快递渠道（DHL），请联系客服开通" : "您的账户还没有开通美国本土渠道，请联系客服开通");
-  const results = await quoteChannels(channels, (c) => quoteOne(customerId, c.code, c.name, req));
+  const results = await quoteChannels(channels, (c) => quoteOne(customerId, c.code, c.name, req), req);
   return flagJiaguCoverage(fillZones(results)).sort((a, b) => Number(b.ok) - Number(a.ok) || (a.price ?? 0) - (b.price ?? 0));
 }
 
@@ -424,7 +467,7 @@ export async function quoteMulti(customerId: number, raw: ShipmentRequest): Prom
   const req = withPieceTotals(raw);
   const channels = customerChannels(customerId).filter((c) => isMultiBoxName(c.name) && !isDhlCode(c.code));
   if (!channels.length) throw new Error("还没有开通多箱渠道（UPS HWT / FedEx MWT），请联系客服开通");
-  const results = await quoteChannels(channels, (c) => quoteOne(customerId, c.code, c.name, req));
+  const results = await quoteChannels(channels, (c) => quoteOne(customerId, c.code, c.name, req), req);
   return results.sort((a, b) => Number(b.ok) - Number(a.ok) || (a.price ?? 0) - (b.price ?? 0));
 }
 
@@ -443,7 +486,7 @@ export async function quoteForProspect(req: ShipmentRequest, markup: PartialRule
   const channels = forDestination(listChannels(true), req).filter((c) => !isMultiBoxName(c.name));
   if (!channels.length) throw new Error("没有启用的物流渠道，请先到“设置”里同步渠道");
   const gm = getSettings().markup;
-  const results = await quoteChannels(channels, (c) => quoteOne(0, c.code, c.name, req, resolveRule(gm, c.markup, markup)));
+  const results = await quoteChannels(channels, (c) => quoteOne(0, c.code, c.name, req, resolveRule(gm, c.markup, markup)), req);
   return flagJiaguCoverage(fillZones(results)).sort((a, b) => Number(b.ok) - Number(a.ok) || (a.price ?? 0) - (b.price ?? 0));
 }
 

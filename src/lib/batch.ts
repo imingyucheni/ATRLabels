@@ -8,7 +8,7 @@ import { checkAddress, needsAck, type AddressCheck } from "./addressCheck";
 import ExcelJS from "exceljs";
 import { activeShipmentByRef, customerChannels, db, duplicateRefMessage, getChannel, getCustomer, getSettings, getShipment, listChannels, type ShipmentStatus } from "./db";
 import { InsufficientBalanceError } from "./ledger";
-import { createLabel, PriceChangedError, quoteChannel, refreshShipment, validateRequest, forDestination } from "./service";
+import { createLabel, PriceChangedError, primeQuotes, quoteChannel, refreshShipment, validateRequest, forDestination } from "./service";
 import type { Address, ShipmentRequest, SkuItem, UnitSystem } from "./shipbest/types";
 import { usStateCode } from "./geo";
 import { JOB_STATUS_LABEL, type JobStatus } from "./batchLabels";
@@ -847,6 +847,8 @@ async function quoteJob(jobId: number) {
     const quotes: RowQuote[] = [];
     // 寄美国只试算美国本土渠道，寄国外只试算国际渠道（不然每单都多出几行“不可用”）
     const rowCodes = forDestination(codes.map((code) => ({ code })), req).map((c) => c.code);
+    // 嘉谷的渠道合并成几个请求先一起发出去（以前每单要一个渠道一个渠道地等）
+    primeQuotes((rowCodes.length ? rowCodes : codes).filter((c) => c.startsWith("JG-")), req);
     for (const code of rowCodes.length ? rowCodes : codes) {
       try {
         const q = await quoteChannel(job.customerId, code, req);

@@ -25,6 +25,8 @@ export interface ShipBestClient {
   getProducts(): Promise<Product[]>;
   /** 按指定渠道试算运费 */
   trialPrice(productCode: string, req: ShipmentRequest): Promise<FeeQuote | null>;
+  /** 一次给多个渠道报价（服务商支持合并请求时才有，例如嘉谷）：渠道代码 → 报价 */
+  trialPriceMany?(codes: string[], req: ShipmentRequest): Map<string, Promise<FeeQuote | null>>;
   createOrder(customNo: string, productCode: string, req: ShipmentRequest, remark?: string): Promise<unknown>;
   getOrder(key: { orderNo?: string; customNo?: string }): Promise<OrderDetail>;
   cancelOrder(key: { orderNo?: string; customNo?: string }): Promise<void>;
@@ -314,6 +316,11 @@ export class SandboxShipBestClient extends MockShipBestClient {
     if (!q) throw new ShipBestError(10061, "trial price failed");
     return q;
   }
+  trialPriceMany(codes: string[], req: ShipmentRequest) {
+    const m = this.real.trialPriceMany?.(codes, req) ?? new Map<string, Promise<FeeQuote | null>>();
+    for (const [code, p] of m) m.set(code, p.then((q) => { if (!q) throw new ShipBestError(10061, "trial price failed"); return q; }));
+    return m;
+  }
 }
 
 /**
@@ -362,6 +369,12 @@ export class MultiProviderClient implements ShipBestClient {
 
   async trialPrice(code: string, req: ShipmentRequest) {
     return this.pick(code).trialPrice(code, req);
+  }
+
+  /** 嘉谷的渠道合并报价；其他服务商的渠道不在返回里（照旧逐个报价） */
+  trialPriceMany(codes: string[], req: ShipmentRequest) {
+    const jgCodes = codes.filter((c) => isJiaguCode(c));
+    return this.jg && jgCodes.length ? this.jg.trialPriceMany(jgCodes, req) : new Map<string, Promise<FeeQuote | null>>();
   }
 
   async createOrder(customNo: string, code: string, req: ShipmentRequest, remark?: string) {
