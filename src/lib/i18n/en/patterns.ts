@@ -24,6 +24,8 @@ export const patterns: [RegExp, string][] = [
   [/^海关编码（HS）至少 (\d+) 位数字$/, "HS code must be at least $1 digits"],
 
   /* ---------- 限时活动 / 负数加价 ---------- */
+  [/^这个渠道的申报价值只能用美元（USD），请把币种 (\S+) 换算成美元后再下单$/, "This service only accepts declared values in USD. Please convert $1 to USD and try again"],
+  [/^这个渠道在 (\S+) ~ (\S+) 已经有活动「(.+)」，日期不能重叠（先停用或删除原来的活动）$/, "This service already has the promotion “$3” from $1 to $2; dates can't overlap (disable or delete the existing promotion first)"],
   [/^已恢复 (\d+) 项加价，之后的报价和下单按恢复后的价格$/, "Restored $1 markup(s); new quotes and orders use the restored pricing"],
   [/^(.*?)限时活动期间所有客户都按活动价；这里填的负数加价要等活动结束后才生效，那时没有活动返利，会按成本价出单，所以不能填。只想在活动期间优惠，在“设置 → 限时活动价”里设置就行$/, "$1During a promotion every customer gets the promo price; a negative markup entered here would only apply after the promotion ends, when there's no promo rebate, so labels would be sold at cost. To discount only during the promotion, use Settings → Limited-time promotions"],
 

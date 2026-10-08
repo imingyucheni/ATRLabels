@@ -163,8 +163,10 @@ export function parseAmount(raw: string): number | null {
 export function customerAmountFor(costAmount: number, policy: AdjustmentPolicy, rule: MarkupRule): number {
   if (policy === "none") return 0;
   if (policy === "at_cost") return costAmount;
+  // 负数加价（限时活动 / 长期返利渠道）只适用于运费本身（有返利兜底）；附加费没有返利，至少按成本转给客户，不能打折亏钱
+  const pct = Math.max(0, rule.percent);
   // 先按万分之一分取整，去掉浮点误差（0.2 * 1.05 = 0.21000000000000002）
-  const cents = Math.round(costAmount * (1 + rule.percent / 100) * 100 * 1e4) / 1e4;
+  const cents = Math.round(costAmount * (1 + pct / 100) * 100 * 1e4) / 1e4;
   return (cents >= 0 ? Math.ceil(cents) : -Math.floor(-cents)) / 100;
 }
 
@@ -212,7 +214,7 @@ export interface Preview {
 }
 
 export const DUP_BEFORE = "这一单之前已经导入过同样金额的补差，跳过（不会重复扣款）";
-export const DUP_IN_FILE = "同一单号、同样金额在表格里重复出现，只导入第一行";
+export const DUP_IN_FILE = "同一单号、同样金额、同样原因在表格里重复出现，只导入第一行";
 
 /** 之前导入过补差的单号（统一写法）和面单 */
 /**
@@ -229,6 +231,11 @@ function importedBefore() {
     anyShipments: new Set(rows.filter((r) => r.shipment_id).map((r) => r.shipment_id!)),
     shipments: new Set(rows.filter((r) => r.shipment_id).map((r) => sig(`#${r.shipment_id}`, r.cost_amount, r.reason))),
   };
+}
+
+/** 这张面单已有的补差金额（成本侧） */
+export function shipmentAdjustmentAmounts(shipmentId: number): number[] {
+  return (db().prepare("SELECT cost_amount FROM adjustments WHERE shipment_id = ?").all(shipmentId) as { cost_amount: number }[]).map((r) => r.cost_amount);
 }
 
 /** 这张面单是否已经有补差记录 */
@@ -287,21 +294,23 @@ export function buildPreview(rows: string[][], m: Mapping): Preview {
         row.customerName = s.customerName;
         // 公司自用账户的单：补差由公司自己承担，不向任何人收取
         row.customerAmount = isInternalCustomer(s.customerId) ? 0 : customerAmountFor(row.costAmount, policy, s.rule);
-        row.markupPercent = policy === "with_markup" ? s.rule.percent : null;
+        row.markupPercent = policy === "with_markup" ? Math.max(0, s.rule.percent) : null;
       }
       // 同一单号、同样金额的补差只导入一次：之前导入过的、表格里重复出现的都跳过
       const nk = sig(normalizeTrackingKey(matchKey), row.costAmount!, reason);
       const sk = row.shipmentId ? sig(`#${row.shipmentId}`, row.costAmount!, reason) : null;
+      // 同一个文件里同一单两笔金额一样、原因不同的（例如住宅费 3.20 + 偏远费 3.20）是两项费用，都要导入
+      const rk = (k: string) => `${k}|${(reason ?? "").trim().toLowerCase()}`;
       if (before.keys.has(nk) || (sk && before.shipments.has(sk))) row.error = DUP_BEFORE;
-      else if (seenKeys.has(nk) || (sk && seenShipments.has(sk))) row.error = DUP_IN_FILE;
+      else if (seenKeys.has(rk(nk)) || (sk && seenShipments.has(rk(sk)))) row.error = DUP_IN_FILE;
       if (row.error) row.possibleDuplicate = true;
       else if (before.anyKeys.has(normalizeTrackingKey(matchKey)) || (row.shipmentId && before.anyShipments.has(row.shipmentId))) {
         // 同一单之前补过一笔金额 / 原因不同的：照常导入（例如承运商后来退回、或另一项附加费），但提醒核对
         row.possibleDuplicate = true;
         row.warning = "这一单之前导入过一笔金额不同的补差，请确认不是同一笔费用";
       }
-      seenKeys.add(nk);
-      if (sk) seenShipments.add(sk);
+      seenKeys.add(rk(nk));
+      if (sk) seenShipments.add(rk(sk));
     }
     out.push(row);
   }

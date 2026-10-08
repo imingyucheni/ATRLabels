@@ -15,6 +15,7 @@ import {
   type Shipment,
   type ShipmentPatch,
   activeShipmentByRef,
+  API_TEST_ENV,
   isInternalCustomer,
   switchShipmentChannel,
   isTestAccount,
@@ -24,19 +25,19 @@ import {
 import { precheck, rememberQuote } from "./coverage";
 import { downloadLabel, readLabel } from "./labels";
 import { backfillLabelSku, detectLabelSku } from "./labelSku";
-import { chargeLabel, refundCancelled, removeShipmentLedger } from "./ledger";
+import { chargeLabel, hasCancelRefund, refundCancelled, removeShipmentLedger } from "./ledger";
 import { displayChannel } from "./channelDisplay";
 import { notifyLater } from "./notify";
 import type { AddressCheck } from "./addressCheck";
 import { computePrice, resolveRule, roundUp, type MarkupRule, type PartialRule } from "./pricing";
-import { effectiveRule } from "./markup";
+import { pickRule, rebateFor } from "./markup";
 import { getPromotion } from "./promotions";
 import { checkLimits, checkMinSize } from "./channelLimits";
 import { getShipBestClient, getTestAccountClient, shipbestMode, ShipBestError } from "./shipbest/client";
-import { failoverFor, isJiaguCode, jiaguConfig } from "./shipbest/jiagu";
+import { failoverFor, isJiaguCode, jiaguConfig, warehouseOfCode } from "./shipbest/jiagu";
 import { checkMultiBox, isMultiBoxName, multiBoxRule, multiBoxWarnings, pkgFromPieces } from "./multiBox";
 import { recordSpeed } from "./speedStats";
-import { aesRequired, hsDigits, isDhlCode, isInternational } from "./shipbest/dhl";
+import { aesRequired, dhlSettings, hsDigits, isDhlCode, isInternational } from "./shipbest/dhl";
 import { guessCarrier } from "./carriers";
 import { publicError } from "./portal";
 import { logProviderEvent, recordLabelFailure } from "./providerLog";
@@ -232,10 +233,6 @@ export interface ChannelQuote {
   ms?: number;
 }
 
-function ruleFor(customerId: number, channelCode: string): MarkupRule {
-  // 客户在该渠道的专属加价 > 客户专属加价 > 渠道加价 > 全局默认；公司自用账户按成本价
-  return effectiveRule(customerId, channelCode);
-}
 
 /* ---------------- 分区 ---------------- */
 
@@ -249,7 +246,8 @@ const ZONE_TTL = 6 * 3600_000;
 export function zoneOf(code: string, zip: string | undefined, zone: string | null | undefined): { zone: string | null; zoneEstimated?: boolean } {
   const z5 = (zip ?? "").trim().slice(0, 5);
   if (zone) {
-    if (z5 && !isJiaguCode(code)) {
+    // DHL 的“分区”是时效说明（N 个工作日），邮编也是外国邮编：不能拿来给美国邮编补分区
+    if (z5 && !isJiaguCode(code) && !isDhlCode(code)) {
       if (zoneByZip.size > 5000) zoneByZip.clear();
       zoneByZip.set(z5, { zone, at: Date.now() });
     }
@@ -336,7 +334,27 @@ const quoteCache = (g.__quoteCache ??= new Map());
 
 function quoteKey(code: string, req: ShipmentRequest) {
   const a = (x: ShipmentRequest["sender"]) => [x.country, x.province, x.city, x.zipCode, x.address1, x.address2].map((v) => (v ?? "").trim().toUpperCase()).join("|");
-  return JSON.stringify([code, a(req.sender), a(req.recipient), req.pkg, req.skuList.map((k) => [k.quantity, k.declaredUnitPrice, k.productNature])]);
+  return JSON.stringify([code, providerFingerprint(code), a(req.sender), a(req.recipient), req.pkg, req.skuList.map((k) => [k.quantity, k.declaredUnitPrice, k.productNature])]);
+}
+
+/**
+ * 报价缓存也要区分服务商的连接设置：切换模拟 / 沙盒 / 正式、换账号、改嘉谷仓库后，
+ * 不能拿 3 分钟内旧设置下的成本去卖（只用账号 ID 这类标识，不放密钥）
+ */
+function providerFingerprint(code: string): string {
+  try {
+    if (isJiaguCode(code)) {
+      const cfg = jiaguConfig();
+      return cfg ? `jg|${cfg.apiUrl}|${cfg.customerId}|${warehouseOfCode(cfg, code)}` : "jg|off";
+    }
+    if (isDhlCode(code)) {
+      const d = dhlSettings();
+      return `dhl|${d.mode}|${d.accountNumber}`;
+    }
+    return `sb|${shipbestMode()}|${getSettings().shipbest?.apiId ?? ""}`;
+  } catch {
+    return "?";
+  }
 }
 
 /** 测试用：清空报价缓存 */
@@ -421,13 +439,13 @@ async function quoteRemote(customerId: number, channelCode: string, channelName:
     if (!Number.isFinite(cost) || cost <= 0) return { channelCode, channelName, ok: false, error: "该渠道暂时无法报价" } satisfies ChannelQuote;
     // 钱包是美元：服务商报的不是美元时不能直接当美元收
     if (q.currency && q.currency.toUpperCase() !== "USD") return { channelCode, channelName, ok: false, error: "该渠道报价币种不是美元，暂不支持" } satisfies ChannelQuote;
-    const rule = ruleOverride ?? ruleFor(customerId, channelCode);
     // 公司自用账户按成本价：不做价格取整
     const step = isInternalCustomer(customerId) ? 0.01 : roundingStep;
-    const price = computePrice(cost, rule, step);
-    // 限时活动：算出不参加活动时的原价，客户端显示“原价 / 限时价”
-    const promo = rule.source === "promo" && rule.promoId ? getPromotion(rule.promoId) : null;
-    const originalPrice = promo ? computePrice(cost, effectiveRule(customerId, channelCode, { ignorePromo: true }), step) : null;
+    // 限时活动价和平时价取低的（活动不能让任何客户变贵）；活动价更低时客户端显示“原价 / 限时价”
+    const picked = pickRule(customerId, channelCode, cost, step, ruleOverride);
+    const { rule, price } = picked;
+    const promo = picked.promo && rule.promoId ? getPromotion(rule.promoId) : null;
+    const originalPrice = promo ? picked.normalPrice : null;
     const rebate = rule.rebate ? Math.round(cost * rule.rebate) / 100 : 0;
     return {
       channelCode,
@@ -529,7 +547,9 @@ export async function quoteForProspect(req: ShipmentRequest, markup: PartialRule
   const channels = forDestination(listChannels(true), req).filter((c) => !isMultiBoxName(c.name));
   if (!channels.length) throw new Error("没有启用的物流渠道，请先到“设置”里同步渠道");
   const gm = getSettings().markup;
-  const results = await quoteChannels(channels, (c) => quoteOne(0, c.code, c.name, req, resolveRule(gm, c.markup, markup)), req, hooks);
+  // 和真实客户一样算：渠道长期返利兜底、限时活动价（在 pickRule 里和平时价取低的）
+  const ruleOf = (c: { code: string; markup?: PartialRule | null; rebate?: number }) => ({ ...resolveRule(gm, c.markup, markup), source: "prospect", ...((c.rebate ?? 0) > 0 ? { rebate: c.rebate } : {}) });
+  const results = await quoteChannels(channels, (c) => quoteOne(0, c.code, c.name, req, ruleOf(c)), req, hooks);
   return flagJiaguCoverage(fillZones(results)).sort((a, b) => Number(b.ok) - Number(a.ok) || (a.price ?? 0) - (b.price ?? 0));
 }
 
@@ -567,7 +587,7 @@ export interface CreateInput {
 }
 
 /** 开放 API 测试密钥出的单（模拟面单，不扣钱） */
-export const API_TEST_ENV = "api-test";
+export { API_TEST_ENV };
 
 export async function createLabel(input: CreateInput): Promise<number> {
   const { customerId, channelCode } = input;
@@ -575,7 +595,7 @@ export async function createLabel(input: CreateInput): Promise<number> {
   if (!getCustomer(customerId)) throw new Error("客户不存在");
   const ref = input.customerRef?.trim() || "";
   // 同一个订单号不能重复下单（取消后可以重新下）
-  const dupe = ref ? activeShipmentByRef(customerId, ref) : undefined;
+  const dupe = ref ? activeShipmentByRef(customerId, ref, { apiTest: !!input.simulate }) : undefined;
   if (dupe) throw new Error(duplicateRefMessage(ref, dupe));
   const errors = validateRequest(req);
   if (errors.length) throw new Error(errors.join("；"));
@@ -583,6 +603,11 @@ export async function createLabel(input: CreateInput): Promise<number> {
   const channel = getChannel(channelCode);
   if (!channel?.enabled) throw new Error("渠道不存在或已停用");
   if (!customerCanUse(customerId, channelCode)) throw new Error("该客户未开通此渠道");
+  // DHL、嘉谷的接口申报价值一律按美元：填了别的币种会被当成美元申报（例如人民币 90 报成 90 美元）
+  if (isDhlCode(channelCode) || isJiaguCode(channelCode)) {
+    const other = req.skuList.find((k) => k.declaredCurrency && k.declaredCurrency.trim().toUpperCase() !== "USD");
+    if (other) throw new Error(`这个渠道的申报价值只能用美元（USD），请把币种 ${other.declaredCurrency} 换算成美元后再下单`);
+  }
   // 多箱寄出：出单前再检查一遍渠道要求（含英文品名、海关编码）
   if (req.pkg.pieces?.length) {
     const mb = multiBoxRule(channel.name);
@@ -603,7 +628,7 @@ export async function createLabel(input: CreateInput): Promise<number> {
   // 建本地记录和扣款放在同一个事务里：余额不足时什么都不留下
   const id = db().transaction(() => {
     // 试算期间可能已经有同号的单提交了（重复点击 / 两个页面同时下单），入库前再查一次
-    const again = ref ? activeShipmentByRef(customerId, ref) : undefined;
+    const again = ref ? activeShipmentByRef(customerId, ref, { apiTest: !!input.simulate }) : undefined;
     if (again) throw new Error(duplicateRefMessage(ref, again));
     const newId = insertShipment({
     customNo,
@@ -707,23 +732,29 @@ async function tryFailover(
     return false;
   }
   const price = quote.price ?? 0;
+  // 利润、对账按实际出单的备用渠道算：返利用备用渠道自己的（主渠道的限时活动 / 返利不跟过去）
+  const backupRebate = rebateFor(backup);
+  const netCost = cost * (1 - backupRebate / 100);
+  const mainNetCost = (quote.cost ?? 0) * (1 - (quote.rule?.rebate ?? 0) / 100);
   // 公司自用账号按成本价收：不看利润，只要备用不比主渠道贵
-  const ok = isInternalCustomer(customerId) ? cost > 0 && cost <= (quote.cost ?? 0) : cost > 0 && price - cost >= price * FAILOVER_MIN_MARGIN;
+  const ok = isInternalCustomer(customerId) ? cost > 0 && netCost <= mainNetCost + 1e-9 : cost > 0 && price - netCost >= price * FAILOVER_MIN_MARGIN;
   if (!ok) {
-    log(`主渠道被拒（${err.message}），备用渠道 ${ch.name} 成本 ${cost.toFixed(2)}，客户价 ${price.toFixed(2)}，利润率不到 ${FAILOVER_MIN_MARGIN * 100}%，没有切换`);
+    log(`主渠道被拒（${err.message}），备用渠道 ${ch.name} 成本 ${cost.toFixed(2)}${backupRebate ? `（返利 ${backupRebate}%）` : ""}，客户价 ${price.toFixed(2)}，利润率不到 ${FAILOVER_MIN_MARGIN * 100}%，没有切换`);
     return false;
   }
+  const { promoId: _promo, rebate: _rebate, ...keep } = quote.rule ?? { percent: 0, fixed: 0, minProfit: 0 };
+  const backupRule: MarkupRule = { ...keep, ...(quote.rule?.source === "promo" ? { source: "failover" } : {}), ...(backupRebate > 0 ? { rebate: backupRebate } : {}) };
   try {
     await getShipBestClient().createOrder(customNo, backup, req, remark);
   } catch (e2) {
     log(`主渠道被拒（${err.message}），备用渠道 ${ch.name} 也下单失败：${(e2 as Error).message}`);
     if (e2 instanceof ShipBestError) return false;
     // 备用提交结果未知：订单可能已经在嘉谷建好，按备用渠道留着，稍后刷新
-    switchShipmentChannel(id, backup, ch.name, cost, zone);
+    switchShipmentChannel(id, backup, ch.name, cost, zone, backupRule);
     updateShipment(id, { errorMsg: `提交结果未知（${(e2 as Error).message}），请稍后点“刷新状态”` });
     return true;
   }
-  switchShipmentChannel(id, backup, ch.name, cost, zone);
+  switchShipmentChannel(id, backup, ch.name, cost, zone, backupRule);
   log(`主渠道 ${getChannel(mainCode)?.name ?? mainCode} 被拒（${err.message}），已自动改用 ${ch.name} 出单：成本 ${cost.toFixed(2)}（原 ${(quote.cost ?? 0).toFixed(2)}），客户价 ${price.toFixed(2)} 不变`);
   return true;
 }
@@ -748,7 +779,20 @@ export async function refreshShipment(id: number): Promise<Shipment> {
   };
   if (d.feePrice !== null && d.feePrice !== undefined && Number(d.feePrice) > 0) patch.actualCost = Number(d.feePrice);
 
-  // 查询要等服务商返回，期间可能已经取消 / 确认取消：用最新的状态判断，不能用查询前的旧快照
+  // 面单先下载好（要等），再读最新状态决定怎么改：等待期间可能已经取消 / 申请取消 / 确认取消，
+  // 不能用等待之前的旧快照把状态改回去（例如把已经退款的单改回“已出单”）
+  if (patch.labelUrl && !s.labelPath) {
+    try {
+      const saved = await downloadLabel(patch.labelUrl, s.customNo, { from: senderLines(s.sender) });
+      patch.labelPath = saved.path;
+      patch.labelMime = saved.mime;
+      // 看看服务商的面单上是否已经印了 SKU，决定打印时要不要加印
+      patch.labelSku = await detectLabelSku(readLabel(saved.path), saved.mime, s.skuList.map((k) => k.sku)).catch(() => "image" as const);
+    } catch (e) {
+      patch.errorMsg = (patch.errorMsg ? patch.errorMsg + "；" : "") + (e as Error).message;
+    }
+  }
+  // 从这里到写回之间没有等待，读到的就是最新状态
   const cur = getShipment(id) ?? s;
   let justTimedOut = false;
   if (d.status === 6) {
@@ -769,17 +813,6 @@ export async function refreshShipment(id: number): Promise<Shipment> {
     }
   }
 
-  if (patch.labelUrl && !s.labelPath) {
-    try {
-      const saved = await downloadLabel(patch.labelUrl, s.customNo, { from: senderLines(s.sender) });
-      patch.labelPath = saved.path;
-      patch.labelMime = saved.mime;
-      // 看看服务商的面单上是否已经印了 SKU，决定打印时要不要加印
-      patch.labelSku = await detectLabelSku(readLabel(saved.path), saved.mime, s.skuList.map((k) => k.sku)).catch(() => "image" as const);
-    } catch (e) {
-      patch.errorMsg = (patch.errorMsg ? patch.errorMsg + "；" : "") + (e as Error).message;
-    }
-  }
   updateShipment(id, patch);
   settleCancel(id);
 
@@ -802,6 +835,18 @@ export async function refreshShipment(id: number): Promise<Shipment> {
         errorMsg: `客户已换单重新下单（新单 ${fresh?.customNo ?? cur.replacedBy}），这张单的面单延迟生成、自动作废没有成功。请联系服务商作废后点“确认已取消”（客户取消费填 0）`,
       });
     }
+    return getShipment(id)!;
+  }
+
+  // 超时转异常（自动作废没成功）的单，面单后来又生成了：客户可能已经换渠道重新下单，提醒客户和后台，避免两张都用 / 都扣费
+  if (cur.status === "exception" && !cur.replacedBy && patch.status === "labeled" && (cur.errorMsg === JG_LABEL_TIMEOUT_MSG || cur.errorMsg === JG_TIMEOUT_VOIDED_MSG)) {
+    const ref = s.customerRef || s.customNo;
+    updateShipment(id, { errorMsg: "这张单超时后面单才生成：如果已经换渠道重新下过单，请取消这一张，避免重复扣费" });
+    logProviderEvent(s.customNo, "系统", "系统判断", null, "超时转异常后面单又生成了，已提醒客户核对是否重复下单");
+    notifyLater(s.customerId, "exception", { zh: `订单 ${ref} 的面单已生成（超时后）`, en: `Label for order ${ref} was created late` }, {
+      zh: [`订单 ${ref} 之前出单超时，现在面单已经生成并扣费。如果您已经换其他渠道重新下过这一单，请在订单详情里取消这一张，避免重复扣费；没有重新下单的话可以正常使用这张面单。`],
+      en: [`Order ${ref} timed out earlier, but its label has now been created and charged. If you already shipped this order with another service, please cancel this label in the order details to avoid paying twice; otherwise you can use it normally.`],
+    });
     return getShipment(id)!;
   }
 
@@ -937,17 +982,36 @@ export async function requestCancel(
   const s = getShipment(id);
   if (!s) throw new Error("记录不存在");
   if (s.status === "cancelled") return { done: true, message: "已经是取消状态" };
+  // 同一张单同时只处理一个取消（客户和后台同时点、接口超时重试），避免一个成功退款、另一个又把状态改成“取消处理中”
+  if (cancelling.has(id)) return { done: false, message: "这一单正在取消，请稍后刷新查看结果" };
+  cancelling.add(id);
+  try {
+    return await doCancel(s, opts);
+  } finally {
+    cancelling.delete(id);
+  }
+}
+
+const cancelling = ((globalThis as unknown as { __cancelling?: Set<number> }).__cancelling ??= new Set<number>());
+
+async function doCancel(s: Shipment, opts: { markOnFail?: boolean }): Promise<{ done: boolean; message: string }> {
+  const id = s.id;
   try {
     await clientFor(s).cancelOrder(s.orderNo ? { orderNo: s.orderNo } : { customNo: s.customNo });
     logProviderEvent(s.customNo, providerOf(s.channelCode), "申请取消", null, "成功");
-    updateShipment(id, { ...cancelPatch(s, wasLabeled(s)), sbStatus: 6 });
+    // 等服务商期间面单可能刚生成（要收取消费）或已经被别处取消：按最新状态算
+    const cur = getShipment(id) ?? s;
+    if (cur.status === "cancelled") return { done: true, message: "已经是取消状态" };
+    updateShipment(id, { ...cancelPatch(cur, wasLabeled(cur)), sbStatus: 6 });
     settleCancel(id);
     return { done: true, message: "已取消，费用已退回账户余额" };
   } catch (e) {
     logProviderEvent(s.customNo, providerOf(s.channelCode), "申请取消", e instanceof ShipBestError ? e.code : null, `失败：${(e as Error).message}`);
+    const cur = getShipment(id) ?? s;
+    if (cur.status === "cancelled") return { done: true, message: "已经是取消状态" };
     // 内部测试账号的单是模拟面单，没有真实面单要作废：直接取消，按规则退款
-    if (s.isTest && (isTestAccount(s.customerId) || s.env === API_TEST_ENV)) {
-      updateShipment(id, { ...cancelPatch(s, wasLabeled(s)), sbStatus: 6, errorMsg: null });
+    if (cur.isTest && (isTestAccount(cur.customerId) || cur.env === API_TEST_ENV)) {
+      updateShipment(id, { ...cancelPatch(cur, wasLabeled(cur)), sbStatus: 6, errorMsg: null });
       settleCancel(id);
       return { done: true, message: "已取消，费用已退回账户余额" };
     }
@@ -958,9 +1022,9 @@ export async function requestCancel(
     }
     updateShipment(id, {
       status: "cancel_requested",
-      errorMsg: `接口取消未成功：${(e as Error).message}。请联系 ${providerOf(s.channelCode)} 人工取消，完成后点“确认已取消”。`,
+      errorMsg: `接口取消未成功：${(e as Error).message}。请联系 ${providerOf(cur.channelCode)} 人工取消，完成后点“确认已取消”。`,
     });
-    return { done: false, message: `已标记为取消处理中，请联系 ${providerOf(s.channelCode)} 人工取消` };
+    return { done: false, message: `已标记为取消处理中，请联系 ${providerOf(cur.channelCode)} 人工取消` };
   }
 }
 
@@ -968,6 +1032,8 @@ export function confirmCancelled(id: number, cancelFee: number, sbCancelFee: num
   const s = getShipment(id);
   if (!s) throw new Error("记录不存在");
   if (s.status !== "cancel_requested") throw new Error("这张面单不在取消处理中");
+  // 已经退过款的（例如另一次取消已经成功）：不能再按新的手续费改记录，否则记录和实际退款对不上
+  if (hasCancelRefund(id)) throw new Error("这张面单已经退过款了，请刷新页面查看最新状态");
   if (!Number.isFinite(cancelFee) || cancelFee < 0 || cancelFee > s.price) throw new Error("客户取消手续费要在 0 到客户价之间");
   if (!Number.isFinite(sbCancelFee) || sbCancelFee < 0) throw new Error("服务商取消费不能是负数");
   updateShipment(id, { ...cancelPatch(s, true, { cancelFee, sbCancelFee }), errorMsg: null });

@@ -5,7 +5,7 @@ import fs from "node:fs";
 import { notifyLater } from "./notify";
 import path from "node:path";
 import { dataDir, db, getCustomer } from "./db";
-import { cnyToPay, usdCnyQuote } from "./fx";
+import { cnyToPay, usdCnyQuote, wasQuotedRecently } from "./fx";
 import { sniffMime } from "./labels";
 import { addLedger } from "./ledger";
 
@@ -88,7 +88,10 @@ export async function createTopup(input: {
     const q = await usdCnyQuote();
     fxLive = q.live;
     const shown = input.quotedRate && Number.isFinite(input.quotedRate) ? input.quotedRate : null;
-    fxRate = shown && Math.abs(shown - q.rate) / q.rate <= 0.015 ? shown : q.rate;
+    // 页面汇率比现在高（客户多付）可以按它算；比现在低的只接受服务器最近真的报过的汇率（汇率刚涨、客户按旧页面付款），
+    // 不能让页面传一个更低的数字少付人民币；相差都不能超过 1.5%
+    const near = shown !== null && Math.abs(shown - q.rate) / q.rate <= 0.015;
+    fxRate = shown !== null && near && (shown >= q.rate || wasQuotedRecently(shown)) ? shown : q.rate;
     payAmount = cnyToPay(amount, fxRate);
     payCurrency = "CNY";
   }

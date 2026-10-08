@@ -1158,10 +1158,11 @@ export function updateShipment(id: number, patch: ShipmentPatch) {
 }
 
 /** 自动改用备用渠道出单后：渠道和成本按实际出单的记（客户价不变） */
-export function switchShipmentChannel(id: number, channelCode: string, channelName: string, quotedCost: number, zone: string | null) {
+/** 自动备用：改成实际出单的渠道、成本；rule 按备用渠道的返利记（利润、对账、佣金按实际出单的算） */
+export function switchShipmentChannel(id: number, channelCode: string, channelName: string, quotedCost: number, zone: string | null, rule?: MarkupRule) {
   db()
-    .prepare("UPDATE shipments SET channel_code = ?, channel_name = ?, quoted_cost = ?, zone = COALESCE(?, zone), updated_at = datetime('now') WHERE id = ?")
-    .run(channelCode, channelName, quotedCost, zone, id);
+    .prepare("UPDATE shipments SET channel_code = ?, channel_name = ?, quoted_cost = ?, zone = COALESCE(?, zone), rule_json = COALESCE(?, rule_json), updated_at = datetime('now') WHERE id = ?")
+    .run(channelCode, channelName, quotedCost, zone, rule ? JSON.stringify(rule) : null, id);
 }
 
 export function setLabelNote(id: number, note: string | null) {
@@ -1289,13 +1290,21 @@ export function reorderRef(customerId: number, ref: string | null): string {
   return `${base}-${Date.now().toString(36).slice(-4).toUpperCase()}`.slice(0, 50);
 }
 
-export function activeShipmentByRef(customerId: number, ref: string) {
+/** API 测试密钥下的模拟单（不扣费、不出真实面单） */
+export const API_TEST_ENV = "api-test";
+
+/**
+ * 同一个订单号还有没有在用的面单（防止重复下单）。
+ * API 测试密钥的模拟单和真实订单分开算：测试过的订单号，正式下单不受影响（apiTest = 查测试单）。
+ */
+export function activeShipmentByRef(customerId: number, ref: string, opts: { apiTest?: boolean } = {}) {
   return db()
     .prepare(
       `SELECT id, custom_no, tracking_no, status, created_at FROM shipments
-       WHERE customer_id = ? AND customer_ref = ? AND status NOT IN ('cancelled', 'exception') ORDER BY id DESC LIMIT 1`,
+       WHERE customer_id = ? AND customer_ref = ? AND status NOT IN ('cancelled', 'exception')
+         AND (COALESCE(env, '') = ?) = ? ORDER BY id DESC LIMIT 1`,
     )
-    .get(customerId, ref.trim()) as { id: number; custom_no: string; tracking_no: string | null; status: ShipmentStatus; created_at: string } | undefined;
+    .get(customerId, ref.trim(), API_TEST_ENV, opts.apiTest ? 1 : 0) as { id: number; custom_no: string; tracking_no: string | null; status: ShipmentStatus; created_at: string } | undefined;
 }
 
 /** 订单号重复时的提示 */

@@ -14,7 +14,7 @@ import {
   type Mapping,
   type ParsedSheet,
   type Preview,
-  shipmentHasAdjustment,
+  shipmentAdjustmentAmounts, shipmentHasAdjustment,
 } from "@/lib/adjustments";
 import {
   deleteAdjustmentBatch,
@@ -749,10 +749,13 @@ export async function linkAdjustmentAction(_: FlashState, fd: FormData): Promise
   if (adj.shipment_id) return { error: "已经关联过了" };
   const s = findShipmentByKey(str(fd.get("key")));
   if (!s) return { error: "找不到这个单号对应的面单" };
-  if (shipmentHasAdjustment(s.id)) return { error: "这一单已经有补差记录了，不能重复关联（避免重复扣款）" };
+  // 同一单可以有几笔不同的附加费；金额一样的才当成重复（避免重复扣款），金额不同的提醒核对
+  const existing = shipmentAdjustmentAmounts(s.id);
+  if (existing.some((a) => Math.abs(a - adj.cost_amount) < 0.005)) return { error: "这一单已经有一笔同样金额的补差了，不能重复关联（避免重复扣款）" };
   // 关联到异常状态的面单时先提醒，勾选“仍然关联”后再提交
   if (fd.get("force") !== "1") {
     const warn: string[] = [];
+    if (existing.length) warn.push("这一单已经有金额不同的补差记录，请确认不是同一笔费用");
     if (s.status === "cancelled") warn.push("这张面单已经取消");
     if (s.status === "exception") warn.push("这张面单是异常状态");
     if (adj.reason && s.channelName && !sameCarrier(adj.reason, s.channelName)) warn.push(`补差原因里的渠道和面单渠道（${s.channelName}）可能不一致`);
@@ -1319,7 +1322,12 @@ export async function togglePromotionAction(_: FlashState, fd: FormData): Promis
   const p = getPromotion(Number(fd.get("id")));
   if (!p) return { error: "活动不存在" };
   if (fd.get("delete") === "1") deletePromotion(p.id);
-  else savePromotion(p.id, { ...p, enabled: !p.enabled });
+  else {
+    // 重新启用：和其他活动的日期不能重叠
+    const err = p.enabled ? null : validatePromotion({ ...p, enabled: true }, p.id);
+    if (err) return { error: err };
+    savePromotion(p.id, { ...p, enabled: !p.enabled });
+  }
   revalidatePath("/settings");
   return { ok: fd.get("delete") === "1" ? "活动已删除" : p.enabled ? "活动已停用，恢复原来的加价" : "活动已启用" };
 }

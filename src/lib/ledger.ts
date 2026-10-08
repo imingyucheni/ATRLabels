@@ -136,6 +136,17 @@ export function removeShipmentLedger(shipmentId: number) {
   db().prepare("DELETE FROM ledger WHERE shipment_id = ?").run(shipmentId);
 }
 
+/** 这张单在账户流水里净扣了多少（面单扣款 − 取消退款；不含补差） */
+export function shipmentNetCharge(shipmentId: number): number {
+  const r = db().prepare("SELECT COALESCE(SUM(amount), 0) AS n FROM ledger WHERE shipment_id = ? AND type IN ('label', 'refund')").get(shipmentId) as { n: number };
+  return -r.n;
+}
+
+/** 这张单是否已经退过取消款 */
+export function hasCancelRefund(shipmentId: number): boolean {
+  return !!db().prepare("SELECT 1 FROM ledger WHERE shipment_id = ? AND type = 'refund'").get(shipmentId);
+}
+
 /** 取消退款（幂等：同一张单只退一次） */
 export function refundCancelled(customerId: number, shipmentId: number, refund: number, createdBy: string) {
   if (isInternalCustomer(customerId)) return;

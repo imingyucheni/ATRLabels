@@ -552,7 +552,6 @@ export const admin3: Record<string, string> = {
   "已提交取消申请，客服处理完成后费用会退回账户余额。请不要再使用这张面单。": "Cancellation requested. The charge will be refunded to your balance once support completes it. Please don't use this label.",
   "这一单之前导入过一笔金额不同的补差，请确认不是同一笔费用": "An adjustment with a different amount was imported for this order before; make sure this isn't the same charge",
   "这一单之前已经导入过同样金额的补差，跳过（不会重复扣款）": "The same adjustment amount was already imported for this order; skipped (no double charge)",
-  "同一单号、同样金额在表格里重复出现，只导入第一行": "The same order number and amount appear more than once in the file; only the first row is imported",
   "其他调整（手动调账、跨期取消退款等）": "Other adjustments (manual adjustments, refunds for earlier orders, etc.)",
   "没有填自定义单号（没有单号的行会被当作上一单的 SKU），请补上单号后重新上传": "Missing order number (rows without one are treated as extra SKUs of the order above). Add the order number and upload again.",
   "该渠道暂时无法报价": "This service can't quote right now",

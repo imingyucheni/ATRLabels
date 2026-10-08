@@ -7,7 +7,7 @@ import { db, getCustomer, getShipment, listChannels, customerChannels, getSettin
 import type { Address, ShipmentRequest, SkuItem, UnitSystem } from "../shipbest/types";
 import { cleanRequest } from "../sanitize";
 import { createLabel, quoteAll, quoteChannel, refreshShipment, requestCancel, validateRequest, PriceChangedError, API_TEST_ENV } from "../service";
-import { publicQuoteError, cancelWindowPassed, cancelWindowHours } from "../portal";
+import { publicError, publicQuoteError, cancelWindowPassed, cancelWindowHours } from "../portal";
 import { displayChannel } from "../channelDisplay";
 import { trackingUrl } from "../carriers";
 import { balanceOf, InsufficientBalanceError } from "../ledger";
@@ -113,6 +113,15 @@ export function toShipmentRequest(customerId: number, body: ApiShipmentBody): Sh
   const items: ApiItem[] = Array.isArray(body.items) ? body.items : [];  // 美国件不传时 cleanRequest 会补一件普通货物
   if (items.length > 50) errors.push("items 最多 50 个");
   if (errors.length) throw new ApiError(400, "VALIDATION_ERROR", errors.join("；"), { errors });
+  // 国际件要报关：每件商品的数量、申报价值都必须填（不能悄悄按 1 美元申报）
+  if (recipient && String(recipient.country ?? "US").toUpperCase() !== "US") {
+    if (!items.length) errors.push("国际件 items 必填（报关用）");
+    items.forEach((i, n) => {
+      if (!(Number(i.unitValue) > 0)) errors.push(`items[${n}].unitValue 必填（单件申报价值 USD，大于 0）`);
+      if (!(Number(i.quantity) >= 1)) errors.push(`items[${n}].quantity 必填（大于等于 1）`);
+    });
+    if (errors.length) throw new ApiError(400, "VALIDATION_ERROR", errors.join("；"), { errors });
+  }
   const qty = items.reduce((a, i) => a + (Number(i.quantity) || 1), 0) || 1;
   const w = Number(p!.weight) || 0;
   const skuList: Partial<SkuItem>[] = items.map((i) => ({
@@ -164,7 +173,7 @@ export function orderView(s: Shipment, base: string) {
     test: s.env === API_TEST_ENV,
     createdAt: s.createdAt,
     ...(s.status === "cancelled" ? { refund: s.refundAmount ?? 0, cancelFee: s.cancelFee ?? 0 } : {}),
-    ...(s.status === "exception" && s.errorMsg ? { error: s.errorMsg } : {}),
+    ...(s.status === "exception" && s.errorMsg ? { error: publicError(s.errorMsg) } : {}),
   };
 }
 
@@ -192,7 +201,7 @@ export function balance(key: ApiKey) {
 export async function rates(key: ApiKey, body: ApiShipmentBody & { channel?: string }) {
   const req = toShipmentRequest(key.customerId, body);
   const list = body.channel ? [await quoteChannel(key.customerId, String(body.channel), req)] : await quoteAll(key.customerId, req).catch((e) => {
-    throw new ApiError(400, "NO_CHANNEL", (e as Error).message);
+    throw new ApiError(400, "NO_CHANNEL", publicError((e as Error).message));
   });
   return list.map((q) => ({
     channel: q.channelCode,
@@ -205,10 +214,14 @@ export async function rates(key: ApiKey, body: ApiShipmentBody & { channel?: str
   }));
 }
 
-function findOrder(customerId: number, no: string): Shipment | null {
+/** 按单号 / 订单号查单：测试密钥只查测试单，正式密钥只查正式单（同一个订单号两边各下过也不会串） */
+function findOrder(key: ApiKey, no: string): Shipment | null {
   const r = db()
-    .prepare("SELECT id FROM shipments WHERE customer_id = ? AND (custom_no = ? OR customer_ref = ?) ORDER BY (custom_no = ?) DESC, id DESC LIMIT 1")
-    .get(customerId, no, no, no) as { id: number } | undefined;
+    .prepare(
+      `SELECT id FROM shipments WHERE customer_id = ? AND (custom_no = ? OR customer_ref = ?) AND (COALESCE(env, '') = ?) = ?
+       ORDER BY (custom_no = ?) DESC, (status NOT IN ('cancelled', 'exception')) DESC, id DESC LIMIT 1`,
+    )
+    .get(key.customerId, no, no, API_TEST_ENV, key.mode === "test" ? 1 : 0, no) as { id: number } | undefined;
   return r ? getShipment(r.id) : null;
 }
 
@@ -216,6 +229,12 @@ function findOrder(customerId: number, no: string): Shipment | null {
 function visible(key: ApiKey, s: Shipment | null): Shipment {
   if (!s || (key.mode === "test") !== (s.env === API_TEST_ENV)) throw new ApiError(404, "NOT_FOUND", "订单不存在");
   return s;
+}
+
+/** 这个订单号已经出过、还在用的单（重复提交时直接返回它） */
+function activeByRef(key: ApiKey, ref: string): Shipment | null {
+  const s = findOrder(key, ref);
+  return s && s.customerRef === ref && s.status !== "cancelled" && s.status !== "exception" ? s : null;
 }
 
 export interface CreateBody extends ApiShipmentBody {
@@ -236,10 +255,8 @@ export async function createOrder(key: ApiKey, body: CreateBody, base: string) {
   if (!ref) throw new ApiError(400, "VALIDATION_ERROR", "referenceNo 必填（你们系统里的订单号，用来防止重复出单）");
   const channel = String(body.channel ?? "").trim();
   if (!channel) throw new ApiError(400, "VALIDATION_ERROR", "channel 必填（先调 /channels 或 /rates 拿渠道代码）");
-  const existing = findOrder(key.customerId, ref);
-  if (existing && existing.customerRef === ref && existing.status !== "cancelled" && existing.status !== "exception" && (key.mode === "test") === (existing.env === API_TEST_ENV)) {
-    return { created: false, order: orderView(existing, base) };
-  }
+  const existing = activeByRef(key, ref);
+  if (existing) return { created: false, order: orderView(existing, base) };
   if (key.mode === "live" && !hasAcceptedTerms(key.customerId)) throw new ApiError(403, "TERMS_NOT_ACCEPTED", "请先登录客户中心阅读并同意服务条款");
   if (!customerChannels(key.customerId).some((c) => c.code === channel)) throw new ApiError(400, "CHANNEL_UNAVAILABLE", "这个账户没有开通该渠道");
   const req = toShipmentRequest(key.customerId, body);
@@ -269,22 +286,26 @@ export async function createOrder(key: ApiKey, body: CreateBody, base: string) {
     });
     return { created: true, order: orderView(getShipment(id)!, base) };
   } catch (e) {
+    // 同一个订单号的另一个请求（例如超时重试）刚刚出单成功：返回那一单，不算失败
+    const dup = activeByRef(key, ref);
+    if (dup) return { created: false, order: orderView(dup, base) };
     if (e instanceof PriceChangedError) throw new ApiError(409, "PRICE_CHANGED", e.message, { price: e.quote.price, currency: e.quote.currency });
     if (e instanceof InsufficientBalanceError) throw new ApiError(402, "INSUFFICIENT_BALANCE", e.message);
-    throw new ApiError(400, "ORDER_FAILED", (e as Error).message);
+    // 不把服务商原话、我们和服务商之间的问题给客户看（和客户中心一样）
+    throw new ApiError(400, "ORDER_FAILED", publicError((e as Error).message));
   }
 }
 
 /** GET /orders/{no}：查单（还在出面单的会顺便去服务商刷新一次） */
 export async function getOrder(key: ApiKey, no: string, base: string) {
-  let s = visible(key, findOrder(key.customerId, no));
+  let s = visible(key, findOrder(key, no));
   if (s.status === "pending" || (s.status === "labeled" && !s.trackingNo)) s = await refreshShipment(s.id).catch(() => s);
   return orderView(s, base);
 }
 
 /** GET /orders/{no}/label：面单文件 */
 export async function getLabel(key: ApiKey, no: string): Promise<{ bytes: Uint8Array; mime: string; filename: string }> {
-  let s = visible(key, findOrder(key.customerId, no));
+  let s = visible(key, findOrder(key, no));
   if (!s.labelPath && s.status === "pending") s = await refreshShipment(s.id).catch(() => s);
   if (s.status === "cancelled") throw new ApiError(410, "LABEL_VOID", "这张面单已取消作废，不能再打印");
   if (!s.labelPath) throw new ApiError(404, "LABEL_NOT_READY", "面单还在生成，请稍后再取");
@@ -297,12 +318,12 @@ export async function getLabel(key: ApiKey, no: string): Promise<{ bytes: Uint8A
 
 /** POST /orders/{no}/cancel：取消（规则和客户中心一样：时限内、接口能取消的马上退款，否则转人工） */
 export async function cancelOrder(key: ApiKey, no: string, base: string) {
-  const s = visible(key, findOrder(key.customerId, no));
+  const s = visible(key, findOrder(key, no));
   if (s.status === "cancelled") return { done: true, message: "已经是取消状态", order: orderView(s, base) };
   if (s.status !== "pending" && s.status !== "labeled") throw new ApiError(409, "CANCEL_NOT_ALLOWED", "这张面单当前不能取消");
   if (cancelWindowPassed(s.createdAt)) throw new ApiError(409, "CANCEL_NOT_ALLOWED", `下单已超过 ${cancelWindowHours()} 小时，不能再取消`);
   const r = await requestCancel(s.id).catch((e) => {
-    throw new ApiError(502, "PROVIDER_ERROR", (e as Error).message);
+    throw new ApiError(502, "PROVIDER_ERROR", publicError((e as Error).message));
   });
   const contact = getSettings().supportContact;
   return {

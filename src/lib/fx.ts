@@ -43,8 +43,25 @@ async function fetchLive(): Promise<{ live: number; source: string } | null> {
 
 const r4 = (n: number) => Math.round(n * 10000) / 10000;
 
+/** 最近报给客户的充值汇率（页面显示过的）：提交充值时只接受这些汇率，不信任页面随便传的数字 */
+const recent = ((globalThis as unknown as { __fxShown?: Map<number, number> }).__fxShown ??= new Map<number, number>());
+const SHOWN_TTL = 6 * 3600_000;
+
+/** 这个汇率是不是最近 6 小时内服务器报出过的 */
+export function wasQuotedRecently(rate: number): boolean {
+  const at = recent.get(r4(rate));
+  return at !== undefined && Date.now() - at < SHOWN_TTL;
+}
+
 /** 当前充值汇率。force = 忽略缓存重新获取 */
 export async function usdCnyQuote(force = false): Promise<FxQuote> {
+  const q = await quoteNow(force);
+  recent.set(q.rate, Date.now());
+  if (recent.size > 200) for (const [k, at] of recent) if (Date.now() - at >= SHOWN_TTL) recent.delete(k);
+  return q;
+}
+
+async function quoteNow(force: boolean): Promise<FxQuote> {
   const st = getSettings();
   const markup = st.fxMarkup;
   const manual = (live: number, source: string, at: string): FxQuote => ({ live, markup, rate: r4(live + markup), source, fetchedAt: at, manual: true });

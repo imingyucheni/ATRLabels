@@ -72,8 +72,8 @@ export function promoStatus(p: Promotion, today = localDate()): PromoStatus {
   return "active";
 }
 
-/** 检查活动设置；有问题返回原因 */
-export function validatePromotion(p: Omit<Promotion, "id" | "createdAt">): string | null {
+/** 检查活动设置；有问题返回原因。id = 正在修改的活动（不和自己比重叠） */
+export function validatePromotion(p: Omit<Promotion, "id" | "createdAt">, id?: number | null): string | null {
   if (!getChannel(p.channelCode)) return "渠道不存在";
   if (!/^\d{4}-\d{2}-\d{2}$/.test(p.startsOn) || !/^\d{4}-\d{2}-\d{2}$/.test(p.endsOn)) return "请填写开始和结束日期";
   if (p.endsOn < p.startsOn) return "结束日期不能早于开始日期";
@@ -83,6 +83,11 @@ export function validatePromotion(p: Omit<Promotion, "id" | "createdAt">): strin
   if (1 + p.customerPercent / 100 < 1 - p.rebatePercent / 100 - 1e-9)
     return `活动加价 ${p.customerPercent}% 低于返利 ${p.rebatePercent}% 能覆盖的范围，会亏本（最低只能设到 -${p.rebatePercent}%）`;
   if (!p.label.trim()) return "请填写客户看到的活动名称";
+  // 同一个渠道同时只能有一个活动（重叠时只有最新的生效，设置页却两个都显示“进行中”）
+  if (p.enabled) {
+    const clash = listPromotions().find((x) => x.id !== id && x.enabled && x.channelCode === p.channelCode && x.startsOn <= p.endsOn && x.endsOn >= p.startsOn);
+    if (clash) return `这个渠道在 ${clash.startsOn} ~ ${clash.endsOn} 已经有活动「${clash.label}」，日期不能重叠（先停用或删除原来的活动）`;
+  }
   return null;
 }
 

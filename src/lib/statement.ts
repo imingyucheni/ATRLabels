@@ -1,5 +1,6 @@
 import { fmtTime } from "./time";
-import { getCustomer, listAdjustments, listShipments, STATUS_LABEL } from "./db";
+import { API_TEST_ENV, getCustomer, listAdjustments, listShipments, STATUS_LABEL } from "./db";
+import { shipmentNetCharge } from "./ledger";
 import { displayChannel } from "./channelDisplay";
 
 export interface StatementLine {
@@ -23,7 +24,25 @@ export function buildStatement(customerId: number, from?: string, to?: string) {
   if (!customer) return null;
   const lines: StatementLine[] = [];
   for (const s of listShipments({ customerId, from, to })) {
-    if (s.status === "exception") continue;
+    // API 测试密钥的模拟单没扣过钱，不进对账单
+    if (s.env === API_TEST_ENV) continue;
+    // 异常单：还没退款的仍然是扣着钱的，要列出来（按账户流水实际扣的金额）；已经退了的不列
+    if (s.status === "exception") {
+      const net = shipmentNetCharge(s.id);
+      if (net > 0.004) {
+        lines.push({
+          date: fmtTime(s.createdAt),
+          type: "面单",
+          ref: s.customNo,
+          customerRef: s.customerRef ?? "",
+          trackingNo: s.trackingNo ?? "",
+          detail: `${displayChannel(s.channelCode).name} · ${s.recipient.city} ${s.recipient.zipCode} · ${STATUS_LABEL[s.status]}`,
+          amount: Math.round(net * 100) / 100,
+          shipmentId: s.id,
+        });
+      }
+      continue;
+    }
     const cancelled = s.status === "cancelled";
     lines.push({
       date: fmtTime(s.createdAt),

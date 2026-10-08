@@ -3,7 +3,7 @@
  * 收入 = 客户价（取消的只算取消手续费）+ 向客户补收的补差；成本 = ShipBest 扣费 + ShipBest 补差 / 取消费。
  * 按下单日期归属（补差也算在原订单的下单日期上，方便看每一单的真实利润）。
  */
-import { db, getCustomer, listShipments, shipmentCost, shipmentProfit, shipmentReceivable, type Shipment } from "./db";
+import { db, getCustomer, isInternalCustomer, listShipments, shipmentCost, shipmentProfit, shipmentReceivable, type Shipment } from "./db";
 
 export interface Totals {
   orders: number;
@@ -88,7 +88,8 @@ export interface Report {
 
 export function buildReport(from: string, to: string, customerId?: number, opts: { includeTest?: boolean } = {}): Report {
   // 模拟 / 沙盒 / 内部测试单不算营收（客户首页看自己的出单量时要算上：includeTest）
-  const keep = (s: Shipment) => opts.includeTest || !s.isTest;
+  // 公司自用（成本价）的单不向任何人收钱，不算营收（单独看这个账户时照常显示）
+  const keep = (s: Shipment) => (opts.includeTest || !s.isTest) && (customerId !== undefined || !isInternalCustomer(s.customerId));
   const list = listShipments({ from, to, customerId }).filter(keep);
   const prevRange = shiftRange(from, to);
   const prev = listShipments({ ...prevRange, customerId }).filter(keep);

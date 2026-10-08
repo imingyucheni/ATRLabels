@@ -5,10 +5,10 @@
  * - 每张订单下单时用的规则（含来源）存在订单里
  */
 import { db, getChannel, getCustomer, getSettings, isInternalCustomer, listChannels, updateChannel } from "./db";
-import type { MarkupRule, PartialRule } from "./pricing";
+import { computePrice, type MarkupRule, type PartialRule } from "./pricing";
 import { activePromotion } from "./promotions";
 
-export type MarkupSource = "promo" | "customer_channel" | "customer" | "channel" | "global" | "house";
+export type MarkupSource = "promo" | "customer_channel" | "customer" | "channel" | "global" | "house" | "failover" | "prospect";
 
 export const MARKUP_SOURCE_LABEL: Record<MarkupSource, string> = {
   promo: "限时活动价",
@@ -17,6 +17,8 @@ export const MARKUP_SOURCE_LABEL: Record<MarkupSource, string> = {
   channel: "渠道加价",
   global: "全局默认",
   house: "公司自用（成本价）",
+  failover: "自动备用（客户价按原渠道的限时活动价）",
+  prospect: "新客户试算",
 };
 
 export const MARKUP_SCOPE_LABEL: Record<"global" | "channel" | "customer" | "customer_channel", string> = {
@@ -99,12 +101,29 @@ export function setCustomerChannelMarkups(customerId: number, rules: Record<stri
 
 /* ---------------- 生效规则 ---------------- */
 
-/** 这个客户在这个渠道实际用的加价规则，以及百分比来自哪一级 */
+/** 正在进行的限时活动的加价规则（可以是负数，记下活动返利算利润）；没有活动返回 null */
+export function promoRuleFor(channelCode: string): (MarkupRule & { source: MarkupSource }) | null {
+  const promo = activePromotion(channelCode);
+  return promo ? { percent: promo.customerPercent, fixed: 0, minProfit: 0, source: "promo", promoId: promo.id, rebate: promo.rebatePercent } : null;
+}
+
+/** 这个渠道现在出单能拿到的服务商返利 %：进行中的限时活动返利，否则渠道长期返利 */
+export function rebateFor(channelCode: string): number {
+  return activePromotion(channelCode)?.rebatePercent ?? getChannel(channelCode)?.rebate ?? 0;
+}
+
+/**
+ * 这个客户在这个渠道的加价规则，以及百分比来自哪一级。
+ * 有限时活动时返回活动规则；实际报价用 pickRule（活动价和平时价取低的）。
+ */
 export function effectiveRule(customerId: number, channelCode: string, opts: { ignorePromo?: boolean } = {}): MarkupRule & { source: MarkupSource } {
-  if (isInternalCustomer(customerId)) return { percent: 0, fixed: 0, minProfit: 0, source: "house" };
-  // 限时活动：活动期间所有客户都按活动加价（可以是负数），记下返利比例算利润
-  const promo = opts.ignorePromo ? null : activePromotion(channelCode);
-  if (promo) return { percent: promo.customerPercent, fixed: 0, minProfit: 0, source: "promo", promoId: promo.id, rebate: promo.rebatePercent };
+  if (isInternalCustomer(customerId)) {
+    // 公司自用按成本价；返利照样记下（利润、对账要算）
+    const rebate = rebateFor(channelCode);
+    return { percent: 0, fixed: 0, minProfit: 0, source: "house", ...(rebate > 0 ? { rebate } : {}) };
+  }
+  const promo = opts.ignorePromo ? null : promoRuleFor(channelCode);
+  if (promo) return promo;
   const levels: [MarkupSource, PartialRule | null | undefined][] = [
     ["customer_channel", customerChannelMarkup(customerId, channelCode)],
     ["customer", getCustomer(customerId)?.markup],
@@ -118,6 +137,22 @@ export function effectiveRule(customerId: number, channelCode: string, opts: { i
   const p = pick("percent");
   const rebate = getChannel(channelCode)?.rebate ?? 0;
   return { percent: p.v, fixed: pick("fixed").v, minProfit: pick("minProfit").v, source: p.src, ...(rebate > 0 ? { rebate } : {}) };
+}
+
+/**
+ * 按这一单的成本选规则：限时活动价和平时价取低的。
+ * 活动只能让客户更便宜，不能让本来价格更低的客户（例如谈好的大客户价、长期返利渠道的负数加价）在活动期间变贵。
+ * base = 平时的规则（新客户试算时传入临时加价；不传按这个客户的加价设置）。公司自用账户不参加活动。
+ */
+export function pickRule(customerId: number, channelCode: string, cost: number, step: number, base?: MarkupRule): { rule: MarkupRule; price: number; promo: boolean; normalPrice: number } {
+  const normal = base ?? effectiveRule(customerId, channelCode, { ignorePromo: true });
+  const normalPrice = computePrice(cost, normal, step);
+  const promo = normal.source === "house" ? null : promoRuleFor(channelCode);
+  if (promo) {
+    const promoPrice = computePrice(cost, promo, step);
+    if (promoPrice < normalPrice) return { rule: promo, price: promoPrice, promo: true, normalPrice };
+  }
+  return { rule: normal, price: normalPrice, promo: false, normalPrice };
 }
 
 /* ---------------- 修改记录 ---------------- */
@@ -193,7 +228,8 @@ export interface LeftoverNegative {
 /** 修改记录里最近一次把这一项改成现在这个负数之前的加价 %（查不到、或之前也是负数 → null） */
 function percentBefore(scope: "customer_channel" | "channel", customerId: number | null, code: string, current: number, rebate: number): number | null {
   const rows = conn()
-    .prepare(`SELECT before_json, after_json FROM markup_log WHERE scope = ? AND channel_code = ? AND ${customerId ? "customer_id = ?" : "customer_id IS NULL"} ORDER BY id DESC`)
+    // 限时活动的记录也记在渠道下面（after = 活动加价），不是渠道加价的修改，跳过
+    .prepare(`SELECT before_json, after_json FROM markup_log WHERE scope = ? AND channel_code = ? AND ${customerId ? "customer_id = ?" : "customer_id IS NULL"} AND label NOT LIKE '限时活动%' ORDER BY id DESC`)
     .all(...(customerId ? [scope, code, customerId] : [scope, code])) as { before_json: string | null; after_json: string | null }[];
   for (const r of rows) {
     const after = r.after_json ? (JSON.parse(r.after_json) as PartialRule) : null;

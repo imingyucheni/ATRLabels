@@ -94,6 +94,15 @@ export const qa3: Record<string, string> = {
   "预上网：出单后运单号会提前有物流记录（上网），不用等快递揽收扫描": "Pre-scan: the tracking number shows carrier activity soon after the label is created, without waiting for the pickup scan",
   "多箱：一票多箱寄同一个地址，按总重量计价": "Multi-box: several boxes to one address in a single shipment, priced by total weight",
   "该渠道暂时没有响应，请稍后再试": "This service isn't responding right now. Please try again later",
+  "自动备用（客户价按原渠道的限时活动价）": "Auto backup (customer price from the original service's promotion)",
+  "新客户试算": "Prospect quote",
+  // 全面检查后修复
+  "这一单正在取消，请稍后刷新查看结果": "This order is already being cancelled. Please refresh shortly to see the result",
+  "这张面单已经退过款了，请刷新页面查看最新状态": "This label has already been refunded. Please refresh the page to see its current status",
+  "这一单已经有一笔同样金额的补差了，不能重复关联（避免重复扣款）": "This order already has an adjustment with the same amount; it can't be linked again (to avoid charging twice)",
+  "这一单已经有金额不同的补差记录，请确认不是同一笔费用": "This order already has an adjustment with a different amount; make sure it isn't the same fee",
+  "这张单超时后面单才生成：如果已经换渠道重新下过单，请取消这一张，避免重复扣费": "This label was created after the order had timed out. If the order was already shipped with another service, cancel this one to avoid paying twice",
+  "同一单号、同样金额、同样原因在表格里重复出现，只导入第一行": "The same order number, amount and reason appear more than once in the file; only the first row is imported",
   // 活动结束后遗留的负数加价
   "有 {n} 项负数加价还在生效，需要恢复": "{n} negative markup(s) still active — restore needed",
   "有 {n} 项负数加价还在生效": "{n} negative markup(s) still active",
