@@ -23,6 +23,10 @@ export const patterns: [RegExp, string][] = [
   [/^商品 (\d+)：海关编码（HS）至少 (\d+) 位数字$/, "Item $1: HS code must be at least $2 digits"],
   [/^海关编码（HS）至少 (\d+) 位数字$/, "HS code must be at least $1 digits"],
 
+  /* ---------- 限时活动 / 负数加价 ---------- */
+  [/^已恢复 (\d+) 项加价，之后的报价和下单按恢复后的价格$/, "Restored $1 markup(s); new quotes and orders use the restored pricing"],
+  [/^(.*?)限时活动期间所有客户都按活动价；这里填的负数加价要等活动结束后才生效，那时没有活动返利，会按成本价出单，所以不能填。只想在活动期间优惠，在“设置 → 限时活动价”里设置就行$/, "$1During a promotion every customer gets the promo price; a negative markup entered here would only apply after the promotion ends, when there's no promo rebate, so labels would be sold at cost. To discount only during the promotion, use Settings → Limited-time promotions"],
+
   /* ---------- 服务商接口超时 / 连不上 ---------- */
   [/^(.+?) 接口超时：(\d+) 秒没有响应，请稍后再试$/, "$1 API timed out (no response in $2 s). Please try again later"],
   [/^(.+?) 接口连不上(（.+?）)?，请稍后再试$/, "Can't reach the $1 API$2. Please try again later"],

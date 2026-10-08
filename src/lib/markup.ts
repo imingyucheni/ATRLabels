@@ -4,7 +4,7 @@
  * - 每次修改加价（全局 / 渠道 / 客户 / 客户在某渠道）都记一条修改记录，后台可以查
  * - 每张订单下单时用的规则（含来源）存在订单里
  */
-import { db, getChannel, getCustomer, getSettings, isInternalCustomer } from "./db";
+import { db, getChannel, getCustomer, getSettings, isInternalCustomer, listChannels, updateChannel } from "./db";
 import type { MarkupRule, PartialRule } from "./pricing";
 import { activePromotion } from "./promotions";
 
@@ -169,4 +169,83 @@ export function negativeRule(r: PartialRule, who = "", rebate = 0): string | nul
   if (!(rebate > 0)) return `${who}加价不能为负数（会低于成本出单）。如果服务商对这个渠道有返利，先在“设置 → 物流渠道”填上服务商返利 %，就可以填负数`;
   if (p < -rebate) return `${who}加价最低只能到 -${rebate}%（这个渠道服务商返利 ${rebate}%，再低就亏本）`;
   return null;
+}
+
+/* ---------------- 活动结束后遗留的负数加价 ---------------- */
+
+/**
+ * 低于渠道长期返利能覆盖的负数加价（多半是限时活动期间填的）：活动结束后仍然生效，
+ * 价格被“成本 + 最低利润”兜住，等于按成本价出。已经调回正常（不是负数、或在长期返利范围内）的不算。
+ */
+export interface LeftoverNegative {
+  scope: "customer_channel" | "channel";
+  customerId: number | null;
+  customerName: string | null;
+  channelCode: string;
+  channelName: string;
+  current: PartialRule;
+  /** 恢复后的加价 %：改成负数之前的设置（修改记录里查到的）；null = 清空，沿用上一级 */
+  restorePercent: number | null;
+  /** 恢复后实际生效的加价 % */
+  restoreEffective: number;
+}
+
+/** 修改记录里最近一次把这一项改成现在这个负数之前的加价 %（查不到、或之前也是负数 → null） */
+function percentBefore(scope: "customer_channel" | "channel", customerId: number | null, code: string, current: number, rebate: number): number | null {
+  const rows = conn()
+    .prepare(`SELECT before_json, after_json FROM markup_log WHERE scope = ? AND channel_code = ? AND ${customerId ? "customer_id = ?" : "customer_id IS NULL"} ORDER BY id DESC`)
+    .all(...(customerId ? [scope, code, customerId] : [scope, code])) as { before_json: string | null; after_json: string | null }[];
+  for (const r of rows) {
+    const after = r.after_json ? (JSON.parse(r.after_json) as PartialRule) : null;
+    if (after?.percent !== current) continue;
+    const p = r.before_json ? (JSON.parse(r.before_json) as PartialRule).percent ?? null : null;
+    return p !== null && p < -rebate ? null : p;
+  }
+  return null;
+}
+
+export function leftoverNegativeMarkups(): LeftoverNegative[] {
+  const out: LeftoverNegative[] = [];
+  const rebateOf = (code: string) => getChannel(code)?.rebate ?? 0;
+  for (const c of listChannels()) {
+    const p = c.markup?.percent;
+    if (p === null || p === undefined || p >= -c.rebate || p >= 0) continue;
+    const restorePercent = percentBefore("channel", null, c.code, p, c.rebate);
+    out.push({ scope: "channel", customerId: null, customerName: null, channelCode: c.code, channelName: c.name, current: clean(c.markup), restorePercent, restoreEffective: restorePercent ?? getSettings().markup?.percent ?? 0 });
+  }
+  const rows = conn().prepare("SELECT customer_id, channel_code, percent, fixed, min_profit FROM customer_channel_markup WHERE percent < 0 ORDER BY customer_id").all() as {
+    customer_id: number; channel_code: string; percent: number; fixed: number | null; min_profit: number | null;
+  }[];
+  for (const r of rows) {
+    const rebate = rebateOf(r.channel_code);
+    if (r.percent >= -rebate) continue;
+    const cust = getCustomer(r.customer_id);
+    if (!cust || isInternalCustomer(r.customer_id)) continue;
+    const restorePercent = percentBefore("customer_channel", r.customer_id, r.channel_code, r.percent, rebate);
+    // 沿用上一级：客户专属 → 渠道（渠道本身也是遗留负数时按它恢复后的） → 全局
+    const chLeft = out.find((x) => x.scope === "channel" && x.channelCode === r.channel_code);
+    const inherited = cust.markup?.percent ?? (chLeft ? chLeft.restoreEffective : getChannel(r.channel_code)?.markup?.percent) ?? getSettings().markup?.percent ?? 0;
+    out.push({
+      scope: "customer_channel", customerId: r.customer_id, customerName: cust.name, channelCode: r.channel_code, channelName: getChannel(r.channel_code)?.name ?? r.channel_code,
+      current: { percent: r.percent, fixed: r.fixed, minProfit: r.min_profit },
+      restorePercent,
+      restoreEffective: restorePercent ?? inherited,
+    });
+  }
+  return out;
+}
+
+/** 把遗留的负数加价恢复成改之前的设置（查不到就清空，沿用上一级）；固定加价、最低利润不动。返回改了几项 */
+export function restoreLeftoverNegativeMarkups(): number {
+  const list = leftoverNegativeMarkups();
+  for (const x of list) {
+    const next = { ...x.current, percent: x.restorePercent };
+    if (x.scope === "customer_channel") setCustomerChannelMarkups(x.customerId!, { [x.channelCode]: next });
+    else {
+      const ch = getChannel(x.channelCode)!;
+      logMarkupChange({ scope: "channel", channelCode: x.channelCode, label: `${ch.name}（活动结束后恢复）`, before: x.current, after: next });
+      updateChannel(x.channelCode, ch.enabled, next);
+    }
+  }
+  return list.length;
 }

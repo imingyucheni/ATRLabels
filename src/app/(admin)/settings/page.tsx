@@ -8,7 +8,7 @@ import { saveShipGridAction, testShipGridAction } from "@/app/shipgridActions";
 import { fmtTime } from "@/lib/time";
 import { localDate } from "@/lib/reports";
 import { labelSkuStats } from "@/lib/labelSku";
-import { describeRule, listMarkupLog, MARKUP_SCOPE_LABEL } from "@/lib/markup";
+import { describeRule, leftoverNegativeMarkups, listMarkupLog, MARKUP_SCOPE_LABEL } from "@/lib/markup";
 import { DEFAULT_MIN, defaultLimits, limitsFor, savedLimits } from "@/lib/channelLimits";
 import { listPromotions, promoStatus } from "@/lib/promotions";
 import { acceptedCount, getTerms, unsignedCustomers, usingDefaultTerms } from "@/lib/terms";
@@ -25,7 +25,7 @@ import { DEFAULT_SETTINGS_TAB, isSettingsTab, type SettingsTab } from "@/lib/set
 import FlashForm from "@/components/FlashForm";
 import RuleInputs from "@/components/RuleInputs";
 import { DEFAULT_JG_WAREHOUSES, JG_WAREHOUSE_INFO, isJiaguCode, parseJgCode, JG_PREFIX, JG_SUFFIX } from "@/lib/shipbest/jiagu";
-import { saveTermsAction, saveSiteAction, saveJiaguAction, testJiaguAction, addJiaguVariantAction, removeJiaguVariantAction, saveDhlAction, testDhlAction, saveEbayAction, resetTestEnvAction, resetSandboxAction, resetTermsAction, saveChannelLimitsAction, savePromotionAction, togglePromotionAction, saveSmtpAction, testMailAction, setFinancePinAction, clearTestDataAction, saveAddrCheckAction, testAddrAction, refreshFxAction, saveChannelsAction, savePaymentSettingsAction, saveSettingsAction, saveShipBestAction, syncChannelsAction, verifyAction } from "@/app/actions";
+import { saveTermsAction, saveSiteAction, saveJiaguAction, testJiaguAction, addJiaguVariantAction, removeJiaguVariantAction, saveDhlAction, testDhlAction, saveEbayAction, resetTestEnvAction, resetSandboxAction, resetTermsAction, saveChannelLimitsAction, savePromotionAction, togglePromotionAction, restoreLeftoverMarkupsAction, saveSmtpAction, testMailAction, setFinancePinAction, clearTestDataAction, saveAddrCheckAction, testAddrAction, refreshFxAction, saveChannelsAction, savePaymentSettingsAction, saveSettingsAction, saveShipBestAction, syncChannelsAction, verifyAction } from "@/app/actions";
 import { cnyToPay, usdCnyQuote } from "@/lib/fx";
 import FilePick from "@/components/FilePick";
 import { CarrierMark } from "@/components/ChannelLabel";
@@ -840,9 +840,39 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         const STATUS: Record<string, [string, string]> = { active: ["进行中", "ok"], upcoming: ["未开始", "pending"], ended: ["已结束", "cancelled"], off: ["已停用", "cancelled"] };
         const today = localDate();
         const in30 = localDate(new Date(Date.now() + 30 * 86400_000));
+        // 活动结束后还在生效的负数加价（客户按渠道 / 渠道上单独填的）
+        const leftovers = leftoverNegativeMarkups();
+        const pct = (n: number) => `${n < 0 ? "-" : "+"}${Math.abs(n)}%`;
         return (
-          <SettingsSection id="promotions" title={t("限时活动价")} summary={active.length ? t("{n} 个活动进行中", { n: active.length }) : t("没有进行中的活动")}>
+          <SettingsSection id="promotions" title={t("限时活动价")} defaultOpen={leftovers.length > 0}
+            summary={leftovers.length ? t("有 {n} 项负数加价还在生效，需要恢复", { n: leftovers.length }) : active.length ? t("{n} 个活动进行中", { n: active.length }) : t("没有进行中的活动")}>
             <p className="small muted" style={{ marginTop: 0 }}>{t("服务商某个渠道有返利时（例如 OnTrac 返 30%：花 $10，之后返 $3），活动期间这个渠道可以给客户更低的加价，甚至负数（例如 -10%），扣掉返利后我们仍有利润（-10% + 30% ≈ 赚成本的 20%）。活动期间对所有客户生效，优先于其他加价设置；客户端会显示“限时折扣”标签和原价。到结束日期后自动恢复原来的加价。")}</p>
+            {leftovers.length > 0 ? (
+              <div style={{ marginBottom: 12 }}>
+              <FlashForm action={restoreLeftoverMarkupsAction} submitLabel="全部恢复正常价格" submitClass="small primary" className="alert warn"
+                confirm={t("把这 {n} 项负数加价恢复成改之前的设置（查不到就沿用上一级）？已经调回的不受影响。", { n: leftovers.length })}>
+                <b>{t("有 {n} 项负数加价还在生效", { n: leftovers.length })}</b>
+                <p className="small" style={{ margin: "4px 0 8px" }}>{t("这些是在客户（或渠道）上单独填的负数加价，多半是活动期间填的。活动期间所有客户都按活动价，它们不起作用；活动结束后它们就生效了，渠道没有长期返利时客户价 = 成本价（不赚钱）。点下面的按钮恢复成改之前的加价，已经调回正常的客户不会动。")}</p>
+                <div className="table-wrap">
+                  <table>
+                    <thead><tr><th>{t("客户")}</th><th>{t("渠道")}</th><th className="num">{t("现在")}</th><th className="num">{t("恢复后")}</th></tr></thead>
+                    <tbody>
+                      {leftovers.map((x) => (
+                        <tr key={`${x.scope}-${x.customerId}-${x.channelCode}`}>
+                          <td>{x.customerId ? <a href={`/customers/${x.customerId}?tab=pricing`}>{x.customerName}</a> : <span className="muted">{t("所有客户（渠道加价）")}</span>}</td>
+                          <td className="small">{x.channelName}</td>
+                          <td className="num neg">{pct(x.current.percent ?? 0)}</td>
+                          <td className="num">{pct(x.restoreEffective)}<div className="small muted">{x.restorePercent !== null ? t("改之前的设置") : t("沿用上一级")}</div></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </FlashForm>
+              </div>
+            ) : (
+              <p className="small profit-pos" style={{ marginTop: 0 }}>{t("已检查：没有遗留的负数加价，活动结束后所有客户都已按正常加价计算。")}</p>
+            )}
             {promos.length > 0 && (
               <div className="table-wrap" style={{ marginBottom: 12 }}>
                 <table>

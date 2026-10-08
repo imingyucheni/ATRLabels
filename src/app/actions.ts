@@ -54,7 +54,7 @@ import { saveDimRule } from "@/lib/rates";
 import { CARRIERS } from "@/lib/carriers";
 import { clearChannelNameCache, sameNameChannels } from "@/lib/channelDisplay";
 import { clearTestData, resetSandboxData } from "@/lib/cleanup";
-import { customerChannelMarkupsFor, logMarkupChange, negativeRule, setCustomerChannelMarkups } from "@/lib/markup";
+import { customerChannelMarkupsFor, logMarkupChange, negativeRule, restoreLeftoverNegativeMarkups, setCustomerChannelMarkups } from "@/lib/markup";
 import { defaultLimits, saveLimits, type ChannelLimits } from "@/lib/channelLimits";
 import { activePromotion, deletePromotion, getPromotion, savePromotion, validatePromotion } from "@/lib/promotions";
 import { isProductionSite } from "@/lib/sites";
@@ -259,9 +259,15 @@ function ruleFromForm(fd: FormData, prefix = ""): PartialRule {
   };
 }
 
-/** 这个渠道能填的负数加价下限来自哪个返利：渠道长期返利、进行中的限时活动返利，取大的 */
-function allowedRebate(code: string, channelRebate?: number): number {
-  return Math.max(channelRebate ?? getChannel(code)?.rebate ?? 0, activePromotion(code)?.rebatePercent ?? 0);
+/**
+ * 渠道 / 客户按渠道的负数加价：下限只看渠道长期返利。
+ * 限时活动期间所有客户都按活动价，这里填的加价要等活动结束才生效，那时已经没有活动返利（以前按活动返利放行，活动结束后客户就按成本价出了）。
+ */
+function negativeForChannel(r: PartialRule, who: string, code: string, channelRebate?: number): string | null {
+  const neg = negativeRule(r, who, channelRebate ?? getChannel(code)?.rebate ?? 0);
+  if (neg && (r.percent ?? 0) < 0 && activePromotion(code))
+    return `${who}限时活动期间所有客户都按活动价；这里填的负数加价要等活动结束后才生效，那时没有活动返利，会按成本价出单，所以不能填。只想在活动期间优惠，在“设置 → 限时活动价”里设置就行`;
+  return neg;
 }
 
 export async function setTestAccountAction(_: FlashState, fd: FormData): Promise<FlashState> {
@@ -467,7 +473,7 @@ export async function saveChannelsAction(_: FlashState, fd: FormData): Promise<F
   await requireAdmin();
   const rebateOf = (c: { code: string; rebate: number }) => (fd.has(`rebate.${c.code}`) ? Math.min(99, Math.max(0, optNum(fd.get(`rebate.${c.code}`)) ?? 0)) : c.rebate);
   for (const c of listChannels()) {
-    const neg = negativeRule(ruleFromForm(fd, `${c.code}.`), `${c.name}：`, allowedRebate(c.code, rebateOf(c)));
+    const neg = negativeForChannel(ruleFromForm(fd, `${c.code}.`), `${c.name}：`, c.code, rebateOf(c));
     if (neg) return { error: neg };
   }
   // 返利调低后，已经填的负数加价（渠道或客户按渠道）不能低于新的返利
@@ -860,13 +866,22 @@ export async function saveCustomerChannelMarkupAction(_: FlashState, fd: FormDat
   const rules: Record<string, PartialRule> = {};
   for (const c of customerChannels(id)) {
     const r = ruleFromForm(fd, `${c.code}.`);
-    const neg = negativeRule(r, `${c.name}：`, allowedRebate(c.code));
+    const neg = negativeForChannel(r, `${c.name}：`, c.code);
     if (neg) return { error: neg };
     rules[c.code] = r;
   }
   setCustomerChannelMarkups(id, rules);
   revalidatePath(`/customers/${id}`);
   return { ok: "按渠道加价已保存，之后的报价和下单按新的比例计算" };
+}
+
+/** 限时活动结束后还留着的负数加价（客户按渠道 / 渠道）：一键恢复成改之前的设置，已经调回的不动 */
+export async function restoreLeftoverMarkupsAction(_: FlashState, _fd: FormData): Promise<FlashState> {
+  await requireAdmin();
+  const n = restoreLeftoverNegativeMarkups();
+  revalidatePath("/settings");
+  revalidatePath("/customers", "layout");
+  return n ? { ok: `已恢复 ${n} 项加价，之后的报价和下单按恢复后的价格` } : { ok: "没有需要恢复的加价" };
 }
 
 export async function saveLabelNoteAction(_: FlashState, fd: FormData): Promise<FlashState> {
