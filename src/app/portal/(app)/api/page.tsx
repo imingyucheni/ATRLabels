@@ -4,7 +4,8 @@ import { requireCustomer } from "@/lib/auth";
 import { apiEnabled, INTERNAL_MESSAGE, listKeys, listLogs, RATE_PER_MIN } from "@/lib/api/keys";
 import { publicBase } from "@/lib/stores/web";
 import { fmtTime } from "@/lib/time";
-import { getT } from "@/lib/prefs";
+import { getLang, getT } from "@/lib/prefs";
+import { translateMessage } from "@/lib/i18n";
 import FlashForm from "@/components/FlashForm";
 import ApiKeyCreate from "@/components/ApiKeyCreate";
 import { revokeApiKeyAction } from "@/app/portal/actions";
@@ -17,11 +18,12 @@ export default async function PortalApiPage() {
   const me = await requireCustomer();
   if (!apiEnabled(me.id)) redirect("/portal");
   const t = await getT();
+  const lang = await getLang();
   const base = `${publicBase({ headers: await headers() })}/api/v1`;
   const keys = listKeys(me.id);
   const logs = listLogs(me.id, 50);
   // 调用记录里的错误说明：服务器内部错误只显示统一提示（老记录里可能存着原始报错），其他的去掉服务商等内部信息
-  const logMessage = (l: (typeof logs)[number]) => (l.code === "INTERNAL" || l.status >= 500 ? t(INTERNAL_MESSAGE) : publicError(l.message));
+  const logMessage = (l: (typeof logs)[number]) => (l.code === "INTERNAL" || l.status >= 500 ? t(INTERNAL_MESSAGE) : translateMessage(lang, publicError(l.message)));
   return (
     <>
       <h1>{t("API 对接")}</h1>

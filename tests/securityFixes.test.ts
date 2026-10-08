@@ -335,6 +335,27 @@ describe("安全修复", () => {
     expect(await render()).toContain("返利 7%");
   });
 
+  it("员工给客户设加价：每一项不能低于全局默认（设成 0 就是成本价）；主管理员设的更低的值员工保存其他内容不受影响", async () => {
+    db.saveSettings({ markup: { percent: 5, fixed: 0, minProfit: 0.3 } });
+    const code = db.customerChannels(cid)[0].code;
+    st.setStaffAccess(sid, { mode: "list", customers: { [String(cid)]: "edit" } });
+    const mk = await import("@/lib/markup");
+    mk.setCustomerChannelMarkups(cid, { [code]: {} });
+    asStaff();
+    const zero = await actions.saveCustomerChannelMarkupAction(null, fd({ id: String(cid), [`${code}.percent`]: "0", [`${code}.fixed`]: "0", [`${code}.minProfit`]: "0" }));
+    expect(zero?.error).toMatch(/不能低于全局默认/);
+    expect(mk.customerChannelMarkups(cid)[code]).toBeUndefined();
+    expect((await actions.saveCustomerChannelMarkupAction(null, fd({ id: String(cid), [`${code}.percent`]: "8" })))?.ok).toBeTruthy();
+    // 主管理员设了更低的 2%，员工原样保存（没改这一项）照常通过，改成 1% 不行
+    asOwner();
+    expect((await actions.saveCustomerChannelMarkupAction(null, fd({ id: String(cid), [`${code}.percent`]: "2" })))?.ok).toBeTruthy();
+    asStaff();
+    expect((await actions.saveCustomerChannelMarkupAction(null, fd({ id: String(cid), [`${code}.percent`]: "2", [`${code}.fixed`]: "0.5" })))?.ok).toBeTruthy();
+    expect((await actions.saveCustomerChannelMarkupAction(null, fd({ id: String(cid), [`${code}.percent`]: "1" })))?.error).toMatch(/不能低于全局默认/);
+    asOwner();
+    mk.setCustomerChannelMarkups(cid, { [code]: {} });
+  });
+
   /* ---------------- 5. 登录限次不能被用来锁别人的账号 ---------------- */
 
   it("后台登录：别人换着 IP 输错 50 次以上，主管理员用对的密码照样能登录；同一个 IP 输错 10 次才挡", async () => {

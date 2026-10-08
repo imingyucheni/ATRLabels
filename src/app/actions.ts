@@ -54,7 +54,7 @@ import { saveDimRule } from "@/lib/rates";
 import { CARRIERS } from "@/lib/carriers";
 import { clearChannelNameCache, sameNameChannels } from "@/lib/channelDisplay";
 import { clearTestData, resetSandboxData } from "@/lib/cleanup";
-import { customerChannelMarkupsFor, logMarkupChange, negativeRule, restoreLeftoverNegativeMarkups, setCustomerChannelMarkups } from "@/lib/markup";
+import { customerChannelMarkups, customerChannelMarkupsFor, logMarkupChange, negativeRule, restoreLeftoverNegativeMarkups, setCustomerChannelMarkups } from "@/lib/markup";
 import { defaultLimits, saveLimits, type ChannelLimits } from "@/lib/channelLimits";
 import { activePromotion, deletePromotion, getPromotion, savePromotion, validatePromotion } from "@/lib/promotions";
 import { isProductionSite } from "@/lib/sites";
@@ -283,6 +283,22 @@ export async function setTestAccountAction(_: FlashState, fd: FormData): Promise
   return { ok: on ? "已设为内部测试账号：之后这个账号下的单都是模拟面单，不产生费用" : "已取消内部测试账号：之后这个账号下单会真实出单扣费" };
 }
 
+/**
+ * 员工设置客户加价：每一项不能低于全局默认（和员工试算新客户一样），否则员工把加价设成 0 就能看到成本、也等于按成本卖。
+ * 只检查这次改了的项：主管理员之前给客户设的更低价格，员工保存其他内容时不受影响。更低的价格请主管理员设置。
+ */
+function staffMarkupError(role: string, next: PartialRule, before: PartialRule | null | undefined, label = ""): string | null {
+  if (role !== "staff") return null;
+  const g = getSettings().markup;
+  const names = { percent: "加价 %", fixed: "固定加价", minProfit: "最低利润" } as const;
+  for (const k of ["percent", "fixed", "minProfit"] as const) {
+    const v = next[k];
+    if (v === null || v === undefined || v === (before?.[k] ?? null)) continue;
+    if (v < g[k]) return `${label}${names[k]}不能低于全局默认（${g[k]}），更低的价格请找主管理员设置`;
+  }
+  return null;
+}
+
 export async function saveCustomerAction(_: FlashState, fd: FormData): Promise<FlashState> {
   const who = await requireAdmin({ staff: true });
   const name = str(fd.get("name"));
@@ -302,6 +318,8 @@ export async function saveCustomerAction(_: FlashState, fd: FormData): Promise<F
   const neg = negativeRule(ruleFromForm(fd));
   if (neg) return { error: neg };
   const beforeMarkup = isNew ? null : getCustomer(idRaw)?.markup ?? null;
+  const low = staffMarkupError(who.role, ruleFromForm(fd), beforeMarkup);
+  if (low) return { error: low };
   const savedId = saveCustomer(isNew ? null : idRaw, {
     name,
     contact: str(fd.get("contact")) || null,
@@ -874,11 +892,14 @@ export async function saveCustomerChannelMarkupAction(_: FlashState, fd: FormDat
   if (denied) return { error: denied };
   if (!getCustomer(id)) return { error: "客户不存在" };
   const rules: Record<string, PartialRule> = {};
+  const before = customerChannelMarkups(id);
   for (const c of customerChannels(id)) {
     const r = ruleFromForm(fd, `${c.code}.`);
     const neg = negativeForChannel(r, `${c.name}：`, c.code);
     // 员工看不到返利：提示里不能带返利比例
     if (neg) return { error: who.role === "staff" ? `${c.name}：加价太低会低于成本，员工不能这样设置，请找主管理员` : neg };
+    const low = staffMarkupError(who.role, r, before[c.code], `${c.name}：`);
+    if (low) return { error: low };
     rules[c.code] = r;
   }
   setCustomerChannelMarkups(id, rules);

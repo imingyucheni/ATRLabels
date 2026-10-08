@@ -4,6 +4,7 @@ import { customerChannels, getSettings, listChannels } from "@/lib/db";
 import { getLang, getT } from "@/lib/prefs";
 import { localizeChannelName, publicChannel } from "@/lib/carriers";
 import { isMultiBoxName } from "@/lib/multiBox";
+import { isDhlCode } from "@/lib/shipbest/dhl";
 
 export async function GET() {
   const admin = await isLoggedIn();
@@ -14,7 +15,9 @@ export async function GET() {
   // 客户看到的是干净的渠道名（不带仓库邮编），导入时也认这个名称
   // 英文界面下载的模板里，渠道名的中文说明（预上网等）换成英文；导入时中英文名称都认
   const lang = await getLang();
-  const channels = own ? customerChannels(own).filter((c) => !isMultiBoxName(c.name)).map((c) => localizeChannelName(publicChannel(c).name, lang)) : listChannels(true).filter((c) => !isMultiBoxName(c.name)).map((c) => c.name);
+  // 批量导入只发美国本土：不放多箱渠道和国际快递（DHL）
+  const usable = (c: { code: string; name: string }) => !isMultiBoxName(c.name) && !isDhlCode(c.code);
+  const channels = own ? customerChannels(own).filter(usable).map((c) => localizeChannelName(publicChannel(c).name, lang)) : listChannels(true).filter(usable).map((c) => c.name);
   const buf = await buildTemplate(own ? senderFor(own) : getSettings().sender, { channels });
   return new Response(new Uint8Array(buf), {
     headers: {

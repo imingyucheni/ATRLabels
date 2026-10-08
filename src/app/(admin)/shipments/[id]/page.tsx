@@ -201,7 +201,7 @@ export default async function ShipmentDetail({ params }: { params: Promise<{ id:
           {s.status === "cancel_requested" && (
             <div className="card" style={{ marginTop: 12, background: "var(--warn-soft)" }}>
               <h2>{t("确认已取消")}</h2>
-              <p className="small">{t("接口没能直接取消，要联系 {p} 人工取消。{p} 确认取消后，填写费用并点“确认已取消”。退款 = 客户价 - 客户取消手续费。", { p: provider })}</p>
+              <p className="small">{isInternalCustomer(s.customerId) ? t("接口没能直接取消，要联系 {p} 人工取消。{p} 确认取消后，填写服务商收取的取消费并点“确认已取消”（公司自用账户不扣余额，不用退款）。", { p: provider }) : t("接口没能直接取消，要联系 {p} 人工取消。{p} 确认取消后，填写费用并点“确认已取消”。退款 = 客户价 - 客户取消手续费。", { p: provider })}</p>
               <div className="row" style={{ marginBottom: 10 }}>
                 <FlashForm action={cancelAction} submitLabel="再通过接口取消一次" submitClass="small" inline confirm={t("再向 {p} 发一次取消请求？成功就直接取消并退款。", { p: provider })}>
                   <input type="hidden" name="id" value={s.id} />
