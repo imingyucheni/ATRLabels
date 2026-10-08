@@ -68,6 +68,8 @@ export default function MultiBoxForm(props: {
     .filter((p) => p.length > 0 || p.width > 0 || p.height > 0 || p.weight > 0 || p.qty > 0);
   const filled = pieces.filter((p) => p.length > 0 && p.width > 0 && p.height > 0 && p.weight > 0 && p.qty > 0);
   const rule0 = rules[0] ?? null;
+  // 美国境内本来不需要海关编码；只有要求的渠道（UPS HWT，嘉谷的渠道要求）必填，提示里写明是哪个渠道要的
+  const hsRule = rules.find((r) => r.hsMinDigits) ?? null;
   const sum = summarizePieces(filled, rule0);
   const items = [{ productNameEn: item.name, hsCode: item.hs }];
 
@@ -249,7 +251,7 @@ export default function MultiBoxForm(props: {
         <h2>{t("货物信息")}</h2>
         <div className="grid">
           <label className="f"><span className="req">{t("英文品名")}</span><input value={item.name} maxLength={50} placeholder={t("例如 Cotton T-shirts")} onChange={(e) => dirty(setItem)({ ...item, name: e.target.value })} /><span className="field-hint muted">{t("不能有中文，建议写清楚是什么货")}</span></label>
-          <label className="f"><span className={rules.some((r) => r.hsMinDigits) ? "req" : ""}>{t("海关编码（HS）")}</span><input value={item.hs} maxLength={14} inputMode="numeric" placeholder="61091000" onChange={(e) => dirty(setItem)({ ...item, hs: e.target.value })} /><span className="field-hint muted">{t("至少 8 位数字")}</span></label>
+          <label className="f"><span className={hsRule ? "req" : ""}>{t("海关编码（HS）")}</span><input value={item.hs} maxLength={14} inputMode="numeric" placeholder="61091000" onChange={(e) => dirty(setItem)({ ...item, hs: e.target.value })} /><span className="field-hint muted">{hsRule ? t("{label} 要求至少 {n} 位数字", { label: hsRule.label, n: hsRule.hsMinDigits }) : t("选填")}</span></label>
           <label className="f"><span className="req">{t("整票申报价值（USD）")}</span><input type="number" min={0} step={0.01} value={item.value} onChange={(e) => dirty(setItem)({ ...item, value: e.target.value })} /></label>
           <label className="f">{t("SKU（可选）")}<input value={item.sku} maxLength={64} onChange={(e) => dirty(setItem)({ ...item, sku: e.target.value })} /></label>
           <label className="f">{t("自定义单号（可选）")}<input value={ref} maxLength={50} onChange={(e) => setRef(e.target.value)} /></label>

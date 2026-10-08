@@ -51,8 +51,20 @@ export function translateMessage(lang: Lang, msg: string | null | undefined): st
   for (const [re, rep] of PATTERNS) {
     if (re.test(msg)) return fragments(msg.replace(re, rep as string));
   }
+  // 几条提示用“；”连在一起的（例如多箱的几项问题）：逐条翻译
+  if (msg.includes("；")) return msg.split("；").map((m) => translateMessage(lang, m)).join("; ");
   return fragments(msg);
 }
+
+/** 嵌在提示括号里的具体原因（多箱箱子超限等），带数字，逐段换成英文 */
+const REASONS: [RegExp, string][] = [
+  [/最长边 ([\d.]+) in 超过 ([\d.]+) in/g, "longest side $1 in is over $2 in"],
+  [/次长边 ([\d.]+) in 超过 ([\d.]+) in/g, "second-longest side $1 in is over $2 in"],
+  [/长 \+ 2×宽 \+ 2×高 = ([\d.]+) in 超过 ([\d.]+) in/g, "length + 2×width + 2×height = $1 in is over $2 in"],
+  [/体积 (\d+) 立方英寸超过 ([\d,]+)/g, "volume $1 cu in is over $2"],
+  [/单箱 ([\d.]+) lb 超过 ([\d.]+) lb/g, "box weight $1 lb is over $2 lb"],
+  [/计费重 ([\d.]+) lb 超过 ([\d.]+) lb/g, "billable weight $1 lb is over $2 lb"],
+];
 
 /** ShipBest 错误码的中文说明会嵌在各种提示里（例如 “[11203] 该订单不支持取消（…）”），逐段替换成英文 */
 const FRAGMENTS: [string, string][] = [
@@ -83,6 +95,7 @@ const FRAGMENTS: [string, string][] = [
 ];
 function fragments(msg: string) {
   let out = msg;
+  for (const [re, en] of REASONS) out = out.replace(re, en);
   for (const [zh, en] of FRAGMENTS) if (out.includes(zh)) out = out.split(zh).join(en);
   return out.replace(/（/g, " (").replace(/）/g, ")");
 }

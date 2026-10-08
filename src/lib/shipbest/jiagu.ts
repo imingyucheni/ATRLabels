@@ -30,6 +30,7 @@ export const DEFAULT_JG_WAREHOUSES: Record<string, string> = {
   "580469": "230759", // Ontrac-SG-B-XT · Ontrac-91710-230490（4820 Dorina Ct, Chino CA 91710）
   "591208": "230759", // Ontrac-SG-B-XT-预上网 · Ontrac-91710-230490（同一个仓库）
   "582918": "230496", // UPS-NEW-HWT-XT（多箱）· SG-UPS-92335（9774 Calabash Ave, Fontana CA 92335）
+  "580457": "230244", // Fedex MWT末端-W（多箱）· CA-92337-11010（不可处理退件）
 };
 
 /** 嘉谷的仓库（设置页选仓库时显示名称和地址，方便核对） */
@@ -39,6 +40,7 @@ export const JG_WAREHOUSE_INFO: Record<string, { name: string; address: string }
   "229615": { name: "CA-92374", address: "" },
   "230759": { name: "Ontrac-91710-230490", address: "4820 Dorina Ct, Chino, CA 91710" },
   "230496": { name: "SG-UPS-92335", address: "9774 Calabash Ave, Fontana, CA 92335" },
+  "230244": { name: "CA-92337-11010（不可处理退件）", address: "" },
   // 第二个 FedEx NG 渠道（备用）的仓库
   "230206": { name: "SG-HX-CA 91762", address: "1380 W Mission Blvd, Ontario, CA 91762" },
 };

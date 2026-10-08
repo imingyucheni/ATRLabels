@@ -7,6 +7,22 @@ export const patterns: [RegExp, string][] = [
   [/^余额不足：当前余额 (-?[\d.]+)，本单需要 ([\d.]+)，请先充值$/, "Insufficient balance: current balance $1; this label needs $2. Please top up first"],
   [/^价格已变化：当前报价 ([\d.]+) (\w+)，请确认后重新提交$/, "Price changed: the current quote is $1 $2. Please confirm and submit again"],
 
+  /* ---------- 多箱寄出：渠道要求检查（lib/multiBox.ts）；括号里的具体原因由 index.ts 的 REASONS 再换成英文 ---------- */
+  [/^([^；]+?) 至少 (\d+) 箱一起下单（现在 (\d+) 箱）$/, "$1 needs at least $2 boxes in one shipment (currently $3)"],
+  [/^([^；]+?) 一票总重量至少 ([\d.]+) lb（现在 ([\d.]+) lb）$/, "$1 needs a total weight of at least $2 lb (currently $3 lb)"],
+  [/^([^；]+?) 一票总重量最多 ([\d.]+) lb（现在 ([\d.]+) lb），请分成几票下单$/, "$1 allows at most $2 lb per shipment (currently $3 lb). Please split it into several shipments"],
+  [/^按体积算的计费重 ([\d.]+) lb 超过 ([\d.]+) lb，会按公布价计费，请分票或换小一点的箱子$/, "Billable weight by volume is $1 lb, over $2 lb, so it would be billed at list rates. Split the shipment or use smaller boxes"],
+  [/^([^；]+?) 单箱不能超过 ([\d.]+) lb（有一种箱子 ([\d.]+) lb）$/, "$1 allows at most $2 lb per box (one box is $3 lb)"],
+  [/^([^；]+?) 只发美国本土 48 州，不能寄到 (\w+)$/, "$1 only ships within the contiguous 48 states, not to $2"],
+  [/^([\d.]+×[\d.]+×[\d.]+) in 的箱子超出 ([^；]+?) 的最大限制（([^；]+)），不能发$/, "The $1 in box exceeds the $2 maximum limits ($3) and can't be shipped"],
+  [/^([\d.]+×[\d.]+×[\d.]+) in 的箱子会产生额外处理费 \/ 超尺寸（([^；]+)），([^；]+?) 不能发$/, "The $1 in box would get Additional Handling / Oversize charges ($2), which $3 doesn't allow"],
+  [/^(\d+) 箱会另收额外处理费（AHS，([^；]+)），每箱计费重最低按 (\d+) lb$/, "$1 box(es) will get an Additional Handling charge (AHS: $2), billed at least $3 lb per box"],
+  [/^(\d+) 箱会另收超尺寸费（Oversize，([^；]+)），每箱计费重最低按 (\d+) lb$/, "$1 box(es) will get an Oversize charge ($2), billed at least $3 lb per box"],
+  [/^商品 (\d+)：英文品名必填$/, "Item $1: English description is required"],
+  [/^商品 (\d+)：英文品名不能有中文$/, "Item $1: English description can't contain Chinese characters"],
+  [/^商品 (\d+)：海关编码（HS）至少 (\d+) 位数字$/, "Item $1: HS code must be at least $2 digits"],
+  [/^海关编码（HS）至少 (\d+) 位数字$/, "HS code must be at least $1 digits"],
+
   /* ---------- 服务商接口超时 / 连不上 ---------- */
   [/^(.+?) 接口超时：(\d+) 秒没有响应，请稍后再试$/, "$1 API timed out (no response in $2 s). Please try again later"],
   [/^(.+?) 接口连不上(（.+?）)?，请稍后再试$/, "Can't reach the $1 API$2. Please try again later"],
