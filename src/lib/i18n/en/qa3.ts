@@ -144,4 +144,12 @@ export const qa3: Record<string, string> = {
   "每次查运费、核对地址时，各服务商接口用了多久（只记最近 100 次，服务器重启后清零）。下单页现在查到一个渠道就先显示一个，慢的服务商不会拖住其他渠道；查价最多等 15 秒。": "How long each provider's API took for rate quotes and address checks (last 100 calls, reset on server restart). The order page now shows each service as soon as it responds, so a slow provider doesn't hold up the others; a quote waits at most 15 seconds.",
   "次数": "Calls", "平均": "Average", "90% 在多少秒内": "90% within", "最慢": "Slowest", "失败 / 超时": "Failed / timed out", "最近一次": "Last call",
   "查一次运费后这里会显示各服务商的速度。": "Get a rate quote and each provider's speed will show here.",
+  // 服务商反馈：嘉谷 ErrorCode=100 重新推送、沙盒 / 模拟单的取消
+  "重新推送（ShippingLabel）": "Re-push (ShippingLabel)",
+  "模拟取消": "Simulated cancel",
+  // 正式模式下 DHL 还是测试环境
+  "现在是正式模式，但 DHL 还是测试环境：测试环境出的面单不能真实寄件，所以 DHL 渠道暂停报价和出单（客户看到“该渠道暂时无法报价”）。请填正式的 API Key / Secret，环境选“正式”后保存。":
+    "The site is in live mode but DHL is still set to its test environment. Test labels can't be shipped, so DHL services are paused for quotes and labels (customers see “This service can't be quoted right now”). Enter the live API Key / Secret, set the environment to Live and save.",
+  "DHL 服务商账号还是测试环境：测试环境的面单不能真实寄件，正式模式下不报价、不出单。请到 设置 → DHL Express 填正式账号，环境选“正式”":
+    "DHL is still set to its test environment: test labels can't be shipped, so DHL doesn't quote or create labels in live mode. Go to Settings → DHL Express, enter the live account and set the environment to Live",
 };
