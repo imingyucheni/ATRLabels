@@ -3,7 +3,7 @@
  * 密钥只在生成时显示一次；数据库里只存 SHA-256 摘要（密钥是 32 位随机串，摘要查不回原文）。
  */
 import { createHash, randomBytes } from "node:crypto";
-import { db } from "../db";
+import { db, getCustomer } from "../db";
 
 export type KeyMode = "live" | "test";
 
@@ -129,6 +129,8 @@ export function setKeyIps(id: number, customerId: number, raw: string) {
   conn().prepare("UPDATE api_keys SET ip_allow = ? WHERE id = ?").run(parseIpAllow(raw).join(",") || null, id);
 }
 
+export const ACCOUNT_DISABLED_MESSAGE = "公司自用账户不能使用 API";
+
 export type AuthResult = { ok: true; key: ApiKey } | { ok: false; status: number; code: string; message: string };
 
 /** 校验请求带的密钥（Authorization: Bearer … 或 X-Api-Key: …） */
@@ -139,6 +141,11 @@ export function authenticate(headers: { get(name: string): string | null }, ip: 
   const r = conn().prepare("SELECT * FROM api_keys WHERE hash = ?").get(sha(token)) as KeyRow | undefined;
   if (!r || r.revoked_at) return { ok: false, status: 401, code: "UNAUTHORIZED", message: "API 密钥无效或已作废" };
   const key = toKey(r);
+  // 公司自用账户（成本价、不扣余额）不能用 API。
+  // API 有自己的开关（后台客户详情 → 开放 API），和客户端登录分开：只用 API、不登录客户中心的客户照常能用
+  const c = getCustomer(key.customerId);
+  if (!c) return { ok: false, status: 401, code: "UNAUTHORIZED", message: "API 密钥无效或已作废" };
+  if (c.internal) return { ok: false, status: 403, code: "API_DISABLED", message: ACCOUNT_DISABLED_MESSAGE };
   if (!apiEnabled(key.customerId)) return { ok: false, status: 403, code: "API_DISABLED", message: "这个账户的 API 还没有开通，请联系客服" };
   if (key.ipAllow.length && (!ip || !key.ipAllow.includes(ip))) return { ok: false, status: 403, code: "IP_NOT_ALLOWED", message: `这个密钥不允许从 ${ip ?? "未知 IP"} 调用` };
   conn().prepare("UPDATE api_keys SET last_used_at = datetime('now') WHERE id = ?").run(key.id);
@@ -164,6 +171,9 @@ export function rateLimit(keyId: number, now = Date.now()): number {
 }
 
 /* ---------------- 调用记录 ---------------- */
+
+/** 服务器内部错误：返回给调用方、记进客户能看到的调用记录的都是这句，原始报错只打在服务器日志里 */
+export const INTERNAL_MESSAGE = "服务器内部错误，请稍后重试";
 
 export interface ApiLog { id: number; keyId: number | null; method: string; path: string; status: number; code: string | null; message: string | null; ms: number | null; ip: string | null; createdAt: string; keyPrefix: string | null }
 

@@ -174,9 +174,26 @@ export function accessOf(s: Pick<StaffAccount, "access"> | null | undefined): St
   return s?.access ?? { mode: "all", customers: {} };
 }
 
-/** 员工对某个客户的权限：null = 看不到 */
-export function customerLevel(s: Pick<StaffAccount, "access"> | null | undefined, customerId: number): AccessLevel | null {
+/**
+ * 公司自用账户（成本价、不扣余额）：员工一律看不到、不能操作，不管是“全部客户”模式还是单独授权。
+ * 这个文件不打开数据库（proxy 也要用），不知道哪个客户是公司自用账户：由打开数据库的一方（auth.ts、quoteStream.ts）注册判断方法。
+ * 还没注册时宁可当成看不到（员工对所有客户都是 null）；proxy 只做粗检查（传 skipInternal），页面和操作里会再完整检查一遍。
+ * 放在 globalThis 上：同一个进程里即使这个文件被打包成几份，注册一次处处有效。
+ */
+type InternalCheck = (customerId: number) => boolean;
+const reg = globalThis as unknown as { __atrInternalCustomerCheck?: InternalCheck };
+
+export function setInternalCustomerCheck(fn: InternalCheck) {
+  reg.__atrInternalCustomerCheck = fn;
+}
+
+/** 员工对某个客户的权限：null = 看不到（公司自用账户永远是 null） */
+export function customerLevel(s: Pick<StaffAccount, "access"> | null | undefined, customerId: number, opts: { skipInternal?: boolean } = {}): AccessLevel | null {
   if (!s) return null;
+  if (!opts.skipInternal) {
+    const isInternal = reg.__atrInternalCustomerCheck;
+    if (!isInternal || isInternal(customerId)) return null;
+  }
   const a = accessOf(s);
   const v = a.customers[String(customerId)];
   if (a.mode === "all") return v === "none" ? null : v === "view" ? "view" : "edit";

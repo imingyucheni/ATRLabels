@@ -62,11 +62,14 @@ export function verifyAdminToken(token: string | undefined | null): boolean {
 export const STAFF_PAGES = [/^\/customers(\/|$)/, /^\/leads(\/|$)/, /^\/quote(\/|$)/, /^\/finance(\/|$)/, /^\/account(\/|$)/];
 export const staffCanOpen = (path: string) => STAFF_PAGES.some((re) => re.test(path));
 
-/** 后台登录的人对某个客户的权限：主管理员全部能操作；员工按授权；null = 看不到 */
-export function customerAccess(who: AdminPrincipal | null, customerId: number): AccessLevel | null {
+/**
+ * 后台登录的人对某个客户的权限：主管理员全部能操作；员工按授权，公司自用账户（成本价）员工永远看不到；null = 看不到。
+ * skipInternal 只给 proxy 用（proxy 不打开数据库，判断不了公司自用账户，页面会再检查一遍）。
+ */
+export function customerAccess(who: AdminPrincipal | null, customerId: number, opts: { skipInternal?: boolean } = {}): AccessLevel | null {
   if (!who) return null;
   if (who.role === "owner") return "edit";
-  return customerLevel(getStaff(who.id), customerId);
+  return customerLevel(getStaff(who.id), customerId, opts);
 }
 
 /** 列表过滤用：这个客户能不能看到（主管理员全部能看） */
@@ -77,8 +80,19 @@ export function customerFilter(who: AdminPrincipal | null): (customerId: number)
   return (customerId) => customerLevel(s, customerId) !== null;
 }
 
-/** 客户详情这类带客户 id 的页面：/customers/123、/customers/123/statement … */
-export function customerIdInPath(path: string): number | null {
-  const m = path.match(/^\/customers\/(\d+)(\/|$)/);
-  return m ? Number(m[1]) : null;
+/** 网址里的客户编号只认纯数字（不认 5.0、%35、0x5、05 这类 Number() 也能转出来的写法） */
+export const CUSTOMER_ID_SEGMENT = /^[1-9]\d{0,9}$/;
+
+/**
+ * /customers/ 下面打开的是什么：
+ * - null：不是某个客户的页面（客户列表）；
+ * - "new"：新建客户（/customers/new）；
+ * - { id }：某个客户的详情、对账单、扣款明细、条款存档…（/customers/123、/customers/123/statement）；
+ * - "invalid"：其他写法（/customers/5.0、/customers/%35、/customers/0x5、/customers/new/xxx…），员工一律不让开。
+ */
+export function customerPathTarget(path: string): { id: number } | "new" | "invalid" | null {
+  const m = path.match(/^\/customers\/([^/]+)(\/.*)?$/);
+  if (!m) return null;
+  if (m[1] === "new" && !m[2]) return "new";
+  return CUSTOMER_ID_SEGMENT.test(m[1]) ? { id: Number(m[1]) } : "invalid";
 }

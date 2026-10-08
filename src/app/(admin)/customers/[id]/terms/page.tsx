@@ -5,10 +5,13 @@ import { archiveIntact, getAcceptance, lastAcceptance, listAcceptances, provider
 import { fmtTime, TZ_LABEL } from "@/lib/time";
 import { getT } from "@/lib/prefs";
 import PrintButton from "@/components/PrintButton";
+import { customerPageAccess } from "../access";
 
 /** 客户签署的服务条款存档：签署时的客户信息 + 条款原文，可以打印 / 另存为 PDF */
 export default async function CustomerTermsPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ a?: string }> }) {
-  const c = getCustomer(Number((await params).id));
+  // 不只靠 proxy：客户编号必须是纯数字，没有这个客户权限的一律 404
+  const { id } = await customerPageAccess((await params).id);
+  const c = getCustomer(id);
   if (!c) notFound();
   const t = await getT();
   const pick = Number((await searchParams).a);

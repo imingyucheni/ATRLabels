@@ -22,14 +22,15 @@ import { adminOrigin } from "@/lib/sites";
 import { usStateCode } from "@/lib/geo";
 import { isPaperSize, PAPER_LABEL } from "@/lib/labelLayout";
 import { deleteSender, listSenders, saveSender, setDefaultSender } from "@/lib/senders";
-import { activeShipmentByRef, duplicateRefMessage, getCustomer, getCustomerLogin, getPasswordHash, getSettings, getShipment, setCustomerLabelPaper, setCustomerPassword, setCustomerSender, setLabelNote } from "@/lib/db";
+import { activeShipmentByRef, duplicateRefMessage, getCustomer, getCustomerLogin, getPasswordHash, getSettings, getShipment, isInternalCustomer, setCustomerLabelPaper, setCustomerPassword, setCustomerSender, setLabelNote } from "@/lib/db";
 import { InsufficientBalanceError } from "@/lib/ledger";
 import { cancelWindowHours, cancelWindowPassed, ownsShipment, publicError, toPublicQuote, type PublicQuote } from "@/lib/portal";
 import { cleanAddress, cleanRequest, n, str } from "@/lib/sanitize";
 import { createLabel, PriceChangedError, refreshShipment, requestCancel, resubmitShipment } from "@/lib/service";
 import { ShipBestError } from "@/lib/shipbest/client";
 import { createTopup, getTopup } from "@/lib/topup";
-import { requestReset, resetWithToken } from "@/lib/passwordReset";
+import { checkToken, requestReset, resetWithToken } from "@/lib/passwordReset";
+import { smtpConfigured } from "@/lib/mailer";
 import type { Address, ShipmentRequest } from "@/lib/shipbest/types";
 import type { FlashState } from "@/app/actions";
 import { deleteMyStore, disconnectStore, getStore, importToBatch, listStores, saveShopifyStore, storesEnabled, syncStore } from "@/lib/stores";
@@ -51,13 +52,16 @@ export async function portalLoginAction(_: unknown, fd: FormData) {
   const email = str(fd.get("email")).toLowerCase();
   const password = String(fd.get("password") ?? "");
   const key = `portal:${email}:${await clientIp()}`;
-  // 按 IP + 按账号各限一次：换 IP 也不能无限试同一个账号的密码
-  const limited = checkRateLimit(key) ?? checkRateLimit(`portal:${email}`, 30);
+  // 按 IP（+ 邮箱）限次数：超过了直接拒绝，不再验证密码
+  const limited = checkRateLimit(key);
   if (limited) return { error: await tMsg(limited), email };
+  // 每个邮箱还记一个总失败次数，但不拿它锁账号：否则别人换着 IP 故意输错就能把客户锁在外面。
+  // 密码对的照样能登录，输错的照样记次数
   const c = email ? getCustomerLogin(email) : null;
   // 账号不存在时也算一次密码，响应时间一样，不能借此试出哪些邮箱开了账号
   const ok = verifyPassword(password, c?.passwordHash ?? DUMMY_HASH);
-  if (!c || !c.enabled || !c.passwordHash || !ok) {
+  // 公司自用账户（成本价、不扣余额）不能登录客户 OMS，和账号不存在一样处理
+  if (!c || !c.enabled || !c.passwordHash || !ok || isInternalCustomer(c.id)) {
     recordFailure(key);
     recordFailure(`portal:${email}`);
     return { error: await tMsg("邮箱或密码错误，或账号未开通"), email };
@@ -338,9 +342,16 @@ export async function portalForgotAction(_: unknown, fd: FormData) {
   recordFailure(key); // 每次申请都计数，防止被刷
   if (!email) return { error: await tMsg("请填写登录邮箱") };
   // 链接地址用服务器配置的网址，不信任请求头（防止被伪造成别的域名骗取重置链接）
-  const h = await headers();
-  const base = process.env.APP_URL || process.env.OMS_URL || `${h.get("x-forwarded-proto") ?? "http"}://${h.get("host")}`;
-  const r = await requestReset(email, base);
+  const base = resetLinkBase(await headers());
+  // 公司自用账户（成本价）不能登录客户 OMS：不处理，回复和邮箱不存在时一样
+  const login = getCustomerLogin(email);
+  const internal = !!login && isInternalCustomer(login.id);
+  // 要发邮件、却没有可信的网址：不发链接（不然链接可能指向别人伪造的域名），只在服务器日志里提醒；回复照常
+  const untrusted = !base && smtpConfigured();
+  if (untrusted && !internal) {
+    console.warn("[password-reset] 没有配置 APP_URL / OMS_URL，请求的域名也不在配置里，没有发送重置链接。请在 .env.local 里设置 APP_URL（客户 OMS 的网址）");
+  }
+  const r = internal || untrusted ? { emailed: smtpConfigured() } : await requestReset(email, base ?? "");
   const t = await getT();
   return {
     ok: r.emailed
@@ -351,10 +362,39 @@ export async function portalForgotAction(_: unknown, fd: FormData) {
   };
 }
 
+/**
+ * 重置密码链接用的网址：优先用配置的 APP_URL / OMS_URL。
+ * 都没配置时，只有请求的域名是配置过的（ADMIN_URL、ALLOWED_ORIGINS 里写明的域名）才用；否则返回 null，不发链接。
+ * Host 请求头谁都可以伪造：不能直接拿来拼链接，不然重置链接会发到攻击者的域名上。
+ */
+function resetLinkBase(h: { get(name: string): string | null }): string | null {
+  const env = (process.env.APP_URL || process.env.OMS_URL || "").trim().replace(/\/+$/, "");
+  if (env) return env;
+  const host = (h.get("host") ?? "").trim().toLowerCase();
+  if (!host) return null;
+  const hostOf = (u: string) => {
+    try {
+      return new URL(u.includes("://") ? u : `https://${u}`).host.toLowerCase();
+    } catch {
+      return "";
+    }
+  };
+  const admin = (process.env.ADMIN_URL ?? "").trim().replace(/\/+$/, "");
+  if (admin && hostOf(admin) === host) return admin;
+  // ALLOWED_ORIGINS 里写明的域名（带 * 的通配不算）
+  const allowed = (process.env.ALLOWED_ORIGINS ?? "").split(",").map((x) => x.trim()).filter((x) => x && !x.includes("*")).map(hostOf);
+  if (!allowed.includes(host)) return null;
+  const proto = (h.get("x-forwarded-proto") ?? "").split(",")[0].trim() === "https" ? "https" : "http";
+  return `${proto}://${host}`;
+}
+
 export async function portalResetAction(_: unknown, fd: FormData) {
   const token = str(fd.get("token"), 100);
   const pw = String(fd.get("password") ?? "");
   if (pw !== String(fd.get("confirm") ?? "")) return { error: await tMsg("两次输入的密码不一致") };
+  // 公司自用账户（成本价）不能登录客户 OMS：它的重置链接一律当作失效
+  const owner = checkToken(token);
+  if (owner && isInternalCustomer(owner)) return { error: await tMsg("链接已失效，请重新申请") };
   try {
     const id = resetWithToken(token, pw);
     await createCustomerSession(id, getPasswordHash(id)!);

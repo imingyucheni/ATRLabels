@@ -97,6 +97,7 @@ export const qa3: Record<string, string> = {
   "自动备用（客户价按原渠道的限时活动价）": "Auto backup (customer price from the original service's promotion)",
   "新客户试算": "Prospect quote",
   // 全面检查后修复
+  "现在按限时活动价（比这个客户平时的价格低），活动结束后按左边的设置": "Currently on the promotion price (lower than this customer's usual price); the settings on the left apply after the promotion ends",
   "正式模式下 DHL 还是测试环境：测试面单不能真实寄件，所以 DHL 渠道现在不报价、不出单（客户那边也一样）。要试 DHL 测试环境请用沙盒站；要正式出单请到": "The site is live but DHL is still in test mode: test labels can't actually be shipped, so DHL services won't quote or create labels right now (for customers too). Use the sandbox site to try DHL test mode, or to ship for real go to",
   "改成正式环境。": "and switch to the production environment.",
   "这一单正在取消，请稍后刷新查看结果": "This order is already being cancelled. Please refresh shortly to see the result",
@@ -154,4 +155,13 @@ export const qa3: Record<string, string> = {
     "The site is in live mode but DHL is still set to its test environment. Test labels can't be shipped, so DHL services are paused for quotes and labels (customers see “This service can't be quoted right now”). Enter the live API Key / Secret, set the environment to Live and save.",
   "DHL 服务商账号还是测试环境：测试环境的面单不能真实寄件，正式模式下不报价、不出单。请到 设置 → DHL Express 填正式账号，环境选“正式”":
     "DHL is still set to its test environment: test labels can't be shipped, so DHL doesn't quote or create labels in live mode. Go to Settings → DHL Express, enter the live account and set the environment to Live",
+  // 安全修复：员工权限、公司自用账户、开放 API
+  "员工试算新客户时，临时加价不能低于全局默认加价（留空 = 按全局默认）": "When staff quote for a new customer, the temporary markup can't be lower than the global default markup (leave blank = use the global default)",
+  "服务器内部错误，请稍后重试": "Internal error, please retry later",
+  "公司自用账户不能使用 API": "The house account can't use the API",
+  "公司自用账户（成本价）不能开通客户端登录，也不能设置登录密码；用它出单请用“管理员下单”": "The house account (at cost) can't have customer login or a login password; use “Admin shipping” to ship with it",
+  "公司自用账户只给“管理员下单”用：按成本价、不扣余额，不能开通客户端登录，也不能进入客户 OMS。": "The house account is only for “Admin shipping”: priced at cost and never charged. It can't have customer login and can't be opened in the customer OMS.",
+  "请在同一个浏览器里先登录客户中心，再到“店铺订单”重新点“连接 eBay”。": "Sign in to the Customer Center in this same browser first, then click “Connect eBay” again under Store orders.",
+  "授权失败": "Authorization failed",
+  "返回店铺订单": "Back to store orders",
 };

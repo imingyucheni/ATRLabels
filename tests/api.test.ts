@@ -49,6 +49,8 @@ describe("开放 API v1", () => {
     db.saveSettings({ sender: { nameFirst: "ATR", nameLast: "Warehouse", country: "US", province: "CA", city: "Chino", address1: "13950 Central Ave", zipCode: "91710", phone: "9095550100" } });
     await svc.syncChannels();
     cid = db.saveCustomer(null, { name: "API 客户", contact: null, phone: null, email: null, note: null, markup: {} });
+    // 用 API 的客户都开通了客户端登录（密钥是客户自己在 OMS 里生成的）；登录关掉后 API 也不能用
+    db.updateCustomerPortal(cid, { email: "api@example.com", enabled: true, creditLimit: 0 });
     db.setCustomerChannels(cid, db.listChannels().map((c) => c.code).filter((c) => !c.startsWith("DHL-")));
     ledger.addLedger({ customerId: cid, type: "topup", amount: 100, createdBy: "admin" });
     terms.acceptTerms({ customerId: cid, party: terms.partyOf(db.getCustomer(cid)!), signer: "Amy", signerTitle: "Owner", lang: "zh", ip: null, userAgent: null });
@@ -148,6 +150,58 @@ describe("开放 API v1", () => {
     expect(r.json.code).toBe("INSUFFICIENT_BALANCE");
     expect((await call("POST", "/api/v1/orders", live, { referenceNo: "SO-X", channel: "NOPE", shipTo, package: pkg })).json.code).toBe("CHANNEL_UNAVAILABLE");
   }, 30_000);
+
+  it("IP 白名单按 X-Forwarded-For 的最后一段（反向代理加的真实来源）核对，第一段伪造不了", async () => {
+    const { key, token } = keys.createKey(cid, { mode: "live", ipAllow: "1.2.3.4" });
+    try {
+      // 调用方自己在请求头里填白名单 IP：反向代理会把真实来源追加在最后，最后一段才算数
+      expect((await call("GET", "/api/v1/balance", token, undefined, { "x-forwarded-for": "1.2.3.4, 9.9.9.9" })).json.code).toBe("IP_NOT_ALLOWED");
+      expect((await call("GET", "/api/v1/balance", token, undefined, { "x-forwarded-for": "5.5.5.5, 1.2.3.4" })).status).toBe(200);
+      const { clientIp } = await import("@/lib/api/http");
+      const { ipFromHeaders } = await import("@/lib/auth");
+      const h = new Headers({ "x-forwarded-for": "6.6.6.6, 7.7.7.7" });
+      expect(clientIp(new Request("https://x/", { headers: h }))).toBe("7.7.7.7");
+      expect(ipFromHeaders(h)).toBe("7.7.7.7"); // 和后台登录限流同一个规则
+      expect(ipFromHeaders(new Headers({ "x-real-ip": "8.8.8.8" }))).toBe("8.8.8.8");
+      expect(ipFromHeaders(new Headers())).toBeNull();
+    } finally {
+      keys.revokeKey(key.id, cid);
+    }
+  });
+
+  it("API 开关和客户端登录分开（只用 API 的客户照常能用）；公司自用账户的密钥不能用", async () => {
+    db.updateCustomerPortal(cid, { email: "api@example.com", enabled: false, creditLimit: 0 });
+    expect((await call("GET", "/api/v1/balance", live)).status).toBe(200);
+    db.updateCustomerPortal(cid, { email: "api@example.com", enabled: true, creditLimit: 0 });
+
+    const house = db.houseCustomerId();
+    keys.setApiEnabled(house, true);
+    db.updateCustomerPortal(house, { email: null, enabled: true, creditLimit: 0 }); // 就算数据库里被打开了登录
+    const hk = keys.createKey(house, { mode: "live" }).token;
+    expect((await call("GET", "/api/v1/balance", hk)).json).toMatchObject({ success: false, code: "API_DISABLED", message: keys.ACCOUNT_DISABLED_MESSAGE });
+  });
+
+  it("服务器内部错误：调用记录（客户 OMS 能看到）里只记统一提示，原始报错只打在服务器日志", async () => {
+    const { handle } = await import("@/lib/api/http");
+    const req = new Request(B + "/api/v1/balance", { headers: { Authorization: `Bearer ${live}`, "x-forwarded-for": "9.9.9.9" } });
+    const err = console.error;
+    const logged: unknown[] = [];
+    console.error = (...a: unknown[]) => void logged.push(a);
+    let res: Response;
+    try {
+      res = await handle(req, async () => {
+        throw new Error("ShipBest HTTP 502: upstream db password=hunter2 at 10.0.0.5");
+      });
+    } finally {
+      console.error = err;
+    }
+    expect(res.status).toBe(500);
+    expect(await res.json()).toMatchObject({ code: "INTERNAL", message: "服务器内部错误，请稍后重试" });
+    const last = keys.listLogs(cid, 1)[0];
+    expect(last).toMatchObject({ code: "INTERNAL", status: 500, message: keys.INTERNAL_MESSAGE });
+    expect(JSON.stringify(keys.listLogs(cid))).not.toContain("hunter2");
+    expect(logged.flat().map(String).join(" ")).toContain("hunter2"); // 服务器日志里还有原文，方便排查
+  });
 
   it("频率限制：每个密钥每分钟 60 次；调用都有记录", () => {
     const t = 1_000_000;
