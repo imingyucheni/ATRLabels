@@ -12,9 +12,10 @@ import type {
 
 import { providerFetch, ShipBestError } from "./errors";
 import { getJiaguClient, isJiaguCode, jgOrders, type JiaguClient } from "./jiagu";
-import { DhlClient, dhlConfig, dhlOrders, dhlSettings, isDhlCode, mockDhlTransport, type DhlConfig } from "./dhl";
+import { DhlClient, dhlConfig, DhlError, dhlOrders, dhlSettings, isDhlCode, mockDhlTransport, type DhlConfig } from "./dhl";
 import { mockLabelPdf } from "../labels";
 import { multiBoxRule, summarizePieces } from "../multiBox";
+import { logProviderEvent } from "../providerLog";
 
 /** ShipBest 渠道名后面加的标记（只有后台看得到，客户看到的是物流商名称） */
 export const SB_SUFFIX = " · SB";
@@ -301,10 +302,13 @@ export class MockShipBestClient implements ShipBestClient {
   async cancelOrder(key: { orderNo?: string; customNo?: string }) {
     const o = this.find(key);
     if (o.status === 6) throw new ShipBestError(11204, "The order is Cancelled not cancel repeated !");
-    // 真实情况：已打单的订单需联系 ShipBest 人工取消
-    if (o.status === 4) throw new ShipBestError(11203, "The order was nonsupport cancelled!");
+    const provider = isJiaguCode(o.logisticsProductCode) ? "嘉谷" : isDhlCode(o.logisticsProductCode) ? "DHL" : null;
+    // ShipBest 的单按真实规则：已打单的订单需联系 ShipBest 人工取消（说明里写清楚是模拟单）
+    if (o.status === 4 && !provider) throw new ShipBestError(11203, "模拟订单，和真实 ShipBest 一样已打单不能接口取消：The order was nonsupport cancelled!");
     o.status = 6;
     mockOrders.save(o);
+    // 嘉谷 / DHL 的模拟单：真实接口出面单后也能作废（嘉谷 VoidShipment；DHL 没揽收就作废），模拟时直接取消成功，不连服务商
+    if (provider) logProviderEvent(o.customNo, provider, "模拟取消", null, `模拟订单（沙盒 / 模拟模式）：直接取消成功，没有连接${provider}`);
   }
 }
 
@@ -342,7 +346,16 @@ export class SandboxShipBestClient extends MockShipBestClient {
  * 订单查询 / 取消按自定义单号判断是哪家的单（嘉谷的单在 provider_orders 里有记录）。
  */
 export class MultiProviderClient implements ShipBestClient {
-  constructor(private sb: ShipBestClient | null, private jg: JiaguClient | null, private dhl: DhlClient | null = null) {}
+  /**
+   * opts.dhlTestOnLive：正式模式下 DHL 还是测试环境 → DHL 渠道不报价、不出单（测试环境的面单不能真实寄件，客户付了钱拿到的是无效面单）。
+   * 已经出的 DHL 单照常查询、取消。
+   */
+  constructor(private sb: ShipBestClient | null, private jg: JiaguClient | null, private dhl: DhlClient | null = null, private opts: { dhlTestOnLive?: boolean } = {}) {}
+
+  /** 同样的服务商，但不拦 DHL 测试环境：给内部测试账号用（下单是模拟的，DHL 测试环境报价没关系） */
+  withoutDhlGuard(): MultiProviderClient {
+    return this.opts.dhlTestOnLive ? new MultiProviderClient(this.sb, this.jg, this.dhl) : this;
+  }
 
   private isDhlOrder(key: { orderNo?: string; customNo?: string }) {
     return !!this.dhl && !!key.customNo && !!dhlOrders.get(key.customNo);
@@ -350,6 +363,7 @@ export class MultiProviderClient implements ShipBestClient {
 
   private dhlOr(): DhlClient {
     if (!this.dhl) throw new ShipBestError(10023, "DHL 没有启用或账号没填完整（设置 → DHL Express）");
+    if (this.opts.dhlTestOnLive) throw new DhlError(10023, DHL_TEST_ON_LIVE_MSG);
     return this.dhl;
   }
 
@@ -476,6 +490,17 @@ export function shipbestMode(): ShipBestMode {
   return shipbestConfig().mode;
 }
 
+/** 正式模式下 DHL 不报价、不出单时的说明（后台看得到；客户只看到“该渠道暂时无法报价”） */
+export const DHL_TEST_ON_LIVE_MSG = "DHL 服务商账号还是测试环境：测试环境的面单不能真实寄件，正式模式下不报价、不出单。请到 设置 → DHL Express 填正式账号，环境选“正式”";
+
+/**
+ * 正式模式（不是沙盒站、不是模拟 / 沙盒模式）下，DHL 还设成测试环境：
+ * 测试环境出的面单不能真实寄件，客户付了钱拿到的却是无效面单，所以这时 DHL 渠道不报价、不出单。
+ */
+export function dhlTestOnLive(): boolean {
+  return shipbestConfig().mode === "live" && !!dhlConfig() && dhlSettings().mode !== "live";
+}
+
 let live: { key: string; jg: JiaguClient | null; client: ShipBestClient } | null = null;
 let testWrap: { base: ShipBestClient; client: ShipBestClient } | null = null;
 
@@ -486,7 +511,8 @@ let testWrap: { base: ShipBestClient; client: ShipBestClient } | null = null;
 export function getTestAccountClient(): ShipBestClient {
   const base = getShipBestClient();
   if (shipbestConfig().mode !== "live") return base;
-  if (testWrap?.base !== base) testWrap = { base, client: new SandboxShipBestClient(base) };
+  // 测试账号的单全是模拟的：DHL 还在测试环境时也可以报价试用（正式客户那边照样不报价）
+  if (testWrap?.base !== base) testWrap = { base, client: new SandboxShipBestClient(base instanceof MultiProviderClient ? base.withoutDhlGuard() : base) };
   return testWrap.client;
 }
 
@@ -543,9 +569,11 @@ export function getShipBestClient(): ShipBestClient {
   if (!hasSb && !jg && !dhl) {
     throw new Error("还没有填写 ShipBest API ID / Token，请到后台“设置 → ShipBest 连接”填写");
   }
-  const key = `${c.mode}|${c.baseUrl}|${c.apiId}|${c.token}|${jg ? "jg" : ""}|${dhlCache?.key ?? ""}`;
+  // 正式模式下 DHL 还是测试环境：DHL 渠道不报价、不出单（沙盒模式下单是模拟的，不用拦）
+  const dhlTest = c.mode === "live" && !!dhl && dhlSettings().mode !== "live";
+  const key = `${c.mode}|${c.baseUrl}|${c.apiId}|${c.token}|${jg ? "jg" : ""}|${dhl ? dhlCache?.key ?? "" : ""}|${dhlTest ? "dhl-test" : ""}`;
   if (live?.key !== key || live.jg !== jg) {
-    const real = new MultiProviderClient(hasSb ? new HttpShipBestClient(c.baseUrl, c.apiId, c.token) : null, jg, dhl);
+    const real = new MultiProviderClient(hasSb ? new HttpShipBestClient(c.baseUrl, c.apiId, c.token) : null, jg, dhl, { dhlTestOnLive: dhlTest });
     live = { key, jg, client: c.mode === "sandbox" ? new SandboxShipBestClient(real) : real };
   }
   return live.client;

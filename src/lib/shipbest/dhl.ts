@@ -283,7 +283,12 @@ export function buildShipmentBody(cfg: DhlConfig, productCode: string, req: Ship
 type DhlOrder = {
   customNo: string;
   productCode: string;
-  trackingNo: string;
+  /** 提交前先记一条（还没有运单号）：提交超时、结果未知时为空 */
+  trackingNo: string | null;
+  /** 开始提交的时间（毫秒） */
+  submittedAt?: number;
+  /** 运单上印的客户参考号（客户订单号，没有就是我们的单号）：去 DHL 后台核对时按这个找 */
+  reference?: string;
   trackingUrl?: string | null;
   status: number;
   label?: string | null;
@@ -310,6 +315,14 @@ export const dhlOrders = {
       .run(o.customNo, JSON.stringify(o));
   },
 };
+
+/** 开始提交后多久还没有运单号算“提交结果未知”（出单接口最多等 60 秒，纸质发票重试再等 60 秒） */
+const DHL_SUBMIT_GRACE_MS = 150_000;
+
+/** 提交结果未知时的说明（后台看）。reference = 运单上印的客户参考号 */
+export function dhlUnknownMessage(reference: string, reason?: string) {
+  return `DHL 提交结果未知${reason ? `（${reason}）` : ""}：没有收到 DHL 的运单号，不知道运单有没有建成。请到 DHL 后台（MyDHL+）按参考号 ${reference} 核对：没有建单的申请取消后点“确认已取消”（全额退款）；已经建单的联系技术补录面单`;
+}
 
 /** 面单地址：dhl://<自定义单号>（面单内容在本地记录里，downloadLabel 读出来存成文件） */
 export const dhlLabelUrl = (customNo: string) => `dhl://${customNo}`;
@@ -443,16 +456,34 @@ export class DhlClient {
     const reference = (db().prepare("SELECT customer_ref FROM shipments WHERE custom_no = ?").get(customNo) as { customer_ref: string | null } | undefined)?.customer_ref || customNo;
     type Resp = { shipmentTrackingNumber?: string; trackingUrl?: string; documents?: { typeCode?: string; imageFormat?: string; content?: string }[]; shipmentCharges?: { currencyType?: string; price?: number }[] };
     let paperless = this.cfg.paperless;
+    // 提交前先记下这是 DHL 的单（还没有运单号）：万一提交超时、结果未知，之后刷新 / 取消也知道去找 DHL，
+    // 不会被当成 ShipBest 的单去查（查询 / 取消按 provider_orders 里的记录分给各服务商）
+    const pending: DhlOrder = { customNo, productCode: code, trackingNo: null, submittedAt: Date.now(), reference, status: 2, paperless };
+    dhlOrders.save(pending);
     let r: Resp;
     try {
-      r = await this.call<Resp>("POST", "/shipments", buildShipmentBody(this.cfg, productCode, req, { customNo, reference, paperless }));
+      try {
+        r = await this.call<Resp>("POST", "/shipments", buildShipmentBody(this.cfg, productCode, req, { customNo, reference, paperless }));
+      } catch (e) {
+        // 目的地不支持电子发票：改成纸质发票再提交一次（客户需要打印商业发票随货）
+        if (!(paperless && e instanceof DhlError && /\bWY\b|paperless|PLT/i.test(e.message))) throw e;
+        paperless = false;
+        r = await this.call<Resp>("POST", "/shipments", buildShipmentBody(this.cfg, productCode, req, { customNo, reference, paperless }));
+      }
     } catch (e) {
-      // 目的地不支持电子发票：改成纸质发票再提交一次（客户需要打印商业发票随货）
-      if (!(paperless && e instanceof DhlError && /\bWY\b|paperless|PLT/i.test(e.message))) throw e;
-      paperless = false;
-      r = await this.call<Resp>("POST", "/shipments", buildShipmentBody(this.cfg, productCode, req, { customNo, reference, paperless }));
+      if (e instanceof DhlError) {
+        // DHL 明确拒绝：运单没有建成（本地订单会删掉并退款），记录标成已作废
+        dhlOrders.save({ ...pending, paperless, status: 6, error: `DHL 拒绝出单：${e.message}` });
+      } else {
+        // 超时 / 连不上：DHL 那边可能已经建单，记录保持“待出单”，刷新时提示去 DHL 后台核对
+        dhlOrders.save({ ...pending, paperless, error: dhlUnknownMessage(reference, (e as Error).message) });
+      }
+      throw e;
     }
-    if (!r.shipmentTrackingNumber) throw new DhlError(1, "DHL 没有返回运单号");
+    if (!r.shipmentTrackingNumber) {
+      dhlOrders.save({ ...pending, paperless, error: "DHL 没有返回运单号" });
+      throw new DhlError(1, "DHL 没有返回运单号");
+    }
     const label = r.documents?.find((d) => d.typeCode === "label");
     const invoice = r.documents?.find((d) => d.typeCode === "invoice");
     const charge = r.shipmentCharges?.find((c) => c.currencyType === "BILLC") ?? r.shipmentCharges?.[0];
@@ -475,6 +506,9 @@ export class DhlClient {
   async getOrder(customNo: string): Promise<OrderDetail> {
     const o = dhlOrders.get(customNo);
     if (!o) throw new DhlError(1, "订单不存在");
+    // 提交后一直没有运单号（提交超时、或者提交过程中服务器重启）：保持“待出单”，提示去 DHL 后台核对
+    // 刚开始提交的几分钟内是正常出单中，不提示
+    const unknown = o.status === 2 && !o.trackingNo && Date.now() - (o.submittedAt ?? 0) > DHL_SUBMIT_GRACE_MS;
     return {
       // 不填服务商单号：查询 / 取消都按我们的自定义单号找到这票 DHL
       orderNo: "",
@@ -482,7 +516,7 @@ export class DhlClient {
       logisticsProductCode: o.productCode,
       logisticsProductName: o.productCode,
       status: o.status,
-      errorMsg: o.error ?? null,
+      errorMsg: o.error ?? (unknown ? dhlUnknownMessage(o.reference || customNo) : null),
       trackingNo: o.trackingNo,
       labelUrl: o.label ? dhlLabelUrl(customNo) : null,
       feePrice: o.cost ?? null,
@@ -506,7 +540,12 @@ export class DhlClient {
   async cancelOrder(customNo: string) {
     const o = dhlOrders.get(customNo);
     if (!o) throw new DhlError(1, "订单不存在");
+    // 已作废，或者 DHL 明确拒绝了（没有建单）：本地直接算已取消
     if (o.status === 6) return;
+    // 提交结果未知、没有运单号：DHL 没有按参考号查运单的接口，系统确认不了 DHL 有没有建单，不能在本地直接作废，转人工核对
+    if (!o.trackingNo) {
+      throw new DhlError(2, `DHL 提交结果未知，系统确认不了这票有没有在 DHL 建单，不能自动取消：请到 DHL 后台（MyDHL+）按参考号 ${o.reference || customNo} 核对，没有建单或已作废的再点“确认已取消”`);
+    }
     const events = await this.trackingEvents(o.trackingNo);
     // 只有“运单信息已接收”之类的电子记录不算揽收；出现揽收或之后的扫描就不能取消
     if (events.some((t) => !/^(SD|SI|MR|IR|SIR)$/i.test(t))) throw new DhlError(2, "DHL 已经揽收这票包裹，不能取消（请联系客服）");

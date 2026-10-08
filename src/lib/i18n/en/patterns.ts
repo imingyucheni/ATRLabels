@@ -32,6 +32,15 @@ export const patterns: [RegExp, string][] = [
   [/^(.+?) 接口连不上(（.+?）)?，请稍后再试$/, "Can't reach the $1 API$2. Please try again later"],
   [/^已同步 (\d+) 个渠道；以下服务商这次没取到，原来的渠道照常可用，稍后再点一次同步：(.+)$/, "Synced $1 services. These providers didn't respond this time (their existing services still work; sync again later): $2"],
 
+  /* ---------- DHL：正式模式下还是测试环境、提交结果未知 ---------- */
+  [/^\[10023\] 物流产品已停用（DHL 服务商账号还是测试环境：测试环境的面单不能真实寄件，正式模式下不报价、不出单。请到 设置 → DHL Express 填正式账号，环境选“正式”）$/, "[10023] Service is disabled (DHL is still set to its test environment: test labels can't be shipped, so DHL doesn't quote or create labels in live mode. Go to Settings → DHL Express, enter the live account and set the environment to Live)"],
+  [/^DHL 提交结果未知（(.+)）：没有收到 DHL 的运单号，不知道运单有没有建成。请到 DHL 后台（MyDHL\+）按参考号 (.+?) 核对：没有建单的申请取消后点“确认已取消”（全额退款）；已经建单的联系技术补录面单$/, "DHL submission result unknown ($1): no DHL waybill number was received, so we don't know whether the shipment was created. Check reference $2 in MyDHL+: if it wasn't created, request cancellation and click “Confirm cancelled” (full refund); if it was, contact tech support to attach the label"],
+  [/^DHL 提交结果未知：没有收到 DHL 的运单号，不知道运单有没有建成。请到 DHL 后台（MyDHL\+）按参考号 (.+?) 核对：没有建单的申请取消后点“确认已取消”（全额退款）；已经建单的联系技术补录面单$/, "DHL submission result unknown: no DHL waybill number was received, so we don't know whether the shipment was created. Check reference $1 in MyDHL+: if it wasn't created, request cancellation and click “Confirm cancelled” (full refund); if it was, contact tech support to attach the label"],
+  [/^(?:\[2\] )?DHL 提交结果未知，系统确认不了这票有没有在 DHL 建单，不能自动取消：请到 DHL 后台（MyDHL\+）按参考号 (.+?) 核对，没有建单或已作废的再点“确认已取消”$/, "DHL submission result unknown — we can't confirm whether DHL created this shipment, so it can't be cancelled automatically. Check reference $1 in MyDHL+; if it wasn't created (or was voided), click “Confirm cancelled”"],
+
+  /* ---------- 多箱面单合成 PDF ---------- */
+  [/^多箱面单第 (\d+) 箱（共 (\d+) 箱）是 (\S+) 格式，不能合成 PDF：请到服务商后台下载这票的全部面单$/, "Multi-box label for box $1 of $2 is in $3 format and can't be merged into the PDF. Download all labels for this shipment from the provider's portal"],
+
   /* ---------- 账户流水说明（按“ · ”拆开逐段翻译） ---------- */
   [/^充值申请 #(\d+)$/, "Top-up request #$1"],
   [/^支付宝 ¥([\d.]+)（汇率 ([\d.]+)）$/, "Alipay ¥$1 (rate $2)"],

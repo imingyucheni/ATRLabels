@@ -15,7 +15,7 @@ import { acceptedCount, getTerms, unsignedCustomers, usingDefaultTerms } from "@
 import { ADJUSTMENT_POLICY_LABEL, channelCustomerCounts, getSettings, listChannels } from "@/lib/db";
 import { BALANCE_RULE_LABEL } from "@/lib/ledger";
 import { computePrice, money, resolveRule, type MarkupRule } from "@/lib/pricing";
-import { isMockMode, isSandboxSite, shipbestConfig, type ShipBestMode } from "@/lib/shipbest/client";
+import { dhlTestOnLive, isMockMode, isSandboxSite, shipbestConfig, type ShipBestMode } from "@/lib/shipbest/client";
 import { isProductionSite, siteSwitch } from "@/lib/sites";
 import { groupChannels } from "@/lib/channelGroups";
 import StampSettings from "@/components/StampSettings";
@@ -356,13 +356,21 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         const d = dhlSettings();
         const ready = !!(d.apiKey && d.apiSecret && d.accountNumber);
         const dhlChannels = listChannels().filter((c) => isDhlCode(c.code));
+        // 正式模式下 DHL 还是测试环境：DHL 渠道不给客户报价、不能出单
+        const testOnLive = dhlTestOnLive();
         return (
           <SettingsSection
             id="dhl"
             title={t("DHL Express 国际快递")}
-            badge={<span className={`badge ${d.enabled && (ready || isMockMode()) ? "ok" : "pending"}`}>{d.enabled && ready ? (d.mode === "live" ? t("正式") : t("测试环境")) : d.enabled && isMockMode() ? t("模拟") : ready ? t("已停用") : t("未配置")}</span>}
+            defaultOpen={testOnLive}
+            badge={<span className={`badge ${testOnLive ? "exception" : d.enabled && (ready || isMockMode()) ? "ok" : "pending"}`}>{d.enabled && ready ? (d.mode === "live" ? t("正式") : t("测试环境")) : d.enabled && isMockMode() ? t("模拟") : ready ? t("已停用") : t("未配置")}</span>}
             summary={dhlChannels.length ? t("{a} 个渠道，启用 {b} 个", { a: dhlChannels.length, b: dhlChannels.filter((c) => c.enabled).length }) : undefined}
           >
+            {testOnLive && (
+              <div className="alert warn" style={{ marginTop: 0, marginBottom: 12 }}>
+                {t("现在是正式模式，但 DHL 还是测试环境：测试环境出的面单不能真实寄件，所以 DHL 渠道暂停报价和出单（客户看到“该渠道暂时无法报价”）。请填正式的 API Key / Secret，环境选“正式”后保存。")}
+              </div>
+            )}
             <p className="small muted" style={{ marginTop: 0 }}>
               {t("连接我们自己的 DHL Express 账号（MyDHL API）。启用后点“物流渠道 → 同步渠道”，会出现 DHL Express Worldwide / 12:00 / 9:00 三个渠道（名称后面带“· DHL”），再到客户详情里给客户开通。收件国家不是美国时，报价只走 DHL；寄美国不走 DHL。API Key / Secret 和付款账号向 DHL 客户经理申请（developer.dhl.com 的 MyDHL API）。")}
             </p>

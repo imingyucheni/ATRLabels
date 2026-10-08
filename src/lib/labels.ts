@@ -17,6 +17,13 @@ export function sniffMime(buf: Buffer, headerType: string | null): { mime: strin
   return { mime: t, ext: "bin" };
 }
 
+/** 面单格式的显示名（报错用）：ZPL、GIF，其他的用文件类型 */
+function labelFormatName(buf: Buffer, mime: string) {
+  if (mime === "text/plain" || buf.subarray(0, 3).toString("latin1") === "^XA") return "ZPL";
+  if (buf.subarray(0, 4).toString("latin1") === "GIF8") return "GIF";
+  return mime || "未知";
+}
+
 /**
  * 下载 ShipBest 返回的面单并存到本地。
  * ShipBest 的 labelUrl 可能过期，所以出单后立即保存一份。
@@ -29,18 +36,24 @@ export async function downloadLabel(url: string, customNo: string, extra: { from
     const urls = JSON.parse(url.slice("multi:".length)) as string[];
     const { PDFDocument } = await import("pdf-lib");
     const out = await PDFDocument.create();
-    for (const u of urls) {
+    for (const [i, u] of urls.entries()) {
       const one = await downloadLabel(u, `${customNo}-part`, extra);
-      const b = readLabel(one.path);
-      if (one.mime === "application/pdf") {
-        const src = await PDFDocument.load(b, { ignoreEncryption: true });
-        (await out.copyPages(src, src.getPageIndices())).forEach((p) => out.addPage(p));
-      } else if (one.mime === "image/png" || one.mime === "image/jpeg") {
-        const img = one.mime === "image/png" ? await out.embedPng(b) : await out.embedJpg(b);
-        const scale = Math.min(288 / img.width, 432 / img.height);
-        out.addPage([288, 432]).drawImage(img, { x: (288 - img.width * scale) / 2, y: (432 - img.height * scale) / 2, width: img.width * scale, height: img.height * scale });
+      try {
+        const b = readLabel(one.path);
+        if (one.mime === "application/pdf") {
+          const src = await PDFDocument.load(b, { ignoreEncryption: true });
+          (await out.copyPages(src, src.getPageIndices())).forEach((p) => out.addPage(p));
+        } else if (one.mime === "image/png" || one.mime === "image/jpeg") {
+          const img = one.mime === "image/png" ? await out.embedPng(b) : await out.embedJpg(b);
+          const scale = Math.min(288 / img.width, 432 / img.height);
+          out.addPage([288, 432]).drawImage(img, { x: (288 - img.width * scale) / 2, y: (432 - img.height * scale) / 2, width: img.width * scale, height: img.height * scale });
+        } else {
+          // ZPL、GIF 等放不进 PDF：不能悄悄跳过（合出来的 PDF 会少箱子，客户少贴面单），直接报错
+          throw new Error(`多箱面单第 ${i + 1} 箱（共 ${urls.length} 箱）是 ${labelFormatName(b, one.mime)} 格式，不能合成 PDF：请到服务商后台下载这票的全部面单`);
+        }
+      } finally {
+        fs.rmSync(path.resolve(dataDir(), one.path), { force: true });
       }
-      fs.rmSync(path.resolve(dataDir(), one.path), { force: true });
     }
     buf = Buffer.from(await out.save());
   } else if (url.startsWith("dhl://")) {

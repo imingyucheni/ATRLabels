@@ -17,6 +17,19 @@ const QUOTE_TIMEOUT_MS = 15_000;
 export const JG_SUFFIX = " · GDE";
 const ORDER_TYPE_LASTMILE = 20120;
 
+/**
+ * 下单（ShippingLabel）返回这些错误码时订单不算失败：不退款、不切备用，之后查状态时再取面单。
+ * 100：供应商异步未及时返回单号（文档：需要重新推送）；700402：API 获取面单异常（承运商面单可能已经生成）。
+ */
+const JG_ACCEPTED_CODES = new Set(["100", "700402"]);
+/** 重新推送时这些错误码表示订单已经在嘉谷：100 仍在等供应商、100002 订单重复、100100 订单已经存在 → 继续等面单 */
+const JG_WAITING_CODES = new Set(["100", "100002", "100100"]);
+/** 重新推送：两次推送至少隔 45 秒，最多 5 次 */
+export const JG_REPUSH_INTERVAL_MS = 45_000;
+export const JG_REPUSH_MAX = 5;
+/** 只在下单后 4 分钟内重新推送：5 分钟还没面单会转异常并自动作废，之后再推可能又建出一张单 */
+export const JG_REPUSH_WINDOW_MS = 4 * 60_000;
+
 /** 嘉谷给的“产品 ID → 仓库 ID”（不同渠道从不同仓库出）；后台可以改，这里是默认值 */
 export const DEFAULT_JG_WAREHOUSES: Record<string, string> = {
   "569599": "221121", // Fedex NG末端-N · GDE-ONE-91761
@@ -140,6 +153,18 @@ export function warehouseOfCode(cfg: JiaguConfig, code: string) {
   return warehouseFor(cfg, productId, warehouseId);
 }
 
+/** 这张单实际从哪个仓库出：下单时记下的仓库优先（后台之后改了仓库设置也不变）；以前的单没记，按渠道代码和当前设置推算 */
+export function orderWarehouse(cfg: JiaguConfig, customNo: string, code: string) {
+  return jgOrders.get(customNo)?.warehouseId || warehouseOfCode(cfg, code);
+}
+
+/** 服务商反馈里显示的仓库：“仓库 GALAX（196845）” */
+function warehouseLabel(id: number | null | undefined) {
+  if (!id) return "没有设置仓库";
+  const name = JG_WAREHOUSE_INFO[String(id)]?.name;
+  return name ? `仓库 ${name}（${id}）` : `仓库 ${id}`;
+}
+
 export function buildJiaguBody(cfg: JiaguConfig, req: ShipmentRequest, productId: number, warehouseId?: number | null) {
   const { sender: s, recipient: r, pkg } = req;
   const u = units(req);
@@ -240,6 +265,27 @@ interface JgResult<T> {
   result?: T;
 }
 
+/** ShippingLabel 的返回（下单和重新推送一样） */
+type JgLabelResult = { Identifier?: string; MasterTrackingNbr?: string; TrackingNbr?: string; MasterLabelUrl?: string; labels?: { labelUri?: string }[] };
+
+/** 从 ShippingLabel 的返回里取嘉谷单号、运单号、面单；多箱每箱一张面单，全部记下来，下载时合成一个 PDF（主面单不一定包含所有箱子） */
+function labelOf(x: JgLabelResult | undefined) {
+  const r = x ?? {};
+  const uris = (r.labels ?? []).map((l) => l.labelUri).filter((u): u is string => !!u);
+  return {
+    identifier: r.Identifier || undefined,
+    tracking: r.MasterTrackingNbr || r.TrackingNbr || null,
+    label: uris.length > 1 ? `multi:${JSON.stringify(uris)}` : r.MasterLabelUrl || uris[0] || null,
+  };
+}
+
+/** 面单地址合并：已有的多箱面单列表（multi:[...]）不会被单张面单（例如 WaybillUrl）覆盖；已有的保留，缺的才补 */
+export function mergeLabel(existing: string | null | undefined, incoming: string | null | undefined): string | null {
+  if (existing?.startsWith("multi:")) return existing;
+  if (incoming?.startsWith("multi:")) return incoming;
+  return existing || incoming || null;
+}
+
 /** 查面单的返回概括成一句，记到服务商反馈里 */
 function replySummary(ok: boolean, message: string, tracking?: string | null, label?: string | null) {
   return [ok ? "成功" : "失败", message, tracking ? `运单号 ${tracking}` : "没有运单号", label ? "有面单" : "没有面单"].filter(Boolean).join(" · ");
@@ -253,7 +299,28 @@ export class JiaguError extends ShipBestError {
   }
 }
 
-type LocalOrder = { customNo: string; productCode: string; productName: string; identifier?: string; trackingNo?: string | null; labelUrl?: string | null; status: number; cost?: number | null; error?: string | null };
+type LocalOrder = {
+  customNo: string;
+  productCode: string;
+  productName: string;
+  identifier?: string;
+  trackingNo?: string | null;
+  labelUrl?: string | null;
+  status: number;
+  cost?: number | null;
+  error?: string | null;
+  /** 下单时实际用的仓库：取消（VoidShipment）按这个仓库作废，后台之后改了仓库设置也不会作废到别的仓库 */
+  warehouseId?: number | null;
+  /** 提交给 ShippingLabel 的请求体：ErrorCode=100 时文档要求重新推送，原样再提交一次 */
+  pushBody?: Record<string, unknown> | null;
+  /** 第一次提交的时间、最后一次推送的时间（毫秒） */
+  createdAt?: number;
+  lastPushAt?: number;
+  /** 已经重新推送了几次 */
+  repushes?: number;
+  /** 申请过取消：之后不再重新推送（免得把要取消的单又推出面单） */
+  cancelRequested?: boolean;
+};
 
 /** 嘉谷订单在本地的记录：查状态 / 取消时知道是嘉谷的单 */
 export const jgOrders = {
@@ -427,31 +494,35 @@ export class JiaguClient {
 
   async createOrder(customNo: string, code: string, req: ShipmentRequest, productName = code) {
     const { productId: id, warehouseId: wh } = parseJgCode(code);
+    const warehouseId = warehouseFor(this.cfg, id, wh);
+    const body: Record<string, unknown> = { ...buildJiaguBody(this.cfg, req, id, wh), OrderNbr: customNo, ProductID: id };
+    const now = Date.now();
     // 提交前先记下这是嘉谷的单：万一提交超时、结果未知，之后刷新也知道去嘉谷查（查不到面单 5 分钟后转异常）
     // 主渠道被拒后自动改用备用渠道时，同一个单号再提交一次：记录改成备用渠道（取消时用对仓库）
-    if (jgOrders.get(customNo)?.productCode !== code) jgOrders.save({ customNo, productCode: code, productName, status: 2 });
-    const r = await this.call<{ Identifier?: string; MasterTrackingNbr?: string; TrackingNbr?: string; MasterLabelUrl?: string; labels?: { labelUri?: string }[] }>(
-      "/api/gts/ShippingLabel",
-      { ...buildJiaguBody(this.cfg, req, id, wh), OrderNbr: customNo, ProductID: id },
-    );
-    const x = r.result ?? {};
-    const tracking = x.MasterTrackingNbr || x.TrackingNbr || null;
-    // 多箱：每箱一张面单，全部记下来，下载时合成一个 PDF（主面单不一定包含所有箱子）
-    const uris = (x.labels ?? []).map((l) => l.labelUri).filter((u): u is string => !!u);
-    const label = uris.length > 1 ? `multi:${JSON.stringify(uris)}` : x.MasterLabelUrl || uris[0] || null;
+    // 同时记下实际用的仓库（取消时按这个作废）和请求体（ErrorCode=100 时要原样重新推送）
+    jgOrders.save({ customNo, productCode: code, productName, status: 2, warehouseId, pushBody: body, createdAt: now, lastPushAt: now, repushes: 0 });
+    const r = await this.call<JgLabelResult>("/api/gts/ShippingLabel", body);
+    const { identifier, tracking, label } = labelOf(r.result);
+    // ErrorCode = 100：订单已建，供应商面单稍后返回，之后查状态时再取（取不到就按文档重新推送）
+    // ErrorCode = 700402：获取面单异常，承运商面单可能已经生成：和 100 一样按“已接单、结果未知”处理，不退款、不切备用
+    const accepted = !r.ok && JG_ACCEPTED_CODES.has(r.code ?? "");
     logProviderEvent(customNo, "嘉谷", "提交订单", r.code, [
-      r.ok ? "成功" : r.code === "100" ? "已接单，面单稍后生成" : "失败",
+      r.ok ? "成功" : r.code === "100" ? "已接单，面单稍后生成" : r.code === "700402" ? "获取面单异常，订单可能已建好，稍后再查面单" : "失败",
       r.message,
-      x.Identifier && `嘉谷单号 ${x.Identifier}`,
+      warehouseLabel(warehouseId),
+      identifier && `嘉谷单号 ${identifier}`,
       tracking && `运单号 ${tracking}`,
     ].filter(Boolean).join(" · "));
-    // ErrorCode = 100：订单已建，服务商面单稍后返回，之后查状态时再取
-    if (!r.ok && r.code !== "100") throw new JiaguError(r.code, r.message || "下单失败");
-    jgOrders.save({ customNo, productCode: code, productName, identifier: x.Identifier, trackingNo: tracking, labelUrl: label, status: tracking && label ? 4 : 2 });
+    if (!r.ok && !accepted) throw new JiaguError(r.code, r.message || "下单失败");
+    // 提交期间可能已经有刷新取到面单、或者已经取消：用最新的记录合并（已取消的不会被改回来）
+    const cur = jgOrders.get(customNo);
+    const t = cur?.trackingNo || tracking;
+    const l = mergeLabel(cur?.labelUrl, label);
+    jgOrders.save({ ...cur, customNo, productCode: code, productName, warehouseId, identifier: identifier || cur?.identifier, trackingNo: t, labelUrl: l, status: cur?.status === 6 ? 6 : t && l ? 4 : 2 });
   }
 
   async getOrder(customNo: string): Promise<OrderDetail> {
-    const o = jgOrders.get(customNo);
+    let o = jgOrders.get(customNo);
     if (!o) throw new JiaguError(900901, "订单在嘉谷系统中不存在");
     if (o.status === 2) {
       // 面单还没好：先按订单号取，取不到再用异步面单接口
@@ -469,10 +540,17 @@ export class JiaguClient {
           label = label || a.result?.labelUrl;
         }
       }
-      if (tracking && label) {
-        Object.assign(o, { trackingNo: tracking, labelUrl: label, status: 4 });
-        jgOrders.save(o);
+      // 查询要等嘉谷返回，期间可能已经取消、或者别的刷新已经取到面单：用最新的记录合并
+      const cur = jgOrders.get(customNo) ?? o;
+      if (cur.status === 2) {
+        // 只补缺的：下单时已经拿到的运单号、多箱每箱的面单（multi:[...]）不会被这里的单张面单覆盖
+        const t = cur.trackingNo || tracking || null;
+        const l = mergeLabel(cur.labelUrl, label);
+        if (t && l) jgOrders.save({ ...cur, trackingNo: t, labelUrl: l, status: 4 });
+        // 还是没有面单：按文档重新推送（有间隔和次数限制）
+        else await this.repush(customNo);
       }
+      o = jgOrders.get(customNo) ?? o;
     }
     return {
       // 不回填 orderNo：本地一律按自定义单号查嘉谷订单（嘉谷单号记在 provider_orders 里）
@@ -489,13 +567,59 @@ export class JiaguClient {
     };
   }
 
+  /**
+   * 重新推送：文档要求 ErrorCode=100（供应商异步未及时返回单号）时重新推送订单。
+   * 查不到面单时，用下单时记下的请求体、同一个订单号再提交一次 ShippingLabel：两次至少隔 45 秒、最多 5 次、只在下单 4 分钟内。
+   * 拿到面单就记下；返回 100 / 100002 订单重复 / 100100 订单已经存在 → 继续等；其他错误只记录，也继续等
+   * （不删单、不退款，5 分钟还没面单照常转异常并自动作废）。申请过取消的单不再推送。
+   */
+  private async repush(customNo: string): Promise<void> {
+    const o = jgOrders.get(customNo);
+    if (!o || o.status !== 2 || !o.pushBody || o.cancelRequested) return;
+    const now = Date.now();
+    const n = o.repushes ?? 0;
+    const created = o.createdAt ?? 0;
+    if (n >= JG_REPUSH_MAX || now - created > JG_REPUSH_WINDOW_MS || now - (o.lastPushAt ?? created) < JG_REPUSH_INTERVAL_MS) return;
+    // 先记下这一次（几个刷新同时进来时只推一次）
+    jgOrders.save({ ...o, repushes: n + 1, lastPushAt: now });
+    const action = "重新推送（ShippingLabel）";
+    let r: { ok: boolean; code: string | null; message: string; result: JgLabelResult | undefined };
+    try {
+      r = await this.call<JgLabelResult>("/api/gts/ShippingLabel", o.pushBody);
+    } catch (e) {
+      logProviderEvent(customNo, "嘉谷", action, null, `第 ${n + 1} 次 · ${(e as Error).message} · 继续等面单`);
+      return;
+    }
+    const { identifier, tracking, label } = labelOf(r.result);
+    logProviderEvent(customNo, "嘉谷", action, r.code, [
+      `第 ${n + 1} 次`,
+      r.ok ? "成功" : r.code === "100" ? "供应商仍未返回单号，继续等" : JG_WAITING_CODES.has(r.code ?? "") ? "订单已在嘉谷，继续等面单" : "失败，继续等面单",
+      r.message,
+      identifier && `嘉谷单号 ${identifier}`,
+      tracking ? `运单号 ${tracking}` : "没有运单号",
+      label ? "有面单" : "没有面单",
+    ].filter(Boolean).join(" · "));
+    if (!r.ok) return;
+    // 推送期间可能已经取消 / 别的刷新取到了面单：用最新的记录合并，只补缺的
+    const cur = jgOrders.get(customNo);
+    if (!cur || cur.status !== 2) return;
+    const t = cur.trackingNo || tracking;
+    const l = mergeLabel(cur.labelUrl, label);
+    jgOrders.save({ ...cur, identifier: cur.identifier || identifier, trackingNo: t, labelUrl: l, status: t && l ? 4 : 2 });
+  }
+
   async cancelOrder(customNo: string) {
     const o = jgOrders.get(customNo);
+    // 申请过取消就不再重新推送
+    if (o && !o.cancelRequested) jgOrders.save({ ...o, cancelRequested: true });
+    // 按下单时记下的仓库作废（以前的单没记，按渠道代码和当前设置推算）
+    const warehouseID = o?.warehouseId || warehouseOfCode(this.cfg, o?.productCode ?? "");
     const r = await this.call<boolean>("/api/gts/VoidShipment", {
-      ownershipID: this.cfg.ownershipId, warehouseID: warehouseOfCode(this.cfg, o?.productCode ?? ""), customerID: this.cfg.customerId, orderNbr: customNo,
+      ownershipID: this.cfg.ownershipId, warehouseID, customerID: this.cfg.customerId, orderNbr: customNo,
     });
     if (!r.ok || r.result === false) throw new JiaguError(r.code ?? 11203, r.message || "该订单不支持取消");
-    if (o) jgOrders.save({ ...o, status: 6 });
+    const cur = jgOrders.get(customNo) ?? o;
+    if (cur) jgOrders.save({ ...cur, status: 6 });
   }
 
   /** 实际结算费用（出单后服务商核算的金额），用于自动补差 */
