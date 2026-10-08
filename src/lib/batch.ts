@@ -6,13 +6,17 @@
 import { localizeChannelName, publicChannel, stripProviderTag } from "./carriers";
 import { checkAddress, needsAck, type AddressCheck } from "./addressCheck";
 import ExcelJS from "exceljs";
-import { activeShipmentByRef, customerChannels, db, duplicateRefMessage, getChannel, getCustomer, getSettings, getShipment, listChannels, type ShipmentStatus } from "./db";
+import { activeShipmentByRef, customerChannels, db, duplicateRefMessage, getChannel, getCustomer, getSettings, getShipment, listChannels, type Channel, type ShipmentStatus } from "./db";
 import { InsufficientBalanceError } from "./ledger";
 import { createLabel, PriceChangedError, primeQuotes, quoteChannel, refreshShipment, validateRequest, forDestination } from "./service";
 import type { Address, ShipmentRequest, SkuItem, UnitSystem } from "./shipbest/types";
 import { usStateCode } from "./geo";
 import { JOB_STATUS_LABEL, type JobStatus } from "./batchLabels";
 import { isMultiBoxName } from "./multiBox";
+import { isInternational } from "./shipbest/dhl";
+import { parseJgCode } from "./shipbest/jiagu";
+import { cellText, parseCsv, readSheetRows } from "./adjustments";
+import { assertZipSize } from "./zip";
 
 export { JOB_STATUS_LABEL, type JobStatus };
 
@@ -186,6 +190,112 @@ export interface ParsedOrder {
   /** 表格里填写的物流产品（渠道名称或代码） */
   fileChannel: string;
   errors: string[];
+  /** 提醒（不拦着下单，但默认不勾选），例如店铺订单可能以前下过单 */
+  warning?: string;
+}
+
+/** 批量导入（表格 / 店铺订单）只支持寄美国：国际件要填材质、原产国等报关信息，模板里没有这些列 */
+export const INTL_IMPORT_MSG = "国际件请在“国际下单（DHL）”里单独下单（批量导入只支持寄往美国的订单）";
+
+/**
+ * 美国邮编统一写法：Excel 把邮编存成数字时前导 0 会丢。
+ * 3–4 位补成 5 位（2134 → 02134）；7–8 位是丢了 0 的 ZIP+4（21101234 → 02110-1234）；9 位补上横杠。
+ */
+export function normalizeUsZip(raw: string): string {
+  const z = (raw ?? "").trim().replace(/\s+/g, "");
+  let m = z.match(/^(\d{3,5})(?:-(\d{4}))?$/);
+  if (m) return m[1].padStart(5, "0") + (m[2] ? `-${m[2]}` : "");
+  m = z.match(/^\d{7,9}$/);
+  if (m) {
+    const d = z.padStart(9, "0");
+    return `${d.slice(0, 5)}-${d.slice(5)}`;
+  }
+  return raw;
+}
+
+/**
+ * 读取批量下单表格，空行保留成 []：第 i 个元素就是表格里的第 i + 1 行，报错时的“第几行”和 Excel 里看到的一致。
+ * （补差导入用的 readSheetRows 会跳过空行，那边按内容判重，行号无所谓）
+ */
+export async function readOrderSheet(filename: string, buf: Buffer): Promise<string[][]> {
+  const lower = filename.toLowerCase();
+  let rows: string[][];
+  if (lower.endsWith(".xlsx")) {
+    const wb = new ExcelJS.Workbook();
+    assertZipSize(buf);
+    await wb.xlsx.load(buf as unknown as ArrayBuffer);
+    // 批量下单模板取第一个工作表（第二个是填写示例）
+    const ws = wb.worksheets[0];
+    const sparse: string[][] = [];
+    ws?.eachRow({ includeEmpty: false }, (row) => {
+      sparse[row.number - 1] = (row.values as ExcelJS.CellValue[]).slice(1).map(cellText);
+    });
+    rows = Array.from(sparse, (r) => r ?? []);
+  } else if (lower.endsWith(".csv") || lower.endsWith(".txt")) {
+    rows = csvKeepingLineNumbers(buf);
+  } else {
+    // .xls / 其他格式：沿用原来的报错说明
+    return readSheetRows(filename, buf, "first");
+  }
+  if (!rows.some((r) => r.some((c) => c && c.trim()))) throw new Error("表格是空的");
+  return rows;
+}
+
+/**
+ * CSV：parseCsv 会跳过空行，这里按同样的规则（引号里的换行不算）找出每条记录从第几行开始，把空行补回来。
+ * 对不上时（极少见的写法）按原来的顺序返回，只是行号可能不准。
+ */
+function csvKeepingLineNumbers(buf: Buffer): string[][] {
+  const rows = parseCsv(buf);
+  let text: string;
+  try {
+    text = new TextDecoder("utf-8", { fatal: true }).decode(buf);
+  } catch {
+    text = new TextDecoder("gbk").decode(buf);
+  }
+  text = text.replace(/^\uFEFF/, "");
+  const firstLine = text.split(/\r?\n/, 1)[0] ?? "";
+  const delim = [",", ";", "\t"].sort((a, b) => firstLine.split(b).length - firstLine.split(a).length)[0];
+  const starts: number[] = [];
+  let line = 1;
+  let start = 1;
+  let cell = "";
+  let quoted = false;
+  let filled = false;
+  const endCell = () => {
+    if (cell.trim()) filled = true;
+    cell = "";
+  };
+  const endRecord = () => {
+    endCell();
+    if (filled) starts.push(start);
+    filled = false;
+  };
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (quoted) {
+      if (c === '"' && text[i + 1] === '"') {
+        cell += '"';
+        i++;
+      } else if (c === '"') quoted = false;
+      else {
+        if (c === "\n") line++;
+        cell += c;
+      }
+    } else if (c === '"' && cell === "") quoted = true;
+    else if (c === delim) endCell();
+    else if (c === "\n" || c === "\r") {
+      if (c === "\r" && text[i + 1] === "\n") i++;
+      endRecord();
+      line++;
+      start = line;
+    } else cell += c;
+  }
+  endRecord();
+  if (starts.length !== rows.length) return rows;
+  const out: string[][] = [];
+  rows.forEach((r, k) => (out[starts[k] - 1] = r));
+  return Array.from(out, (r) => r ?? []);
 }
 
 const norm = (h: string) => (h ?? "").replace(/[*＊\s]/g, "").replace(/（/g, "(").replace(/）/g, ")").toLowerCase();
@@ -258,7 +368,8 @@ export function isShipBestTemplate(header: string[]) {
 
 export function parseOrders(rows: string[][], defaultSender: Address | null): { orders: ParsedOrder[]; error?: string } {
   const st = getSettings();
-  const headerIdx = rows.slice(0, 10).findIndex(isShipBestTemplate);
+  // 表头一般在第 1 行；前面可能有标题行、空行（空行现在保留着，多看几行）
+  const headerIdx = rows.slice(0, 20).findIndex((r) => !!r && isShipBestTemplate(r));
   if (headerIdx < 0) return { orders: [], error: "没有找到表头：请用本页“下载模板”里的导单模板填写后上传" };
   const { find, inRecip, inSender, senderStart } = headerIndex(rows[headerIdx]);
   const col = {
@@ -293,10 +404,11 @@ export function parseOrders(rows: string[][], defaultSender: Address | null): { 
       const v = g(n);
       if (v) a[k] = v as never;
     }
+    if (!isInternational({ recipient: a })) {
+      // Excel 把 02134、02110-1234 这类邮编存成数字，前导 0 会丢：补回 5 位 / 9 位
+      a.zipCode = normalizeUsZip(a.zipCode);
+    }
     if (a.country === "US") {
-      // Excel 把 02134 这类邮编存成数字，前导 0 会丢：补回 5 位
-      const z = a.zipCode.match(/^(\d{3,4})(-\d{4})?$/);
-      if (z) a.zipCode = z[1].padStart(5, "0") + (z[2] ?? "");
       // 州写全称（California）时换成代码（CA）
       if (a.province) a.province = usStateCode(a.province) ?? a.province;
     }
@@ -309,7 +421,7 @@ export function parseOrders(rows: string[][], defaultSender: Address | null): { 
   let currentUnitText = "";
 
   for (let i = headerIdx + 1; i < rows.length; i++) {
-    const r = rows[i];
+    const r = rows[i] ?? [];
     if (!r.some((c) => c && c.trim())) continue;
     const ref = get(r, col.ref);
     const skuCode = get(r, col.sku);
@@ -384,6 +496,11 @@ export function parseOrders(rows: string[][], defaultSender: Address | null): { 
 
   for (const o of orders) {
     if (!o.customerRef) continue; // 缺单号的行已经报错，不用再逐项校验
+    // 国际件：模板里没有材质、原产国等报关列，逐项校验只会报一堆看不懂的错，直接说清楚去哪里下单
+    if (isInternational(o.req)) {
+      o.errors = [INTL_IMPORT_MSG];
+      continue;
+    }
     const { pkg } = o.req;
     // SKU 尺寸没填时用包裹尺寸（接口要求必填）；单件重量没填时按包裹重量均摊
     const totalQty = o.req.skuList.reduce((a, s) => a + (s.quantity || 1), 0) || 1;
@@ -404,18 +521,23 @@ export function parseOrders(rows: string[][], defaultSender: Address | null): { 
   return { orders };
 }
 
-/** 表格里的物流产品名称 → 渠道代码（按名称或代码匹配，忽略空格和全半角括号） */
-export function matchChannel(name: string): string | null {
-  if (!name) return null;
+/**
+ * 表格里的物流产品名称 → 候选渠道代码（按名称或代码匹配，忽略空格和全半角括号）。
+ * list 传客户自己开通的渠道：ShipBest 和嘉谷有同名的渠道（客户看到的都是“USPS”），只在客户能用的渠道里找，
+ * 不然会对上一个客户没开通的渠道。原名 / 代码对上的优先，其次是客户看到的名称。
+ */
+export function matchChannels(name: string, list: Pick<Channel, "code" | "name" | "displayName" | "carrier">[] = listChannels(true)): string[] {
+  if (!name) return [];
   const n = norm(name);
-  const list = listChannels(true);
-  // 渠道原名、代码，或客户看到的名称（客户下载的模板里是这个）
-  // ShipBest 导单表里的渠道名没有“· SB”这类服务商标记，比较时去掉
-  const c =
-    list.find((ch) => norm(ch.name) === n || norm(stripProviderTag(ch.name)) === n || norm(ch.code) === n) ??
-    // 客户看到的名称：中文（“OnTrac 预上网”）或英文界面下载的模板（“OnTrac Pre-scan”）
-    list.find((ch) => norm(publicChannel(ch).name) === n || norm(localizeChannelName(publicChannel(ch).name, "en")) === n);
-  return c?.code ?? null;
+  // 渠道原名、代码（ShipBest 导单表里的渠道名没有“· SB”这类服务商标记，比较时去掉）
+  const exact = list.filter((ch) => norm(ch.name) === n || norm(stripProviderTag(ch.name)) === n || norm(ch.code) === n);
+  if (exact.length) return exact.map((c) => c.code);
+  // 客户看到的名称：中文（“OnTrac 预上网”）或英文界面下载的模板（“OnTrac Pre-scan”）
+  return list.filter((ch) => norm(publicChannel(ch).name) === n || norm(localizeChannelName(publicChannel(ch).name, "en")) === n).map((c) => c.code);
+}
+
+export function matchChannel(name: string, list?: Pick<Channel, "code" | "name" | "displayName" | "carrier">[]): string | null {
+  return matchChannels(name, list)[0] ?? null;
 }
 
 /* ---------------- 任务 ---------------- */
@@ -438,6 +560,9 @@ export interface RowQuote {
   /** 限时活动 */
   promo?: { label: string; endsOn: string; originalPrice: number };
 }
+
+/** 表格里指定的渠道用不了时，这一行说明的开头 */
+const FILE_CHANNEL_NOTE = "表格里的物流产品";
 
 /** cheapest = 每单选最便宜；file = 优先用表格里的物流产品 */
 export type PickMode = "cheapest" | "file";
@@ -474,6 +599,12 @@ export interface BatchRow {
   error: string | null;
   /** 可能重复导入等提醒 */
   warning: string | null;
+  /**
+   * 提醒是哪一类（页面上分开汇总）：duplicate = 订单号在别的未提交批次里；store = 店铺里已经取消 / 在别处发货（已自动取消勾选）；other = 其他
+   */
+  warningKind: "duplicate" | "store" | "other" | null;
+  /** 表格里指定的物流产品这单用不了，暂选了最便宜的渠道（已取消勾选，等客户确认） */
+  fileChannelNote: boolean;
   /** 收件地址核对（USPS） */
   address: AddressCheck | null;
   shipmentId: number | null;
@@ -510,7 +641,8 @@ export function createJob(input: {
       // 订单号已经下过单（没取消）：直接标错误，不能提交
       const shipped = o.customerRef ? activeShipmentByRef(input.customerId, o.customerRef) : undefined;
       if (shipped) o.errors.push(duplicateRefMessage(o.customerRef, shipped));
-      const warning = o.customerRef && !shipped ? duplicateWarning(input.customerId, o.customerRef, jobId) : null;
+      const dupe = o.customerRef && !shipped ? duplicateWarning(input.customerId, o.customerRef, jobId) : null;
+      const warning = [o.warning, dupe].filter(Boolean).join("；") || null;
       stmt.run(jobId, o.rowNo, o.customerRef || null, JSON.stringify(o.req), o.fileChannel || null, o.errors.length ? "error" : "pending", o.errors.join("；") || null, warning, warning || o.errors.length ? 0 : 1);
     }
     return jobId;
@@ -530,6 +662,28 @@ function duplicateWarning(customerId: number, ref: string, jobId: number): strin
     .get(customerId, ref, jobId) as { id: number; filename: string | null; created_at: string } | undefined;
   if (r) return `订单号 ${ref} 在另一个未提交的批次里（${r.filename ?? "批量导入"}，${r.created_at.slice(0, 10)}），可能是重复导入，默认不提交`;
   return null;
+}
+
+/** 店铺订单导入后，店铺里取消了 / 已经在别处发货了：批次里还没下单的那一行显示这个提醒 */
+export const STORE_GONE_WARNING = "店铺里这单已经取消或已在别处发货，已取消勾选。确认还要发货再手动勾选";
+
+/**
+ * 店铺同步时发现订单已经不用发货（gone = true）：还没下单的那一行取消勾选并提醒；
+ * 订单又回到店铺的待发货列表（gone = false）：去掉提醒（不替客户重新勾选）。
+ */
+export function flagStoreRow(jobId: number, rowNo: number, gone: boolean) {
+  const r = db().prepare("SELECT id, status, shipment_id, warning FROM batch_job_rows WHERE job_id = ? AND row_no = ?").get(jobId, rowNo) as
+    | { id: number; status: RowStatus; shipment_id: number | null; warning: string | null }
+    | undefined;
+  if (!r) return;
+  // 原来就有的提醒（例如可能重复下单）保留在后面
+  const rest = (r.warning ?? "").startsWith(STORE_GONE_WARNING) ? (r.warning ?? "").slice(STORE_GONE_WARNING.length).replace(/^；/, "") : r.warning ?? "";
+  if (gone) {
+    if (r.status === "created" || r.shipment_id) return;
+    db().prepare("UPDATE batch_job_rows SET selected = 0, warning = ? WHERE id = ?").run([STORE_GONE_WARNING, rest].filter(Boolean).join("；"), r.id);
+  } else if (r.warning?.startsWith(STORE_GONE_WARNING)) {
+    db().prepare("UPDATE batch_job_rows SET warning = ? WHERE id = ?").run(rest || null, r.id);
+  }
 }
 
 interface JobRowDb {
@@ -639,6 +793,8 @@ export function getJob(jobId: number): BatchJob | null {
         status: r.status,
         error: r.error,
         warning: r.warning,
+        warningKind: !r.warning ? null : r.warning.startsWith(STORE_GONE_WARNING) ? "store" : r.warning.includes("在另一个未提交的批次里") ? "duplicate" : "other",
+        fileChannelNote: r.status === "quoted" && !!r.error?.startsWith(FILE_CHANNEL_NOTE),
         address: r.addr_json ? (JSON.parse(r.addr_json) as AddressCheck) : null,
         shipmentId: r.shipment_id,
         trackingNo: s?.trackingNo ?? null,
@@ -675,6 +831,8 @@ export function deleteJob(jobId: number) {
 
 /* ---------------- 选择渠道 / 勾选（任务处于“待确认”时） ---------------- */
 
+const customerOf = (jobId: number) => (db().prepare("SELECT customer_id FROM batch_jobs WHERE id = ?").get(jobId) as { customer_id: number }).customer_id;
+
 function assertEditable(jobId: number) {
   const j = getJob(jobId);
   if (!j) throw new Error("任务不存在");
@@ -686,15 +844,27 @@ function applyQuote(rowId: number, q: RowQuote) {
   setRow(rowId, { channel_code: q.code, channel_name: q.name, price: q.price!, currency: q.currency ?? null, error: null });
 }
 
-/** 按规则选渠道：cheapest 最便宜 / file 表格指定（没有则最便宜）/ 具体渠道代码 */
-function pickFor(quotes: RowQuote[], rule: string, fileChannel: string | null): RowQuote | undefined {
+/**
+ * 按规则选渠道：cheapest 最便宜 / file 表格指定 / 具体渠道代码。
+ * file：表格里写了物流产品、但这单用不了（客户没开通、没试算或没报价）时不悄悄换成别的物流商，
+ * 返回 note 说明原因，由调用的地方决定是暂选最便宜（并取消勾选）还是保持原选择。
+ */
+function pickFor(quotes: RowQuote[], rule: string, fileChannel: string | null, customerId: number): { quote?: RowQuote; note?: string } {
   const ok = quotes.filter((q) => q.ok).sort((a, b) => a.price! - b.price!);
-  if (rule === "cheapest") return ok[0];
+  if (rule === "cheapest") return { quote: ok[0] };
   if (rule === "file") {
-    const code = fileChannel ? matchChannel(fileChannel) : null;
-    return ok.find((q) => q.code === code) ?? ok[0];
+    if (!fileChannel) return { quote: ok[0] };
+    // 只在客户自己开通的渠道里认（ShipBest 和嘉谷有同名渠道）；同名的有几个时选报价最便宜的那个
+    const codes = matchChannels(fileChannel, customerChannels(customerId));
+    const hit = ok.find((q) => codes.includes(q.code));
+    if (hit) return { quote: hit };
+    return {
+      note: codes.length
+        ? `${FILE_CHANNEL_NOTE}“${fileChannel}”这单没有报价，已暂选最便宜的渠道，请确认后再勾选提交`
+        : `${FILE_CHANNEL_NOTE}“${fileChannel}”不在这个账户开通的渠道里，已暂选最便宜的渠道，请确认后再勾选提交`,
+    };
   }
-  return ok.find((q) => q.code === rule);
+  return { quote: ok.find((q) => q.code === rule) };
 }
 
 /** 单独改某一单的渠道 */
@@ -714,7 +884,8 @@ export function chooseAll(jobId: number, rule: string, rowIds?: number[]) {
   let skipped = 0;
   for (const r of jobRows(jobId)) {
     if (r.status !== "quoted" || (rowIds && !rowIds.includes(r.id))) continue;
-    const q = pickFor(JSON.parse(r.quotes_json ?? "[]"), rule, r.file_channel);
+    // 按表格物流产品：这单用不了表格里的渠道时保持原选择（算在 skipped 里），不换成别的物流商
+    const { quote: q } = pickFor(JSON.parse(r.quotes_json ?? "[]"), rule, r.file_channel, customerOf(jobId));
     if (q) {
       applyQuote(r.id, q);
       changed++;
@@ -745,7 +916,11 @@ export function updateRow(jobId: number, rowId: number, patch: { recipient: Addr
   if (shipped) return duplicateRefMessage(r.customer_ref!, shipped);
   const req = JSON.parse(r.req_json) as ShipmentRequest;
   const old = req.pkg;
-  const next: ShipmentRequest = { ...req, recipient: patch.recipient, pkg: { ...old, ...patch.pkg } };
+  const recipient = { ...patch.recipient };
+  // 改成国外地址：批量下单不能出国际件
+  if (isInternational({ recipient })) return INTL_IMPORT_MSG;
+  if (recipient.zipCode) recipient.zipCode = normalizeUsZip(recipient.zipCode);
+  const next: ShipmentRequest = { ...req, recipient, pkg: { ...old, ...patch.pkg } };
   // SKU 尺寸原来就是沿用包裹尺寸的，跟着一起改
   next.skuList = req.skuList.map((s) =>
     s.length === old.length && s.width === old.width && s.height === old.height && s.unit === old.displayUnitSystem
@@ -844,6 +1019,11 @@ async function quoteJob(jobId: number) {
   // 每单在每个渠道试算一次；同时最多 3 个请求，避免触发频率限制
   await pool(pending, 3, async (r) => {
     const req = JSON.parse(r.req_json) as ShipmentRequest;
+    // 国际件不在批量下单里试算（导入时已经标错误；老批次里的也一样处理）
+    if (isInternational(req)) {
+      setRow(r.id, { status: "error", selected: 0, error: INTL_IMPORT_MSG });
+      return;
+    }
     const quotes: RowQuote[] = [];
     // 寄美国只试算美国本土渠道，寄国外只试算国际渠道（不然每单都多出几行“不可用”）
     const rowCodes = forDestination(codes.map((code) => ({ code })), req).map((c) => c.code);
@@ -868,9 +1048,14 @@ async function quoteJob(jobId: number) {
     setRow(r.id, addrPatch);
     // 重新试算时尽量保留之前选的渠道
     const keep = r.channel_code ? quotes.find((q) => q.ok && q.code === r.channel_code) : undefined;
-    const pick = keep ?? pickFor(quotes, job.pickMode, r.file_channel);
+    const chosen = keep ? { quote: keep } : pickFor(quotes, job.pickMode, r.file_channel, job.customerId);
+    // 表格里指定的渠道这单用不了：暂选最便宜的，但不勾选、写明原因，让客户确认（不能悄悄换成别的物流商）
+    const pick = chosen.quote ?? (chosen.note ? pickFor(quotes, "cheapest", null, job.customerId).quote : undefined);
     if (pick) {
-      setRow(r.id, { status: "quoted", quotes_json: JSON.stringify(quotes), channel_code: pick.code, channel_name: pick.name, price: pick.price!, currency: pick.currency ?? null, error: null });
+      setRow(r.id, {
+        status: "quoted", quotes_json: JSON.stringify(quotes), channel_code: pick.code, channel_name: pick.name, price: pick.price!, currency: pick.currency ?? null,
+        error: chosen.note ?? null, ...(chosen.note ? { selected: 0 } : {}),
+      });
     } else {
       setRow(r.id, { status: "error", quotes_json: JSON.stringify(quotes), channel_code: null, channel_name: null, price: null, error: `所有渠道都无法报价：${quotes[0]?.error ?? "没有可用渠道"}` });
     }
@@ -896,6 +1081,9 @@ async function createJobLabels(jobId: number) {
   // 逐单下单：钱包扣款要按顺序，不并发
   for (const r of rows) {
     if (stopped) break;
+    // 提交过程中这一单被取消勾选了（例如店铺同步发现订单已取消）：跳过
+    const now = db().prepare("SELECT status, selected FROM batch_job_rows WHERE id = ?").get(r.id) as { status: RowStatus; selected: number } | undefined;
+    if (!now || now.status !== "quoted" || !now.selected) continue;
     const req = JSON.parse(r.req_json) as ShipmentRequest;
     const channel = getChannel(r.channel_code!);
     if (!channel?.enabled) {
@@ -920,12 +1108,20 @@ async function createJobLabels(jobId: number) {
         stopped = `余额不足，已暂停。充值后点“提交订单”继续。（${e.message}）`;
       } else if (e instanceof PriceChangedError) {
         priceChanged++;
-        setRow(r.id, { price: e.quote.price!, error: `运费已更新为 ${e.quote.price!.toFixed(2)}，请确认后再提交` });
+        // 报价列表里这个渠道的价格也换成新的：不然“全部选最便宜”、重新点这个渠道又会用回旧价，再提交又报价格变化
+        const nq = e.quote;
+        const quotes = (JSON.parse(r.quotes_json ?? "[]") as RowQuote[]).map((q) =>
+          q.code === r.channel_code
+            ? { ...q, ok: true, price: nq.price!, currency: nq.currency ?? q.currency, zone: nq.zone ?? q.zone ?? null, cost: nq.cost ?? q.cost, warning: nq.warning, promo: nq.promo }
+            : q,
+        );
+        setRow(r.id, { price: nq.price!, currency: nq.currency ?? r.currency, quotes_json: JSON.stringify(quotes), error: `运费已更新为 ${nq.price!.toFixed(2)}，请确认后再提交` });
       } else {
-        // 服务器在“扣款建单”和“记下这一行已下单”之间重启过：同一订单号的单其实已经建好了，直接关联上，不算失败
+        // 服务器在“扣款建单”和“记下这一行已下单”之间重启过：同一订单号的单其实已经建好了，直接关联上，不算失败。
+        // 只认这个批次开始后建的、还没关联到别的行、收件邮编和渠道都对得上的那张单，不能把别的订单的面单当成这一单
         const done = r.customer_ref ? activeShipmentByRef(job.customerId, r.customer_ref) : undefined;
         const linked = done && (db().prepare("SELECT 1 FROM batch_job_rows WHERE shipment_id = ?").get(done.id) as unknown);
-        if (done && !linked && done.created_at >= job.createdAt) setRow(r.id, { status: "created", shipment_id: done.id, error: null });
+        if (done && !linked && done.created_at >= job.createdAt && sameOrder(done.id, req, r.channel_code!)) setRow(r.id, { status: "created", shipment_id: done.id, error: null });
         // 服务商拒绝（尺寸不对、对方系统临时出错…）：订单没建成、没扣钱。退回“待确认”（不勾选），可以修改或换渠道后重新提交
         else setRow(r.id, { status: "quoted", selected: 0, error: failedMsg((e as Error).message) });
       }
@@ -939,6 +1135,17 @@ async function createJobLabels(jobId: number) {
   }
   setJob(jobId, "labeling");
   await waitLabels(jobId);
+}
+
+/** 已建好的单是不是这一行：收件邮编（前 5 位）一样，渠道一样（嘉谷自动改用备用仓库的也算同一个产品） */
+function sameOrder(shipmentId: number, req: ShipmentRequest, channelCode: string): boolean {
+  const s = getShipment(shipmentId);
+  if (!s) return false;
+  const zip5 = (z: string | undefined) => normalizeUsZip(z ?? "").slice(0, 5).toUpperCase();
+  if (zip5(s.recipient?.zipCode) !== zip5(req.recipient.zipCode)) return false;
+  if (s.channelCode === channelCode) return true;
+  const a = parseJgCode(s.channelCode);
+  return a.productId > 0 && a.productId === parseJgCode(channelCode).productId;
 }
 
 /** 轮询本批次里已提交、面单还没生成的订单，直到都出面单或超时 */

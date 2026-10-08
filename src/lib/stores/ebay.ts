@@ -7,7 +7,7 @@
  */
 import { createHash, createVerify } from "node:crypto";
 import type { Address } from "../shipbest/types";
-import type { FetchedOrders, PlatformAdapter, StoreOrder, TrackingPush } from "./types";
+import type { FetchedOrders, PlatformAdapter, StoreOrder, StoreOrderState, TrackingPush } from "./types";
 
 export const EBAY_SCOPES = [
   "https://api.ebay.com/oauth/api_scope",
@@ -181,7 +181,8 @@ export function normalizeEbayOrder(o: EbayOrder): (StoreOrder & { buyer?: string
   const parts = (to.fullName ?? "").trim().split(/\s+/);
   const recipient: Address = {
     nameFirst: parts[0] ?? "",
-    nameLast: parts.slice(1).join(" "),
+    // 只有一个名字：姓也用它（服务商两个字段都要有值，和开放 API 一样）
+    nameLast: parts.slice(1).join(" ") || (parts[0] ?? ""),
     ...(to.companyName ? { corporateName: to.companyName } : {}),
     phone: to.primaryPhone?.phoneNumber || undefined,
     ...(to.email ? { email: to.email } : {}),
@@ -209,6 +210,9 @@ export function normalizeEbayOrder(o: EbayOrder): (StoreOrder & { buyer?: string
   };
 }
 
+/** 一次同步最多拉几页（每页 100 单） */
+export const EBAY_MAX_PAGES = 5;
+
 /** eBay 的物流商代码；认不出的用 Other */
 const EBAY_CARRIER: Record<string, string> = { usps: "USPS", fedex: "FedEx", ups: "UPS", dhl: "DHL", ontrac: "OnTrac" };
 export const ebayCarrier = (carrierId: string) => EBAY_CARRIER[carrierId] ?? "Other";
@@ -225,7 +229,8 @@ export class EbayAdapter implements PlatformAdapter {
     const orders: StoreOrder[] = [];
     const closedExtIds: string[] = [];
     let path: string | null = `/sell/fulfillment/v1/order?filter=${encodeURIComponent("orderfulfillmentstatus:{NOT_STARTED|IN_PROGRESS}")}&limit=100`;
-    for (let page = 0; path && page < 5; page++) {
+    // 最多拉 5 页（500 单）；还有下一页时标记“没拉全”，没拉到的订单不能当成已关闭
+    for (let page = 0; path && page < EBAY_MAX_PAGES; page++) {
       const r = await this.rest("GET", path);
       if (r.status >= 300) throw ebayError(r);
       for (const o of (r.json.orders ?? []) as EbayOrder[]) {
@@ -239,7 +244,20 @@ export class EbayAdapter implements PlatformAdapter {
       const next = r.json.next as string | undefined;
       path = next ? next.replace(/^https?:\/\/[^/]+/, "") : null;
     }
-    return { orders, closedExtIds };
+    return { orders, closedExtIds, complete: !path };
+  }
+
+  /** 导入后不在待发货列表里的订单：按订单号查现在的状态（一次最多 50 个；查不到的不返回） */
+  async orderStates(extIds: string[]): Promise<Record<string, StoreOrderState>> {
+    const out: Record<string, StoreOrderState> = {};
+    for (let i = 0; i < extIds.length; i += 50) {
+      const r = await this.rest("GET", `/sell/fulfillment/v1/order?orderIds=${encodeURIComponent(extIds.slice(i, i + 50).join(","))}`);
+      if (r.status >= 300) throw ebayError(r);
+      for (const o of (r.json.orders ?? []) as EbayOrder[]) {
+        out[o.orderId] = o.cancelStatus?.cancelState === "CANCELED" ? "cancelled" : o.orderFulfillmentStatus === "FULFILLED" ? "fulfilled" : "open";
+      }
+    }
+    return out;
   }
 
   async pushFulfillment(order: StoreOrder, t: TrackingPush): Promise<string | null> {
@@ -263,8 +281,10 @@ export class EbayAdapter implements PlatformAdapter {
 }
 
 /** 演示 / 测试用：一个假的 eBay 卖家 */
-export function mockEbayRest(): EbayRest & { pushed: unknown[] } {
+export function mockEbayRest(): EbayRest & { pushed: unknown[]; cancelled: Set<string> } {
   const pushed: unknown[] = [];
+  /** 测试用：买家取消了的订单（列表里带 cancelState = CANCELED） */
+  const cancelled = new Set<string>();
   const fn = (async (method: string, path: string, body?: unknown) => {
     if (method === "POST" && path.includes("/shipping_fulfillment")) {
       pushed.push(body);
@@ -280,8 +300,10 @@ export function mockEbayRest(): EbayRest & { pushed: unknown[] } {
         lineItems: [{ lineItemId: "10001", sku: "CASE-IP15", title: "iPhone 15 Case Clear", quantity: 2, lineItemCost: { value: "17.98", currency: "USD" }, lineItemFulfillmentStatus: "NOT_STARTED" }],
       },
     ];
+    for (const o of orders) if (cancelled.has(o.orderId)) o.cancelStatus = { cancelState: "CANCELED" };
     return { status: 200, json: { orders, total: orders.length } };
-  }) as EbayRest & { pushed: unknown[] };
+  }) as EbayRest & { pushed: unknown[]; cancelled: Set<string> };
   fn.pushed = pushed;
+  fn.cancelled = cancelled;
   return fn;
 }

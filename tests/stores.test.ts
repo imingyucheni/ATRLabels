@@ -88,7 +88,8 @@ describe("电商店铺对接（Shopify / eBay）", () => {
     expect(open[0].order.recipient.country).toBe("US");
 
     const job = await shipAll(open.map((o) => o.id));
-    expect(job.rows.every((x) => x.customerRef?.startsWith("#"))).toBe(true);
+    // Shopify 订单号前面加店铺简称（不同店铺的 #1001 不会撞号）
+    expect(job.rows.map((x) => x.customerRef).sort()).toEqual(["atr-demo #1001", "atr-demo #1002", "atr-demo #1003"]);
     expect(job.rows.filter((x) => x.status === "created").length).toBe(3);
     // 再同步：已导入的不会重复出现
     await stores.syncStore(id);
@@ -176,8 +177,8 @@ describe("电商店铺对接（Shopify / eBay）", () => {
     const jobId = stores.importToBatch(cid, [{ id: a.id, pkg: { length: 6, width: 6, height: 6, weight: 0.5, unit: 3 } }, { id: b.id, pkg: { length: 20, width: 12, height: 10, weight: 7, unit: 3 } }], "customer");
     const rows = batch.getJob(jobId)!.rows;
     const byRef = Object.fromEntries(rows.map((r) => [r.customerRef, r.pkg]));
-    expect(byRef["#701"]).toBe("6×6×6 in · 0.5 lb");
-    expect(byRef["#702"]).toBe("20×12×10 in · 7 lb");
+    expect(byRef["third-demo #701"]).toBe("6×6×6 in · 0.5 lb");
+    expect(byRef["third-demo #702"]).toBe("20×12×10 in · 7 lb");
     expect(portal.skuComboKey([{ sku: "b", quantity: 2 }, { sku: "A", quantity: 1 }])).toBe("A×1|B×2");
     // 已出过单的商品组合能认出来（前面 Shopify 演示店铺发过 TS-BLK-M ×1）
     const combos = portal.packagesBySkuCombo(cid);

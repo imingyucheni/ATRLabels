@@ -135,4 +135,29 @@ export const qa3: Record<string, string> = {
   "每次查运费、核对地址时，各服务商接口用了多久（只记最近 100 次，服务器重启后清零）。下单页现在查到一个渠道就先显示一个，慢的服务商不会拖住其他渠道；查价最多等 15 秒。": "How long each provider's API took for rate quotes and address checks (last 100 calls, reset on server restart). The order page now shows each service as soon as it responds, so a slow provider doesn't hold up the others; a quote waits at most 15 seconds.",
   "次数": "Calls", "平均": "Average", "90% 在多少秒内": "90% within", "最慢": "Slowest", "失败 / 超时": "Failed / timed out", "最近一次": "Last call",
   "查一次运费后这里会显示各服务商的速度。": "Get a rate quote and each provider's speed will show here.",
+  // 批量导入 / 店铺订单
+  "国际件请在“国际下单（DHL）”里单独下单（批量导入只支持寄往美国的订单）":
+    "International shipments can't be imported in bulk — please create them under “International (DHL)” (bulk import supports US addresses only)",
+  "店铺里这单已经取消或已在别处发货，已取消勾选。确认还要发货再手动勾选":
+    "This order was cancelled or fulfilled elsewhere in the store, so it was unticked. Tick it manually if you still want to ship it",
+  "{n} 单在店铺里已经取消或已在别处发货，已取消勾选，不会提交。确认还要发货的请手动勾选。":
+    "{n} order(s) were cancelled or fulfilled elsewhere in the store and were unticked, so they won't be submitted. Tick them manually if you still want to ship them.",
+  "{n} 单有提醒（见每单的说明），已默认不勾选，确认没问题再勾选提交。":
+    "{n} order(s) have a notice (see each order) and are unticked by default. Tick them once you've checked.",
+  "{n} 单表格里指定的物流产品用不了，已暂选最便宜的渠道并取消勾选，请确认渠道后再勾选提交。":
+    "{n} order(s) can't use the service named in the file. The cheapest service was picked for now and they were unticked — check the service, then tick them to submit.",
+  "店铺里已取消这单，不用再发货": "Cancelled in the store — no need to ship",
+  "店铺里这单已经发货（在别处发货），不用再发货": "Already fulfilled in the store (shipped elsewhere) — no need to ship",
+  "店铺里这单已经不在待发货列表里（可能已取消或已在别处发货）": "No longer awaiting fulfillment in the store (possibly cancelled or shipped elsewhere)",
+  "店铺里已取消这单，运单号没有回传到店铺。面单如果不用了，请尽快取消":
+    "Cancelled in the store, so the tracking number wasn't pushed. If you no longer need the label, cancel it soon",
+  "店铺里这单已经是已发货状态，系统没有再回传运单号。请到店铺后台核对：如果不是用这张面单发的，面单不用了请尽快取消":
+    "The store already shows this order as fulfilled, so the tracking number wasn't pushed again. Check the fulfillment in your store admin: if it wasn't shipped with this label and you don't need the label, cancel it soon",
+  "店铺里这单已经不在待发货列表里，系统没有再回传运单号。请到店铺后台核对：如果已取消或不是用这张面单发的，面单不用了请尽快取消":
+    "This order is no longer awaiting fulfillment in the store, so the tracking number wasn't pushed. Check it in your store admin: if it was cancelled or not shipped with this label and you don't need the label, cancel it soon",
+  "回传店铺失败次数太多，已停止自动重试：请在店铺后台手动填写运单号":
+    "Pushing to the store failed too many times, so automatic retries have stopped. Please enter the tracking number in your store admin",
+  "回传店铺失败": "Couldn't push to the store",
+  "查看批次 →": "View batch →",
+  "eBay 授权已过期，请重新连接 eBay 店铺": "eBay authorization expired — please reconnect your eBay store",
 };

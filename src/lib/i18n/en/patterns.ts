@@ -38,6 +38,13 @@ export const patterns: [RegExp, string][] = [
   [/^申请 \$([\d.]+)，实际入账 \$([\d.]+)$/, "requested $$$1, credited $$$2"],
   [/^参考号 (.+)$/, "Ref. $1"],
 
+  /* ---------- 批量导入 / 店铺订单 ---------- */
+  [/^表格里的物流产品“(.+)”这单没有报价，已暂选最便宜的渠道，请确认后再勾选提交$/, "The service “$1” from the file has no quote for this order. The cheapest service was picked for now — please check, then tick it to submit"],
+  [/^表格里的物流产品“(.+)”不在这个账户开通的渠道里，已暂选最便宜的渠道，请确认后再勾选提交$/, "The service “$1” from the file isn't enabled on this account. The cheapest service was picked for now — please check, then tick it to submit"],
+  [/^订单号 (.+) 以前下过单（(.+?)），可能是同一单，默认不提交。确认不是同一单再勾选$/, "Order ref $1 was shipped before ($2). It may be the same order, so it isn't submitted by default — tick it if it's a different order"],
+  [/^Shopify 授权已失效，请重新连接店铺（(.+)）$/, "Shopify authorization expired — please reconnect the store ($1)"],
+  [/^Shopify 授权刷新失败：(.+)$/, "Couldn't refresh the Shopify authorization: $1"],
+
   /* ---------- 补差原因（按“ · ”拆开逐段翻译；前面的原始原因保留） ---------- */
   [/预报 (\S+) (\S+) → 结算 (\S+) (\S+)（超出 (\S+) (\S+)）$/, "declared $1 $2 → billed $3 $4 ($5 $6 over)"],
   [/预报 (\S+) (\S+) → 结算 (\S+) (\S+)（少 (\S+) (\S+)）$/, "declared $1 $2 → billed $3 $4 ($5 $6 under)"],

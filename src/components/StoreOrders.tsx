@@ -280,15 +280,17 @@ export default function StoreOrders({ rows, presets, senders, defaultUnit = 3 }:
                     )}
                   </td>
                   <td className="small">
-                    {r.status === "imported" && r.labelReady
+                    {r.status === "imported" && r.labelReady && !r.pushNote
                       ? <span className="badge labeled">{t("已出单 · 回传中")}</span>
-                      : r.status === "shipped" && r.pushNote
+                      : (r.status === "shipped" || r.status === "imported") && r.pushNote
                         ? <span className="badge">{t("已出单 · 未回传")}</span>
                         : <span className={`badge ${STATUS[r.status][1]}`}>{t(STATUS[r.status][0])}</span>}
-                    {r.pushNote && <div className="muted">{t(r.pushNote)}</div>}
+                    {/* 没回传的原因：模拟面单、店铺里已取消 / 在别处发货、回传失败太多次（这些要客户自己处理，用醒目的颜色） */}
+                    {r.pushNote && <div className={r.status === "shipped" && !r.pushError ? "muted" : undefined} style={r.status === "shipped" && !r.pushError ? undefined : { color: "var(--warn)", maxWidth: 260 }}>{t(r.pushNote)}</div>}
                     {r.trackingNo && <div>{r.shipmentId ? <a href={`/portal/shipments/${r.shipmentId}`}>{r.trackingNo}</a> : r.trackingNo}</div>}
                     {r.status === "imported" && r.jobId && !r.labelReady && <div><a href={`/portal/batch?job=${r.jobId}`}>{t("去出单 →")}</a></div>}
-                    {r.pushError && <div style={{ color: "var(--warn)", maxWidth: 240 }}>{t("回传店铺失败，稍后自动重试")}{t("：")}{r.pushError}</div>}
+                    {r.status === "closed" && r.jobId && !r.trackingNo && <div><a href={`/portal/batch?job=${r.jobId}`}>{t("查看批次 →")}</a></div>}
+                    {r.pushError && <div style={{ color: "var(--warn)", maxWidth: 240 }}>{r.pushNote ? t("回传店铺失败") : t("回传店铺失败，稍后自动重试")}{t("：")}{r.pushError}</div>}
                   </td>
                 </tr>
               );

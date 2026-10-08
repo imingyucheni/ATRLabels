@@ -114,7 +114,8 @@ export function parseAddress(text: string): Partial<Address> {
     .split(/\n+/)
     // 行尾带国家（… IL 62704 USA）：去掉国家，记下美国
     .map((l) => {
-      const m = l.match(/^(.*\S)[,\s]+(USA|U\.S\.A\.?|United States( of America)?|U\.?S\.?)\s*$/i);
+      // 后面可能还跟着括号里的代码（WooCommerce 等复制出来是“United States (US)”）
+      const m = l.match(/^(.*\S)[,\s]+(USA|U\.S\.A\.?|United States( of America)?|U\.?S\.?)(?:\s*[（(]\s*(?:US|USA)\s*[)）])?\s*$/i);
       // 只写“US”的：前面必须紧跟着邮编（… CA 91706 US），避免把街道名里的 US（US Highway）当成国家
       const bare = m && /^U\.?S\.?$/i.test(m[2]);
       if (m && /\d/.test(m[1]) && (!bare || /\b\d{5}(-?\d{4})?$/.test(m[1]))) {
@@ -176,7 +177,9 @@ export function parseAddress(text: string): Partial<Address> {
 
   // 3) 国家
   lines = lines.filter((l) => {
-    const c = l.replace(/[.,]/g, "").trim();
+    // “United States (US)” / “Canada (CA)”：去掉括号里的代码再认；只有括号（“(US)”）的按代码认
+    const paren = l.match(/^(.*?)\s*[（(]\s*([A-Za-z.]{2,4})\s*[)）]\s*$/);
+    const c = (paren && paren[1].trim() ? paren[1] : paren ? paren[2] : l).replace(/[.,]/g, "").trim();
     if (COUNTRY.test(c)) {
       out.country = "US";
       return false;
@@ -265,6 +268,10 @@ export function parseAddress(text: string): Partial<Address> {
       street = street.slice(0, unitIn.index).trim();
     }
     out.address1 = street;
+    // 公寓号写在街道前面（“Apt 4B” 一行，下一行才是“200 Elm St”）：也是地址2，不能当成公司名、更不能丢掉
+    const pre = lines.slice(0, streetIdx);
+    const preUnits = pre.filter((l) => UNIT.test(l));
+    if (preUnits.length) out.address2 = [...preUnits, out.address2].filter(Boolean).join(" ");
     const next = lines[streetIdx + 1];
     const taken = [streetIdx];
     if (next && (UNIT.test(next) || (/\d/.test(next) && !out.address2))) {
@@ -272,7 +279,7 @@ export function parseAddress(text: string): Partial<Address> {
       taken.push(streetIdx + 1);
     }
     // 名字在街道前面；街道前多出来的一行当公司名
-    const before = lines.slice(0, streetIdx).filter((l) => !/\d{3,}/.test(l));
+    const before = pre.filter((l) => !UNIT.test(l) && !/\d{3,}/.test(l));
     if (before.length) Object.assign(out, splitName(before[0]));
     if (before.length > 1) out.corporateName = before.slice(1).join(" ");
     lines = lines.filter((_, i) => !taken.includes(i) && i >= streetIdx);
