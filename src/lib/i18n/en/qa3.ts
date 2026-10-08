@@ -73,4 +73,5 @@ export const qa3: Record<string, string> = {
   // 渠道名里的服务说明（鼠标放在渠道名上显示）
   "预上网：出单后运单号会提前有物流记录（上网），不用等快递揽收扫描": "Pre-scan: the tracking number shows carrier activity soon after the label is created, without waiting for the pickup scan",
   "多箱：一票多箱寄同一个地址，按总重量计价": "Multi-box: several boxes to one address in a single shipment, priced by total weight",
+  "该渠道暂时没有响应，请稍后再试": "This service isn't responding right now. Please try again later",
 };

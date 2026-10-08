@@ -7,6 +7,11 @@ export const patterns: [RegExp, string][] = [
   [/^余额不足：当前余额 (-?[\d.]+)，本单需要 ([\d.]+)，请先充值$/, "Insufficient balance: current balance $1; this label needs $2. Please top up first"],
   [/^价格已变化：当前报价 ([\d.]+) (\w+)，请确认后重新提交$/, "Price changed: the current quote is $1 $2. Please confirm and submit again"],
 
+  /* ---------- 服务商接口超时 / 连不上 ---------- */
+  [/^(.+?) 接口超时：(\d+) 秒没有响应，请稍后再试$/, "$1 API timed out (no response in $2 s). Please try again later"],
+  [/^(.+?) 接口连不上(（.+?）)?，请稍后再试$/, "Can't reach the $1 API$2. Please try again later"],
+  [/^已同步 (\d+) 个渠道；以下服务商这次没取到，原来的渠道照常可用，稍后再点一次同步：(.+)$/, "Synced $1 services. These providers didn't respond this time (their existing services still work; sync again later): $2"],
+
   /* ---------- 账户流水说明（按“ · ”拆开逐段翻译） ---------- */
   [/^充值申请 #(\d+)$/, "Top-up request #$1"],
   [/^支付宝 ¥([\d.]+)（汇率 ([\d.]+)）$/, "Alipay ¥$1 (rate $2)"],

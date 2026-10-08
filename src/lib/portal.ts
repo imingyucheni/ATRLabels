@@ -159,6 +159,8 @@ export function publicError(msg?: string | null): string {
     .replace(/\bJG-\d+(-W\d+)?\b/g, "")
     .replace(/\s*·\s*(SB|GDE)\b/g, "")
     .replace(/[（(]设置\s*→[^）)]*[）)]/g, "");
+  // 服务商接口超时 / 连不上：不说是哪家服务商
+  if (/接口超时|接口连不上/.test(raw)) return "该渠道暂时没有响应，请稍后再试";
   // 服务商接口异常（带着对方返回的原文）、后台配置问题：不给客户看细节
   if (/HTTP \d{3}|接口返回异常|非 JSON|没有设置仓库|没有启用或没有填写账号|渠道 \d+ /.test(raw)) return "系统繁忙，请稍后再试或联系客服";
   // 地址不在派送范围：统一说成“地址未覆盖”

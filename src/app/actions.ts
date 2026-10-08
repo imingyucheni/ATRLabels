@@ -93,6 +93,7 @@ import {
   refreshShipment,
   requestCancel,
   syncChannels,
+  syncChannelsDetailed,
   validateRequest,
   withQuoteSkus,
   type ChannelQuote,
@@ -571,9 +572,11 @@ export async function saveChannelsAction(_: FlashState, fd: FormData): Promise<F
 export async function syncChannelsAction(_: FlashState): Promise<FlashState> {
   await requireAdmin();
   try {
-    const count = await syncChannels();
+    const r = await syncChannelsDetailed();
     revalidatePath("/settings");
-    return { ok: `已同步 ${count} 个渠道` };
+    if (r.errors.length && !r.count) return { error: r.errors.join("；") };
+    if (r.errors.length) return { error: `已同步 ${r.count} 个渠道；以下服务商这次没取到，原来的渠道照常可用，稍后再点一次同步：${r.errors.join("；")}` };
+    return { ok: `已同步 ${r.count} 个渠道` };
   } catch (e) {
     return { error: (e as Error).message };
   }

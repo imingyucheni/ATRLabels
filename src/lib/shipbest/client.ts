@@ -10,7 +10,7 @@ import type {
   ShipmentRequest,
 } from "./types";
 
-import { ShipBestError } from "./errors";
+import { providerFetch, ShipBestError } from "./errors";
 import { getJiaguClient, isJiaguCode, jgOrders, type JiaguClient } from "./jiagu";
 import { DhlClient, dhlConfig, dhlOrders, dhlSettings, isDhlCode, mockDhlTransport, type DhlConfig } from "./dhl";
 import { mockLabelPdf } from "../labels";
@@ -25,6 +25,8 @@ export interface ShipBestClient {
   getProducts(): Promise<Product[]>;
   /** 按指定渠道试算运费 */
   trialPrice(productCode: string, req: ShipmentRequest): Promise<FeeQuote | null>;
+  /** 同步渠道：几家服务商分别取，一家失败不影响其他家（返回成功取到的渠道 + 失败的原因） */
+  getProductsDetailed?(): Promise<{ products: Product[]; errors: string[] }>;
   /** 一次给多个渠道报价（服务商支持合并请求时才有，例如嘉谷）：渠道代码 → 报价 */
   trialPriceMany?(codes: string[], req: ShipmentRequest): Map<string, Promise<FeeQuote | null>>;
   createOrder(customNo: string, productCode: string, req: ShipmentRequest, remark?: string): Promise<unknown>;
@@ -70,17 +72,15 @@ export class HttpShipBestClient implements ShipBestClient {
   ) {}
 
   private async call<T>(path: string, body: unknown): Promise<T> {
-    const res = await fetch(this.baseUrl.replace(/\/$/, "") + path, {
+    const { res, text } = await providerFetch("ShipBest", this.baseUrl.replace(/\/$/, "") + path, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         ...buildHeaders(this.apiId, this.accessToken, path),
       },
       body: JSON.stringify(body ?? {}),
-      signal: AbortSignal.timeout(30_000),
-      cache: "no-store",
+      timeoutMs: 30_000,
     });
-    const text = await res.text();
     let json: ApiResult<T>;
     try {
       json = JSON.parse(text);
@@ -311,6 +311,9 @@ export class SandboxShipBestClient extends MockShipBestClient {
   async getProducts() {
     return this.real.getProducts();
   }
+  async getProductsDetailed() {
+    return this.real.getProductsDetailed ? this.real.getProductsDetailed() : { products: await this.real.getProducts(), errors: [] };
+  }
   async trialPrice(productCode: string, req: ShipmentRequest): Promise<FeeQuote | null> {
     const q = await this.real.trialPrice(productCode, req);
     if (!q) throw new ShipBestError(10061, "trial price failed");
@@ -360,11 +363,29 @@ export class MultiProviderClient implements ShipBestClient {
   }
 
   async getProducts() {
-    const out: Product[] = [];
-    if (this.sb) out.push(...(await this.sb.getProducts()).map((p) => ({ ...p, name: p.name.endsWith(SB_SUFFIX) ? p.name : `${p.name}${SB_SUFFIX}` })));
-    if (this.jg) out.push(...(await this.jg.getProducts()));
-    if (this.dhl) out.push(...(await this.dhl.getProducts()));
-    return out;
+    const r = await this.getProductsDetailed();
+    if (r.errors.length) throw new Error(r.errors.join("；"));
+    return r.products;
+  }
+
+  /** 几家服务商同时取渠道；一家超时 / 出错不影响其他家 */
+  async getProductsDetailed() {
+    const jobs: [string, Promise<Product[]>][] = [];
+    if (this.sb) jobs.push(["ShipBest", this.sb.getProducts().then((list) => list.map((p) => ({ ...p, name: p.name.endsWith(SB_SUFFIX) ? p.name : `${p.name}${SB_SUFFIX}` })))]);
+    if (this.jg) jobs.push(["嘉谷", this.jg.getProducts()]);
+    if (this.dhl) jobs.push(["DHL", this.dhl.getProducts()]);
+    const settled = await Promise.allSettled(jobs.map(([, p]) => p));
+    const products: Product[] = [];
+    const errors: string[] = [];
+    settled.forEach((s, i) => {
+      if (s.status === "fulfilled") products.push(...s.value);
+      else {
+        const msg = (s.reason as Error)?.message ?? String(s.reason);
+        // 错误里已经带服务商名（例如“嘉谷 接口超时…”）就不再加
+        errors.push(msg.includes(jobs[i][0]) ? msg : `${jobs[i][0]}：${msg}`);
+      }
+    });
+    return { products, errors };
   }
 
   async trialPrice(code: string, req: ShipmentRequest) {

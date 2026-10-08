@@ -32,3 +32,27 @@ export class ShipBestError extends Error {
     this.name = "ShipBestError";
   }
 }
+
+/**
+ * 请服务商接口：超时、连不上时给出中文说明（哪家、等了多久），而不是 “The operation was aborted due to timeout”。
+ * 这类错误不是服务商的明确拒绝，结果未知：下单时按“提交结果未知”处理，不当作失败删单。
+ */
+export async function providerFetch(provider: string, url: string, init: RequestInit & { timeoutMs: number }): Promise<{ res: Response; text: string }> {
+  const { timeoutMs, ...rest } = init;
+  try {
+    const res = await fetch(url, { ...rest, signal: AbortSignal.timeout(timeoutMs), cache: "no-store" });
+    const text = await res.text();
+    return { res, text };
+  } catch (e) {
+    throw networkError(provider, e, timeoutMs);
+  }
+}
+
+export function networkError(provider: string, e: unknown, timeoutMs: number): Error {
+  const err = e as Error & { cause?: { code?: string } };
+  if (err?.name === "TimeoutError" || err?.name === "AbortError") {
+    return new Error(`${provider} 接口超时：${Math.round(timeoutMs / 1000)} 秒没有响应，请稍后再试`);
+  }
+  const code = err?.cause?.code;
+  return new Error(`${provider} 接口连不上${code ? `（${code}）` : ""}，请稍后再试`);
+}

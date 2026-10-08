@@ -6,7 +6,7 @@
  * 注意：对方的授权服务只认 http 地址签发的令牌（https 拿到的令牌接口会拒绝），接口本身也只有 http。
  */
 import { db, getSettings } from "../db";
-import { ShipBestError } from "./errors";
+import { providerFetch, ShipBestError } from "./errors";
 import type { FeeQuote, OrderDetail, Product, ShipmentRequest } from "./types";
 import { logProviderEvent } from "../providerLog";
 import { expandPieces } from "../multiBox";
@@ -282,14 +282,13 @@ export class JiaguClient {
   }
 
   private async fetchToken(): Promise<string> {
-    const res = await fetch(`${this.cfg.authUrl}/connect/token`, {
+    const { res, text } = await providerFetch("嘉谷（授权）", `${this.cfg.authUrl}/connect/token`, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({ grant_type: "client_credentials", client_id: this.cfg.clientId, client_secret: this.cfg.secret }),
-      signal: AbortSignal.timeout(20_000),
-      cache: "no-store",
+      timeoutMs: 20_000,
     });
-    const json = (await res.json().catch(() => ({}))) as { access_token?: string; expires_in?: number; error?: string };
+    const json = ((): unknown => { try { return JSON.parse(text); } catch { return {}; } })() as { access_token?: string; expires_in?: number; error?: string };
     if (!json.access_token) throw new JiaguError(res.status, `授权失败（检查 Client ID / Secret）${json.error ? `：${json.error}` : ""}`);
     // 提前 5 分钟换新令牌
     this.token = { value: json.access_token, exp: Date.now() + Math.max(60, (json.expires_in ?? 3600) - 300) * 1000 };
@@ -297,18 +296,16 @@ export class JiaguClient {
   }
 
   private async call<T>(path: string, body: unknown, retry = true, timeoutMs = 45_000): Promise<{ ok: boolean; code: string | null; message: string; result: T | undefined }> {
-    const res = await fetch(`${this.cfg.apiUrl}${path}`, {
+    const { res, text } = await providerFetch("嘉谷", `${this.cfg.apiUrl}${path}`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${await this.accessToken()}` },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(timeoutMs),
-      cache: "no-store",
+      timeoutMs,
     });
     if (res.status === 401 && retry) {
       this.token = null;
       return this.call(path, body, false, timeoutMs);
     }
-    const text = await res.text();
     let j: JgResult<T>;
     try {
       j = JSON.parse(text);

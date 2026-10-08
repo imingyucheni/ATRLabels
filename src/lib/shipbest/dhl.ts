@@ -8,7 +8,7 @@
  * DHL 没有作废运单的接口：没被揽收（扫描）的运单不计费，所以“取消”是查一下轨迹，没揽收就在本地作废。
  */
 import { db, getSettings } from "../db";
-import { ShipBestError } from "./errors";
+import { providerFetch, ShipBestError } from "./errors";
 import type { Address, FeeQuote, OrderDetail, Product, ShipmentRequest, SkuItem } from "./types";
 
 export const DHL_PREFIX = "DHL-";
@@ -338,14 +338,12 @@ export type DhlTransport = (method: "GET" | "POST", path: string, body?: unknown
 function httpTransport(cfg: DhlConfig): DhlTransport {
   const auth = "Basic " + Buffer.from(`${cfg.apiKey}:${cfg.apiSecret}`).toString("base64");
   return async (method, path, body) => {
-    const res = await fetch(cfg.baseUrl + path, {
+    const { res, text } = await providerFetch("DHL", cfg.baseUrl + path, {
       method,
       headers: { Authorization: auth, "Content-Type": "application/json", Accept: "application/json", "x-version": "3.3.1" },
       ...(body ? { body: JSON.stringify(body) } : {}),
-      signal: AbortSignal.timeout(method === "POST" && path.startsWith("/shipments") ? 60_000 : 25_000),
-      cache: "no-store",
+      timeoutMs: method === "POST" && path.startsWith("/shipments") ? 60_000 : 25_000,
     });
-    const text = await res.text();
     try {
       return { status: res.status, json: text ? JSON.parse(text) : {} };
     } catch {

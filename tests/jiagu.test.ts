@@ -222,6 +222,25 @@ describe("嘉谷万邑接口", () => {
     expect(calls.filter((c) => c.path === "/api/gts/CalculateRates").length).toBe(3);
   });
 
+  it("接口超时：中文说明是哪家、等了多久；同步渠道时一家超时不影响其他家", async () => {
+    vi.stubGlobal("fetch", async (url: string) => {
+      if (new URL(url).pathname === "/connect/token") return new Response(JSON.stringify({ access_token: "tok", expires_in: 3600 }));
+      throw new DOMException("The operation was aborted due to timeout", "TimeoutError");
+    });
+    const client = jg.getJiaguClient()!;
+    await expect(client.getProducts()).rejects.toThrow("嘉谷 接口超时：45 秒没有响应，请稍后再试");
+    const { MultiProviderClient } = await import("@/lib/shipbest/client");
+    const sbFake = { verify: async () => {}, getProducts: async () => [{ code: "LP1", name: "USPS-（91710）" }], trialPrice: async () => null, createOrder: async () => ({}), getOrder: async () => ({}) as never, cancelOrder: async () => {} };
+    const multi = new MultiProviderClient(sbFake, client);
+    const r = await multi.getProductsDetailed();
+    expect(r.products).toEqual([{ code: "LP1", name: "USPS-（91710） · SB" }]);
+    expect(r.errors).toEqual(["嘉谷 接口超时：45 秒没有响应，请稍后再试"]);
+    const { translateMessage } = await import("@/lib/i18n");
+    expect(translateMessage("en", "ShipBest 接口超时：30 秒没有响应，请稍后再试")).toBe("ShipBest API timed out (no response in 30 s). Please try again later");
+    const { publicError } = await import("@/lib/portal");
+    expect(publicError("嘉谷 接口超时：25 秒没有响应，请稍后再试")).toBe("该渠道暂时没有响应，请稍后再试");
+  });
+
   it("下单被拒绝时抛错（订单没建成），取消失败也抛错", async () => {
     fakeServer({
       "/api/gts/ShippingLabel": () => ({ IsSuccess: false, ErrorCode: "100002", Message: "订单重复" }),

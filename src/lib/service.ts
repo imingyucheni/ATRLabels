@@ -190,9 +190,20 @@ export function withQuoteSkus(req: ShipmentRequest): ShipmentRequest {
 /* ---------------- 渠道同步 ---------------- */
 
 export async function syncChannels() {
-  const products = await getShipBestClient().getProducts();
-  upsertChannels(products);
-  return products.length;
+  const r = await syncChannelsDetailed();
+  if (!r.count && r.errors.length) throw new Error(r.errors.join("；"));
+  return r.count;
+}
+
+/**
+ * 同步渠道：几家服务商同时取，取到的先存下来；没取到的那家（超时、出错）列在 errors 里，
+ * 它原来的渠道不受影响（同步只新增 / 更新，不删除）。
+ */
+export async function syncChannelsDetailed(): Promise<{ count: number; errors: string[] }> {
+  const client = getShipBestClient();
+  const r = client.getProductsDetailed ? await client.getProductsDetailed() : { products: await client.getProducts(), errors: [] };
+  upsertChannels(r.products);
+  return { count: r.products.length, errors: r.errors };
 }
 
 /* ---------------- 报价 ---------------- */
