@@ -10,7 +10,7 @@ import { isPaperSize } from "@/lib/labelLayout";
 import { money, signedPercent } from "@/lib/pricing";
 import { defaultCancelFees, JG_LABEL_TIMEOUT_MIN, JG_LABEL_TIMEOUT_MSG, JG_TIMEOUT_VOIDED_MSG, providerOf } from "@/lib/service";
 import { listProviderEvents } from "@/lib/providerLog";
-import { isJiaguCode, jgOrders, jiaguConfig, parseJgCode, warehouseOfCode } from "@/lib/shipbest/jiagu";
+import { isJiaguCode, jgOrders, jiaguConfig, orderWarehouse, parseJgCode } from "@/lib/shipbest/jiagu";
 import { stripProviderTag } from "@/lib/carriers";
 import CopyText from "@/components/CopyText";
 import { SB_STATUS, type Address } from "@/lib/shipbest/types";
@@ -62,7 +62,7 @@ export default async function ShipmentDetail({ params }: { params: Promise<{ id:
   const providerNo = jg ? jgOrders.get(s.customNo)?.identifier ?? null : s.orderNo;
   const productId = jg ? String(parseJgCode(s.channelCode).productId) : s.channelCode;
   const jgCfg = jg ? jiaguConfig() : null;
-  const warehouse = jgCfg ? warehouseOfCode(jgCfg, s.channelCode) : null;
+  const warehouse = jgCfg ? orderWarehouse(jgCfg, s.customNo, s.channelCode) : null;
   const problem =
     s.errorMsg === JG_LABEL_TIMEOUT_MSG || s.errorMsg === JG_TIMEOUT_VOIDED_MSG ? `下单 ${JG_LABEL_TIMEOUT_MIN} 分钟后仍没有面单`
     : s.errorMsg ? s.errorMsg

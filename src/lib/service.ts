@@ -349,7 +349,7 @@ function providerFingerprint(code: string): string {
     }
     if (isDhlCode(code)) {
       const d = dhlSettings();
-      return `dhl|${d.mode}|${d.accountNumber}`;
+      return `dhl|${shipbestMode()}|${d.mode}|${d.accountNumber}`;
     }
     return `sb|${shipbestMode()}|${getSettings().shipbest?.apiId ?? ""}`;
   } catch {

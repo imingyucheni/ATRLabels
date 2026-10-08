@@ -7,7 +7,7 @@ import { getT } from "@/lib/prefs";
 import { redirect } from "next/navigation";
 import { draftRows, getDraft, MAX_DRAFTS } from "@/lib/drafts";
 import DraftList from "@/components/DraftList";
-import { isMockMode } from "@/lib/shipbest/client";
+import { dhlTestOnLive, isMockMode } from "@/lib/shipbest/client";
 
 export const dynamic = "force-dynamic";
 
@@ -28,11 +28,12 @@ export default async function AdminIntlShipPage({ searchParams }: { searchParams
           <h1 style={{ marginBottom: 2 }}>{t("国际下单（DHL）")}</h1>
           <p className="small muted" style={{ margin: 0 }}>
             {t("按我们的 DHL 成本价出单，订单记在“公司自用（成本价）”账户下，不扣任何客户的余额。")}
-            {d.mode !== "live" && <> <b>{t("当前是 DHL 测试环境，不会真实出单。")}</b></>}
+            {d.mode !== "live" && !dhlTestOnLive() && <> <b>{t("当前是 DHL 测试环境，不会真实出单。")}</b></>}
           </p>
         </div>
         <Link className="btn" href="/ship">{t("美国本地下单")}</Link>
       </div>
+      {dhlTestOnLive() && <div className="alert warn" style={{ marginTop: 12 }}>{t("正式模式下 DHL 还是测试环境：测试面单不能真实寄件，所以 DHL 渠道现在不报价、不出单（客户那边也一样）。要试 DHL 测试环境请用沙盒站；要正式出单请到")} <Link href="/settings#dhl">{t("设置 → DHL Express")}</Link>{t("改成正式环境。")}</div>}
       {!dhlConfig() && !isMockMode() && <div className="alert warn" style={{ marginTop: 12 }}>{t("DHL 还没有启用或账号没填完整，请先到")} <Link href="/settings#dhl">{t("设置 → DHL Express")}</Link>{t("。")}</div>}
       {!channels.length && <div className="alert warn" style={{ marginTop: 12 }}>{t("还没有 DHL 渠道，请到")} <Link href="/settings#channels">{t("设置 → 物流渠道")}</Link> {t("点“同步渠道”。")}</div>}
       <div style={{ height: 12 }} />

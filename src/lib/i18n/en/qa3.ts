@@ -97,6 +97,8 @@ export const qa3: Record<string, string> = {
   "自动备用（客户价按原渠道的限时活动价）": "Auto backup (customer price from the original service's promotion)",
   "新客户试算": "Prospect quote",
   // 全面检查后修复
+  "正式模式下 DHL 还是测试环境：测试面单不能真实寄件，所以 DHL 渠道现在不报价、不出单（客户那边也一样）。要试 DHL 测试环境请用沙盒站；要正式出单请到": "The site is live but DHL is still in test mode: test labels can't actually be shipped, so DHL services won't quote or create labels right now (for customers too). Use the sandbox site to try DHL test mode, or to ship for real go to",
+  "改成正式环境。": "and switch to the production environment.",
   "这一单正在取消，请稍后刷新查看结果": "This order is already being cancelled. Please refresh shortly to see the result",
   "这张面单已经退过款了，请刷新页面查看最新状态": "This label has already been refunded. Please refresh the page to see its current status",
   "这一单已经有一笔同样金额的补差了，不能重复关联（避免重复扣款）": "This order already has an adjustment with the same amount; it can't be linked again (to avoid charging twice)",
