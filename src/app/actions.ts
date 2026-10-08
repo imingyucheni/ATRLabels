@@ -101,11 +101,12 @@ export async function loginAction(_: unknown, fd: FormData) {
   const username = String(fd.get("username") ?? "").trim().toLowerCase();
   const password = String(fd.get("password") ?? "");
   const key = "admin:" + (await clientIp());
-  // 除了按 IP，每个登录名还有一个总次数限制：换 IP 也不能无限试密码。
-  // 按登录名分开算：有人乱试某个员工账号，不会把主管理员和其他员工一起锁住
-  const acct = "admin:acct:" + (username || "admin");
-  const limited = checkRateLimit(key) ?? checkRateLimit(acct, 50);
+  // 按 IP 限次数：超过了直接拒绝，不再验证密码
+  const limited = checkRateLimit(key);
   if (limited) return { error: limited };
+  // 每个登录名还记一个总失败次数（按登录名分开算），但不拿它锁账号：
+  // 否则别人换着 IP 故意输错，就能把主管理员 / 员工锁在外面。密码对的照样能登录，输错的照样记次数
+  const acct = "admin:acct:" + (username || "admin");
   // 登录名留空（或填 admin）= 主管理员，用后台密码；否则是员工账号
   const staff = username && username !== "admin" ? staffLogin(username, password) : null;
   if (username && username !== "admin" ? !staff : !checkPassword(password)) {
@@ -335,6 +336,9 @@ export async function hideCredentialsAction(id: number) {
   revalidatePath(`/customers/${id}`);
 }
 
+/** 公司自用账户不能开通客户端登录、不能设置登录密码 */
+const INTERNAL_NO_PORTAL = "公司自用账户（成本价）不能开通客户端登录，也不能设置登录密码；用它出单请用“管理员下单”";
+
 export async function saveCustomerPortalAction(_: FlashState, fd: FormData): Promise<FlashState> {
   const who = await requireAdmin({ staff: true });
   const id = Number(fd.get("id"));
@@ -342,6 +346,8 @@ export async function saveCustomerPortalAction(_: FlashState, fd: FormData): Pro
   if (denied) return { error: denied };
   const email = str(fd.get("portalEmail"), 100).toLowerCase() || null;
   const enabled = fd.get("portalEnabled") === "on";
+  // 公司自用账户（成本价、不扣余额）只给“管理员下单”用，不能开通客户端登录（主管理员也不行）
+  if (enabled && isInternalCustomer(id)) return { error: INTERNAL_NO_PORTAL };
   if (enabled && !email) return { error: "开通登录需要填写登录邮箱" };
   if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return { error: "登录邮箱格式不正确" };
   try {
@@ -362,6 +368,7 @@ export async function setCustomerPasswordAction(_: FlashState, fd: FormData): Pr
   if (denied) return { error: denied };
   const c = getCustomer(id);
   if (!c) return { error: "客户不存在" };
+  if (c.internal) return { error: INTERNAL_NO_PORTAL };
   // 还没填登录邮箱时用客户资料里的邮箱；生成密码时顺便开通登录
   const email = c.portalEmail ?? c.email?.toLowerCase() ?? null;
   if (!email) return { error: "请先在上面填写登录邮箱" };
@@ -993,6 +1000,7 @@ export async function handleResetRequestAction(_: FlashState, fd: FormData): Pro
   const owner = resetRequestCustomer(Number(fd.get("id")));
   const denied = owner ? customerDenied(who, owner) : null;
   if (denied) return { error: denied };
+  if (owner && isInternalCustomer(owner)) return { error: INTERNAL_NO_PORTAL };
   try {
     const r = adminResetFromRequest(Number(fd.get("id")));
     revalidatePath("/customers");

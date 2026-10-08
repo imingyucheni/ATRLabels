@@ -1,9 +1,12 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { getCustomer, getPasswordHash, type Customer } from "./db";
+import { getCustomer, getPasswordHash, isInternalCustomer, type Customer } from "./db";
 import { ADMIN_COOKIE, adminMac, customerAccess, staffToken, verifyAdminToken, verifySession, type AdminPrincipal } from "./adminSession";
-import type { StaffAccount } from "./staffStore";
+import { setInternalCustomerCheck, type StaffAccount } from "./staffStore";
+
+// 员工权限里要排除公司自用账户（成本价）：staffStore 不打开数据库，在这里告诉它怎么判断
+setInternalCustomerCheck(isInternalCustomer);
 
 // 沙盒站和正式站可能在同一个 IP 的不同端口上，浏览器 cookie 不分端口：沙盒站用不同的 cookie 名，两边可以同时登录
 const SFX = process.env.APP_ENV === "sandbox" ? "_sb" : "";
@@ -62,7 +65,19 @@ export async function createSession(staff?: StaffAccount) {
 }
 
 export async function destroySession() {
-  (await cookies()).delete(COOKIE);
+  const jar = await cookies();
+  // 主管理员退出后台：代操作客户 OMS 也一起结束（同一个网址时直接删掉；OMS 在另一个域名时记下退出时间，之前进入的代操作作废）
+  let owner = false;
+  try {
+    owner = verifyAdminToken(jar.get(COOKIE)?.value);
+  } catch {
+    /* 没配置 SESSION_SECRET：本来就登录不了 */
+  }
+  if (owner) {
+    asState.ownerLogoutAt = Date.now();
+    jar.delete(AS_COOKIE);
+  }
+  jar.delete(COOKIE);
 }
 
 /** 是否主管理员登录（接口默认只认主管理员） */
@@ -104,12 +119,16 @@ const failures = new Map<string, { count: number; until: number }>();
 
 /**
  * 访客 IP：取 X-Forwarded-For 的最后一段（Caddy 反向代理加上的真实来源），
- * 第一段是访客自己可以随便填的，不能用来限流。
+ * 第一段是访客自己可以随便填的，不能用来限流，也不能用来核对 IP 白名单。
+ * 后台 / 客户登录限流和开放 API 的 IP 白名单都用这一个规则。
  */
-export async function clientIp(): Promise<string> {
-  const h = await headers();
+export function ipFromHeaders(h: { get(name: string): string | null }): string | null {
   const parts = (h.get("x-forwarded-for") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
-  return parts[parts.length - 1] || h.get("x-real-ip") || "local";
+  return parts[parts.length - 1] || h.get("x-real-ip")?.trim() || null;
+}
+
+export async function clientIp(): Promise<string> {
+  return ipFromHeaders(await headers()) ?? "local";
 }
 
 /** 同一个 key 15 分钟内失败 max 次（默认 10）后锁定 15 分钟 */
@@ -165,26 +184,53 @@ const AS_MAX_AGE = 4 * 3600;
 
 const usedEnterTokens = new Map<string, number>();
 
+/**
+ * 代操作会话的进程内状态（放在 globalThis：同一个进程里各处共用）：
+ * - ownerLogoutAt：主管理员最近一次退出后台的时间，之前进入的代操作作废；
+ * - bootAt：程序启动时间。退出时间只记在内存里，重启后就忘了，所以 OMS 在另一个域名时，重启前进入的代操作也作废（重新进入即可）。
+ */
+const asState = ((globalThis as unknown as { __atrAsState?: { ownerLogoutAt: number; bootAt: number } }).__atrAsState ??= { ownerLogoutAt: 0, bootAt: Date.now() });
+
+/** 后台密码的指纹：改了 ADMIN_PASSWORD，之前进入的代操作全部失效（和后台登录一样） */
+const ownerPwFingerprint = () => mac("pw:" + (process.env.ADMIN_PASSWORD ?? "")).slice(0, 16);
+const asMac = (id: number, exp: number, iat: number) => mac(`as.${id}.${exp}.${iat}.${ownerPwFingerprint()}`);
+
+const hostOf = (u?: string) => {
+  try {
+    return u ? new URL(u).host.toLowerCase() : "";
+  } catch {
+    return "";
+  }
+};
+
+/** 客户 OMS 是不是单独的域名（配置了 OMS_URL，且和 ADMIN_URL 不同）：这时 OMS 那边收不到后台的登录 cookie */
+const omsOnOwnHost = () => {
+  const oms = hostOf(process.env.OMS_URL);
+  return !!oms && oms !== hostOf(process.env.ADMIN_URL);
+};
+
 /** 后台生成的一次性进入凭证（60 秒有效），放在跳转链接里，OMS 可以在另一个域名 */
 export function makeEnterToken(customerId: number) {
   const exp = Math.floor(Date.now() / 1000) + 60;
   return `${customerId}.${exp}.${mac(`enter.${customerId}.${exp}`)}`;
 }
 
-/** OMS 这边校验进入凭证，写入“管理员代操作”会话 */
+/** OMS 这边校验进入凭证，写入“管理员代操作”会话。公司自用账户（成本价）不能进入：它只给“管理员下单”用 */
 export async function enterAsCustomer(token: string): Promise<number | null> {
   const [idStr, expStr, sig] = token.split(".");
   const id = Number(idStr);
   const exp = Number(expStr);
   if (!id || !exp || !sig || exp < Date.now() / 1000 || !safeEqual(sig, mac(`enter.${id}.${exp}`))) return null;
-  if (!getCustomer(id)) return null;
+  const c = getCustomer(id);
+  if (!c || c.internal) return null;
   // 一次性：用过的凭证不能再用
   const now = Date.now() / 1000;
   for (const [k, e] of usedEnterTokens) if (e < now) usedEnterTokens.delete(k);
   if (usedEnterTokens.has(sig)) return null;
   usedEnterTokens.set(sig, exp);
   const asExp = Math.floor(Date.now() / 1000) + AS_MAX_AGE;
-  (await cookies()).set(AS_COOKIE, `${id}.${asExp}.${mac(`as.${id}.${asExp}`)}`, {
+  const iat = Date.now();
+  (await cookies()).set(AS_COOKIE, `${id}.${asExp}.${iat}.${asMac(id, asExp, iat)}`, {
     httpOnly: true,
     sameSite: "lax",
     secure: await cookieSecure(),
@@ -198,15 +244,33 @@ export async function leaveCustomer() {
   (await cookies()).delete(AS_COOKIE);
 }
 
-/** 管理员代操作的客户 id（没有则 null） */
+/**
+ * 管理员代操作的客户 id（没有则 null）。
+ * 只在主管理员的后台登录还有效时才认：后台退出、登录过期、改了后台密码，代操作马上失效。
+ * OMS 在另一个域名时收不到后台的登录 cookie：靠凭证里的后台密码指纹、主管理员的退出时间来判断。
+ * 公司自用账户（成本价）永远不认。
+ */
 export async function impersonatedCustomerId(): Promise<number | null> {
-  const token = (await cookies()).get(AS_COOKIE)?.value;
+  const jar = await cookies();
+  const token = jar.get(AS_COOKIE)?.value;
   if (!token) return null;
-  const [idStr, expStr, sig] = token.split(".");
+  const [idStr, expStr, iatStr, sig] = token.split(".");
   const id = Number(idStr);
   const exp = Number(expStr);
-  if (!id || !exp || !sig || exp < Date.now() / 1000 || !safeEqual(sig, mac(`as.${id}.${exp}`))) return null;
-  return getCustomer(id) ? id : null;
+  const iat = Number(iatStr);
+  if (!id || !exp || !iat || !sig || exp < Date.now() / 1000 || !safeEqual(sig, asMac(id, exp, iat))) return null;
+  // 进入之后主管理员退出过后台：作废
+  if (iat <= asState.ownerLogoutAt) return null;
+  const adminToken = jar.get(COOKIE)?.value;
+  if (adminToken || !omsOnOwnHost()) {
+    // 能看到后台登录（同一个网址）：必须是有效的主管理员登录（员工、过期、伪造的都不行）
+    if (!verifyAdminToken(adminToken)) return null;
+  } else if (iat < asState.bootAt) {
+    // OMS 在另一个域名：重启前进入的不认（退出时间只记在内存里）
+    return null;
+  }
+  const c = getCustomer(id);
+  return c && !c.internal ? id : null;
 }
 
 /** 当前 OMS 操作人：管理员代操作记为 admin */
@@ -214,7 +278,10 @@ export async function portalActor(): Promise<"admin" | "customer"> {
   return (await impersonatedCustomerId()) ? "admin" : "customer";
 }
 
-/** 返回已登录客户的 id（管理员代操作时返回被代操作的客户）；未登录、会话过期、账号停用都返回 null */
+/**
+ * 返回已登录客户的 id（管理员代操作时返回被代操作的客户）；未登录、会话过期、账号停用都返回 null。
+ * 公司自用账户（成本价、不扣余额）不能登录客户 OMS：即使有它的会话也不认。
+ */
 export async function currentCustomerId(): Promise<number | null> {
   const as = await impersonatedCustomerId();
   if (as) return as;
@@ -226,7 +293,7 @@ export async function currentCustomerId(): Promise<number | null> {
   if (!id || !exp || !sig || exp < Date.now() / 1000) return null;
   const c = getCustomer(id);
   const pwHash = getPasswordHash(id);
-  if (!c?.portalEnabled || !pwHash) return null;
+  if (!c?.portalEnabled || c.internal || !pwHash) return null;
   return safeEqual(sig, portalMac(id, exp, pwHash)) ? id : null;
 }
 

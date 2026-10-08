@@ -3,6 +3,7 @@ import { apiEnabled, listKeys, listLogs } from "@/lib/api/keys";
 import { fmtTime } from "@/lib/time";
 import { getT } from "@/lib/prefs";
 import { adminRevokeApiKeyAction, setApiEnabledAction } from "@/app/actions";
+import { getCustomer } from "@/lib/db";
 
 /** 后台客户详情：开放 API（开通开关、密钥、最近调用） */
 export default async function ApiCard({ customerId }: { customerId: number }) {
@@ -11,6 +12,8 @@ export default async function ApiCard({ customerId }: { customerId: number }) {
   const keys = listKeys(customerId);
   const logs = listLogs(customerId, 10);
   const fails = logs.filter((l) => l.status >= 400).length;
+  // 客户端登录关掉（停用）的客户，API 密钥也一起不能用
+  const portalOff = !getCustomer(customerId)?.portalEnabled;
   return (
     <div className="card" id="api">
       <h2 style={{ marginTop: 0 }}>{t("开放 API")} <span className="badge test">{t("测试中")}</span></h2>
@@ -25,6 +28,7 @@ export default async function ApiCard({ customerId }: { customerId: number }) {
           {" "}<a href="/site/developers" target="_blank">{t("接口文档")} ↗</a>
         </div>
       </FlashForm>
+      {on && portalOff && <div className="alert warn">{t("这个客户的客户端登录已关闭：API 密钥也暂时不能用，重新开通登录后恢复。")}</div>}
       {keys.length > 0 && (
         <div className="table-wrap">
           <table>

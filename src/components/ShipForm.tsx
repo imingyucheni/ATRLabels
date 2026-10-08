@@ -895,7 +895,8 @@ export default function ShipForm(props: {
                         <>
                           {!props.hideCost && <td className="num muted">{money(q.listCost)}</td>}
                           {!props.hideCost && <td className="num">{money(q.cost, q.currency)}</td>}
-                          <td className="small">{signedPercent(q.rule!.percent)} + {q.rule!.fixed}{t("，最低利润")} {q.rule!.minProfit}</td>
+                          {/* 员工拿到的报价不带加价规则（规则 + 客户价能倒推成本） */}
+                          <td className="small">{q.rule ? <>{signedPercent(q.rule.percent)} + {q.rule.fixed}{t("，最低利润")} {q.rule.minProfit}</> : "-"}</td>
                         </>
                       )}
                       <td className="num q-price"><b>{money(q.price, q.currency)}</b>{portal && q.price === bestPrice && <div className="small profit-pos">{t("最低价")}</div>}{q.promo && <div className="small" style={{ textAlign: "right" }}><span className="badge promo">{tm(q.promo.label)}</span> <s className="muted">{money(q.promo.originalPrice, q.currency)}</s><div className="muted">{t("活动至 {d}", { d: q.promo.endsOn.slice(5) })}</div></div>}{q.warning && <div className="small warn-text" style={{ maxWidth: 260, marginLeft: "auto", textAlign: "left" }}>⚠ {tm(q.warning)}</div>}</td>

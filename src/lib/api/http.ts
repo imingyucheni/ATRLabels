@@ -1,8 +1,9 @@
 /** 开放 API 的公共处理：鉴权、频率限制、统一返回格式、调用记录 */
-import { authenticate, logCall, rateLimit, type ApiKey } from "./keys";
+import { authenticate, INTERNAL_MESSAGE, logCall, rateLimit, type ApiKey } from "./keys";
 import { ApiError } from "./v1";
 import { publicBase } from "../stores/web";
 import { translateMessage } from "../i18n";
+import { ipFromHeaders } from "../auth";
 
 type Handler = (key: ApiKey, ctx: { base: string; req: Request }) => Promise<unknown>;
 
@@ -14,9 +15,11 @@ export const ok = (data: unknown) => json(200, { success: true, code: "OK", mess
 const fail = (status: number, code: string, message: string, details?: unknown, extra?: Record<string, string>) =>
   json(status, { success: false, code, message, ...(details !== undefined ? { details } : {}) }, extra);
 
+/** 调用方 IP：和后台登录限流同一个规则（X-Forwarded-For 的最后一段；第一段调用方可以随便填，不能用来核对 IP 白名单） */
 export function clientIp(req: Request): string | null {
-  return req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || req.headers.get("x-real-ip") || null;
+  return ipFromHeaders(req.headers);
 }
+
 
 export async function readJson<T>(req: Request): Promise<T> {
   const text = await req.text();
@@ -64,9 +67,10 @@ export async function handle(req: Request, fn: Handler): Promise<Response> {
       res = fail(e.status, e.code, tr(e.message), e.details);
     } else {
       code = "INTERNAL";
-      message = (e as Error).message;
+      // 原始报错可能带服务商、数据库等内部信息：只打在服务器日志里，客户 OMS 的调用记录只记统一的提示
+      message = INTERNAL_MESSAGE;
       console.error("[api]", path, e);
-      res = fail(500, "INTERNAL", en ? "Internal error, please retry later" : "服务器内部错误，请稍后重试");
+      res = fail(500, "INTERNAL", en ? "Internal error, please retry later" : INTERNAL_MESSAGE);
     }
   }
   logCall({ keyId: key.id, customerId: key.customerId, method: req.method, path, status: res.status, code, message, ms: Date.now() - t0, ip });

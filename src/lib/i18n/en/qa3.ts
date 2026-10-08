@@ -135,4 +135,14 @@ export const qa3: Record<string, string> = {
   "每次查运费、核对地址时，各服务商接口用了多久（只记最近 100 次，服务器重启后清零）。下单页现在查到一个渠道就先显示一个，慢的服务商不会拖住其他渠道；查价最多等 15 秒。": "How long each provider's API took for rate quotes and address checks (last 100 calls, reset on server restart). The order page now shows each service as soon as it responds, so a slow provider doesn't hold up the others; a quote waits at most 15 seconds.",
   "次数": "Calls", "平均": "Average", "90% 在多少秒内": "90% within", "最慢": "Slowest", "失败 / 超时": "Failed / timed out", "最近一次": "Last call",
   "查一次运费后这里会显示各服务商的速度。": "Get a rate quote and each provider's speed will show here.",
+  // 安全修复：员工权限、公司自用账户、开放 API
+  "员工试算新客户时，临时加价不能低于全局默认加价（留空 = 按全局默认）": "When staff quote for a new customer, the temporary markup can't be lower than the global default markup (leave blank = use the global default)",
+  "服务器内部错误，请稍后重试": "Internal error, please retry later",
+  "这个账户已停用（客户端登录已关闭），API 暂时不能用，请联系客服": "This account is disabled (customer login is turned off), so the API is unavailable for now. Please contact support",
+  "公司自用账户（成本价）不能开通客户端登录，也不能设置登录密码；用它出单请用“管理员下单”": "The house account (at cost) can't have customer login or a login password; use “Admin shipping” to ship with it",
+  "公司自用账户只给“管理员下单”用：按成本价、不扣余额，不能开通客户端登录，也不能进入客户 OMS。": "The house account is only for “Admin shipping”: priced at cost and never charged. It can't have customer login and can't be opened in the customer OMS.",
+  "这个客户的客户端登录已关闭：API 密钥也暂时不能用，重新开通登录后恢复。": "This customer's login is turned off, so their API keys don't work either. They work again once login is re-enabled.",
+  "请在同一个浏览器里先登录客户中心，再到“店铺订单”重新点“连接 eBay”。": "Sign in to the Customer Center in this same browser first, then click “Connect eBay” again under Store orders.",
+  "授权失败": "Authorization failed",
+  "返回店铺订单": "Back to store orders",
 };

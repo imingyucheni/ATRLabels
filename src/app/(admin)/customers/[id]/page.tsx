@@ -23,7 +23,7 @@ import SalesCard from "./SalesCard";
 import { groupChannels } from "@/lib/channelGroups";
 import StaffAccessCard from "./StaffAccessCard";
 import { currentAdmin } from "@/lib/auth";
-import { customerAccess } from "@/lib/adminSession";
+import { customerPageAccess } from "./access";
 import { actorLabel } from "@/lib/actor";
 import { ledgerEntryAction, hideCredentialsAction, saveCustomerAction, saveCustomerChannelsAction, saveCustomerChannelMarkupAction, saveCustomerPortalAction, saveCustomerSenderAction, saveCustomerStampAction, setCustomerPasswordAction, setTestAccountAction } from "@/app/actions";
 
@@ -46,10 +46,13 @@ export default async function CustomerEdit({ params, searchParams }: { params: P
   const tab: Tab = (tabs.find(([k]) => k === tabParam)?.[0] ?? "overview") as Tab;
   // 新客户只有资料表单；老客户按标签页分开显示，页面不再一长条
   const show = (k: Tab) => tab === k;
-  const c = id === "new" ? null : getCustomer(Number(id));
+  // 不只靠 proxy：客户编号必须是纯数字，没有权限的（包括员工打开公司自用账户）一律 404
+  const access = id === "new" ? null : await customerPageAccess(id);
+  const c = access ? getCustomer(access.id) : null;
   if (id !== "new" && !c) notFound();
-  // 员工：没授权的客户 proxy 已经拦了；只读权限时页面上的表单全部禁用（服务端也会拒绝）
-  const ro = !!c && staff && customerAccess(who, c.id) === "view";
+  // 只读权限时页面上的表单全部禁用（服务端也会拒绝）
+  const ro = !!c && access?.level !== "edit";
+  const canEdit = !!c && access?.level === "edit";
   const { markup } = getSettings();
   const h = await headers();
   const creds = c ? pendingCredentials(c.id) : null;
@@ -70,11 +73,13 @@ export default async function CustomerEdit({ params, searchParams }: { params: P
         <h1 style={{ margin: 0 }}>{c ? t("编辑客户：{name}", { name: c.name }) : t("新增客户")}</h1>
         <div className="row">
           {/* 在当前标签页进入：OMS 里点“退出代操作”会直接回到后台，不会多出一个后台标签页 */}
-          {c && !staff && <a className="btn primary" href={`/api/customers/${c.id}/oms`}>{t("进入客户 OMS")}</a>}
+          {/* 公司自用账户不能进入 OMS：它只给“管理员下单”用 */}
+          {c && !staff && !c.internal && <a className="btn primary" href={`/api/customers/${c.id}/oms`}>{t("进入客户 OMS")}</a>}
           <Link href="/customers">{t("← 返回")}</Link>
         </div>
       </div>
-      {c && creds && !ro && (
+      {/* 开户信息（登录密码）只给能操作这个客户的人看 */}
+      {c && creds && canEdit && !c.internal && (
         <CredentialsCard brand={getSettings().brandName} name={c.name} url={omsLogin} email={creds.email} password={creds.password}
           onHide={hideCredentialsAction.bind(null, c.id)} noChannels={!usable} />
       )}
@@ -179,7 +184,7 @@ export default async function CustomerEdit({ params, searchParams }: { params: P
               <>
                 <FlashForm action={saveCustomerChannelMarkupAction} submitLabel="保存按渠道加价" className="card" id="channel-markup" review>
                   <h2 style={{ marginTop: 0 }}>{t("按渠道加价")}</h2>
-                  <p className="small muted">{t("这个客户在某个渠道要加多一点或少一点时，在这里单独填；留空沿用上一级（客户专属加价 → 渠道加价 → 全局默认），灰字就是沿用的数值。")} {t("渠道有服务商返利时（设置 → 渠道），加价可以填负数，最低到 -返利%。")}</p>
+                  <p className="small muted">{t("这个客户在某个渠道要加多一点或少一点时，在这里单独填；留空沿用上一级（客户专属加价 → 渠道加价 → 全局默认），灰字就是沿用的数值。")} {!staff && t("渠道有服务商返利时（设置 → 渠道），加价可以填负数，最低到 -返利%。")}</p>
                   <input type="hidden" name="id" value={c.id} />
                   <div className="table-wrap">
                     <table>
@@ -196,7 +201,7 @@ export default async function CustomerEdit({ params, searchParams }: { params: P
                               {(["percent", "fixed", "minProfit"] as const).map((k) => (
                                 <td key={k}><input name={`${ch.code}.${k}`} type="number" step="0.01" min={k === "percent" ? undefined : 0} defaultValue={v(mine[k])} placeholder={String(inherit[k])} style={{ width: 90 }} /></td>
                               ))}
-                              <td className="small">{signedPercent(eff.percent)}{eff.fixed ? ` + ${money(eff.fixed)}` : ""}<div className="muted">{t(MARKUP_SOURCE_LABEL[eff.source])}{ch.rebate > 0 && eff.source !== "promo" ? ` · ${t("返利 {n}%", { n: ch.rebate })}` : ""}</div>{eff.source !== "promo" && (mine.percent ?? 0) < 0 && !(ch.rebate > 0) && <div className="small warn-text" style={{ whiteSpace: "normal", maxWidth: 200 }}>{t("这个渠道没有设服务商返利，负数加价不会低于成本 + 最低利润")}</div>}{eff.source === "promo" && <div className="small warn-text" style={{ whiteSpace: "normal", maxWidth: 200 }}>{t("活动期间所有客户按限时活动价，左边的设置活动结束后才生效")}</div>}</td>
+                              <td className="small">{signedPercent(eff.percent)}{eff.fixed ? ` + ${money(eff.fixed)}` : ""}<div className="muted">{t(MARKUP_SOURCE_LABEL[eff.source])}{!staff && ch.rebate > 0 && eff.source !== "promo" ? ` · ${t("返利 {n}%", { n: ch.rebate })}` : ""}</div>{!staff && eff.source !== "promo" && (mine.percent ?? 0) < 0 && !(ch.rebate > 0) && <div className="small warn-text" style={{ whiteSpace: "normal", maxWidth: 200 }}>{t("这个渠道没有设服务商返利，负数加价不会低于成本 + 最低利润")}</div>}{eff.source === "promo" && <div className="small warn-text" style={{ whiteSpace: "normal", maxWidth: 200 }}>{t("活动期间所有客户按限时活动价，左边的设置活动结束后才生效")}</div>}</td>
                               <td className="num">{money(computePrice(10, eff, st.roundingStep))}</td>
                             </tr>
                           );
@@ -245,7 +250,9 @@ export default async function CustomerEdit({ params, searchParams }: { params: P
               </div>
             </FlashForm>}
 
-            {show("profile") && <div className="card">
+            {show("profile") && c.internal && <div className="alert">{t("公司自用账户只给“管理员下单”用：按成本价、不扣余额，不能开通客户端登录，也不能进入客户 OMS。")}</div>}
+
+            {show("profile") && !c.internal && <div className="card">
               <h2>{t("客户端登录")}</h2>
               <FlashForm action={saveCustomerPortalAction} submitLabel="保存登录设置" review>
                 <input type="hidden" name="id" value={c.id} />

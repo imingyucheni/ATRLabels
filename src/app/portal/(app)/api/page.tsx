@@ -1,13 +1,14 @@
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { requireCustomer } from "@/lib/auth";
-import { apiEnabled, listKeys, listLogs, RATE_PER_MIN } from "@/lib/api/keys";
+import { apiEnabled, INTERNAL_MESSAGE, listKeys, listLogs, RATE_PER_MIN } from "@/lib/api/keys";
 import { publicBase } from "@/lib/stores/web";
 import { fmtTime } from "@/lib/time";
 import { getT } from "@/lib/prefs";
 import FlashForm from "@/components/FlashForm";
 import ApiKeyCreate from "@/components/ApiKeyCreate";
 import { revokeApiKeyAction } from "@/app/portal/actions";
+import { publicError } from "@/lib/portal";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +20,8 @@ export default async function PortalApiPage() {
   const base = `${publicBase({ headers: await headers() })}/api/v1`;
   const keys = listKeys(me.id);
   const logs = listLogs(me.id, 50);
+  // 调用记录里的错误说明：服务器内部错误只显示统一提示（老记录里可能存着原始报错），其他的去掉服务商等内部信息
+  const logMessage = (l: (typeof logs)[number]) => (l.code === "INTERNAL" || l.status >= 500 ? t(INTERNAL_MESSAGE) : publicError(l.message));
   return (
     <>
       <h1>{t("API 对接")}</h1>
@@ -85,7 +88,7 @@ export default async function PortalApiPage() {
                 <td className="c-main small"><code>{l.method} {l.path.replace("/api/v1", "")}</code></td>
                 <td data-label={t("结果")} className="small">
                   <span className={`badge ${l.status < 300 ? "ok" : l.status < 500 ? "pending" : "exception"}`}>{l.status} {l.code}</span>
-                  {l.message && l.status >= 300 && <div className="muted" style={{ maxWidth: 360 }}>{l.message}</div>}
+                  {l.message && l.status >= 300 && <div className="muted" style={{ maxWidth: 360 }}>{logMessage(l)}</div>}
                 </td>
                 <td data-label={t("耗时")} className="num small muted">{l.ms ?? "-"} ms</td>
                 <td data-label="IP" className="small muted">{l.ip ?? "-"}</td>

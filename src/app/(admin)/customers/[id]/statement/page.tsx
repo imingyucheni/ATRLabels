@@ -4,6 +4,7 @@ import { money } from "@/lib/pricing";
 import { buildStatement } from "@/lib/statement";
 import { getT, getLang } from "@/lib/prefs";
 import { translateMessage } from "@/lib/i18n";
+import { customerPageAccess } from "../access";
 
 function monthRange(offset = 0) {
   const d = new Date();
@@ -20,7 +21,8 @@ export default async function StatementPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ from?: string; to?: string }>;
 }) {
-  const id = Number((await params).id);
+  // 不只靠 proxy：客户编号必须是纯数字，没有这个客户权限的一律 404
+  const { id } = await customerPageAccess((await params).id);
   const sp = await searchParams;
   const def = monthRange();
   const from = sp.from ?? def.from;

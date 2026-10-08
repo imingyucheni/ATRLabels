@@ -9,7 +9,7 @@ import { checkAddress, type AddressCheck } from "./addressCheck";
 import type { AdminPrincipal } from "./adminSession";
 import { customerAccess } from "./adminSession";
 import { displayChannel } from "./channelDisplay";
-import { getShipment, houseCustomerId } from "./db";
+import { getSettings, getShipment, houseCustomerId, isInternalCustomer } from "./db";
 import { translateMessage, type Lang } from "./i18n";
 import { negativeRule } from "./markup";
 import type { PartialRule } from "./pricing";
@@ -17,6 +17,36 @@ import { publicError, toPublicQuote } from "./portal";
 import { cleanRequest } from "./sanitize";
 import { quoteAll, quoteForProspect, validateRequest, withQuoteSkus, type ChannelQuote, type QuoteHooks } from "./service";
 import type { ShipmentRequest } from "./shipbest/types";
+import { setInternalCustomerCheck } from "./staffStore";
+
+// 员工权限里要排除公司自用账户（成本价）：staffStore 不打开数据库，在这里告诉它怎么判断（auth.ts 里也注册了）
+setInternalCustomerCheck(isInternalCustomer);
+
+/**
+ * 员工看到的报价：只有客户价（和限时活动的活动名、原价）。
+ * 成本、原价、利润、用时、加价规则（加价 %、固定加价、返利、活动）都不给：知道规则和客户价就能倒推出成本。
+ */
+export function staffQuote(q: ChannelQuote): Omit<ChannelQuote, "cost" | "listCost" | "profit" | "ms" | "rule"> {
+  const { cost: _c, listCost: _l, profit: _p, ms: _m, rule: _r, ...rest } = q;
+  void [_c, _l, _p, _m, _r];
+  return rest;
+}
+
+export const STAFF_PROSPECT_MARKUP_ERROR = "员工试算新客户时，临时加价不能低于全局默认加价（留空 = 按全局默认）";
+
+/**
+ * 员工给还没开户的新客户试算：填了的临时加价（加价 %、固定加价、最低利润）每一项都不能低于全局默认，
+ * 不然填 0 / 0 / 0 试算出来的“客户价”就是成本价。留空的照旧沿用全局 / 渠道设置。
+ */
+export function staffProspectMarkupError(m: PartialRule): string | null {
+  const g = getSettings().markup;
+  for (const k of ["percent", "fixed", "minProfit"] as const) {
+    const v = m[k];
+    if (v === null || v === undefined) continue;
+    if (typeof v !== "number" || !Number.isFinite(v) || v < (g[k] ?? 0)) return STAFF_PROSPECT_MARKUP_ERROR;
+  }
+  return null;
+}
 
 export type QuoteMode = "portal" | "admin" | "house" | "resubmit";
 
@@ -72,7 +102,11 @@ export async function runQuoteStream(who: QuoteStreamWho, input: QuoteStreamInpu
     const m: PartialRule = { percent: input.markup?.percent ?? null, fixed: input.markup?.fixed ?? null, minProfit: input.markup?.minProfit ?? null };
     const neg = negativeRule(m);
     if (neg) return fail([neg]);
-    const shape = (q: ChannelQuote) => (admin.role === "staff" ? ({ ...q, cost: undefined, listCost: undefined, profit: undefined, ms: undefined }) : q);
+    if (admin.role === "staff" && !customerId) {
+      const low = staffProspectMarkupError(m);
+      if (low) return fail([low]);
+    }
+    const shape = (q: ChannelQuote) => (admin.role === "staff" ? staffQuote(q) : q);
     return run(customerId, req, false, shape, customerId ? undefined : m);
   }
 

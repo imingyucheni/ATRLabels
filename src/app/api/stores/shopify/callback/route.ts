@@ -4,7 +4,13 @@ import { findStoreByState, saveStoreToken, shopifySecrets, syncStore } from "@/l
 import { exchangeShopifyCode, normalizeShop, verifyShopifyHmac } from "@/lib/stores/shopify";
 import { publicBase, resultPage } from "@/lib/stores/web";
 
-/** Shopify 授权回调：校验 state / hmac / 店铺，换访问令牌，然后先同步一次订单 */
+/**
+ * Shopify 授权回调：校验 state / hmac / 店铺，换访问令牌，然后先同步一次订单。
+ * 和 eBay 不同，这里不要求浏览器登录了客户中心：店主从 Shopify 后台打开 App（/api/stores/shopify/launch）时一般没登录我们的系统。
+ * 每个店铺用的是客户自己在 Shopify 建的 App（Client ID / Secret 存在这条店铺记录里），回调要有用这个 App 密钥签的 hmac，
+ * 店铺域名也要和记录里的一致：别人想把不属于他的店铺连到自己账户下，得先骗店主授权他自己建的 App，
+ * 那样他用自己的 App 本来就拿得到这个店铺的权限，连到我们这里不会多泄露什么。
+ */
 export async function GET(req: Request) {
   const params = new URL(req.url).searchParams;
   const store = findStoreByState(params.get("state") ?? "");
