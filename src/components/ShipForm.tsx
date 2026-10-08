@@ -5,10 +5,10 @@ import AddressCheckPanel from "@/components/AddressCheckPanel";
 import type { AddressCheck } from "@/lib/addressCheck";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
-import { houseCreateAction, houseQuoteAction, quoteAction, resubmitCreateAction, resubmitQuoteAction } from "@/app/actions";
+import { useEffect, useRef, useState, useTransition } from "react";
+import { houseCreateAction, resubmitCreateAction } from "@/app/actions";
 import type { SavedSender } from "@/lib/senders";
-import { portalCreateAction, portalQuoteAction, portalReorderAction, saveSenderBookAction } from "@/app/portal/actions";
+import { portalCreateAction, portalReorderAction, saveSenderBookAction } from "@/app/portal/actions";
 import type { PublicQuote } from "@/lib/portal";
 import AddressFields, { SENDER_EXAMPLE } from "@/components/AddressFields";
 import { useT, useTMsg } from "@/components/I18n";
@@ -56,7 +56,7 @@ const NATURE_PRESETS = [
 
 
 /** 报价行：后台看到完整信息（成本、利润），客户端只有价格 */
-type Quote = PublicQuote & Partial<Pick<ChannelQuote, "cost" | "listCost" | "rule" | "profit" | "zoneEstimated">>;
+type Quote = PublicQuote & Partial<Pick<ChannelQuote, "cost" | "listCost" | "rule" | "profit" | "zoneEstimated" | "ms">>;
 
 /** 异常单修改后重新下单：原订单的信息（预填到表单里） */
 export interface ResubmitSource {
@@ -222,7 +222,10 @@ export default function ShipForm(props: {
   const [onlyAvailable, setOnlyAvailable] = useState(true);
   const [errors, setErrors] = useState<string[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
-  const [quoting, startQuote] = useTransition();
+  // 边查边报：每个渠道查完就显示；pending = 还在查的渠道
+  const [quoting, setQuoting] = useState(false);
+  const [pending, setPending] = useState<{ code: string; name: string }[]>([]);
+  const quoteRun = useRef(0);
   const quoteSec = useElapsed(quoting);
   const [creating, setCreating] = useState<string | null>(null);
   const creatingSec = useElapsed(!!creating);
@@ -285,25 +288,92 @@ export default function ShipForm(props: {
     };
   }
 
+  /**
+   * 查询运费：边查边报（/api/quote/stream）。快的渠道先显示，可以直接下单；慢的渠道查完再补上；
+   * 地址核对结果单独到，不拖住报价。最后用整理好的完整列表（补分区、排序）替换。
+   */
   function onQuote() {
     setErrors([]);
     setNotice(null);
-    startQuote(async () => {
-      const optNum = (v: string) => (v.trim() === "" ? null : Number(v));
-      const r = portal
-        ? await portalQuoteAction(buildRequest())
-        : re
-          ? await resubmitQuoteAction(re.id, buildRequest())
+    setQuotes(null);
+    setPending([]);
+    setAddr(null);
+    setAddrAck(false);
+    setQuoting(true);
+    const run = ++quoteRun.current;
+    const optNum = (v: string) => (v.trim() === "" ? null : Number(v));
+    const req = buildRequest();
+    const body = portal
+      ? { mode: "portal", req }
+      : re
+        ? { mode: "resubmit", oldId: re.id, req }
         : house
-          ? await houseQuoteAction(buildRequest())
-          : await quoteAction(customerId, buildRequest(), { percent: optNum(markup.percent), fixed: optNum(markup.fixed), minProfit: optNum(markup.minProfit) });
-      setErrors(r.errors ?? []);
-      setQuotes(r.quotes ?? null);
-      setAddr(("address" in r && r.address) || null);
-      setAddrAck(false);
-      // 报错滚到错误提示；有报价滚到报价（手机上页面长，不滚的话像“没反应”）
-      setTimeout(() => document.getElementById(r.errors?.length ? "ship-errors" : "ship-quotes")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
-    });
+          ? { mode: "house", req }
+          : { mode: "admin", customerId, req, markup: { percent: optNum(markup.percent), fixed: optNum(markup.fixed), minProfit: optNum(markup.minProfit) } };
+    const scrollTo = (id: string) => setTimeout(() => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+    const live = () => run === quoteRun.current; // 又点了一次查询：旧的结果不要了
+    const sortQ = (list: Quote[]) => [...list].sort((a, b) => Number(b.ok) - Number(a.ok) || (a.price ?? 0) - (b.price ?? 0));
+    let shown = false;
+    let finished = false;
+    void (async () => {
+      try {
+        const res = await fetch("/api/quote/stream", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+        if (!res.ok || !res.body) throw new Error(String(res.status));
+        const reader = res.body.getReader();
+        const dec = new TextDecoder();
+        let buf = "";
+        const handle = (e: { t: string; channels?: { code: string; name: string }[]; q?: Quote; a?: AddressCheck; quotes?: Quote[]; errors?: string[] }) => {
+          if (!live()) return;
+          if (e.t === "start") {
+            setPending(e.channels ?? []);
+            setQuotes([]);
+          } else if (e.t === "q" && e.q) {
+            const q = e.q;
+            setQuotes((list) => sortQ([...(list ?? []).filter((x) => x.channelCode !== q.channelCode), q]));
+            setPending((list) => list.filter((c) => c.code !== q.channelCode));
+            if (!shown) {
+              shown = true;
+              scrollTo("ship-quotes");
+            }
+          } else if (e.t === "addr" && e.a) {
+            setAddr(e.a);
+          } else if (e.t === "done") {
+            finished = true;
+            setQuotes(e.quotes ?? []);
+            setPending([]);
+            setQuoting(false);
+          } else if (e.t === "err") {
+            finished = true;
+            setErrors(e.errors ?? []);
+            setQuotes(null);
+            setPending([]);
+            setQuoting(false);
+            scrollTo("ship-errors");
+          }
+        };
+        for (;;) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buf += dec.decode(value, { stream: true });
+          for (let i = buf.indexOf("\n"); i >= 0; i = buf.indexOf("\n")) {
+            const line = buf.slice(0, i).trim();
+            buf = buf.slice(i + 1);
+            if (line) handle(JSON.parse(line));
+          }
+        }
+        if (buf.trim()) handle(JSON.parse(buf));
+      } catch {
+        if (live() && !finished) {
+          setErrors([t("查询运费失败（网络中断或服务器繁忙），请再点一次“查询运费”")]);
+          scrollTo("ship-errors");
+        }
+      } finally {
+        if (live()) {
+          setQuoting(false);
+          setPending([]);
+        }
+      }
+    })();
   }
 
   // 客户端：这一单的运费扣完后余额是多少、够不够出单
@@ -735,13 +805,13 @@ export default function ShipForm(props: {
             {draftId && <> <button type="button" className="link-btn small" disabled={savingDraft} onClick={() => onSaveDraft("copy")}>{t("另存为一份新草稿")}</button></>}
           </div>
         )}
-        {quoting && (
+        {quoting && !quotes?.length && (
           <div className="busy-line" role="status" aria-live="polite">
             <span className="spinner" />
             <span>
               {t("正在向各渠道查询运费，同时核对收件地址…")}
               {quoteSec > 0 && <b> {t("已等 {n} 秒", { n: quoteSec })}</b>}
-              <span className="muted small"> · {quoteSec >= 15 ? t("有的服务商接口比较慢，请再稍等一下，不要刷新页面") : t("一般 5–20 秒")}</span>
+              <span className="muted small"> · {t("查到一个显示一个，不用等全部查完")}</span>
             </span>
           </div>
         )}
@@ -773,7 +843,17 @@ export default function ShipForm(props: {
             <label><input type="checkbox" checked={onlyAvailable} onChange={(e) => setOnlyAvailable(e.target.checked)} /> {t("只显示可下单渠道")}</label>
           </div>
         )}
-        {quotes && !quotes.some((q) => q.ok) && <div className="alert err">{t("所有渠道都不支持这个地址或包裹，请检查邮编、地址或重量尺寸。")}</div>}
+        {quoting && !!quotes?.length && pending.length > 0 && (
+          <div className="busy-line small" role="status" aria-live="polite">
+            <span className="spinner" />
+            <span>
+              {t("还有 {n} 个渠道在查询：{list}", { n: pending.length, list: pending.map((c) => chName(c.code, c.name).name).join(t("、")) })}
+              {quoteSec > 0 && <b> {t("已等 {n} 秒", { n: quoteSec })}</b>}
+              <span className="muted"> · {t("上面查到的渠道可以直接下单")}</span>
+            </span>
+          </div>
+        )}
+        {quotes && !quoting && !quotes.some((q) => q.ok) && <div className="alert err">{t("所有渠道都不支持这个地址或包裹，请检查邮编、地址或重量尺寸。")}</div>}
         {quotes && (
           <div className="table-wrap">
             <table className={portal || costTable || re ? "quote-table" : undefined}>
@@ -796,7 +876,7 @@ export default function ShipForm(props: {
                       <tr key={q.channelCode} className={q.price === bestPrice ? "best" : ""}>
                         <td className="q-ch">
                           <ChannelLabel code={q.channelCode} name={q.channelName} size="md" />
-                          <div className="small muted">{q.channelCode}{re?.channelCode === q.channelCode && <span className="badge pending" style={{ marginLeft: 6 }}>{t("原渠道")}</span>}</div>
+                          <div className="small muted">{q.channelCode}{q.ms !== undefined && <span title={t("这个渠道报价用的时间")}> · {(q.ms / 1000).toFixed(1)}s</span>}{re?.channelCode === q.channelCode && <span className="badge pending" style={{ marginLeft: 6 }}>{t("原渠道")}</span>}</div>
                         </td>
                         <td className="q-zone" data-label={t("分区")}>{q.zone ?? "-"}{q.zoneEstimated && <span className="small muted" title={t("嘉谷未返回分区，按同一目的地其他渠道的分区估算")}>{t("（参考）")}</span>}</td>
                         <td className="num muted q-cost" data-label={costTable ? t("原价") : t("我们的成本")}>{money(costTable ? q.listCost : q.cost)}</td>
@@ -809,7 +889,7 @@ export default function ShipForm(props: {
                       </tr>
                     ) :
                     <tr key={q.channelCode} className={q.price === bestPrice ? "best" : ""}>
-                      <td className="q-ch"><ChannelLabel code={q.channelCode} name={q.channelName} size="md" />{!portal && <div className="small muted">{q.channelCode}</div>}</td>
+                      <td className="q-ch"><ChannelLabel code={q.channelCode} name={q.channelName} size="md" />{!portal && <div className="small muted">{q.channelCode}{q.ms !== undefined && <span title={t("这个渠道报价用的时间")}> · {(q.ms / 1000).toFixed(1)}s</span>}</div>}</td>
                       <td className="q-zone" data-label={t("分区")}>{q.zone ?? "-"}{!portal && q.zoneEstimated && <span className="small muted" title={t("嘉谷未返回分区，按同一目的地其他渠道的分区估算")}>{t("（参考）")}</span>}</td>
                       {!portal && (
                         <>

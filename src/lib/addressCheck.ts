@@ -10,6 +10,7 @@ import crypto from "node:crypto";
 import { db, getSettings, liveDb } from "./db";
 import { isMockMode } from "./shipbest/client";
 import type { Address } from "./shipbest/types";
+import { recordSpeed } from "./speedStats";
 
 export type AddressStatus =
   | "ok" // 地址正确
@@ -96,7 +97,7 @@ async function accessToken(key: string, secret: string, scope?: string): Promise
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ grant_type: "client_credentials", client_id: key, client_secret: secret, ...(scope ? { scope } : {}) }),
-    signal: AbortSignal.timeout(15_000),
+    signal: AbortSignal.timeout(8_000),
     cache: "no-store",
   });
   const j = (await res.json().catch(() => ({}))) as { access_token?: string; expires_in?: number; error_description?: string; error?: string; scope?: string };
@@ -215,7 +216,7 @@ async function googleCheck(key: string, a: Partial<Address>): Promise<AddressChe
       },
       enableUspsCass: true,
     }),
-    signal: AbortSignal.timeout(15_000),
+    signal: AbortSignal.timeout(8_000),
     cache: "no-store",
   });
   const j = (await res.json().catch(() => ({}))) as { result?: GoogleResult; error?: { message?: string; status?: string } };
@@ -249,14 +250,17 @@ export async function checkAddress(a: Partial<Address> | null | undefined, opts:
   if (conf.monthlyCap > 0 && monthlyUsage(conf.provider) >= conf.monthlyCap) {
     return { status: "unavailable", message: `本月地址核对次数已用完（${conf.monthlyCap} 次），下个月自动恢复` };
   }
+  const t0 = Date.now();
   if (conf.provider === "google") {
     try {
       addUsage("google");
       const r = await googleCheck(conf.googleKey, a);
+      recordSpeed("地址核对（Google）", Date.now() - t0, !("error" in r));
       if ("error" in r) return { status: "unavailable", message: `Google 暂时无法核对（${r.error}）` };
       remember(key, r);
       return { ...r, checkedAt: new Date().toISOString() };
     } catch (e) {
+      recordSpeed("地址核对（Google）", Date.now() - t0, false);
       return { status: "unavailable", message: `Google 暂时无法核对：${(e as Error).message}` };
     }
   }
@@ -269,13 +273,14 @@ export async function checkAddress(a: Partial<Address> | null | undefined, opts:
     const call = async (tk: string) =>
       fetch(`${BASE}/addresses/v3/address?${q}`, {
         headers: { Authorization: `Bearer ${tk}`, Accept: "application/json" },
-        signal: AbortSignal.timeout(15_000),
+        signal: AbortSignal.timeout(8_000),
         cache: "no-store",
       });
     let res = await call(await accessToken(cfg.consumerKey, cfg.consumerSecret));
     // 403：令牌里可能没带地址接口的权限，指定 scope 再要一次令牌重试
     if (res.status === 403) res = await call(await accessToken(cfg.consumerKey, cfg.consumerSecret, "addresses"));
     const j = await res.json().catch(() => ({}));
+    recordSpeed("地址核对（USPS）", Date.now() - t0, res.ok || res.status === 400 || res.status === 404);
     let result: AddressCheck;
     if (res.ok) result = interpretUsps(a, j);
     else if (res.status === 400 || res.status === 404) result = { status: "not_found", message: "地址库里查不到这个地址，可能不存在或写错了" };
@@ -289,6 +294,7 @@ export async function checkAddress(a: Partial<Address> | null | undefined, opts:
     remember(key, result);
     return { ...result, checkedAt: new Date().toISOString() };
   } catch (e) {
+    recordSpeed("地址核对（USPS）", Date.now() - t0, false);
     return { status: "unavailable", message: `USPS 暂时无法核对：${(e as Error).message}` };
   }
 }

@@ -1,6 +1,6 @@
 /** 设置页的页签：每块设置（SettingsSection 的 id）属于哪个页签。页面和菜单共用。 */
 export const SETTINGS_TABS = [
-  { key: "providers", label: "服务商", sections: [["shipbest", "ShipBest"], ["jiagu", "嘉谷万邑"], ["shipgrid", "ShipGrid"], ["dhl", "DHL 国际"]] },
+  { key: "providers", label: "服务商", sections: [["shipbest", "ShipBest"], ["jiagu", "嘉谷万邑"], ["shipgrid", "ShipGrid"], ["dhl", "DHL 国际"], ["speed", "接口速度"]] },
   { key: "pricing", label: "渠道与价格", sections: [["channels", "物流渠道"], ["rules", "全局加价规则"], ["promotions", "限时活动价"], ["limits", "重量 / 尺寸限制"], ["stamp", "面单加印 SKU"]] },
   { key: "customers", label: "客户与官网", sections: [["site", "官网与联系方式"], ["terms", "服务条款"], ["ebay", "eBay 店铺对接"]] },
   { key: "finance", label: "收款与财务", sections: [["payment", "收款方式"], ["finance-pin", "财务确认密码"]] },

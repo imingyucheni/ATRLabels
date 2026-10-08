@@ -35,6 +35,7 @@ import { checkLimits, checkMinSize } from "./channelLimits";
 import { getShipBestClient, getTestAccountClient, shipbestMode, ShipBestError } from "./shipbest/client";
 import { failoverFor, isJiaguCode, jiaguConfig } from "./shipbest/jiagu";
 import { checkMultiBox, isMultiBoxName, multiBoxRule, multiBoxWarnings, pkgFromPieces } from "./multiBox";
+import { recordSpeed } from "./speedStats";
 import { aesRequired, hsDigits, isDhlCode, isInternational } from "./shipbest/dhl";
 import { guessCarrier } from "./carriers";
 import { publicError } from "./portal";
@@ -227,6 +228,8 @@ export interface ChannelQuote {
   rule?: MarkupRule;
   price?: number;
   profit?: number;
+  /** 这个渠道报价用了多久（毫秒，后台看是哪家慢；不发给客户） */
+  ms?: number;
 }
 
 function ruleFor(customerId: number, channelCode: string): MarkupRule {
@@ -287,7 +290,14 @@ export async function quoteChannel(customerId: number, channelCode: string, req:
   return quoteOne(customerId, channelCode, ch?.name ?? channelCode, req);
 }
 
-async function quoteOne(customerId: number, channelCode: string, channelName: string, req: ShipmentRequest, rule?: MarkupRule) {
+/** 报价并记下用时（ms） */
+async function quoteOne(customerId: number, channelCode: string, channelName: string, req: ShipmentRequest, rule?: MarkupRule): Promise<ChannelQuote> {
+  const t0 = Date.now();
+  const q = await quoteOneInner(customerId, channelCode, channelName, req, rule);
+  return { ...q, ms: Date.now() - t0 };
+}
+
+async function quoteOneInner(customerId: number, channelCode: string, channelName: string, req: ShipmentRequest, rule?: MarkupRule) {
   // 多箱渠道（UPS HWT / FedEx MWT）只在“多箱寄出”里用；多箱的货只能走多箱渠道，并且要符合渠道的重量 / 箱数 / 尺寸要求
   const mb = multiBoxRule(getChannel(channelCode)?.name ?? channelName);
   if (req.pkg.pieces?.length) {
@@ -362,11 +372,13 @@ export function primeQuotes(codes: string[], req: ShipmentRequest) {
     const done = p.then(
       (q) => {
         const ms = Date.now() - t0;
+        recordSpeed(providerOf(code), ms, true);
         if (ms > 5000) console.warn(`[报价] ${getChannel(code)?.name ?? code} 用了 ${(ms / 1000).toFixed(1)} 秒（合并请求）`);
         if (q) quoteCache.set(key, { at: Date.now(), q });
         return q;
       },
     );
+    p.catch(() => recordSpeed(providerOf(code), Date.now() - t0, false));
     inflight.set(key, done);
     // 没有渠道来取（例如被重量限制挡掉了）也不能留下未处理的错误
     done.catch(() => null).finally(() => inflight.delete(key));
@@ -380,8 +392,15 @@ async function trialPriceCached(channelCode: string, req: ShipmentRequest): Prom
   const pending = inflight.get(key);
   if (pending) return pending;
   const t0 = Date.now();
-  const q = await getShipBestClient().trialPrice(channelCode, req);
+  let q: FeeQuote | null;
+  try {
+    q = await getShipBestClient().trialPrice(channelCode, req);
+  } catch (e) {
+    recordSpeed(providerOf(channelCode), Date.now() - t0, false);
+    throw e;
+  }
   const ms = Date.now() - t0;
+  recordSpeed(providerOf(channelCode), ms, true);
   // 慢的渠道记一笔，方便看是哪个服务商拖慢了报价（journalctl 里能看到）
   if (ms > 5000) console.warn(`[报价] ${getChannel(channelCode)?.name ?? channelCode} 用了 ${(ms / 1000).toFixed(1)} 秒`);
   if (q) {
@@ -437,14 +456,25 @@ async function quoteRemote(customerId: number, channelCode: string, channelName:
  * 并发试算多个渠道：ShipBest 和嘉谷各走各的队列（两家的频率限制互不影响），
  * ShipBest 同时 3 个（避免触发频率限制 11005），嘉谷同时 4 个；总时间约等于最慢那家的时间。
  */
-async function quoteChannels<C extends { code: string; name: string }>(channels: C[], fn: (c: C) => Promise<ChannelQuote>, req?: ShipmentRequest): Promise<ChannelQuote[]> {
+/** 边查边报：开始时告诉要查哪些渠道，每查完一个就回调一次（下单页一个一个显示出来，不用等最慢的那家） */
+export interface QuoteHooks {
+  onStart?: (channels: { code: string; name: string }[]) => void;
+  onEach?: (q: ChannelQuote) => void;
+}
+
+async function quoteChannels<C extends { code: string; name: string }>(channels: C[], fn: (c: C) => Promise<ChannelQuote>, req?: ShipmentRequest, hooks?: QuoteHooks): Promise<ChannelQuote[]> {
+  hooks?.onStart?.(channels.map((c) => ({ code: c.code, name: c.name })));
   // 嘉谷的渠道先合并成几个请求一起发出去，下面逐个渠道处理时直接用结果
   if (req) primeQuotes(channels.map((c) => c.code).filter((c) => isJiaguCode(c)), req);
   const results: ChannelQuote[] = [];
   const run = async (list: C[], size: number) => {
     const queue = [...list];
     await Promise.all(Array.from({ length: Math.min(size, queue.length) }, async () => {
-      for (let c = queue.shift(); c; c = queue.shift()) results.push(await fn(c));
+      for (let c = queue.shift(); c; c = queue.shift()) {
+        const q = await fn(c);
+        results.push(q);
+        hooks?.onEach?.(q);
+      }
     }));
   };
   await Promise.all([run(channels.filter((c) => !isJiaguCode(c.code)), 3), run(channels.filter((c) => isJiaguCode(c.code)), 4)]);
@@ -457,14 +487,14 @@ export function forDestination<C extends { code: string }>(channels: C[], req: P
   return channels.filter((c) => isDhlCode(c.code) === intl);
 }
 
-export async function quoteAll(customerId: number, req: ShipmentRequest): Promise<ChannelQuote[]> {
+export async function quoteAll(customerId: number, req: ShipmentRequest, hooks?: QuoteHooks): Promise<ChannelQuote[]> {
   if (!listChannels(true).length) throw new Error("没有启用的物流渠道，请先到“设置”里同步渠道");
   const all = customerChannels(customerId);
   if (!all.length) throw new NoChannelsError();
   // 寄往美国以外：只用国际快递渠道（DHL）；寄美国：只用尾程渠道。多箱渠道不参与普通下单报价
   const channels = forDestination(all, req).filter((c) => !isMultiBoxName(c.name));
   if (!channels.length) throw new Error(isInternational(req) ? "您的账户还没有开通国际快递渠道（DHL），请联系客服开通" : "您的账户还没有开通美国本土渠道，请联系客服开通");
-  const results = await quoteChannels(channels, (c) => quoteOne(customerId, c.code, c.name, req), req);
+  const results = await quoteChannels(channels, (c) => quoteOne(customerId, c.code, c.name, req), req, hooks);
   return flagJiaguCoverage(fillZones(results)).sort((a, b) => Number(b.ok) - Number(a.ok) || (a.price ?? 0) - (b.price ?? 0));
 }
 
@@ -495,11 +525,11 @@ export class NoChannelsError extends Error {
  * 销售试算（后台用，不出单）：还没开户的新客户，用所有已启用的渠道、按临时填写的加价试算，
  * 方便给新客户报价、比较渠道和加价幅度。
  */
-export async function quoteForProspect(req: ShipmentRequest, markup: PartialRule): Promise<ChannelQuote[]> {
+export async function quoteForProspect(req: ShipmentRequest, markup: PartialRule, hooks?: QuoteHooks): Promise<ChannelQuote[]> {
   const channels = forDestination(listChannels(true), req).filter((c) => !isMultiBoxName(c.name));
   if (!channels.length) throw new Error("没有启用的物流渠道，请先到“设置”里同步渠道");
   const gm = getSettings().markup;
-  const results = await quoteChannels(channels, (c) => quoteOne(0, c.code, c.name, req, resolveRule(gm, c.markup, markup)), req);
+  const results = await quoteChannels(channels, (c) => quoteOne(0, c.code, c.name, req, resolveRule(gm, c.markup, markup)), req, hooks);
   return flagJiaguCoverage(fillZones(results)).sort((a, b) => Number(b.ok) - Number(a.ok) || (a.price ?? 0) - (b.price ?? 0));
 }
 

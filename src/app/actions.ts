@@ -54,7 +54,7 @@ import { saveDimRule } from "@/lib/rates";
 import { CARRIERS } from "@/lib/carriers";
 import { clearChannelNameCache, sameNameChannels } from "@/lib/channelDisplay";
 import { clearTestData, resetSandboxData } from "@/lib/cleanup";
-import { customerChannelMarkupsFor, logMarkupChange, setCustomerChannelMarkups } from "@/lib/markup";
+import { customerChannelMarkupsFor, logMarkupChange, negativeRule, setCustomerChannelMarkups } from "@/lib/markup";
 import { defaultLimits, saveLimits, type ChannelLimits } from "@/lib/channelLimits";
 import { activePromotion, deletePromotion, getPromotion, savePromotion, validatePromotion } from "@/lib/promotions";
 import { isProductionSite } from "@/lib/sites";
@@ -62,7 +62,7 @@ import { checkAddress, needsAck, type AddressCheck } from "@/lib/addressCheck";
 import { updateLead } from "@/lib/leads";
 import { DEFAULT_JG_WAREHOUSES, getJiaguClient, jgVariantCode, jiaguConfig, JG_SUFFIX, warehouseOfCode } from "@/lib/shipbest/jiagu";
 import { createBackup, deleteBackup, restoreBackup } from "@/lib/backup";
-import { getShipment, resetTestEnv, setChannelEnabled, setStoredMode, setTestAccount } from "@/lib/db";
+import { resetTestEnv, setChannelEnabled, setStoredMode, setTestAccount } from "@/lib/db";
 import { getTerms, saveTerms } from "@/lib/terms";
 import { sendMail } from "@/lib/mailer";
 import { checkConfirmPin, checkFinancePin, setFinancePin } from "@/lib/financePin";
@@ -87,15 +87,11 @@ import {
   createLabel,
   resubmitShipment,
   PriceChangedError,
-  quoteAll,
-  quoteForProspect,
   withdrawCancel,
   refreshShipment,
   requestCancel,
   syncChannels,
   syncChannelsDetailed,
-  validateRequest,
-  withQuoteSkus,
   type ChannelQuote,
 } from "@/lib/service";
 
@@ -129,49 +125,9 @@ export async function logoutAction() {
 
 /* ---------------- 报价 / 出单 ---------------- */
 
-/** 后台运费试算（不出单）：选已有客户按他的渠道和加价；不选客户则按临时加价试算所有渠道 */
-export async function quoteAction(
-  customerId: number,
-  raw: ShipmentRequest,
-  markup?: PartialRule,
-): Promise<{ errors?: string[]; quotes?: ChannelQuote[] }> {
-  const who = await requireAdmin({ staff: true });
-  if (customerId && customerDenied(who, customerId, "view")) return { errors: [customerDenied(who, customerId, "view")!] };
-  // 运费试算只需要地址和包裹：不检查商品明细，缺的用样品补上（出单时仍然严格校验）
-  const req = withQuoteSkus(cleanRequest(raw));
-  const errors = validateRequest(req, { forQuote: true });
-  if (errors.length) return { errors };
-  const m: PartialRule = {
-    percent: markup?.percent ?? null,
-    fixed: markup?.fixed ?? null,
-    minProfit: markup?.minProfit ?? null,
-  };
-  const neg = negativeRule(m);
-  if (neg) return { errors: [neg] };
-  try {
-    const quotes = customerId ? await quoteAll(customerId, req) : await quoteForProspect(req, m);
-    // 员工（二级管理员）只看客户价，不把成本、利润发到浏览器
-    return { quotes: who.role === "staff" ? quotes.map((q) => ({ ...q, cost: undefined, listCost: undefined, profit: undefined }) as unknown as ChannelQuote) : quotes };
-  } catch (e) {
-    return { errors: [(e as Error).message] };
-  }
-}
+// 查运费（后台运费试算、管理员下单、异常单重新下单、客户 OMS）都走 /api/quote/stream（lib/quoteStream.ts），边查边报
 
 /* ---------------- 管理员下单（公司自用账户，按成本价） ---------------- */
-
-/** 管理员查运费：所有已启用渠道（同一物流商的多个渠道一起比），价格 = 成本 */
-export async function houseQuoteAction(raw: ShipmentRequest): Promise<{ errors?: string[]; quotes?: ChannelQuote[]; address?: AddressCheck }> {
-  await requireAdmin();
-  const req = cleanRequest(raw);
-  const errors = validateRequest(req);
-  if (errors.length) return { errors };
-  try {
-    const [quotes, address] = await Promise.all([quoteAll(houseCustomerId(), req), checkAddress(req.recipient)]);
-    return { quotes, address };
-  } catch (e) {
-    return { errors: [(e as Error).message] };
-  }
-}
 
 /** 管理员出单：记在“公司自用（成本价）”账户下，不扣任何客户余额 */
 export async function houseCreateAction(input: {
@@ -207,23 +163,7 @@ export async function houseCreateAction(input: {
 
 // 客户的单在客户 OMS 里出（后台可以“进入客户 OMS”代客户操作）；管理员自己的单用上面的“管理员下单”
 
-/* ---------------- 异常单修改后重新下单 ---------------- */
-
-/** 按原订单客户的价格和渠道比价（公司自用账户就是成本价） */
-export async function resubmitQuoteAction(oldId: number, raw: ShipmentRequest): Promise<{ errors?: string[]; quotes?: ChannelQuote[]; address?: AddressCheck }> {
-  await requireAdmin();
-  const old = getShipment(Number(oldId));
-  if (!old || (old.status !== "exception" && old.status !== "cancelled") || old.replacedBy) return { errors: ["只有出单异常或已取消、还没重新下过单的订单可以重新下单"] };
-  const req = cleanRequest(raw);
-  const errors = validateRequest(req);
-  if (errors.length) return { errors };
-  try {
-    const [quotes, address] = await Promise.all([quoteAll(old.customerId, req), checkAddress(req.recipient)]);
-    return { quotes, address };
-  } catch (e) {
-    return { errors: [(e as Error).message] };
-  }
-}
+/* ---------------- 异常单修改后重新下单（按原订单客户的价格；报价见 lib/quoteStream.ts） ---------------- */
 
 export async function resubmitCreateAction(input: {
   oldId: number;
@@ -322,19 +262,6 @@ function ruleFromForm(fd: FormData, prefix = ""): PartialRule {
 /** 这个渠道能填的负数加价下限来自哪个返利：渠道长期返利、进行中的限时活动返利，取大的 */
 function allowedRebate(code: string, channelRebate?: number): number {
   return Math.max(channelRebate ?? getChannel(code)?.rebate ?? 0, activePromotion(code)?.rebatePercent ?? 0);
-}
-
-/**
- * 加价不允许低于成本：固定加价、最低利润不能为负数；
- * 加价 % 只有渠道有服务商返利时才能填负数，最低到 -返利%（再低就亏本）。
- */
-function negativeRule(r: PartialRule, who = "", rebate = 0): string | null {
-  if ([r.fixed, r.minProfit].some((v) => v !== null && v !== undefined && v < 0)) return `${who}固定加价、最低利润不能为负数（会低于成本出单）`;
-  const p = r.percent;
-  if (p === null || p === undefined || p >= 0) return null;
-  if (!(rebate > 0)) return `${who}加价不能为负数（会低于成本出单）。如果服务商对这个渠道有返利，先在“设置 → 物流渠道”填上服务商返利 %，就可以填负数`;
-  if (p < -rebate) return `${who}加价最低只能到 -${rebate}%（这个渠道服务商返利 ${rebate}%，再低就亏本）`;
-  return null;
 }
 
 export async function setTestAccountAction(_: FlashState, fd: FormData): Promise<FlashState> {

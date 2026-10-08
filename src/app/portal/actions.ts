@@ -26,7 +26,7 @@ import { activeShipmentByRef, duplicateRefMessage, getCustomer, getCustomerLogin
 import { InsufficientBalanceError } from "@/lib/ledger";
 import { cancelWindowHours, cancelWindowPassed, ownsShipment, publicError, toPublicQuote, type PublicQuote } from "@/lib/portal";
 import { cleanAddress, cleanRequest, n, str } from "@/lib/sanitize";
-import { createLabel, PriceChangedError, quoteAll, refreshShipment, requestCancel, resubmitShipment, validateRequest } from "@/lib/service";
+import { createLabel, PriceChangedError, refreshShipment, requestCancel, resubmitShipment } from "@/lib/service";
 import { ShipBestError } from "@/lib/shipbest/client";
 import { createTopup, getTopup } from "@/lib/topup";
 import { requestReset, resetWithToken } from "@/lib/passwordReset";
@@ -104,25 +104,7 @@ export async function leaveCustomerAction() {
   redirect(`${adminOrigin()}${as ? `/customers/${as}` : "/customers"}`);
 }
 
-/* ---------------- 报价 / 下单 ---------------- */
-
-export async function portalQuoteAction(raw: ShipmentRequest): Promise<{ errors?: string[]; quotes?: PublicQuote[]; address?: AddressCheck }> {
-  const me = await requireCustomer();
-  const req = cleanRequest(raw);
-  const errors = validateRequest(req);
-  if (errors.length) return { errors: await Promise.all(errors.map((m) => tMsg(m))) };
-  try {
-    // 报价和地址核对同时进行
-    const [all, address] = await Promise.all([quoteAll(me.id, req), checkAddress(req.recipient)]);
-    const quotes = all.map(toPublicQuote);
-    // 渠道不可用的原因按界面语言显示
-    for (const q of quotes) if (q.error) q.error = await tMsg(q.error);
-    if (address.message) address.message = await tMsg(address.message);
-    return { quotes, address };
-  } catch (e) {
-    return { errors: [await tMsg(publicError((e as Error).message))] };
-  }
-}
+/* ---------------- 报价 / 下单（查运费走 /api/quote/stream，见 lib/quoteStream.ts） ---------------- */
 
 export async function portalCreateAction(input: {
   channelCode: string;

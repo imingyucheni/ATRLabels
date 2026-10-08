@@ -12,6 +12,8 @@ import { logProviderEvent } from "../providerLog";
 import { expandPieces } from "../multiBox";
 
 export const JG_PREFIX = "JG-";
+/** 查价最多等多久：慢的渠道不拖住整个报价（下单不受这个限制） */
+const QUOTE_TIMEOUT_MS = 15_000;
 export const JG_SUFFIX = " · GDE";
 const ORDER_TYPE_LASTMILE = 20120;
 
@@ -286,7 +288,7 @@ export class JiaguClient {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({ grant_type: "client_credentials", client_id: this.cfg.clientId, client_secret: this.cfg.secret }),
-      timeoutMs: 20_000,
+      timeoutMs: 10_000,
     });
     const json = ((): unknown => { try { return JSON.parse(text); } catch { return {}; } })() as { access_token?: string; expires_in?: number; error?: string };
     if (!json.access_token) throw new JiaguError(res.status, `授权失败（检查 Client ID / Secret）${json.error ? `：${json.error}` : ""}`);
@@ -344,8 +346,8 @@ export class JiaguClient {
       "/api/gts/CalculateRates",
       { ...buildJiaguBody(this.cfg, req, id, wh), Products: [{ ID: id }] },
       true,
-      // 只是查价：最多等 25 秒，不让一个慢渠道拖住整个报价（下单仍等 45 秒）
-      25_000,
+      // 只是查价：最多等 15 秒，不让一个慢渠道拖住整个报价（下单仍等 45 秒）
+      QUOTE_TIMEOUT_MS,
     );
     if (!r.ok) throw new JiaguError(r.code, r.message || "算价失败");
     const q = (r.result ?? []).find((x) => x.ID === id) ?? r.result?.[0];
@@ -378,11 +380,13 @@ export class JiaguClient {
         "/api/gts/CalculateRates",
         { ...buildJiaguBody(this.cfg, req, first.productId, first.warehouseId), Products: ids.map((ID) => ({ ID })) },
         true,
-        25_000,
-      ).then((r) => (r.ok ? r.result ?? [] : null), () => null);
+        QUOTE_TIMEOUT_MS,
+      ).then((r) => (r.ok ? r.result ?? [] : null), (e: Error) => e);
       for (const code of list) {
         const id = parseJgCode(code).productId;
         out.set(code, batch.then((rows) => {
+          // 超时 / 连不上：不再逐个重试（再等一轮只会更慢），直接报这个错
+          if (rows instanceof Error) throw rows;
           const q = rows?.find((x) => x.ID === id);
           return q ? this.toQuote(code, q, req) : this.trialPrice(code, req);
         }));

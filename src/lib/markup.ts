@@ -157,3 +157,16 @@ export function describeRule(r: PartialRule | null | undefined, inherit = "沿�
   const f = (v: number | null | undefined, fmt: (n: number) => string) => (v === null || v === undefined ? t(inherit) : fmt(v));
   return `${f(r?.percent, (n) => `${n < 0 ? "-" : "+"}${Math.abs(n)}%`)} · ${f(r?.fixed, (n) => `+$${n.toFixed(2)}`)} · ${t("最低利润")} ${f(r?.minProfit, (n) => `$${n.toFixed(2)}`)}`;
 }
+
+/**
+ * 加价不允许低于成本：固定加价、最低利润不能为负数；
+ * 加价 % 只有渠道有服务商返利时才能填负数，最低到 -返利%（再低就亏本）。
+ */
+export function negativeRule(r: PartialRule, who = "", rebate = 0): string | null {
+  if ([r.fixed, r.minProfit].some((v) => v !== null && v !== undefined && v < 0)) return `${who}固定加价、最低利润不能为负数（会低于成本出单）`;
+  const p = r.percent;
+  if (p === null || p === undefined || p >= 0) return null;
+  if (!(rebate > 0)) return `${who}加价不能为负数（会低于成本出单）。如果服务商对这个渠道有返利，先在“设置 → 物流渠道”填上服务商返利 %，就可以填负数`;
+  if (p < -rebate) return `${who}加价最低只能到 -${rebate}%（这个渠道服务商返利 ${rebate}%，再低就亏本）`;
+  return null;
+}

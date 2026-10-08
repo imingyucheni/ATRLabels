@@ -71,7 +71,7 @@ export class HttpShipBestClient implements ShipBestClient {
     private accessToken: string,
   ) {}
 
-  private async call<T>(path: string, body: unknown): Promise<T> {
+  private async call<T>(path: string, body: unknown, timeoutMs = 30_000): Promise<T> {
     const { res, text } = await providerFetch("ShipBest", this.baseUrl.replace(/\/$/, "") + path, {
       method: "POST",
       headers: {
@@ -79,7 +79,7 @@ export class HttpShipBestClient implements ShipBestClient {
         ...buildHeaders(this.apiId, this.accessToken, path),
       },
       body: JSON.stringify(body ?? {}),
-      timeoutMs: 30_000,
+      timeoutMs,
     });
     let json: ApiResult<T>;
     try {
@@ -105,6 +105,8 @@ export class HttpShipBestClient implements ShipBestClient {
     const data = await this.call<{ orderFeeCalcVos?: FeeQuote[] }>(
       "/api/logistics/trialOrderPrice",
       buildOrderBody(productCode, req),
+      // 只是查价：最多等 15 秒（下单仍等 30 秒）
+      15_000,
     );
     const q = data?.orderFeeCalcVos?.[0];
     if (!q) return null;
@@ -193,10 +195,11 @@ export class MockShipBestClient implements ShipBestClient {
   }
 
   async trialPrice(productCode: string, req: ShipmentRequest): Promise<FeeQuote | null> {
-    // 演示 / 测试用：模拟慢接口（MOCK_DELAY_MS），看加载提示
-    const delay = Number(process.env.MOCK_DELAY_MS) || 0;
-    if (delay > 0) await new Promise((r) => setTimeout(r, delay));
+    // 演示 / 测试用：模拟慢接口（MOCK_DELAY_MS）；MOCK_DELAY_SPREAD=1 时各渠道快慢不同（看边查边报的效果）
     const idx = this.products.findIndex((p) => p.code === productCode);
+    const delayMs = Number(process.env.MOCK_DELAY_MS) || 0;
+    const delay = process.env.MOCK_DELAY_SPREAD === "1" ? Math.round((delayMs * (Math.max(0, idx) + 1)) / this.products.length) : delayMs;
+    if (delay > 0) await new Promise((r) => setTimeout(r, delay));
     if (idx < 0) throw new ShipBestError(10022, "Logistics product not exist!");
     const zoneN = Math.min(8, 2 + (req.recipient.zipCode.charCodeAt(0) % 7));
     const mbRate = MOCK_MULTI_RATES.find((m) => m.match.test(this.products[idx].name));

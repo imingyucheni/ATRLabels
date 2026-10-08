@@ -38,6 +38,7 @@ import { smtpConfig } from "@/lib/mailer";
 import { NOTIFY_EVENTS, NOTIFY_LABEL, recentEmailLog } from "@/lib/notify";
 import { getLang, getT } from "@/lib/prefs";
 import type { T } from "@/lib/i18n";
+import SpeedCard from "@/components/SpeedCard";
 
 const MODE_BADGE: Record<ShipBestMode, string> = { mock: "当前：模拟模式", sandbox: "当前：沙盒模式", live: "当前：正式模式" };
 const MODE_NAME: Record<ShipBestMode, string> = { mock: "模拟", sandbox: "沙盒", live: "正式" };
@@ -73,6 +74,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       <SettingsToc initial={tab} />
       {/* 只显示当前页签的设置块（其他的隐藏，不卸载） */}
       <div className="settings-body" data-settab={tab}>
+
+      <SpeedCard />
 
       <SettingsSection
         id="shipbest"

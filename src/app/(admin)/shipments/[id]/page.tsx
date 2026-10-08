@@ -128,7 +128,7 @@ export default async function ShipmentDetail({ params }: { params: Promise<{ id:
             </>
           ) : s.labelPath ? (
             <>
-              {s.status === "cancel_requested" && <div className="alert warn">{t("已申请取消：在 ShipBest 确认取消前请不要使用这张面单。")}</div>}
+              {s.status === "cancel_requested" && <div className="alert warn">{t("已申请取消：在 {p} 确认取消前请不要使用这张面单。", { p: provider })}</div>}
               {s.labelMime === "application/pdf" ? (
                 <LabelActions
                   id={s.id}
@@ -167,7 +167,7 @@ export default async function ShipmentDetail({ params }: { params: Promise<{ id:
               })()}
             </>
           ) : (
-            <p className="muted">{s.status === "cancelled" ? t("这张单已取消，没有面单。") : s.status === "exception" ? t("出单异常，没有面单。") : t("面单尚未生成。ShipBest 一般几秒内出单，可点“刷新状态”。")}</p>
+            <p className="muted">{s.status === "cancelled" ? t("这张单已取消，没有面单。") : s.status === "exception" ? t("出单异常，没有面单。") : t("面单尚未生成。{p} 一般几秒内出单，可点“刷新状态”。", { p: provider })}</p>
           )}
           {s.labelSku && (
             <p className="small muted" style={{ margin: "8px 0" }}>
@@ -190,7 +190,7 @@ export default async function ShipmentDetail({ params }: { params: Promise<{ id:
               <FlashForm action={cancelAction} submitLabel="申请取消" submitClass="danger" inline
                 confirm={cancelWindowPassed(s.createdAt)
                   ? "这张面单下单已超过可取消时限，服务商可能不接受取消。确定仍要申请取消吗？"
-                  : "确认取消这张面单？已出面单的订单需 ShipBest 人工取消，并收取取消费。"}>
+                  : t("确认取消这张面单？会先通过接口向 {p} 取消；接口取消不了的，要联系 {p} 人工取消，可能收取取消费。", { p: provider })}>
                 <input type="hidden" name="id" value={s.id} />
               </FlashForm>
             )}
@@ -201,7 +201,12 @@ export default async function ShipmentDetail({ params }: { params: Promise<{ id:
           {s.status === "cancel_requested" && (
             <div className="card" style={{ marginTop: 12, background: "var(--warn-soft)" }}>
               <h2>{t("确认已取消")}</h2>
-              <p className="small">{t("在 OMS 联系 ShipBest 完成取消后，填写费用并确认。退款 = 客户价 - 客户取消手续费。")}</p>
+              <p className="small">{t("接口没能直接取消，要联系 {p} 人工取消。{p} 确认取消后，填写费用并点“确认已取消”。退款 = 客户价 - 客户取消手续费。", { p: provider })}</p>
+              <div className="row" style={{ marginBottom: 10 }}>
+                <FlashForm action={cancelAction} submitLabel="再通过接口取消一次" submitClass="small" inline confirm={t("再向 {p} 发一次取消请求？成功就直接取消并退款。", { p: provider })}>
+                  <input type="hidden" name="id" value={s.id} />
+                </FlashForm>
+              </div>
               <FlashForm action={confirmCancelAction} submitLabel="确认已取消" review alwaysSubmit confirm={t("作废这张面单并退款给【{name}】：退款 = 客户价 {price} − 客户取消手续费。确认后不能撤回。", { name: s.customerName ?? "", price: money(s.price, s.currency) })}>
                 <input type="hidden" name="id" value={s.id} />
                 <div className="row" style={{ marginBottom: 8 }}>
@@ -210,10 +215,10 @@ export default async function ShipmentDetail({ params }: { params: Promise<{ id:
                   ) : (
                     <label className="f">{t("向客户收取的取消手续费")}<input name="cancelFee" type="number" step="0.01" min={0} max={s.price} defaultValue={fees.cancelFee} /><span className="field-hint muted">{t("不能超过客户价 {price}", { price: money(s.price, s.currency) })}</span></label>
                   )}
-                  <label className="f">{t("ShipBest 收取的取消费")}<input name="sbCancelFee" type="number" step="0.01" defaultValue={fees.sbCancelFee} /><span className="field-hint muted">{t("预填的是按比例估算的金额，请按 ShipBest 实际收取的填写")}</span></label>
+                  <label className="f">{t("{p} 收取的取消费", { p: provider })}<input name="sbCancelFee" type="number" step="0.01" defaultValue={fees.sbCancelFee} /><span className="field-hint muted">{t("预填的是按比例估算的金额，请按 {p} 实际收取的填写", { p: provider })}</span></label>
                 </div>
               </FlashForm>
-              <p className="small muted" style={{ marginTop: 12 }}>{t("ShipBest 拒绝取消、或者申请错了：")}</p>
+              <p className="small muted" style={{ marginTop: 12 }}>{t("{p} 拒绝取消、或者申请错了：", { p: provider })}</p>
               <FlashForm action={withdrawCancelAction} submitLabel="撤回取消申请" submitClass="" confirm="撤回后面单恢复为“已出面单”，客户可以继续使用。确定？">
                 <input type="hidden" name="id" value={s.id} />
               </FlashForm>
@@ -234,13 +239,13 @@ export default async function ShipmentDetail({ params }: { params: Promise<{ id:
             {s.status === "cancelled" && (
               <>
                 <dt>{t("客户取消费")}</dt><dd>{money(s.cancelFee, s.currency)}</dd>
-                <dt>{t("ShipBest取消费")}</dt><dd>{money(s.sbCancelFee, s.currency)}</dd>
+                <dt>{t("{p} 取消费", { p: provider })}</dt><dd>{money(s.sbCancelFee, s.currency)}</dd>
                 <dt>{t("应退客户")}</dt><dd><b>{money(s.refundAmount, s.currency)}</b></dd>
               </>
             )}
             {adjustments.length > 0 && (
               <>
-                <dt>{t("账单补差")}</dt><dd>{t("ShipBest {cost} · 向客户 {customer}", { cost: money(s.costAdj, s.currency), customer: money(s.customerAdj, s.currency) })}</dd>
+                <dt>{t("账单补差")}</dt><dd>{t("{p} {cost} · 向客户 {customer}", { p: provider, cost: money(s.costAdj, s.currency), customer: money(s.customerAdj, s.currency) })}</dd>
               </>
             )}
             <dt>{t("利润")}</dt><dd><Profit value={shipmentProfit(s)} currency={s.currency} /></dd>
@@ -294,7 +299,7 @@ export default async function ShipmentDetail({ params }: { params: Promise<{ id:
         <div className="card">
           <h2>{t("官方账单补差")}</h2>
           <table>
-            <thead><tr><th>{t("导入时间")}</th><th>{t("批次")}</th><th className="num">{t("ShipBest 补差")}</th><th className="num">{t("向客户")}</th><th>{t("原因")}</th></tr></thead>
+            <thead><tr><th>{t("导入时间")}</th><th>{t("批次")}</th><th className="num">{t("{p} 补差", { p: provider })}</th><th className="num">{t("向客户")}</th><th>{t("原因")}</th></tr></thead>
             <tbody>
               {adjustments.map((a) => (
                 <tr key={a.id}>
