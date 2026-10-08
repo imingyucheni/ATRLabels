@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { currentCustomerId, impersonatedCustomerId, isLoggedIn, portalActor } from "@/lib/auth";
 import { hasAcceptedTerms } from "@/lib/terms";
-import { readSheetRows } from "@/lib/adjustments";
 import {
   chooseAll,
   deleteRows,
@@ -14,6 +13,7 @@ import {
   ensureRunning,
   getJob,
   parseOrders,
+  readOrderSheet,
   requote,
   senderFor,
   setSelected,
@@ -62,7 +62,8 @@ export async function createBatchJobAction(fd: FormData): Promise<{ jobId?: numb
     const file = fd.get("file");
     if (!(file instanceof File) || !file.size) return { error: "请选择文件" };
     if (file.size > 10 * 1024 * 1024) return { error: "文件不能超过 10MB" };
-    const rows = await readSheetRows(file.name, Buffer.from(await file.arrayBuffer()), "first");
+    // 空行保留：报错里的“第几行”和 Excel 里看到的行号一致
+    const rows = await readOrderSheet(file.name, Buffer.from(await file.arrayBuffer()));
     const channels = fd.getAll("channels").map((v) => str(v, 50)).filter(Boolean);
     const { orders, error } = parseOrders(rows, senderFor(customerId));
     if (error) return { error };

@@ -6,7 +6,7 @@
  */
 import { createHmac, timingSafeEqual } from "node:crypto";
 import type { Address } from "../shipbest/types";
-import type { FetchedOrders, PlatformAdapter, StoreOrder, TrackingPush } from "./types";
+import { StoreAuthError, type FetchedOrders, type PlatformAdapter, type StoreOrder, type StoreOrderState, type TrackingPush } from "./types";
 
 export const SHOPIFY_API_VERSION = "2026-07";
 export const SHOPIFY_SCOPES = "read_orders,read_merchant_managed_fulfillment_orders,write_merchant_managed_fulfillment_orders";
@@ -38,7 +38,25 @@ export function shopifyAuthorizeUrl(shop: string, clientId: string, redirectUri:
   return `https://${shop}/admin/oauth/authorize?${q}`;
 }
 
-export type ShopifyToken = { accessToken: string; scope?: string; refreshToken?: string; expiresAt?: number | null };
+export type ShopifyToken = { accessToken: string; scope?: string; refreshToken?: string; expiresAt?: number | null; refreshExpiresAt?: number | null };
+
+/** Shopify 说授权不能用了（令牌被撤销、刷新令牌失效、App 被卸载）：要店主重新连接，不是临时的网络问题 */
+export class ShopifyAuthError extends StoreAuthError {}
+
+/** 授权已失效时给客户看的话（店铺卡片上显示，点“重新授权”就好） */
+export const SHOPIFY_RECONNECT = "Shopify 授权已失效，请重新连接店铺";
+
+type TokenJson = { access_token?: string; scope?: string; refresh_token?: string; expires_in?: number; refresh_token_expires_in?: number; error?: string; error_description?: string };
+
+function tokenFrom(j: TokenJson, oldRefresh?: string): ShopifyToken {
+  return {
+    accessToken: j.access_token!,
+    scope: j.scope,
+    refreshToken: j.refresh_token || oldRefresh,
+    expiresAt: j.expires_in ? Date.now() + j.expires_in * 1000 : null,
+    refreshExpiresAt: j.refresh_token_expires_in ? Date.now() + j.refresh_token_expires_in * 1000 : null,
+  };
+}
 
 /** 用授权码换访问令牌 */
 export async function exchangeShopifyCode(shop: string, clientId: string, clientSecret: string, code: string): Promise<ShopifyToken> {
@@ -49,20 +67,43 @@ export async function exchangeShopifyCode(shop: string, clientId: string, client
     signal: AbortSignal.timeout(20_000),
     cache: "no-store",
   });
-  const j = (await res.json().catch(() => ({}))) as { access_token?: string; scope?: string; refresh_token?: string; expires_in?: number; error_description?: string };
+  const j = (await res.json().catch(() => ({}))) as TokenJson;
   if (!res.ok || !j.access_token) throw new Error(`Shopify 授权失败：${j.error_description || `HTTP ${res.status}`}`);
-  return { accessToken: j.access_token, scope: j.scope, refreshToken: j.refresh_token, expiresAt: j.expires_in ? Date.now() + j.expires_in * 1000 : null };
+  return tokenFrom(j);
+}
+
+/**
+ * 会过期的访问令牌（授权时 Shopify 给了 expires_in 和 refresh_token）：用刷新令牌换一个新的。
+ * 按 OAuth 标准的 refresh_token 方式请求同一个 access_token 地址；Shopify 拒绝（4xx）时抛 ShopifyAuthError，要重新连接。
+ */
+export async function refreshShopifyToken(shop: string, clientId: string, clientSecret: string, refreshToken: string): Promise<ShopifyToken> {
+  const res = await fetch(`https://${shop}/admin/oauth/access_token`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
+    body: new URLSearchParams({ client_id: clientId, client_secret: clientSecret, grant_type: "refresh_token", refresh_token: refreshToken }).toString(),
+    signal: AbortSignal.timeout(20_000),
+    cache: "no-store",
+  });
+  const j = (await res.json().catch(() => ({}))) as TokenJson;
+  if (!res.ok || !j.access_token) {
+    const why = j.error_description || j.error || `HTTP ${res.status}`;
+    if (res.status >= 400 && res.status < 500) throw new ShopifyAuthError(`${SHOPIFY_RECONNECT}（${why}）`);
+    throw new Error(`Shopify 授权刷新失败：${why}`);
+  }
+  return tokenFrom(j, refreshToken);
 }
 
 /** 发 GraphQL 请求的函数（测试 / 演示可以换成假的） */
 export type ShopifyGraphql = (query: string, variables?: Record<string, unknown>) => Promise<any>;
 
-export function shopifyHttp(shop: string, accessToken: string): ShopifyGraphql {
+/** accessToken 可以传一个函数：每次请求前取（令牌快过期时在里面先刷新） */
+export function shopifyHttp(shop: string, accessToken: string | (() => Promise<string>)): ShopifyGraphql {
+  const token = typeof accessToken === "string" ? async () => accessToken : accessToken;
   return async (query, variables) => {
     for (let attempt = 0; ; attempt++) {
       const res = await fetch(`https://${shop}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-Shopify-Access-Token": accessToken },
+        headers: { "Content-Type": "application/json", "X-Shopify-Access-Token": await token() },
         body: JSON.stringify({ query, variables }),
         signal: AbortSignal.timeout(30_000),
         cache: "no-store",
@@ -72,7 +113,7 @@ export function shopifyHttp(shop: string, accessToken: string): ShopifyGraphql {
         await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)));
         continue;
       }
-      if (res.status === 401 || res.status === 403) throw new Error("Shopify 授权已失效，请重新连接店铺");
+      if (res.status === 401 || res.status === 403) throw new ShopifyAuthError(SHOPIFY_RECONNECT);
       const j = (await res.json().catch(() => null)) as { data?: unknown; errors?: { message: string; extensions?: { code?: string } }[] } | null;
       if (!j) throw new Error(`Shopify 接口返回异常（HTTP ${res.status}）`);
       if (j.errors?.some((e) => e.extensions?.code === "THROTTLED") && attempt < 3) {
@@ -120,7 +161,8 @@ export function normalizeShopifyOrder(o: GqlOrder): StoreOrder | null {
   const last = (named.lastName ?? "").trim();
   const recipient: Address = {
     nameFirst: first || last,
-    nameLast: first ? last : "",
+    // 只有一个名字：姓也用它（服务商两个字段都要有值，和开放 API 一样）
+    nameLast: last || first,
     ...(addr.company ? { corporateName: addr.company } : {}),
     phone: (addr.phone || o.phone || o.billingAddress?.phone || "").trim() || undefined,
     ...(o.email ? { email: o.email } : {}),
@@ -159,23 +201,49 @@ export function normalizeShopifyOrder(o: GqlOrder): StoreOrder | null {
 const SHOPIFY_COMPANY: Record<string, string> = { usps: "USPS", fedex: "FedEx", ups: "UPS", dhl: "DHL Express", ontrac: "OnTrac", uniuni: "UniUni", gofo: "GOFO Express", swiftx: "SwiftX", speedx: "SpeedX", ywe: "Yanwen", spx: "SPX Express" };
 export const shopifyCompany = (carrierId: string, fallback: string) => SHOPIFY_COMPANY[carrierId] ?? fallback;
 
+/** 一次同步最多拉几页（每页 50 单） */
+export const SHOPIFY_MAX_PAGES = 10;
+
 export class ShopifyAdapter implements PlatformAdapter {
   constructor(private gql: ShopifyGraphql) {}
 
   async fetchOpenOrders(): Promise<FetchedOrders> {
     const orders: StoreOrder[] = [];
     let cursor: string | null = null;
-    // 最多拉 10 页（500 单），够日常用
-    for (let page = 0; page < 10; page++) {
+    // 最多拉 10 页（500 单），够日常用；还有下一页时标记“没拉全”，没拉到的订单不能当成已关闭
+    let complete = false;
+    for (let page = 0; page < SHOPIFY_MAX_PAGES; page++) {
       const d = (await this.gql(ORDERS_QUERY, { cursor })) as { orders: { pageInfo: { hasNextPage: boolean; endCursor: string | null }; nodes: GqlOrder[] } };
       for (const o of d.orders.nodes) {
         const n = normalizeShopifyOrder(o);
         if (n && n.fulfillRefs.length) orders.push(n);
       }
-      if (!d.orders.pageInfo.hasNextPage) break;
+      if (!d.orders.pageInfo.hasNextPage) {
+        complete = true;
+        break;
+      }
       cursor = d.orders.pageInfo.endCursor;
     }
-    return { orders };
+    return { orders, complete };
+  }
+
+  /**
+   * 导入后不在待发货列表里的订单：查一下是取消了还是已经发货了。
+   * 查不到的（Shopify 返回 null：删除了，或超过 60 天、App 没有读取全部订单的权限）不返回，按“不知道”处理。
+   */
+  async orderStates(extIds: string[]): Promise<Record<string, StoreOrderState>> {
+    const out: Record<string, StoreOrderState> = {};
+    for (let i = 0; i < extIds.length; i += 50) {
+      const ids = extIds.slice(i, i + 50);
+      const d = (await this.gql(`query States($ids: [ID!]!) { nodes(ids: $ids) { ... on Order { id cancelledAt displayFulfillmentStatus } } }`, { ids })) as {
+        nodes: ({ id?: string; cancelledAt?: string | null; displayFulfillmentStatus?: string | null } | null)[];
+      };
+      for (const n of d.nodes ?? []) {
+        if (!n?.id) continue;
+        out[n.id] = n.cancelledAt ? "cancelled" : n.displayFulfillmentStatus === "FULFILLED" || n.displayFulfillmentStatus === "RESTOCKED" ? "fulfilled" : "open";
+      }
+    }
+    return out;
   }
 
   async pushFulfillment(order: StoreOrder, t: TrackingPush): Promise<string | null> {
@@ -210,9 +278,11 @@ export class ShopifyAdapter implements PlatformAdapter {
 }
 
 /** 演示 / 测试用：一个假的 Shopify 店铺 */
-export function mockShopifyGraphql(seed = 3): ShopifyGraphql & { pushed: unknown[]; cancelled: string[] } {
+export function mockShopifyGraphql(seed = 3): ShopifyGraphql & { pushed: unknown[]; cancelled: string[]; gone: Map<string, StoreOrderState> } {
   const pushed: unknown[] = [];
   const cancelled: string[] = [];
+  /** 测试用：这些订单在店铺里已经取消 / 发货（不在待发货列表里，按 ID 查是这个状态） */
+  const gone = new Map<string, StoreOrderState>();
   const people = [
     ["Emily", "Johnson", "1200 Market St Apt 5", "San Francisco", "CA", "94102", "4155550101"],
     ["Michael", "Brown", "500 Congress Ave", "Austin", "TX", "78701", "5125550102"],
@@ -229,6 +299,14 @@ export function mockShopifyGraphql(seed = 3): ShopifyGraphql & { pushed: unknown
       cancelled.push(String(variables?.id));
       return { fulfillmentCancel: { fulfillment: { id: variables?.id, status: "CANCELLED" }, userErrors: [] } };
     }
+    if (query.includes("nodes(ids")) {
+      return {
+        nodes: ((variables?.ids ?? []) as string[]).map((id) => {
+          const st = gone.get(id) ?? "open";
+          return { id, cancelledAt: st === "cancelled" ? new Date().toISOString() : null, displayFulfillmentStatus: st === "fulfilled" ? "FULFILLED" : "UNFULFILLED" };
+        }),
+      };
+    }
     const nodes = people.slice(0, seed).map(([f, l, a1, city, st, zip, ph], i) => ({
       id: `gid://shopify/Order/${5001 + i}`,
       name: `#${1001 + i}`,
@@ -241,10 +319,11 @@ export function mockShopifyGraphql(seed = 3): ShopifyGraphql & { pushed: unknown
       shippingAddress: { firstName: f, lastName: l, company: null, address1: a1, address2: null, city, provinceCode: st, zip, countryCodeV2: "US", phone: ph },
       lineItems: { nodes: [{ sku: i % 2 ? "MUG-WHITE" : "TS-BLK-M", name: i % 2 ? "Ceramic Mug" : "Cotton T-shirt - Black / M", quantity: 1 + (i % 2), requiresShipping: true, originalUnitPriceSet: { shopMoney: { amount: i % 2 ? "12.00" : "19.90", currencyCode: "USD" } } }] },
       fulfillmentOrders: { nodes: [{ id: `gid://shopify/FulfillmentOrder/${7001 + i}`, status: "OPEN" }] },
-    }));
+    })).filter((o) => !gone.has(o.id));
     return { orders: { pageInfo: { hasNextPage: false, endCursor: null }, nodes } };
-  }) as ShopifyGraphql & { pushed: unknown[]; cancelled: string[] };
+  }) as ShopifyGraphql & { pushed: unknown[]; cancelled: string[]; gone: Map<string, StoreOrderState> };
   fn.pushed = pushed;
   fn.cancelled = cancelled;
+  fn.gone = gone;
   return fn;
 }

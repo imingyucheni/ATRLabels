@@ -235,7 +235,13 @@ export default function BatchOrders(props: {
   // 能打印的面单：出单异常、已取消的不打
   const labeled = created.filter((r) => r.hasLabel && r.shipmentStatus !== "cancelled" && r.shipmentStatus !== "exception");
   const problems = job.rows.filter((r) => r.status === "error" || r.status === "failed" || r.shipmentStatus === "exception").length;
-  const dupes = quoted.filter((r) => r.warning).length;
+  const dupes = quoted.filter((r) => r.warningKind === "duplicate").length;
+  // 店铺里已经取消 / 在别处发货的店铺订单（同步时自动取消了勾选）
+  const storeGone = quoted.filter((r) => r.warningKind === "store").length;
+  // 其他提醒（例如店铺订单以前用同样的单号下过单）
+  const otherWarn = quoted.filter((r) => r.warningKind === "other").length;
+  // 表格里指定的物流产品用不了、暂选了最便宜的渠道
+  const fileNotes = quoted.filter((r) => r.fileChannelNote).length;
   const addrBad = (r: { address: { status: string } | null }) => !!r.address && ["missing_unit", "bad_unit", "not_found"].includes(r.address.status);
   const addrIssues = quoted.filter(addrBad).length;
   const processed = job.rows.filter((r) => r.status !== "pending").length;
@@ -365,6 +371,15 @@ export default function BatchOrders(props: {
         </div>
         {dupes > 0 && editable && (
           <div className="alert warn">⚠ {t("{n} 单的订单号在别的批次里还没提交，可能是重复导入，已默认不勾选。同一个订单号只能下一次单，哪边先提交就算哪边的。", { n: dupes })}</div>
+        )}
+        {storeGone > 0 && editable && (
+          <div className="alert warn">⚠ {t("{n} 单在店铺里已经取消或已在别处发货，已取消勾选，不会提交。确认还要发货的请手动勾选。", { n: storeGone })}</div>
+        )}
+        {otherWarn > 0 && editable && (
+          <div className="alert warn">⚠ {t("{n} 单有提醒（见每单的说明），已默认不勾选，确认没问题再勾选提交。", { n: otherWarn })}</div>
+        )}
+        {fileNotes > 0 && editable && (
+          <div className="alert warn">⚠ {t("{n} 单表格里指定的物流产品用不了，已暂选最便宜的渠道并取消勾选，请确认渠道后再勾选提交。", { n: fileNotes })}</div>
         )}
         {addrIssues > 0 && editable && (
           <div className="alert warn">⚠ {t("{n} 单的收件地址核对有问题（查不到或缺公寓号），已默认不勾选。地址写错了点收件人旁边的“修改”；确认没问题的直接勾选就能提交（只是提醒，不影响下单）。", { n: addrIssues })}</div>
