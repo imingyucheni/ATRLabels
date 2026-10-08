@@ -58,3 +58,9 @@ export function seedDemo(conn: Database.Database) {
     conn.prepare("INSERT OR IGNORE INTO multi_access (customer_id) VALUES (?)").run(a);
   }
 }
+
+/** 演示环境跑在测试数据里（测试数据库复制时清空了流水）：给预付演示客户补上同样的演示充值 */
+export function seedDemoTestLedger(conn: Database.Database) {
+  const a = conn.prepare("SELECT id FROM customers WHERE portal_email = ?").get(DEMO_ACCOUNTS[0].email) as { id: number } | undefined;
+  if (a) conn.prepare("INSERT INTO ledger (customer_id, type, amount, note, created_by) VALUES (?, 'topup', 200, '演示充值', 'admin')").run(a.id);
+}

@@ -1036,7 +1036,7 @@ export function confirmCancelled(id: number, cancelFee: number, sbCancelFee: num
   if (hasCancelRefund(id)) throw new Error("这张面单已经退过款了，请刷新页面查看最新状态");
   if (!Number.isFinite(cancelFee) || cancelFee < 0 || cancelFee > s.price) throw new Error("客户取消手续费要在 0 到客户价之间");
   if (!Number.isFinite(sbCancelFee) || sbCancelFee < 0) throw new Error("服务商取消费不能是负数");
-  updateShipment(id, { ...cancelPatch(s, true, { cancelFee, sbCancelFee }), errorMsg: null });
+  updateShipment(id, { ...cancelPatch(s, true, { cancelFee, sbCancelFee }), sbStatus: 6, errorMsg: null });
   settleCancel(id);
 }
 

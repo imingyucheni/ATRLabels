@@ -173,7 +173,8 @@ export default function FlashForm({
               {changes.map((c, i) => (
                 <tr key={i}>
                   <td>{c.label}</td>
-                  <td className="muted">{c.from ? sys(c.from) : empty(c.hint)}</td>
+                  {/* 灰字提示和新填的值一样时（例如新增表单里的示例数字），不显示提示，免得看起来像“没改” */}
+                  <td className="muted">{c.from ? sys(c.from) : empty(c.hint && c.hint === c.to ? undefined : c.hint)}</td>
                   <td className="muted">→</td>
                   <td><b>{c.to ? sys(c.to) : empty(c.hint)}</b></td>
                 </tr>

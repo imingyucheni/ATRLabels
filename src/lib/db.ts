@@ -2,7 +2,7 @@ import Database from "better-sqlite3";
 import { fmtTime } from "./time";
 import fs from "node:fs";
 import path from "node:path";
-import { seedDemo } from "./demo";
+import { seedDemo, seedDemoTestLedger } from "./demo";
 import { DEFAULT_STAMP, FEDEX_PRESET, FEDEX_SMARTPOST_PRESET, isSmartPostName, presetForChannel, type StampOverride, type StampSettings } from "./stampConfig";
 import type { MarkupRule, PartialRule } from "./pricing";
 import type { Address, PackageInfo, SkuItem, UnitSystem } from "./shipbest/types";
@@ -384,6 +384,7 @@ function testDb(): Database.Database {
         for (const t of ["mock_orders", "email_log"]) {
           if (conn.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(t)) conn.exec(`DELETE FROM ${t}`);
         }
+        if (process.env.DEMO_SEED === "1") seedDemoTestLedger(conn);
       })();
       g.__dbs.test = conn;
     } else {

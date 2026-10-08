@@ -97,6 +97,10 @@ export const qa3: Record<string, string> = {
   "自动备用（客户价按原渠道的限时活动价）": "Auto backup (customer price from the original service's promotion)",
   "新客户试算": "Prospect quote",
   // 全面检查后修复
+  "确认这张面单已经作废？公司自用账户不扣余额，也不用退款。确认后不能撤回。": "Confirm this label has been voided? The house account has no balance, so there's nothing to refund. This can't be undone.",
+  "+{pct}% + {fixed}，最低利润 {min}": "+{pct}% + {fixed}, min profit {min}",
+  "尺寸单位": "Dimension unit",
+  "重量单位": "Weight unit",
   "现在按限时活动价（比这个客户平时的价格低），活动结束后按左边的设置": "Currently on the promotion price (lower than this customer's usual price); the settings on the left apply after the promotion ends",
   "正式模式下 DHL 还是测试环境：测试面单不能真实寄件，所以 DHL 渠道现在不报价、不出单（客户那边也一样）。要试 DHL 测试环境请用沙盒站；要正式出单请到": "The site is live but DHL is still in test mode: test labels can't actually be shipped, so DHL services won't quote or create labels right now (for customers too). Use the sandbox site to try DHL test mode, or to ship for real go to",
   "改成正式环境。": "and switch to the production environment.",

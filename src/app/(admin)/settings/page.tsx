@@ -29,7 +29,7 @@ import { saveTermsAction, saveSiteAction, saveJiaguAction, testJiaguAction, addJ
 import { cnyToPay, usdCnyQuote } from "@/lib/fx";
 import FilePick from "@/components/FilePick";
 import { CarrierMark } from "@/components/ChannelLabel";
-import { CARRIERS, carrierById, defaultPublicName, guessCarrier, publicChannel } from "@/lib/carriers";
+import { CARRIERS, carrierById, defaultPublicName, guessCarrier, localizeChannelName, publicChannel } from "@/lib/carriers";
 import { hasTestData, testDataStats } from "@/lib/cleanup";
 import { currentEnv } from "@/lib/db";
 import { addrConfig, monthlyUsage } from "@/lib/addressCheck";
@@ -959,7 +959,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                   <td>
                     <div className="row" style={{ gap: 6, flexWrap: "nowrap" }}>
                       <CarrierMark carrier={publicChannel(c).carrier} size="sm" />
-                      <input name={`display.${c.code}`} defaultValue={c.displayName ?? ""} placeholder={defaultPublicName(c.name, c.carrier)} maxLength={40} style={{ width: 150 }} />
+                      <input name={`display.${c.code}`} defaultValue={c.displayName ?? ""} placeholder={localizeChannelName(defaultPublicName(c.name, c.carrier), lang)} maxLength={40} style={{ width: 150 }} />
                     </div>
                     <select name={`carrier.${c.code}`} defaultValue={c.carrier ?? ""} style={{ marginTop: 6, width: 190 }}>
                       <option value="">{t("自动识别：{name}", { name: carrierById(guessCarrier(c.name)).name })}</option>

@@ -207,7 +207,7 @@ export default async function ShipmentDetail({ params }: { params: Promise<{ id:
                   <input type="hidden" name="id" value={s.id} />
                 </FlashForm>
               </div>
-              <FlashForm action={confirmCancelAction} submitLabel="确认已取消" review alwaysSubmit confirm={t("作废这张面单并退款给【{name}】：退款 = 客户价 {price} − 客户取消手续费。确认后不能撤回。", { name: s.customerName ?? "", price: money(s.price, s.currency) })}>
+              <FlashForm action={confirmCancelAction} submitLabel="确认已取消" review alwaysSubmit confirm={isInternalCustomer(s.customerId) ? t("确认这张面单已经作废？公司自用账户不扣余额，也不用退款。确认后不能撤回。") : t("作废这张面单并退款给【{name}】：退款 = 客户价 {price} − 客户取消手续费。确认后不能撤回。", { name: s.customerName ?? "", price: money(s.price, s.currency) })}>
                 <input type="hidden" name="id" value={s.id} />
                 <div className="row" style={{ marginBottom: 8 }}>
                   {isInternalCustomer(s.customerId) ? (
@@ -240,7 +240,7 @@ export default async function ShipmentDetail({ params }: { params: Promise<{ id:
               <>
                 <dt>{t("客户取消费")}</dt><dd>{money(s.cancelFee, s.currency)}</dd>
                 <dt>{t("{p} 取消费", { p: provider })}</dt><dd>{money(s.sbCancelFee, s.currency)}</dd>
-                <dt>{t("应退客户")}</dt><dd><b>{money(s.refundAmount, s.currency)}</b></dd>
+                {!isInternalCustomer(s.customerId) && <><dt>{t("应退客户")}</dt><dd><b>{money(s.refundAmount, s.currency)}</b></dd></>}
               </>
             )}
             {adjustments.length > 0 && (
