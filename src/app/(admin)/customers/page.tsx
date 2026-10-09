@@ -86,7 +86,7 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
                 <td className={`num ${c.balance < 0 ? "profit-neg" : ""}`} data-label={t("余额")}>{money(c.balance)}</td>
                 <td className="num" data-label={t("信用额度")}>{c.creditLimit ? money(c.creditLimit) : "-"}</td>
                 <td className="hide-m">{show(c.markup.percent, t("默认"), "%")}</td><td className="hide-m">{show(c.markup.fixed, t("默认"))}</td><td className="hide-m">{show(c.markup.minProfit, t("默认"))}</td>
-                <td className="nowrap c-act c-links">
+                <td className="c-act c-links wrap-ok">
                   {!staff && <><a href={`/api/customers/${c.id}/oms`}>{t("进入 OMS")}</a><i> · </i></>}<Link href={`/customers/${c.id}`}>{t("管理")}</Link><i> · </i>{!staff && <><Link href={`/shipments?customerId=${c.id}`}>{t("面单")}</Link><i> · </i></>}<Link href={`/customers/${c.id}/charges`}>{t("扣款明细")}</Link><i> · </i><Link href={`/customers/${c.id}/statement`}>{t("对账单")}</Link>
                 </td>
               </tr>

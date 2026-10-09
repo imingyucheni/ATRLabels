@@ -312,4 +312,8 @@ export const qa3: Record<string, string> = {
   "请填写包裹的长、宽、高和重量": "Please enter the parcel's length, width, height and weight",
   "产品不存在": "Product not found",
   "这个 SKU 已经存在另一个常用产品里，同一个 SKU 只能存一个": "Another saved product already uses this SKU — each SKU can only be saved once",
+  "试算方式": "Quote type",
+  "所有渠道一起比价": "Compare all services at once",
+  "多箱": "Multi-box",
+  "UPS HWT / FedEx MWT，一票多箱按总重计价": "UPS HWT / FedEx MWT — several boxes priced on total weight",
 };

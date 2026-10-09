@@ -1,89 +1,117 @@
 /* ============================================================
    ATR 面单系统 · 设计规范
-   现代、克制：暖灰中性色 + 墨色主按钮 + 一个品牌强调色（深青），
-   细线分隔、大留白、数字等宽；浅色 / 深色两套 token。
+   和品牌（app 图标、官网）一致：深海军蓝 + 品牌蓝，暖橙做点缀；
+   深蓝侧边栏、蓝色渐变主按钮、带层次的卡片；数字等宽；浅色 / 深色两套 token。
    ============================================================ */
 
 :root {
   color-scheme: light;
-  --bg: #f6f6f4;
+  --bg: #f2f4f9;
   --surface: #ffffff;
-  --surface-2: #fafaf9;
-  --sunken: #f1f1ef;
-  --line: #e7e6e3;
-  --line-strong: #d6d5d1;
-  --text: #17171a;
-  --text-2: #4b4b52;
-  --muted: #7a7a82;
-  --ink: #17171a;
-  --ink-hover: #2b2b31;
+  --surface-2: #f8fafc;
+  --sunken: #eef2f7;
+  --field: #ffffff;
+  --line: #e2e8f0;
+  --line-strong: #cbd5e1;
+  --text: #0f172a;
+  --text-2: #334155;
+  --muted: #64748b;
+  --ink: #0b1b34;
+  --ink-hover: #13294d;
   --on-ink: #ffffff;
-  --accent: #0f766e;
+  --accent: #2251e0;
   --on-accent: #ffffff;
-  --accent-soft: #e3f2ef;
-  --accent-ring: rgba(15, 118, 110, 0.22);
+  --accent-soft: #eaf0fe;
+  --accent-ring: rgba(34, 81, 224, 0.22);
+  /* 主按钮、选中的分段：品牌蓝渐变（白字对比度 ≥ 4.5） */
+  --primary-grad: linear-gradient(180deg, #3a68f2 0%, #2251e0 100%);
+  --primary-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 6px 14px -6px rgba(34, 81, 224, 0.55);
+  /* 暖橙点缀（和图标里的箱子同色系） */
+  --warm: #c2620c;
+  --warm-soft: #fdf1e3;
   --ok: #067647;
-  --ok-soft: #e8f5ee;
+  --ok-soft: #e7f6ee;
   --warn: #9a5b00;
   --warn-soft: #fdf4e3;
   --err: #b42318;
   --err-soft: #fdeceb;
   --info-soft: #eef4fd;
-  --shadow-xs: 0 1px 2px rgba(16, 16, 20, 0.04);
-  --shadow-sm: 0 1px 3px rgba(16, 16, 20, 0.06), 0 1px 2px rgba(16, 16, 20, 0.04);
-  --shadow-pop: 0 10px 30px -8px rgba(16, 16, 20, 0.18), 0 2px 6px rgba(16, 16, 20, 0.06);
-  --radius: 12px;
-  --radius-sm: 8px;
+  --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.05);
+  --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04), 0 10px 28px -16px rgba(15, 23, 42, 0.16);
+  --shadow-pop: 0 14px 36px -10px rgba(15, 23, 42, 0.24), 0 2px 6px rgba(15, 23, 42, 0.06);
+  --radius: 14px;
+  --radius-sm: 9px;
   /* 图表（dataviz 参考配色，已通过色盲校验） */
   --series-1: #2a78d6;
   --series-2: #eb6834;
-  --chart-grid: #ecebe8;
-  --chart-axis: #8a8a91;
+  --chart-grid: #e9edf3;
+  --chart-axis: #7b879b;
+  /* 数字卡片顶部色条（按位置轮换，不用状态色） */
+  --k1: #2f62f2;
+  --k2: #7c5cff;
+  --k3: #0e9fbf;
+  --k4: #e07b24;
+  --k5: #d6457f;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --bg: #111113;
-    --surface: #18181b;
-    --surface-2: #1c1c20;
-    --sunken: #141416;
-    --line: #2a2a2f;
-    --line-strong: #3a3a41;
-    --text: #ededee;
-    --text-2: #c4c4c9;
-    --muted: #8d8d96;
-    --ink: #ededee;
+    --bg: #0a0f1d;
+    --surface: #111a2e;
+    --surface-2: #152039;
+    --sunken: #0d1527;
+    --field: #0c1426;
+    --line: #1f2b46;
+    --line-strong: #2f3e61;
+    --text: #e9eef8;
+    --text-2: #c2cbe0;
+    --muted: #8794b2;
+    --ink: #e9eef8;
     --ink-hover: #ffffff;
-    --on-ink: #111113;
-    --accent: #3cc2b2;
-    --on-accent: #06201c;
-    --accent-soft: #15302d;
-    --accent-ring: rgba(60, 194, 178, 0.28);
+    --on-ink: #0a0f1d;
+    --accent: #7b9bff;
+    --on-accent: #0a0f1d;
+    --accent-soft: #18264a;
+    --accent-ring: rgba(123, 155, 255, 0.32);
+    --primary-grad: linear-gradient(180deg, #4a74ff 0%, #3159e8 100%);
+    --primary-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 8px 18px -8px rgba(49, 89, 232, 0.7);
+    --warm: #f3a65e;
+    --warm-soft: #2e2215;
     --ok: #4ccf8f;
-    --ok-soft: #13291e;
+    --ok-soft: #12291f;
     --warn: #f0b44c;
-    --warn-soft: #2d2413;
+    --warn-soft: #2b2214;
     --err: #ff8078;
-    --err-soft: #331816;
-    --info-soft: #172234;
+    --err-soft: #331a1d;
+    --info-soft: #15223d;
     --shadow-xs: none;
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
-    --shadow-pop: 0 12px 32px -8px rgba(0, 0, 0, 0.6);
+    --shadow-card: inset 0 1px 0 rgba(255, 255, 255, 0.03), 0 12px 30px -16px rgba(0, 0, 0, 0.7);
+    --shadow-pop: 0 16px 40px -10px rgba(0, 0, 0, 0.7);
     --series-1: #3987e5;
     --series-2: #d95926;
-    --chart-grid: #26262b;
-    --chart-axis: #8d8d96;
+    --chart-grid: #1c2740;
+    --chart-axis: #8794b2;
+    --k1: #6f93ff;
+    --k2: #a48bff;
+    --k3: #3cc4e0;
+    --k4: #f59e4c;
+    --k5: #f173a7;
   }
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --bg: #111113; --surface: #18181b; --surface-2: #1c1c20; --sunken: #141416; --line: #2a2a2f; --line-strong: #3a3a41;
-  --text: #ededee; --text-2: #c4c4c9; --muted: #8d8d96; --ink: #ededee; --ink-hover: #ffffff; --on-ink: #111113;
-  --accent: #3cc2b2; --on-accent: #06201c; --accent-soft: #15302d; --accent-ring: rgba(60, 194, 178, 0.28);
-  --ok: #4ccf8f; --ok-soft: #13291e; --warn: #f0b44c; --warn-soft: #2d2413; --err: #ff8078; --err-soft: #331816; --info-soft: #172234;
-  --shadow-xs: none; --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4); --shadow-pop: 0 12px 32px -8px rgba(0, 0, 0, 0.6);
-  --series-1: #3987e5; --series-2: #d95926; --chart-grid: #26262b; --chart-axis: #8d8d96;
+  --bg: #0a0f1d; --surface: #111a2e; --surface-2: #152039; --sunken: #0d1527; --field: #0c1426; --line: #1f2b46; --line-strong: #2f3e61;
+  --text: #e9eef8; --text-2: #c2cbe0; --muted: #8794b2; --ink: #e9eef8; --ink-hover: #ffffff; --on-ink: #0a0f1d;
+  --accent: #7b9bff; --on-accent: #0a0f1d; --accent-soft: #18264a; --accent-ring: rgba(123, 155, 255, 0.32);
+  --primary-grad: linear-gradient(180deg, #4a74ff 0%, #3159e8 100%); --primary-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 8px 18px -8px rgba(49, 89, 232, 0.7);
+  --warm: #f3a65e; --warm-soft: #2e2215;
+  --ok: #4ccf8f; --ok-soft: #12291f; --warn: #f0b44c; --warn-soft: #2b2214; --err: #ff8078; --err-soft: #331a1d; --info-soft: #15223d;
+  --shadow-xs: none; --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4); --shadow-card: inset 0 1px 0 rgba(255, 255, 255, 0.03), 0 12px 30px -16px rgba(0, 0, 0, 0.7); --shadow-pop: 0 16px 40px -10px rgba(0, 0, 0, 0.7);
+  --series-1: #3987e5; --series-2: #d95926; --chart-grid: #1c2740; --chart-axis: #8794b2;
+  --k1: #6f93ff; --k2: #a48bff; --k3: #3cc4e0; --k4: #f59e4c; --k5: #f173a7;
 }
 
 /* ---------------- 基础 ---------------- */
@@ -177,7 +205,7 @@ code { font: 12.5px ui-monospace, SFMono-Regular, Menlo, monospace; background: 
   border-radius: var(--radius);
   padding: 20px;
   margin-bottom: 16px;
-  box-shadow: var(--shadow-xs);
+  box-shadow: var(--shadow-card);
 }
 .card-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 14px; }
 .card-head h2 { margin: 0; }
@@ -190,7 +218,7 @@ code { font: 12.5px ui-monospace, SFMono-Regular, Menlo, monospace; background: 
 .kpis, .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
 .kpi, .stat {
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
-  padding: 14px 16px; box-shadow: var(--shadow-xs); min-width: 0;
+  padding: 14px 16px; box-shadow: var(--shadow-card); min-width: 0;
 }
 .kpi-label, .stat > .muted:first-child { font-size: 12.5px; color: var(--muted); font-weight: 500; }
 .kpi-value, .stat .v { font-size: 24px; font-weight: 650; letter-spacing: -0.02em; margin-top: 4px; font-variant-numeric: tabular-nums; line-height: 1.25; }
@@ -1694,7 +1722,9 @@ tbody.ch-group + tbody.ch-group .ch-group-head td { border-top-width: 10px; bord
 
 /* 电脑端：订单号这类主列太长时换行，不把整张表撑出屏幕 */
 @media (min-width: 761px) {
-  .card-table td.c-main { max-width: 220px; overflow-wrap: anywhere; }
+  .card-table td.c-main { max-width: 220px; min-width: 7.5em; overflow-wrap: anywhere; }
+  /* 操作链接很多时（客户列表）可以折成两行，不把名称列挤成一字一行 */
+  .card-table td.c-links.wrap-ok { white-space: normal; min-width: 12em; }
 }
 
 /* 面单记录：运单号可以折行（很长的数字），打印链接放在运单号下面，省一列 */
@@ -1728,3 +1758,146 @@ table.list td.ship-trk .track-link { white-space: normal; word-break: break-all;
 
 /* 渠道名后面的说明图标（预上网、多箱）：鼠标放上去显示是什么意思 */
 .channel-label .channel-hint { flex: none; color: var(--muted); cursor: help; margin-left: -4px; }
+
+/* ============================================================
+   视觉升级：深蓝侧边栏、蓝色渐变主按钮、有层次的卡片、醒目的选中状态
+   （放在最后，覆盖上面的基础样式）
+   ============================================================ */
+
+/* 页面底色：顶部一点品牌蓝的光晕 */
+body {
+  background:
+    radial-gradient(1100px 380px at 72% -140px, color-mix(in srgb, var(--accent) 9%, transparent), transparent 70%) no-repeat,
+    var(--bg);
+}
+h1 { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; }
+h2 { font-weight: 650; }
+.page-sub { font-size: 13.5px; }
+
+/* ---------- 侧边栏：品牌深蓝（深浅色都一样），里面的颜色 token 换成深底用的 ---------- */
+.sidebar {
+  --text: #eef2fb; --text-2: #b9c4de; --muted: #8291b5;
+  --line: rgba(255, 255, 255, 0.08); --line-strong: rgba(255, 255, 255, 0.16);
+  --sunken: rgba(255, 255, 255, 0.06); --surface: rgba(255, 255, 255, 0.05); --surface-2: rgba(255, 255, 255, 0.09);
+  --accent: #93abff; --accent-soft: rgba(90, 128, 255, 0.2); --accent-ring: rgba(147, 171, 255, 0.35);
+  --warn: #f6c46f; --warn-soft: rgba(246, 196, 111, 0.15); --err: #ff8f87; --err-soft: rgba(255, 143, 135, 0.14);
+  --shadow-xs: none;
+  color: var(--text);
+  background:
+    radial-gradient(420px 260px at 0% 0%, rgba(74, 116, 255, 0.22), transparent 70%) no-repeat,
+    linear-gradient(180deg, #0e1d3f 0%, #0a1531 55%, #08102a 100%);
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+}
+.sidebar .brand-name { color: #fff; }
+.sidebar .brand-sub { color: #8e9dc2; }
+.nav-section { color: #8291b5; }
+.nav-section::before { background: #f3a65e; opacity: 1; }
+.nav-tag { background: rgba(243, 166, 94, 0.18); color: #f7bb82; }
+.nav-item { color: #c3cde4; }
+.nav-item svg { background: rgba(255, 255, 255, 0.06); color: #9fb0d8; }
+.nav-item:hover { background: rgba(255, 255, 255, 0.07); color: #fff; }
+.nav-item:hover svg { background: rgba(255, 255, 255, 0.12); color: #fff; }
+.nav-item.active {
+  color: #fff;
+  background: linear-gradient(90deg, rgba(74, 116, 255, 0.34), rgba(74, 116, 255, 0.1));
+  border-color: rgba(147, 171, 255, 0.18);
+}
+.nav-item.active svg { color: #fff; background: var(--primary-grad); box-shadow: 0 4px 12px -4px rgba(49, 89, 232, 0.9); }
+.nav-item.active::before { background: #93abff; }
+.nav-item.disabled:hover { background: transparent; }
+.nav-item.disabled:hover svg { background: rgba(255, 255, 255, 0.06); }
+.who-card { background: rgba(255, 255, 255, 0.05); border-color: rgba(255, 255, 255, 0.09); }
+.who-card .bal b { color: #fff; }
+.sidebar .env-tag { color: #f6c46f; background: rgba(246, 196, 111, 0.12); }
+.sidebar .seg { background: rgba(0, 0, 0, 0.25); border-color: rgba(255, 255, 255, 0.08); }
+.sidebar .seg button.on { background: rgba(255, 255, 255, 0.14); color: #fff; }
+.sidebar button:not(.primary):hover, .sidebar .btn:not(.primary):hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
+.sidebar .menu-dot { box-shadow: 0 0 0 2px #0e1d3f; }
+@media (max-width: 900px) {
+  .sidebar { border-bottom: 1px solid rgba(255, 255, 255, 0.08); }
+  .mobile-current { color: #b9c4de; }
+}
+
+/* ---------- 卡片 ---------- */
+.modal { box-shadow: var(--shadow-pop); }
+
+/* ---------- 输入框：比卡片底色更“实”，深色下也分得清 ---------- */
+input, select, textarea { background-color: var(--field); }
+.sidebar input, .sidebar select { background-color: rgba(0, 0, 0, 0.2); }
+input:focus, select:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-ring); }
+
+/* ---------- 按钮 ---------- */
+button.primary, .btn.primary {
+  background: var(--primary-grad); border-color: transparent; color: #fff;
+  box-shadow: var(--primary-shadow); font-weight: 600;
+  transition: filter 0.12s, box-shadow 0.12s, transform 0.06s;
+}
+button.primary:hover, .btn.primary:hover { background: var(--primary-grad); border-color: transparent; filter: brightness(1.08); }
+button.primary:active, .btn.primary:active { transform: translateY(0.5px); filter: brightness(0.97); }
+button.primary:disabled { filter: saturate(0.6); box-shadow: none; }
+button.danger:hover { border-color: color-mix(in srgb, var(--err) 35%, transparent); }
+
+/* ---------- 分段选择（页面上的筛选 / 切换）：选中的用品牌蓝，一眼看出来 ---------- */
+.seg { background: var(--sunken); border-color: var(--line); }
+.seg a { color: var(--text-2); font-weight: 550; transition: background 0.12s, color 0.12s; }
+.seg a:hover { background: color-mix(in srgb, var(--accent) 8%, transparent); color: var(--text); }
+.seg a.on { background: var(--primary-grad); color: #fff; box-shadow: var(--primary-shadow); font-weight: 600; }
+.unit-toggles .seg button.on { background: var(--primary-grad); color: #fff; box-shadow: var(--primary-shadow); }
+
+/* ---------- 表格：表头有底色，行悬停带一点品牌蓝 ---------- */
+th { background: var(--surface-2); color: var(--text-2); font-weight: 600; border-bottom-color: var(--line-strong); }
+thead tr:first-child th:first-child { border-top-left-radius: 8px; }
+thead tr:first-child th:last-child { border-top-right-radius: 8px; }
+tbody tr:hover td { background: color-mix(in srgb, var(--accent) 5%, var(--surface)); }
+tr.best td { background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
+
+/* ---------- 数字卡片：顶部色条 + 淡淡的同色底，按位置轮换颜色 ---------- */
+.kpi, .stat { position: relative; overflow: hidden; --kc: var(--k1); background: linear-gradient(180deg, color-mix(in srgb, var(--kc) 7%, var(--surface)) 0%, var(--surface) 70%); }
+.kpi::before, .stat::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 3px; background: var(--kc); opacity: 0.9; }
+:is(.kpis, .stats) > :nth-child(5n + 2) { --kc: var(--k2); }
+:is(.kpis, .stats) > :nth-child(5n + 3) { --kc: var(--k3); }
+:is(.kpis, .stats) > :nth-child(5n + 4) { --kc: var(--k4); }
+:is(.kpis, .stats) > :nth-child(5n + 5) { --kc: var(--k5); }
+.kpi-hero { background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 16%, var(--surface)), var(--surface) 75%); }
+.kpi-hero::before { background: var(--primary-grad); }
+
+/* ---------- 提示条：左边一道同色竖线 ---------- */
+.alert { border-left-width: 3px; }
+.alert.ok { border-left-color: var(--ok); }
+.alert.err { border-left-color: var(--err); }
+.alert.warn { border-left-color: var(--warn); }
+.alert.info { border-left-color: var(--accent); }
+
+/* ---------- 登录页左侧：品牌深蓝 + 光晕（深浅色都一样） ---------- */
+.auth-side {
+  color: #fff;
+  background-color: #0b1b34;
+  background-image:
+    radial-gradient(520px 360px at 15% 10%, rgba(74, 116, 255, 0.45), transparent 70%),
+    radial-gradient(420px 300px at 90% 100%, rgba(243, 166, 94, 0.18), transparent 70%),
+    linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-size: auto, auto, 40px 40px, 40px 40px;
+}
+.auth-side .brand-mark:not(.brand-logo) { background: #fff; color: #0b1b34; }
+
+/* ---------- 运费试算：单个包裹 / 多箱 两个大的切换卡片 ---------- */
+.mode-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 380px)); gap: 12px; margin: 4px 0 18px; }
+.mode-tab {
+  display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 12px;
+  background: var(--surface); border: 1px solid var(--line); color: var(--text-2); box-shadow: var(--shadow-xs);
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+.mode-tab:hover { text-decoration: none; border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); color: var(--text); }
+.mode-tab .mode-ico { width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center; flex-shrink: 0; background: var(--sunken); color: var(--muted); }
+.mode-tab b { display: block; color: var(--text); font-size: 14.5px; font-weight: 650; }
+.mode-tab small { display: block; color: var(--muted); font-size: 12px; margin-top: 1px; }
+.mode-tab.on { border-color: var(--accent); background: linear-gradient(135deg, var(--accent-soft), var(--surface) 80%); box-shadow: 0 0 0 3px var(--accent-ring); }
+.mode-tab.on .mode-ico { background: var(--primary-grad); color: #fff; box-shadow: var(--primary-shadow); }
+.page-hint { display: flex; gap: 8px; align-items: flex-start; margin: -8px 0 16px; font-size: 13px; color: var(--text-2); }
+.page-hint svg { flex-shrink: 0; margin-top: 2px; color: var(--accent); }
+@media (max-width: 640px) { .mode-tabs { grid-template-columns: minmax(0, 1fr); } }
+
+/* 报价里的客户价更醒目 */
+.q-price b { color: var(--text); font-size: 14.5px; }
+tr.best .q-price b { color: var(--accent); }
