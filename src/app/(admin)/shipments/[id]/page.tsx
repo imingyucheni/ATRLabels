@@ -1,5 +1,6 @@
 import LabelActions from "@/components/LabelActions";
 import TrackingLink from "@/components/TrackingLink";
+import CopyButton from "@/components/CopyButton";
 import { dhlDocInfo, isDhlCode } from "@/lib/shipbest/dhl";
 import { fmtTime, TZ_LABEL } from "@/lib/time";
 import Link from "next/link";
@@ -85,7 +86,10 @@ export default async function ShipmentDetail({ params }: { params: Promise<{ id:
   return (
     <>
       <div className="row" style={{ justifyContent: "space-between", marginBottom: 12 }}>
-        <h1 style={{ margin: 0 }}>{t("面单 {no}", { no: s.customNo })} <StatusBadge status={s.status} test={s.isTest} /></h1>
+        <div>
+          <h1 style={{ margin: 0 }}>{t("面单 {no}", { no: s.customNo })} <StatusBadge status={s.status} test={s.isTest} /></h1>
+          {s.customerRef && <p className="page-sub">{t("客户订单号")}{t("：")}<b>{s.customerRef}</b></p>}
+        </div>
         <Link href="/shipments">{t("← 返回列表")}</Link>
       </div>
 
@@ -252,7 +256,9 @@ export default async function ShipmentDetail({ params }: { params: Promise<{ id:
           </dl>
           <h3>{t("订单")}</h3>
           <dl className="kv">
-            <dt>{t("自定义单号")}</dt><dd>{s.customNo}</dd>
+            {/* 客户自己填的订单号（单个下单、批量导入、店铺订单号、API 的 customerRef）；系统单号是我们提交给服务商的 */}
+            <dt>{t("客户订单号")}</dt><dd>{s.customerRef ? <span className="track-wrap">{s.customerRef} <CopyButton text={s.customerRef} /></span> : <span className="muted">{t("没填")}</span>}</dd>
+            <dt>{t("系统单号")}</dt><dd><span className="track-wrap">{s.customNo} <CopyButton text={s.customNo} /></span></dd>
             <dt>{t("服务商")}</dt><dd>{t(provider)}</dd>
             <dt>{t("服务商单号")}</dt><dd>{providerNo ?? "-"}</dd>
             <dt>{t("运单号")}</dt><dd><TrackingLink channelCode={s.channelCode} trackingNo={s.trackingNo} title={t("查物流轨迹")} /></dd>

@@ -316,4 +316,6 @@ export const qa3: Record<string, string> = {
   "所有渠道一起比价": "Compare all services at once",
   "多箱": "Multi-box",
   "UPS HWT / FedEx MWT，一票多箱按总重计价": "UPS HWT / FedEx MWT — several boxes priced on total weight",
+  "没填": "Not provided",
+  "第 {n} 行": "Row {n}",
 };

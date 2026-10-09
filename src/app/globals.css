@@ -1901,3 +1901,9 @@ tr.best td { background: color-mix(in srgb, var(--accent) 10%, var(--surface)); 
 /* 报价里的客户价更醒目 */
 .q-price b { color: var(--text); font-size: 14.5px; }
 tr.best .q-price b { color: var(--accent); }
+
+/* 批量下单结果表：单号、包裹、运单号不折行；收件人可以折行但不要太窄；渠道列留够宽度 */
+.batch-table td { vertical-align: top; }
+.batch-table td.bt-recip { min-width: 13em; }
+.batch-table th.bt-ch { min-width: 280px; }
+.batch-table tbody tr td { padding-top: 12px; padding-bottom: 12px; }

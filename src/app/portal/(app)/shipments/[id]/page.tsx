@@ -175,6 +175,7 @@ export default async function PortalShipmentDetail({ params }: { params: Promise
               </>
             )}
             {s.adjustment !== 0 && (<><dt>{t("账单补差")}</dt><dd>{money(s.adjustment, s.currency)}</dd></>)}
+            {s.customerRef && (<><dt>{t("我的订单号")}</dt><dd>{s.customerRef}</dd></>)}
             <dt>{t("系统单号")}</dt><dd>{s.customNo}</dd>
             <dt>{t("下单时间")}</dt><dd>{fmtTime(s.createdAt)}</dd>
             {s.remark && (<><dt>{t("备注")}</dt><dd>{s.remark}</dd></>)}

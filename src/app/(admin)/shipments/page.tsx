@@ -113,7 +113,7 @@ export default async function ShipmentsPage({ searchParams }: { searchParams: Pr
           <tbody>
             {rows.map((s) => (
               <tr key={s.id}>
-                <td className="c-main"><Link href={`/shipments/${s.id}`}>{s.customNo}</Link><div className="small muted">{fmtTime(s.createdAt)}</div></td>
+                <td className="c-main"><Link href={`/shipments/${s.id}`}>{s.customNo}</Link>{s.customerRef && <div className="small" title={t("客户订单号")}>{s.customerRef}</div>}<div className="small muted">{fmtTime(s.createdAt)}</div></td>
                 <td className="wrap" data-label={t("客户")}>{s.customerName}</td>
                 <td className="wrap" data-label={t("收件人")}>{s.recipient.nameFirst} {s.recipient.nameLast}<div className="small muted">{s.recipient.city}, {s.recipient.province ?? s.recipient.country} {s.recipient.zipCode}</div></td>
                 <td className="wrap" data-label={t("渠道")} title={s.channelName ?? undefined}>{localizeChannelName(displayChannel(s.channelCode).name || s.channelName || "", lang)}</td>

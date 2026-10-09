@@ -388,7 +388,7 @@ export default function BatchOrders(props: {
       </div>
 
       <div className="card table-wrap">
-        <table>
+        <table className="batch-table">
           <thead>
             <tr>
               <th style={{ width: 32 }}>
@@ -405,7 +405,7 @@ export default function BatchOrders(props: {
                   />
                 )}
               </th>
-              <th>{t("行")}</th><th>{t("自定义单号")}</th><th>{t("收件人")}</th><th>{t("包裹")}</th><th style={{ minWidth: 300 }}>{t("物流产品 / 价格")}</th><th>{t("状态")}</th>
+              <th>{t("自定义单号")}</th><th>{t("收件人")}</th><th>{t("包裹")}</th><th className="bt-ch">{t("物流产品 / 价格")}</th><th>{t("状态")}</th>
             </tr>
           </thead>
           <tbody>
@@ -432,9 +432,9 @@ export default function BatchOrders(props: {
                       />
                     )}
                   </td>
-                  <td className="muted">{r.rowNo}</td>
-                  <td>{r.customerRef ?? "-"}</td>
-                  <td className="small">
+                  {/* 单号不折行；表格里的行号放在单号下面（找原表格用），省一列 */}
+                  <td className="nowrap">{r.customerRef ?? "-"}<div className="small muted">{t("第 {n} 行", { n: r.rowNo })}</div></td>
+                  <td className="small bt-recip">
                     {r.recipient}
                     {editable && r.status !== "created" && r.status !== "pending" && !r.shipmentId && (
                       <button type="button" className="small" style={{ marginLeft: 6, padding: "0 8px", height: 24 }} disabled={busy} onClick={() => openEdit(r)}>{t("修改")}</button>
@@ -446,7 +446,7 @@ export default function BatchOrders(props: {
                       </div>
                     )}
                   </td>
-                  <td className="small">{r.pkg}</td>
+                  <td className="small nowrap">{r.pkg}</td>
                   <td>
                     {r.status === "created" || r.status === "failed" ? (
                       <span><ChannelLabel code={r.channelCode} name={r.channelName} /> <b>{r.price !== null ? money(r.price, r.currency ?? "") : ""}</b></span>
@@ -495,7 +495,7 @@ export default function BatchOrders(props: {
                   <td className="small">
                     <span className={`badge ${cls}`}>{label}</span>
                     {r.shipmentId ? (
-                      <div>
+                      <div className="nowrap" style={{ marginTop: 4 }}>
                         <a href={`${props.mode === "portal" ? "/portal" : ""}/shipments/${r.shipmentId}`}>{r.trackingNo ?? t("查看")}</a>
                         {r.hasLabel && r.shipmentStatus !== "cancelled" && <> · <a href={`/api/labels/${r.shipmentId}`} target="_blank">{t("面单")}</a></>}
                       </div>
