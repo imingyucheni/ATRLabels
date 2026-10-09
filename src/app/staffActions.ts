@@ -134,10 +134,10 @@ export async function bindStaffSalesAction(_: FlashState, fd: FormData): Promise
   const raw = String(fd.get("salesId") ?? "");
   try {
     const { bindStaffSales } = await import("@/lib/commission");
-    const rep = bindStaffSales(id, s.name, raw === "new" ? "new" : Number(raw) > 0 ? Number(raw) : null, str(fd.get("rate"), 10) || null);
+    const rep = bindStaffSales(id, s.name, raw === "new" ? "new" : Number(raw) > 0 ? Number(raw) : null);
     revalidatePath(`/staff/${id}`);
     revalidatePath("/staff");
-    return { ok: rep ? `已绑定销售“${rep.name}”：他名下客户的订单按销售佣金的比例算提成，员工在“我的看板”里能看到` : "已解除绑定" };
+    return { ok: rep ? `已绑定销售“${rep.name}”：给客户绑定这个销售和比例后，员工在“我的看板”里能看到提成` : "已解除绑定" };
   } catch (e) {
     return fail(e);
   }

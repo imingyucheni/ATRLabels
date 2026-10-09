@@ -39,7 +39,7 @@ export default async function SalesCard({ customerId }: { customerId: number }) 
               </select>
             </label>
             <label className="f">{t("这个客户的佣金比例 %")}
-              <input name="rate" type="number" min="0" max="100" step="0.01" defaultValue={cur?.rate ?? ""} placeholder={t("例如 30；留空用销售的默认比例")} />
+              <input name="rate" type="number" min="0" max="100" step="0.01" defaultValue={cur?.rate ?? ""} placeholder={t("例如 5 = 利润的 5%")} />
             </label>
             <fieldset className="f" style={{ border: 0, padding: 0, margin: 0, gridColumn: "1 / -1" }}>
               <span>{t("从哪些订单开始算")}</span>
@@ -50,7 +50,7 @@ export default async function SalesCard({ customerId }: { customerId: number }) 
               </label>
             </fieldset>
           </div>
-          <p className="small muted">{t("换销售或改比例时选“从这天起”，之前的订单还归原来的销售、按原来的比例；选“全部订单”会把这个客户所有订单都改成新的设置（已经结算的不受影响，多退少补会出现在下次结算里）。")}</p>
+          <p className="small muted">{t("提成 = 这个客户每单的利润 × 比例，每个客户单独设；选“无销售”或不分配，这个客户的利润全部归公司。")} {t("换销售或改比例时选“从这天起”，之前的订单还归原来的销售、按原来的比例；选“全部订单”会把这个客户所有订单都改成新的设置（已经结算的不受影响，多退少补会出现在下次结算里）。")}</p>
         </FlashForm>
       )}
       {history.length > 0 && (

@@ -72,7 +72,7 @@ export default async function MyDashboard({ searchParams }: { searchParams: Prom
         {c ? (
           <>
             <p className="small muted" style={{ marginTop: 0 }}>
-              {t("提成 = 每单利润 × 比例（客户单独设的比例优先，没有就用销售默认比例 {r}）。亏损单冲减提成，取消单按手续费差额算，补差会影响利润。结算由主管理员操作。", { r: c.rep.rate !== null ? `${c.rep.rate}%` : t("未设") })}
+              {t("提成按客户算：归你名下的每个客户有自己的比例（例如利润的 5%），提成 = 这个客户每单的利润 × 比例；没绑定销售的客户利润归公司。亏损单冲减提成，取消单按手续费差额算，补差会影响利润。客户归属和比例由主管理员设置，结算也由主管理员操作。")}
             </p>
             <div className="stats" style={{ margin: 0 }}>
               <div className="stat"><div className="muted">{t("销售")}</div><div className="v" style={{ fontSize: 18 }}>{c.rep.name}</div></div>
@@ -103,7 +103,7 @@ export default async function MyDashboard({ searchParams }: { searchParams: Prom
             )}
           </>
         ) : (
-          <p className="muted" style={{ marginBottom: 0 }}>{t("你的账号还没有绑定提成（销售）。请找主管理员在“员工账号”里给你绑定，绑定后你开的客户会自动算你的提成。")}</p>
+          <p className="muted" style={{ marginBottom: 0 }}>{t("你的账号还没有绑定销售。请找主管理员在“员工账号”里给你绑定，再把你负责的客户绑定到你名下并设好比例，看板里就会显示你的提成。")}</p>
         )}
       </div>
 
@@ -122,7 +122,7 @@ export default async function MyDashboard({ searchParams }: { searchParams: Prom
                   <td className="num" data-label={t("利润")}><Profit value={r.profit} /></td>
                   <td className={`num${r.balance < 0 ? " profit-neg" : ""}`} data-label={t("余额")}>{money(r.balance)}</td>
                   <td className="small muted" data-label={t("最近下单")}>{r.lastAt ? fmtTime(r.lastAt) : "-"}</td>
-                  <td className="small" data-label={t("提成归属")}>{r.mine ? <b>{t("我")}</b> : r.salesName ?? <span className="muted">{t("未分配")}</span>}</td>
+                  <td className="small" data-label={t("提成归属")}>{r.mine ? <><b>{t("我")}</b> · {r.rate !== null ? `${r.rate}%` : <span className="warn-text">{t("未设比例")}</span>}</> : r.salesName ?? <span className="muted">{t("公司（未绑定销售）")}</span>}</td>
                 </tr>
               ))}
               {!d.customers.length && <tr><td colSpan={8} className="muted">{t("还没有授权给你的客户。你新开的客户会自动出现在这里。")}</td></tr>}

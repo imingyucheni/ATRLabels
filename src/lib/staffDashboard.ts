@@ -23,6 +23,8 @@ export interface DashCustomer {
   salesName: string | null;
   /** 归在这个员工绑定的销售名下（算他的提成） */
   mine: boolean;
+  /** 归他名下时这个客户的提成比例（利润 %；null = 还没设） */
+  rate: number | null;
   /** 授权给这个员工了（能打开客户详情）；只是归他名下、没授权的只看统计 */
   canOpen: boolean;
 }
@@ -69,7 +71,8 @@ export function staffDashboard(who: AdminPrincipal, from: string, to: string): S
   const rows = new Map<number, DashCustomer>(
     customers.map((c) => {
       const a = currentAssignment(c.id);
-      return [c.id, { id: c.id, name: c.name, orders: 0, cancelled: 0, revenue: 0, cost: 0, profit: 0, balance: c.balance, lastAt: null, salesName: a?.salesId ? reps.get(a.salesId) ?? null : null, mine: !!rep && a?.salesId === rep.id, canOpen: canSee(c.id) }];
+      const mine = !!rep && a?.salesId === rep.id;
+      return [c.id, { id: c.id, name: c.name, orders: 0, cancelled: 0, revenue: 0, cost: 0, profit: 0, balance: c.balance, lastAt: null, salesName: a?.salesId ? reps.get(a.salesId) ?? null : null, mine, rate: mine ? a?.rate ?? rep!.rate : null, canOpen: canSee(c.id) }];
     }),
   );
   const totals = { customers: customers.length, orders: 0, cancelled: 0, revenue: 0, cost: 0, profit: 0 };

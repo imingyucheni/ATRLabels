@@ -148,15 +148,16 @@ export function salesOfStaff(staffId: number): SalesRep | null {
 }
 
 /**
- * 员工账号绑定销售（算提成）：一个员工对应一个销售，一个销售也只对应一个员工。
- * salesId = null 解除绑定；"new" = 用员工的名字新建一个销售再绑定（默认比例 defaultRate，可以不填）。
+ * 员工账号绑定销售：一个员工对应一个销售，一个销售也只对应一个员工。绑定后员工在看板里看这个销售的提成。
+ * 提成是按客户单独绑定的（客户详情 → 销售：选销售和这个客户的比例）；没绑定销售的客户利润全部归公司。
+ * salesId = null 解除绑定；"new" = 用员工的名字新建一个销售再绑定。
  */
-export function bindStaffSales(staffId: number, staffName: string, salesId: number | "new" | null, defaultRate?: number | string | null): SalesRep | null {
+export function bindStaffSales(staffId: number, staffName: string, salesId: number | "new" | null): SalesRep | null {
   const conn = ensureTables();
   let target: number | null = null;
   if (salesId === "new") {
     const exists = conn.prepare("SELECT id FROM sales_reps WHERE name = ?").get(staffName.trim()) as { id: number } | undefined;
-    target = exists?.id ?? saveSales({ name: staffName, rate: defaultRate ?? null });
+    target = exists?.id ?? saveSales({ name: staffName, rate: null });
   } else if (salesId !== null) {
     if (!getSales(salesId)) throw new Error("销售不存在");
     target = salesId;
@@ -172,15 +173,6 @@ export function bindStaffSales(staffId: number, staffName: string, salesId: numb
   return target === null ? null : getSales(target);
 }
 
-/**
- * 员工新开的客户自动归到他绑定的销售（全部订单都算）。客户已经有销售的不动。
- * 销售没有默认比例时也先归过去，佣金页会提示“未设比例”，主管理员再填。
- */
-export function autoAssignToStaffSales(customerId: number, staffId: number, by: string) {
-  const rep = salesOfStaff(staffId);
-  if (!rep || currentAssignment(customerId)) return;
-  ensureTables().prepare("INSERT INTO customer_sales (customer_id, sales_id, rate, start_date, created_by) VALUES (?,?,NULL,'',?)").run(customerId, rep.id, by);
-}
 
 export function listSales(): SalesRep[] {
   return (ensureTables().prepare("SELECT * FROM sales_reps ORDER BY active DESC, name").all() as RepRow[]).map(toRep);

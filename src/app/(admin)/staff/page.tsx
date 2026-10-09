@@ -55,7 +55,7 @@ export default async function StaffPage() {
                 <td data-label={t("提成（销售）")}>
                   {(() => {
                     const rep = salesOfStaff(s.id);
-                    return <Link href={`/staff/${s.id}`}>{rep ? `${rep.name}${rep.rate !== null ? ` · ${rep.rate}%` : ""}` : <span className="muted">{t("未绑定")}</span>}</Link>;
+                    return <Link href={`/staff/${s.id}`}>{rep ? rep.name : <span className="muted">{t("未绑定")}</span>}</Link>;
                   })()}
                 </td>
                 <td data-label={t("确认密码")}>{s.hasPin ? t("已设置") : <span className="warn-text">{t("还没设置")}</span>}</td>
