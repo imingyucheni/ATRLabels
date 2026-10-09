@@ -20,6 +20,7 @@ import { multiEnabled } from "@/lib/multiAccess";
 import { negativeRule } from "@/lib/markup";
 import type { PartialRule } from "@/lib/pricing";
 import { staffProspectMarkupError } from "@/lib/quoteStream";
+import { maskedChannelCode, maskedChannelName, maskedMessage, maskedQuoteError } from "@/lib/providerMask";
 
 export interface MultiQuote {
   channelCode: string;
@@ -119,13 +120,15 @@ export async function multiTrialQuoteAction(input: { customerId?: number; markup
   if (bad.length) return { errors: await Promise.all(bad.map((x) => tMsg(x))) };
   try {
     const list = customerId ? await quoteMulti(customerId, req) : await quoteMultiForProspect(req, m);
+    // 管理员（非主管理员）不给看到服务商：渠道代码换代号，报错和客户一样只说大类
+    const masked = a.role === "staff";
     const quotes: MultiQuote[] = [];
     for (const q of list) {
       quotes.push({
-        channelCode: q.channelCode,
-        channelName: displayChannel(q.channelCode).name || q.channelName,
+        channelCode: masked ? maskedChannelCode(q.channelCode) : q.channelCode,
+        channelName: displayChannel(q.channelCode).name || (masked ? maskedChannelName(q.channelName) : q.channelName),
         ok: q.ok,
-        error: q.ok ? undefined : await tMsg(q.error ?? ""),
+        error: q.ok ? undefined : await tMsg(masked ? maskedQuoteError(q.error) : q.error ?? ""),
         price: q.price,
         currency: q.currency,
         zone: q.zone,
@@ -135,7 +138,7 @@ export async function multiTrialQuoteAction(input: { customerId?: number; markup
     }
     return { quotes };
   } catch (e) {
-    return fail((e as Error).message);
+    return fail(a.role === "staff" ? maskedMessage((e as Error).message) ?? "" : (e as Error).message);
   }
 }
 

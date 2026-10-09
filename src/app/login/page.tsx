@@ -14,7 +14,7 @@ export default async function LoginPage() {
       brand="ATRShip"
       headline={t("尾程面单，一处管理")}
       sub={t("报价、出单、补差、客户钱包与报表。")}
-      points={["多渠道实时比价，按规则自动加价", "批量导入 ShipBest 导单表，一键合并打印", "官方账单补差自动对应到客户"].map((p) => t(p))}
+      points={["多渠道实时比价，按规则自动加价", "Excel 批量导单，一键合并打印", "官方账单补差自动对应到客户"].map((p) => t(p))}
     >
       <h1>{t("管理后台")}</h1>
       <p className="sub">{t("主管理员只填后台密码；其他管理员填自己的登录名和密码")}</p>

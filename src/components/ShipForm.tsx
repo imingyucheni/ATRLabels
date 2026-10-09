@@ -959,7 +959,7 @@ export default function ShipForm(props: {
                           <ChannelLabel code={q.channelCode} name={q.channelName} size="md" />
                           <div className="small muted">{q.channelCode}{q.ms !== undefined && <span title={t("这个渠道报价用的时间")}> · {(q.ms / 1000).toFixed(1)}s</span>}{re?.channelCode === q.channelCode && <span className="badge pending" style={{ marginLeft: 6 }}>{t("原渠道")}</span>}</div>
                         </td>
-                        <td className="q-zone" data-label={t("分区")}>{q.zone ?? "-"}{q.zoneEstimated && <span className="small muted" title={t("嘉谷未返回分区，按同一目的地其他渠道的分区估算")}>{t("（参考）")}</span>}</td>
+                        <td className="q-zone" data-label={t("分区")}>{q.zone ?? "-"}{q.zoneEstimated && <span className="small muted" title={t("服务商没有返回分区，按同一目的地其他渠道的分区估算")}>{t("（参考）")}</span>}</td>
                         <td className="num muted q-cost" data-label={costTable ? t("原价") : t("我们的成本")}>{money(costTable ? q.listCost : q.cost)}</td>
                         <td className="num q-price"><b>{money(q.price, q.currency)}</b>{q.price === bestPrice && <div className="small profit-pos">{t("最低")}</div>}{q.promo && <div className="small" style={{ textAlign: "right" }}><span className="badge promo">{tm(q.promo.label)}</span> <s className="muted">{money(q.promo.originalPrice, q.currency)}</s><div className="muted">{t("活动至 {d}", { d: q.promo.endsOn.slice(5) })}</div></div>}{q.warning && <div className="small warn-text" style={{ maxWidth: 260, marginLeft: "auto", textAlign: "left" }}>⚠ {tm(q.warning)}</div>}</td>
                         <td className="q-act">
@@ -971,7 +971,7 @@ export default function ShipForm(props: {
                     ) :
                     <tr key={q.channelCode} className={q.price === bestPrice ? "best" : ""}>
                       <td className="q-ch"><ChannelLabel code={q.channelCode} name={q.channelName} size="md" />{!portal && <div className="small muted">{q.channelCode}{q.ms !== undefined && <span title={t("这个渠道报价用的时间")}> · {(q.ms / 1000).toFixed(1)}s</span>}</div>}</td>
-                      <td className="q-zone" data-label={t("分区")}>{q.zone ?? "-"}{!portal && q.zoneEstimated && <span className="small muted" title={t("嘉谷未返回分区，按同一目的地其他渠道的分区估算")}>{t("（参考）")}</span>}</td>
+                      <td className="q-zone" data-label={t("分区")}>{q.zone ?? "-"}{!portal && q.zoneEstimated && <span className="small muted" title={t("服务商没有返回分区，按同一目的地其他渠道的分区估算")}>{t("（参考）")}</span>}</td>
                       {!portal && (
                         <>
                           <td className="num muted">{money(q.listCost)}</td>

@@ -306,6 +306,20 @@ describe("安全修复", () => {
       expect(q.price as number).toBeGreaterThan(q.cost as number);
     }
     for (const q of prospect) expect(q).not.toHaveProperty("ms");
+    // 服务商只看简称（SB / GDE）：没有全名、渠道代码是代号、报错只说大类、加价规则里没有服务商返利
+    for (const ev of [prospect, staffQuotes]) {
+      const text = JSON.stringify(ev);
+      expect(text).not.toMatch(/ShipBest|嘉谷|"channelCode":"(JG-|LP\d)/);
+      for (const q of ev) {
+        expect(String(q.channelCode)).toMatch(/^CH-[0-9A-F]{6}$/);
+        if (q.rule) expect(q.rule).not.toHaveProperty("rebate");
+      }
+    }
+    const startEv = (await collect({ kind: "admin", admin: staffWho }, { mode: "admin", customerId: 0, markup: { percent: 50 }, req })).find((e) => e.t === "start") as { channels: { code: string; name: string }[] };
+    for (const ch of startEv.channels) {
+      expect(ch.code).toMatch(/^CH-/);
+      expect(ch.name).not.toMatch(/ShipBest|嘉谷/);
+    }
     const ownerEv = await collect({ kind: "admin", admin: owner }, { mode: "admin", customerId: cid, req });
     const ownerQuotes = (ownerEv.find((e) => e.t === "done") as { quotes: Record<string, unknown>[] }).quotes;
     expect(ownerQuotes.some((q) => q.ok && q.rule && typeof q.cost === "number")).toBe(true);
@@ -347,7 +361,10 @@ describe("安全修复", () => {
     // 新客户：所有启用的多箱渠道，看得到成本和利润
     const p = await multiTrialQuoteAction({ customerId: 0, markup: { percent: g.percent + 10 }, req: mreq });
     expect(p.errors).toBeUndefined();
-    expect(p.quotes!.map((q) => q.channelCode).sort()).toEqual([...multiCodes].sort());
+    // 管理员看不到服务商的渠道代码：换成代号（同一个渠道代号固定）
+    const { maskedChannelCode } = await import("@/lib/providerMask");
+    expect(p.quotes!.map((q) => q.channelCode).sort()).toEqual(multiCodes.map(maskedChannelCode).sort());
+    expect(JSON.stringify(p.quotes)).not.toMatch(/ShipBest|嘉谷|JG-|LP\d{6}/);
     for (const q of p.quotes!.filter((x) => x.ok)) {
       expect(q.cost).toBeGreaterThan(0);
       expect(q.price!).toBeGreaterThan(q.cost!);

@@ -2,6 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getCustomer } from "@/lib/db";
 import { listOrderCharges } from "@/lib/ledger";
+import { currentAdmin } from "@/lib/auth";
+import { displayChannel } from "@/lib/channelDisplay";
+import { maskedChannelName } from "@/lib/providerMask";
 import { money } from "@/lib/pricing";
 import OrderCharges from "@/components/OrderCharges";
 import { getT } from "@/lib/prefs";
@@ -14,7 +17,9 @@ export default async function CustomerCharges({ params, searchParams }: { params
   if (!c) notFound();
   const sp = await searchParams;
   const t = await getT();
-  const rows = listOrderCharges(c.id, { from: sp.from || undefined, to: sp.to || undefined, q: sp.q || undefined });
+  // 管理员（非主管理员）看到的渠道名和客户一样（对外名称），不带服务商
+  const staff = (await currentAdmin())?.role === "staff";
+  const rows = listOrderCharges(c.id, { from: sp.from || undefined, to: sp.to || undefined, q: sp.q || undefined }).map((r) => (staff ? { ...r, channelName: displayChannel(r.channelCode).name || maskedChannelName(r.channelName) } : r));
   const qs = new URLSearchParams({ customerId: String(c.id), ...(sp.from ? { from: sp.from } : {}), ...(sp.to ? { to: sp.to } : {}) });
   return (
     <>

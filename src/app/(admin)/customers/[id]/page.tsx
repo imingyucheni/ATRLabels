@@ -21,6 +21,7 @@ import MultiAccessCard from "./MultiAccessCard";
 import ApiCard from "./ApiCard";
 import SalesCard from "./SalesCard";
 import { groupChannels } from "@/lib/channelGroups";
+import { MASKED_GROUP_LABEL, maskedChannelName } from "@/lib/providerMask";
 import StaffAccessCard from "./StaffAccessCard";
 import { currentAdmin } from "@/lib/auth";
 import { customerPageAccess } from "./access";
@@ -155,14 +156,15 @@ export default async function CustomerEdit({ params, searchParams }: { params: P
             {/* 按服务商分组 */}
             {groupChannels(allChannels).map((g) => (
               <div key={g.provider} className="ch-check-group">
-                <div className="ch-check-head"><b>{t(g.label)}</b><span className="small muted"> · {t("已开通 {a} / 共 {b} 个", { a: g.list.filter((ch) => opened.has(ch.code)).length, b: g.list.length })}</span></div>
+                <div className="ch-check-head"><b>{t(staff ? MASKED_GROUP_LABEL[g.provider] ?? "" : g.label)}</b><span className="small muted"> · {t("已开通 {a} / 共 {b} 个", { a: g.list.filter((ch) => opened.has(ch.code)).length, b: g.list.length })}</span></div>
                 <div className="check-grid">
                   {g.list.map((ch) => (
                     <label key={ch.code} className={`check-tile ${ch.enabled ? "" : "disabled"}`}>
                       <input type="checkbox" name="channels" value={ch.code} defaultChecked={opened.has(ch.code)} />
                       <span>
-                        <b>{ch.name}</b>
-                        <span className="small muted">{ch.code}{ch.enabled ? "" : t(" · 设置里已停用，暂不可用")}</span>
+                        {/* 管理员只看服务商简称（SB / GDE），不显示全名和服务商的渠道代码 */}
+                        <b>{staff ? maskedChannelName(ch.name) : ch.name}</b>
+                        <span className="small muted">{staff ? "" : ch.code}{ch.enabled ? "" : t(staff ? "暂不可用" : " · 设置里已停用，暂不可用")}</span>
                       </span>
                     </label>
                   ))}
@@ -199,7 +201,7 @@ export default async function CustomerEdit({ params, searchParams }: { params: P
                           const v = (x: number | null | undefined) => (x === null || x === undefined ? "" : String(x));
                           return (
                             <tr key={ch.code}>
-                              <td>{ch.name}</td>
+                              <td>{staff ? maskedChannelName(ch.name) : ch.name}</td>
                               {(["percent", "fixed", "minProfit"] as const).map((k) => (
                                 <td key={k}><input name={`${ch.code}.${k}`} type="number" step="0.01" min={k === "percent" ? undefined : 0} defaultValue={v(mine[k])} placeholder={String(inherit[k])} style={{ width: 90 }} /></td>
                               ))}

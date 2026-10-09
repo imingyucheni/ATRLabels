@@ -18,6 +18,7 @@ import { cleanRequest } from "./sanitize";
 import { quoteAll, quoteForProspect, validateRequest, withQuoteSkus, type ChannelQuote, type QuoteHooks } from "./service";
 import type { ShipmentRequest } from "./shipbest/types";
 import { setInternalCustomerCheck } from "./staffStore";
+import { maskedChannelCode, maskedChannelName, maskedMessage, maskedQuoteError } from "./providerMask";
 
 // 员工权限里要排除公司自用账户（成本价）：staffStore 不打开数据库，在这里告诉它怎么判断（auth.ts 里也注册了）
 setInternalCustomerCheck(isInternalCustomer);
@@ -97,11 +98,21 @@ export async function runQuoteStream(who: QuoteStreamWho, input: QuoteStreamInpu
       if (low) return fail([low]);
     }
     // 员工试算和主管理员一样看公司成本、利润、加价规则（他要知道报价的利润；新客户的加价不能低于全局默认，上面已经检查）
+    // 服务商只给管理员看简称（SB / GDE）：渠道代码换代号、报错和客户一样只说大类、不带服务商返利
     const shape = (q: ChannelQuote) => {
       if (admin.role !== "staff") return q;
-      const { ms: _ms, ...full } = q;
+      const { ms: _ms, rule, ...full } = q;
       void _ms;
-      return full;
+      const { rebate: _rb, promoId: _pid, ...r } = rule ?? { percent: 0, fixed: 0, minProfit: 0 };
+      void _rb;
+      void _pid;
+      return {
+        ...full,
+        channelCode: maskedChannelCode(q.channelCode),
+        channelName: maskedChannelName(q.channelName),
+        ...(rule ? { rule: r } : {}),
+        error: q.ok ? undefined : maskedQuoteError(q.error),
+      };
     };
     return run(customerId, req, false, shape, customerId ? undefined : m);
   }
@@ -132,13 +143,22 @@ export async function runQuoteStream(who: QuoteStreamWho, input: QuoteStreamInpu
   /** 查价（边查边发）+ 地址核对（单独发）；最后发整理好的完整列表 */
   async function run(customerId: number, req: ShipmentRequest, withAddress: boolean, shape: (q: ChannelQuote) => unknown, prospectMarkup?: PartialRule) {
     const portal = who.kind === "customer";
+    // 管理员（非主管理员）：只看服务商简称
+    const masked = who.kind === "admin" && who.admin.role === "staff";
     const address = withAddress
       ? checkAddress(req.recipient)
           .then((a) => emit({ t: "addr", a: a.message ? { ...a, message: portal ? tr(a.message) : a.message } : a }))
           .catch(() => null)
       : Promise.resolve();
     const hooks: QuoteHooks = {
-      onStart: (channels) => emit({ t: "start", channels: channels.map((c) => ({ code: c.code, name: portal ? displayChannel(c.code).name || c.name : c.name })) }),
+      onStart: (channels) =>
+        emit({
+          t: "start",
+          channels: channels.map((c) => ({
+            code: masked ? maskedChannelCode(c.code) : c.code,
+            name: portal ? displayChannel(c.code).name || c.name : masked ? maskedChannelName(c.name) : c.name,
+          })),
+        }),
       onEach: (q) => emit({ t: "q", q: shape(q) }),
     };
     try {
@@ -146,7 +166,7 @@ export async function runQuoteStream(who: QuoteStreamWho, input: QuoteStreamInpu
       emit({ t: "done", quotes: quotes.map(shape) });
     } catch (e) {
       const msg = (e as Error).message;
-      fail([portal ? tr(publicError(msg)) : msg]);
+      fail([portal ? tr(publicError(msg)) : masked ? maskedMessage(msg) ?? msg : msg]);
     }
     // 地址核对比报价慢时，报价先显示，地址结果随后补上
     await address;

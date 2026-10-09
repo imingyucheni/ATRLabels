@@ -319,7 +319,7 @@ export const admin1: Record<string, string> = {
   "尾程面单，一处管理": "Last-mile labels, all in one place",
   "报价、出单、补差、客户钱包与报表。": "Quotes, labels, adjustments, customer wallets and reports.",
   "多渠道实时比价，按规则自动加价": "Live rate comparison across services with rule-based markup",
-  "批量导入 ShipBest 导单表，一键合并打印": "Bulk import ShipBest order sheets and merge-print in one click",
+  "Excel 批量导单，一键合并打印": "Bulk import from Excel and merge-print in one click",
   "官方账单补差自动对应到客户": "Carrier bill adjustments matched to customers automatically",
   "使用后台密码登录": "Log in with the admin password",
   "后台密码": "Admin password",

@@ -1,5 +1,6 @@
 "use server";
 
+import { maskedChannelName } from "@/lib/providerMask";
 import { assignNewCustomerToStaff } from "@/lib/commission";
 import { revalidatePath } from "next/cache";
 import { setMultiEnabled } from "@/lib/multiAccess";
@@ -888,7 +889,11 @@ export async function saveCustomerChannelsAction(_: FlashState, fd: FormData): P
   const codes = fd.getAll("channels").map((v) => str(v, 50)).filter(Boolean);
   // 同一个客户不能开通两个客户看起来一样的渠道（例如两家服务商的 USPS）：客户分不清，只能选一个
   const clash = sameNameChannels(codes);
-  if (clash) return { error: `“${clash.publicName}”开通了 ${clash.names.length} 个（${clash.names.join("、")}），客户看到的名称一样，只能选一个` };
+  if (clash) {
+    // 管理员（非主管理员）看到的渠道名不带服务商标记
+    const names = who.role === "staff" ? clash.names.map(maskedChannelName) : clash.names;
+    return { error: `“${clash.publicName}”开通了 ${names.length} 个（${names.join("、")}），客户看到的名称一样，只能选一个` };
+  }
   setCustomerChannels(id, codes);
   revalidatePath(`/customers/${id}`);
   revalidatePath("/customers");

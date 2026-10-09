@@ -318,4 +318,5 @@ export const qa3: Record<string, string> = {
   "UPS HWT / FedEx MWT，一票多箱按总重计价": "UPS HWT / FedEx MWT — several boxes priced on total weight",
   "没填": "Not provided",
   "第 {n} 行": "Row {n}",
+  "暂不可用": "Temporarily unavailable",
 };

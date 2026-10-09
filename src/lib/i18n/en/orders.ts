@@ -203,9 +203,8 @@ export const orders: Record<string, string> = {
   "导入订单": "Import Orders",
   "下载导单模板": "Download template",
   "使用": "Use the",
-  "ShipBest 导单模板": "ShipBest import template",
-  "：原来在 ShipBest 后台用的表格可以直接上传，也可以点右上角下载模板（含填写说明和示例）。寄件人各列留空时，使用{who}。":
-    ": spreadsheets from the ShipBest dashboard can be uploaded as-is, or download the template at the top right (includes instructions and examples). If the sender columns are blank, {who} is used.",
+  "标准导单模板": "standard import template",
+  "：常用的导单表格可以直接上传，也可以点右上角下载模板（含填写说明和示例）。寄件人各列留空时，使用{who}。": ": common import sheets can be uploaded as they are, or download the template at the top right (with instructions and examples). If the sender columns are empty, {who} is used.",
   "账户设置里的默认寄件地址": "the default sender address in Settings",
   "客户的默认寄件地址": "the customer's default sender address",
   "系统用下面勾选的渠道逐单试算，每单列出各渠道价格，默认选最便宜的，可以逐单修改。":

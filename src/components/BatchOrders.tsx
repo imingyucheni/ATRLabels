@@ -176,7 +176,7 @@ export default function BatchOrders(props: {
           </a>
         </div>
         <ol className="small muted" style={{ paddingLeft: 18, marginTop: 0 }}>
-          <li>{t("使用")} <b>{t("ShipBest 导单模板")}</b>{t("：原来在 ShipBest 后台用的表格可以直接上传，也可以点右上角下载模板（含填写说明和示例）。寄件人各列留空时，使用{who}。", { who: props.mode === "portal" ? t("账户设置里的默认寄件地址") : house ? t("设置里的默认寄件地址") : t("客户的默认寄件地址") })}</li>
+          <li>{t("使用")} <b>{t("标准导单模板")}</b>{t("：常用的导单表格可以直接上传，也可以点右上角下载模板（含填写说明和示例）。寄件人各列留空时，使用{who}。", { who: props.mode === "portal" ? t("账户设置里的默认寄件地址") : house ? t("设置里的默认寄件地址") : t("客户的默认寄件地址") })}</li>
           <li>{t("系统用下面勾选的渠道逐单试算，每单列出各渠道价格，默认选最便宜的，可以逐单修改。")}</li>
           <li>{t("确认后勾选订单“提交订单”，完成后一键合并打印全部面单（纸张在“账户设置”里选，默认 4×6）。")}</li>
         </ol>
