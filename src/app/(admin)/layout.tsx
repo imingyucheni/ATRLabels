@@ -45,7 +45,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     <div className="shell">
       <Sidebar
         brand="ATRShip"
-        brandSub={staff ? t("员工：{name}", { name: who.name }) : version() ? t("管理后台 · 版本 {v}", { v: version() }) : "管理后台"}
+        brandSub={staff ? t("管理员：{name}", { name: who.name }) : version() ? t("管理后台 · 版本 {v}", { v: version() }) : "管理后台"}
         siteLink={(() => {
           const sw = siteSwitch();
           return sw ? { href: sw.url, label: sw.toSandbox ? t("切换到沙盒站") : t("切换到正式站") } : undefined;
@@ -106,7 +106,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
               { href: "/settings?tab=providers", label: "服务商", icon: "provider" },
               { href: "/settings?tab=pricing", label: "渠道与价格", icon: "price" },
               { href: "/settings?tab=customers", label: "更多设置", icon: "settings" },
-              { href: "/staff", label: "员工账号", icon: "account" },
+              { href: "/staff", label: "管理员账号", icon: "account" },
               { href: "/backups", label: "数据备份", icon: "backup" },
             ],
           },

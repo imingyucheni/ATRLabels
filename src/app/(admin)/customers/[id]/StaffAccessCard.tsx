@@ -10,12 +10,12 @@ export default async function StaffAccessCard({ customerId }: { customerId: numb
   const staff = listStaff();
   if (!staff.length) return null;
   return (
-    <FlashForm action={setCustomerStaffAction} submitLabel="保存员工权限" className="card" review>
+    <FlashForm action={setCustomerStaffAction} submitLabel="保存管理员权限" className="card" review>
       <div className="card-head">
-        <h2 style={{ margin: 0 }}>{t("员工权限")}</h2>
-        <Link href="/staff" className="small">{t("管理员工账号")}</Link>
+        <h2 style={{ margin: 0 }}>{t("管理员权限")}</h2>
+        <Link href="/staff" className="small">{t("管理员账号设置")}</Link>
       </div>
-      <p className="small muted" style={{ marginTop: 0 }}>{t("哪些员工能看到这个客户、能不能操作（改资料、设置邮费、确认充值）。")}</p>
+      <p className="small muted" style={{ marginTop: 0 }}>{t("哪些管理员能看到这个客户、能不能操作（改资料、设置邮费、确认充值）。")}</p>
       <input type="hidden" name="customerId" value={customerId} />
       <div className="grid">
         {staff.map((s) => (

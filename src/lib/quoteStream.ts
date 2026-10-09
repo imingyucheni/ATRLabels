@@ -22,7 +22,7 @@ import { setInternalCustomerCheck } from "./staffStore";
 // 员工权限里要排除公司自用账户（成本价）：staffStore 不打开数据库，在这里告诉它怎么判断（auth.ts 里也注册了）
 setInternalCustomerCheck(isInternalCustomer);
 
-export const STAFF_PROSPECT_MARKUP_ERROR = "员工试算新客户时，临时加价不能低于全局默认加价（留空 = 按全局默认）";
+export const STAFF_PROSPECT_MARKUP_ERROR = "管理员试算新客户时，临时加价不能低于全局默认加价（留空 = 按全局默认）";
 
 /**
  * 员工给还没开户的新客户试算：填了的临时加价（加价 %、固定加价、最低利润）每一项都不能低于全局默认，

@@ -118,7 +118,7 @@ export function createStaff(input: { name: string; username: string; password: s
 function update(id: number, fn: (s: StaffAccount) => StaffAccount) {
   const list = load();
   const i = list.findIndex((s) => s.id === id);
-  if (i < 0) throw new Error("员工账号不存在");
+  if (i < 0) throw new Error("管理员账号不存在");
   const next = [...list];
   next[i] = fn({ ...list[i] });
   save(next);
@@ -142,7 +142,7 @@ export function setStaffPassword(id: number, password: string) {
 
 export function deleteStaff(id: number) {
   const list = load();
-  if (!list.some((s) => s.id === id)) throw new Error("员工账号不存在");
+  if (!list.some((s) => s.id === id)) throw new Error("管理员账号不存在");
   save(list.filter((s) => s.id !== id));
 }
 

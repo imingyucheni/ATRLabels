@@ -16,7 +16,7 @@ export default async function MyAccountPage() {
       <>
         <h1>{t("我的账号")}</h1>
         <div className="card">
-          <p>{t("你是主管理员。主管理员的确认密码在")} <Link href="/settings#finance-pin">{t("设置 → 财务确认密码")}</Link>{t("；员工账号在")} <Link href="/staff">{t("员工账号")}</Link> {t("里管理。")}</p>
+          <p>{t("你是主管理员。主管理员的确认密码在")} <Link href="/settings#finance-pin">{t("设置 → 财务确认密码")}</Link>{t("；管理员账号在")} <Link href="/staff">{t("管理员账号")}</Link> {t("里管理。")}</p>
         </div>
       </>
     );

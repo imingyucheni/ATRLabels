@@ -17,7 +17,7 @@ export async function createStaffAction(_: FlashState, fd: FormData): Promise<Fl
   try {
     createStaff({ name: str(fd.get("name"), 40), username: str(fd.get("username"), 32), password: String(fd.get("password") ?? "") });
     revalidatePath("/staff");
-    return { ok: "已创建员工账号，把登录名和密码发给他。他第一次登录后要在“我的账号”里设置自己的 4 位确认密码" };
+    return { ok: "已创建管理员账号，把登录名和密码发给他。他第一次登录后要在“我的账号”里设置自己的 4 位确认密码" };
   } catch (e) {
     return fail(e);
   }
@@ -118,7 +118,7 @@ export async function setCustomerStaffAction(_: FlashState, fd: FormData): Promi
     }
     revalidatePath(`/customers/${customerId}`);
     revalidatePath("/staff");
-    return { ok: "已保存员工权限" };
+    return { ok: "已保存管理员权限" };
   } catch (e) {
     return fail(e);
   }
@@ -130,14 +130,14 @@ export async function bindStaffSalesAction(_: FlashState, fd: FormData): Promise
   await requireAdmin();
   const id = Number(fd.get("id"));
   const s = getStaff(id);
-  if (!s) return { error: "员工不存在" };
+  if (!s) return { error: "管理员不存在" };
   const raw = String(fd.get("salesId") ?? "");
   try {
     const { bindStaffSales } = await import("@/lib/commission");
     const rep = bindStaffSales(id, s.name, raw === "new" ? "new" : Number(raw) > 0 ? Number(raw) : null);
     revalidatePath(`/staff/${id}`);
     revalidatePath("/staff");
-    return { ok: rep ? `已绑定销售“${rep.name}”：给客户绑定这个销售和比例后，员工在“我的看板”里能看到提成` : "已解除绑定" };
+    return { ok: rep ? `已绑定销售“${rep.name}”：给客户绑定这个销售和比例后，管理员在“我的看板”里能看到提成` : "已解除绑定" };
   } catch (e) {
     return fail(e);
   }
@@ -152,7 +152,7 @@ export async function saveStaffCommissionRateAction(_: FlashState, fd: FormData)
     const rate = parseRate(fd.get("rate"));
     saveSettings({ staffCommissionRate: rate });
     revalidatePath("/staff");
-    return { ok: `已保存：员工以后新开的客户默认提成 ${rate}%（其余 ${Math.round((100 - rate) * 100) / 100}% 归公司），已有客户不变` };
+    return { ok: `已保存：管理员以后新开的客户默认提成 ${rate}%（其余 ${Math.round((100 - rate) * 100) / 100}% 归公司），已有客户不变` };
   } catch (e) {
     return fail(e);
   }

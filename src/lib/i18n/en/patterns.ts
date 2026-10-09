@@ -25,14 +25,14 @@ export const patterns: [RegExp, string][] = [
   [/^海关编码（HS）至少 (\d+) 位数字$/, "HS code must be at least $1 digits"],
 
   /* ---------- 限时活动 / 负数加价 ---------- */
-  [/^已保存：员工以后新开的客户默认提成 ([\d.]+)%（其余 ([\d.]+)% 归公司），已有客户不变$/, "Saved: customers opened by staff from now on default to $1% commission ($2% to the company); existing customers are unchanged"],
-  [/^已绑定销售“(.+)”：给客户绑定这个销售和比例后，员工在“我的看板”里能看到提成$/, "Linked to sales profile “$1”: once customers are assigned to it with a rate, the staff member sees the commission under My dashboard"],
+  [/^已保存：管理员以后新开的客户默认提成 ([\d.]+)%（其余 ([\d.]+)% 归公司），已有客户不变$/, "Saved: customers opened by admins from now on default to $1% commission ($2% to the company); existing customers are unchanged"],
+  [/^已绑定销售“(.+)”：给客户绑定这个销售和比例后，管理员在“我的看板”里能看到提成$/, "Linked to sales profile “$1”: once customers are assigned to it with a rate, the admin sees the commission under My dashboard"],
   [/^items\[(\d+)\]\.unitValue 必填（单件申报价值 USD，大于 0）$/, "items[$1].unitValue is required (declared value per unit in USD, greater than 0)"],
   [/^items\[(\d+)\]\.quantity 必填（大于等于 1）$/, "items[$1].quantity is required (at least 1)"],
   [/^(.*?)加价 %不能低于全局默认（(.+)），更低的价格请找主管理员设置$/, "$1Markup % can't be lower than the global default ($2); ask the owner for lower prices"],
   [/^(.*?)固定加价不能低于全局默认（(.+)），更低的价格请找主管理员设置$/, "$1Fixed markup can't be lower than the global default ($2); ask the owner for lower prices"],
   [/^(.*?)最低利润不能低于全局默认（(.+)），更低的价格请找主管理员设置$/, "$1Minimum profit can't be lower than the global default ($2); ask the owner for lower prices"],
-  [/^(.+?)：加价太低会低于成本，员工不能这样设置，请找主管理员$/, "$1: this markup would price below cost; staff can't set it — please ask the owner"],
+  [/^(.+?)：加价太低会低于成本，管理员不能这样设置，请找主管理员$/, "$1: this markup would price below cost; admins can't set it — please ask the owner"],
   [/^这个渠道的申报价值只能用美元（USD），请把币种 (\S+) 换算成美元后再下单$/, "This service only accepts declared values in USD. Please convert $1 to USD and try again"],
   [/^这个渠道在 (\S+) ~ (\S+) 已经有活动「(.+)」，日期不能重叠（先停用或删除原来的活动）$/, "This service already has the promotion “$3” from $1 to $2; dates can't overlap (disable or delete the existing promotion first)"],
   [/^已恢复 (\d+) 项加价，之后的报价和下单按恢复后的价格$/, "Restored $1 markup(s); new quotes and orders use the restored pricing"],

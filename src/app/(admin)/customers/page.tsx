@@ -49,7 +49,7 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
         </div>
       )}
       {deniedParam === "customer" && <div className="alert warn">{t("你没有这个客户的权限，请找主管理员授权。")}</div>}
-      {denied && <div className="alert warn">{t("这个功能只有主管理员能用。员工账号可以开客户账号、设置客户邮费、确认充值。")}</div>}
+      {denied && <div className="alert warn">{t("这个功能只有主管理员能用。管理员账号可以开客户账号、设置客户邮费、确认充值。")}</div>}
       <div className="row" style={{ justifyContent: "space-between", marginBottom: 16 }}>
         <h1 style={{ margin: 0 }}>{t("客户")}</h1>
         <Link className="btn primary" href="/customers/new">{t("＋ 新增客户")}</Link>

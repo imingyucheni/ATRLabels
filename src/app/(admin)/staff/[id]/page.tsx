@@ -28,7 +28,7 @@ export default async function StaffAccessPage({ params }: { params: Promise<{ id
     <>
       <div className="page-head">
         <div>
-          <h1>{t("员工：{name} · 提成和客户权限", { name: s.name })}</h1>
+          <h1>{t("管理员：{name} · 提成和客户权限", { name: s.name })}</h1>
           <p className="page-sub">{t("能操作 {e} 个 · 只能看 {v} 个 · 看不到 {n} 个", { e: counts.edit, v: counts.view, n: counts.none })}</p>
         </div>
         <Link href="/staff">{t("← 返回")}</Link>
@@ -41,7 +41,7 @@ export default async function StaffAccessPage({ params }: { params: Promise<{ id
           <FlashForm action={bindStaffSalesAction} submitLabel="保存" className="card" alwaysSubmit>
             <input type="hidden" name="id" value={s.id} />
             <h2 style={{ marginTop: 0 }}>{t("提成（绑定销售）")}</h2>
-            <p className="small muted">{t("提成是按客户绑定的：员工自己新开的客户默认归他，比例按“员工账号”页的默认提成；其他客户在客户详情 → 渠道与价格 →“销售归属（佣金）”里选销售和比例，每个客户可以不同、随时调整；没绑定销售的客户，利润全部归公司。这里把员工账号和他的销售对应起来（员工第一次开客户时没绑定会自动用他的名字新建），员工在“我的看板”里就能看到自己的提成。")}</p>
+            <p className="small muted">{t("提成是按客户绑定的：管理员自己新开的客户默认归他，比例按“管理员账号”页的默认提成；其他客户在客户详情 → 渠道与价格 →“销售归属（佣金）”里选销售和比例，每个客户可以不同、随时调整；没绑定销售的客户，利润全部归公司。这里把管理员账号和他的销售对应起来（管理员第一次开客户时没绑定会自动用他的名字新建），管理员在“我的看板”里就能看到自己的提成。")}</p>
             <div className="row" style={{ gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
               <label className="f" style={{ minWidth: 240 }}>{t("绑定的销售")}
                 <select name="salesId" key={rep ? rep.id : "none"} defaultValue={rep ? String(rep.id) : ""}>
@@ -63,7 +63,7 @@ export default async function StaffAccessPage({ params }: { params: Promise<{ id
           <label className="check"><input type="radio" name="mode" value="list" defaultChecked={a.mode === "list"} /> {t("默认看不到，需要单独授权（推荐）")}</label>
           <label className="check"><input type="radio" name="mode" value="all" defaultChecked={a.mode === "all"} /> {t("默认能看能操作（下面可以单独排除）")}</label>
         </fieldset>
-        <p className="small muted">{t("能操作 = 改客户资料和登录、设置渠道和邮费、确认充值；只能看 = 能看资料、余额和流水，不能改；看不到 = 客户列表里没有这个客户，直接打开也会被挡回去。员工自己新建的客户会自动给他“能操作”。")}</p>
+        <p className="small muted">{t("能操作 = 改客户资料和登录、设置渠道和邮费、确认充值；只能看 = 能看资料、余额和流水，不能改；看不到 = 客户列表里没有这个客户，直接打开也会被挡回去。管理员自己新建的客户会自动给他“能操作”。")}</p>
         <SetAllSelects selector=".access-table select" options={[["edit", "能操作"], ["view", "只能看"], ["none", "看不到"]]} />
         <div className="table-wrap">
           <table className="card-table access-table">

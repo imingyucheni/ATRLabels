@@ -51,7 +51,7 @@ describe("员工看板和提成", () => {
     const rep = com.bindStaffSales(a, "Sand", "new")!;
     expect(rep).toMatchObject({ name: "Sand", rate: null, staffId: a });
     expect(com.salesOfStaff(a)?.id).toBe(rep.id);
-    expect(() => com.bindStaffSales(b, "Bob", rep.id)).toThrow(/已经绑定了别的员工/);
+    expect(() => com.bindStaffSales(b, "Bob", rep.id)).toThrow(/已经绑定了别的管理员/);
     expect(com.bindStaffSales(a, "Sand", null)).toBeNull();
     expect(com.salesOfStaff(a)).toBeNull();
     com.bindStaffSales(a, "Sand", rep.id);

@@ -164,7 +164,7 @@ export function bindStaffSales(staffId: number, staffName: string, salesId: numb
   }
   if (target !== null) {
     const other = conn.prepare("SELECT staff_id FROM sales_reps WHERE id = ?").get(target) as { staff_id: number | null } | undefined;
-    if (other?.staff_id && other.staff_id !== staffId) throw new Error("这个销售已经绑定了别的员工账号，请先在那个员工那里解除绑定");
+    if (other?.staff_id && other.staff_id !== staffId) throw new Error("这个销售已经绑定了别的管理员账号，请先在那个管理员那里解除绑定");
   }
   conn.transaction(() => {
     conn.prepare("UPDATE sales_reps SET staff_id = NULL WHERE staff_id = ?").run(staffId);

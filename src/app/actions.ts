@@ -341,7 +341,7 @@ export async function saveCustomerAction(_: FlashState, fd: FormData): Promise<F
       assignNewCustomerToStaff(savedId, who, getSettings().staffCommissionRate ?? 30);
     } catch (e) {
       // 自动归属没成功（例如同名销售已经绑定了别的员工）不影响开户：主管理员在客户详情里再分配
-      console.warn(`[提成] 客户 ${savedId} 没能自动归到员工 ${who.name}：${(e as Error).message}`);
+      console.warn(`[提成] 客户 ${savedId} 没能自动归到管理员 ${who.name}：${(e as Error).message}`);
     }
   }
   if (isNew) {
@@ -456,7 +456,7 @@ export async function ledgerEntryAction(_: FlashState, fd: FormData): Promise<Fl
   const kind = String(fd.get("type") ?? "");
   if (!["topup", "manual_add", "manual_sub", "manual"].includes(kind)) return { error: "请选择类型" };
   // 员工只能记“充值”；加款、扣款只有主管理员能做
-  if (who.role === "staff" && kind !== "topup") return { error: "员工账号只能记充值，加款 / 扣款请找主管理员" };
+  if (who.role === "staff" && kind !== "topup") return { error: "管理员账号只能记充值，加款 / 扣款请找主管理员" };
   const denied = customerDenied(who, id);
   if (denied) return { error: denied };
   const type = kind === "topup" ? "topup" : "manual";
@@ -907,7 +907,7 @@ export async function saveCustomerChannelMarkupAction(_: FlashState, fd: FormDat
     const r = ruleFromForm(fd, `${c.code}.`);
     const neg = negativeForChannel(r, `${c.name}：`, c.code);
     // 员工看不到返利：提示里不能带返利比例
-    if (neg) return { error: who.role === "staff" ? `${c.name}：加价太低会低于成本，员工不能这样设置，请找主管理员` : neg };
+    if (neg) return { error: who.role === "staff" ? `${c.name}：加价太低会低于成本，管理员不能这样设置，请找主管理员` : neg };
     const low = staffMarkupError(who.role, r, before[c.code], `${c.name}：`);
     if (low) return { error: low };
     rules[c.code] = r;

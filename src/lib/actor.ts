@@ -12,7 +12,7 @@ export function actorOf(who: { role: "owner" | "staff"; id: number; name: string
 export function actorLabel(createdBy: string | null | undefined): string {
   if (!createdBy) return "-";
   if (createdBy === "admin") return "主管理员";
-  if (createdBy.startsWith("staff:")) return createdBy.split(":").slice(2).join(":") || "员工";
+  if (createdBy.startsWith("staff:")) return createdBy.split(":").slice(2).join(":") || "管理员";
   if (createdBy === "system") return "系统";
   if (createdBy === "customer" || createdBy.startsWith("customer")) return "客户";
   return createdBy;
