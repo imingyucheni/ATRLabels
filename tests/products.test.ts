@@ -45,9 +45,16 @@ describe("常用产品（商品 + 包裹尺寸重量）", () => {
 
   it("同一个 SKU 只存一个：再存一次 = 更新；改成别的产品已经用的 SKU 不行；只能改 / 删自己的", () => {
     const before = pr.listProducts(cid).length;
-    const id = pr.saveProduct(cid, { ...base, sku: "ts-blu-m", weight: 10 });
+    pr.saveProduct(cid, { ...base, name: "蓝色T恤 M码" });
+    // 下单页“存为常用产品”（不带名称）再存一次：更新尺寸重量，名称不变
+    const { name: _n, ...noName } = { ...base, sku: "ts-blu-m", weight: 10, name: undefined };
+    void _n;
+    const id = pr.saveProduct(cid, noName);
     expect(pr.listProducts(cid).length).toBe(before);
-    expect(pr.listProducts(cid).find((x) => x.id === id)?.weight).toBe(10);
+    expect(pr.listProducts(cid).find((x) => x.id === id)).toMatchObject({ weight: 10, name: "蓝色T恤 M码" });
+    // 编辑页把名称清空：回到默认的 “SKU · 品名”
+    pr.saveProduct(cid, { ...noName, id, name: "" });
+    expect(pr.listProducts(cid).find((x) => x.id === id)?.name).toBe("ts-blu-m · Cotton T-shirt");
     const mug = pr.listProducts(cid).find((x) => x.sku === "MUG-1")!;
     expect(() => pr.saveProduct(cid, { ...base, id: mug.id, sku: "TS-BLU-M" })).toThrow(/另一个常用产品/);
     // 别的客户改不了、删不掉

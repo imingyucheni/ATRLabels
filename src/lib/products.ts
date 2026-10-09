@@ -97,11 +97,14 @@ export function listProducts(customerId: number): SavedProduct[] {
 export function saveProduct(customerId: number, raw: Partial<ProductInput>): number {
   const c = cleanProduct(raw);
   if ("error" in c) throw new Error(c.error);
-  const { name, ...data } = c.product;
+  const { name: label, ...data } = c.product;
   const conn = ensureTable();
   const id = Number(raw.id) || 0;
   if (id) {
-    if (data.sku && listProducts(customerId).some((x) => x.id !== id && x.sku.toUpperCase() === data.sku.toUpperCase())) throw new Error("这个 SKU 已经存在另一个常用产品里，同一个 SKU 只能存一个");
+    const all = listProducts(customerId);
+    if (data.sku && all.some((x) => x.id !== id && x.sku.toUpperCase() === data.sku.toUpperCase())) throw new Error("这个 SKU 已经存在另一个常用产品里，同一个 SKU 只能存一个");
+    // 没传名称（下单页“存为常用产品”）：保留原来起的名称
+    const name = raw.name === undefined ? all.find((x) => x.id === id)?.name ?? label : label;
     const r = conn.prepare("UPDATE customer_products SET name = ?, data_json = ?, updated_at = datetime('now') WHERE id = ? AND customer_id = ?").run(name, JSON.stringify(data), id, customerId);
     if (!r.changes) throw new Error("产品不存在");
     return id;
@@ -113,7 +116,7 @@ export function saveProduct(customerId: number, raw: Partial<ProductInput>): num
     const same = listProducts(customerId).find((x) => x.sku.toUpperCase() === data.sku.toUpperCase());
     if (same) return saveProduct(customerId, { ...raw, id: same.id });
   }
-  return Number(conn.prepare("INSERT INTO customer_products (customer_id, name, data_json) VALUES (?,?,?)").run(customerId, name, JSON.stringify(data)).lastInsertRowid);
+  return Number(conn.prepare("INSERT INTO customer_products (customer_id, name, data_json) VALUES (?,?,?)").run(customerId, label, JSON.stringify(data)).lastInsertRowid);
 }
 
 export function deleteProduct(customerId: number, id: number) {
