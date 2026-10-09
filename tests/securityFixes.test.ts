@@ -290,16 +290,22 @@ describe("安全修复", () => {
 
   /* ---------------- 3. 员工倒推不出成本 ---------------- */
 
-  it("员工：授权给他的客户看全部数据（成本、利润、加价规则）；新客户试算只有客户价；主管理员都有", async () => {
+  it("员工试算和主管理员一样看公司成本、利润、加价规则（授权给他的客户和新客户试算都是）", async () => {
     st.setStaffAccess(sid, { mode: "list", customers: { [String(cid)]: "view" } });
     const quotesOf = (ev: import("@/lib/quoteStream").QuoteStreamEvent[]) => [...(ev.find((e) => e.t === "done") as { quotes: Record<string, unknown>[] }).quotes, ...ev.filter((e) => e.t === "q").map((e) => (e as { q: Record<string, unknown> }).q)];
     const staffQuotes = quotesOf(await collect({ kind: "admin", admin: staffWho }, { mode: "admin", customerId: cid, req }));
     expect(staffQuotes.some((q) => q.ok && typeof q.price === "number" && typeof q.cost === "number" && typeof q.profit === "number" && q.rule)).toBe(true);
     for (const q of staffQuotes) expect(q).not.toHaveProperty("ms");
-    // 新客户试算（没选客户）：只有客户价
+    // 新客户试算（没选客户）：也是公司成本、利润
     const prospect = quotesOf(await collect({ kind: "admin", admin: staffWho }, { mode: "admin", customerId: 0, markup: { percent: 50 }, req }));
-    expect(prospect.some((q) => q.ok && typeof q.price === "number")).toBe(true);
-    for (const q of prospect) for (const k of ["rule", "cost", "listCost", "profit", "ms"]) expect(q, k).not.toHaveProperty(k);
+    const ok = prospect.filter((q) => q.ok);
+    expect(ok.length).toBeGreaterThan(0);
+    for (const q of ok) {
+      expect(typeof q.cost).toBe("number");
+      expect(q.profit).toBeCloseTo((q.price as number) - (q.cost as number) + ((q.rule as { rebate?: number }).rebate ? Math.round((q.cost as number) * (q.rule as { rebate: number }).rebate) / 100 : 0), 1);
+      expect(q.price as number).toBeGreaterThan(q.cost as number);
+    }
+    for (const q of prospect) expect(q).not.toHaveProperty("ms");
     const ownerEv = await collect({ kind: "admin", admin: owner }, { mode: "admin", customerId: cid, req });
     const ownerQuotes = (ownerEv.find((e) => e.t === "done") as { quotes: Record<string, unknown>[] }).quotes;
     expect(ownerQuotes.some((q) => q.ok && q.rule && typeof q.cost === "number")).toBe(true);
@@ -323,6 +329,51 @@ describe("安全修复", () => {
     const ev = await collect({ kind: "admin", admin: owner }, { mode: "admin", customerId: 0, markup: { percent: 0, fixed: 0, minProfit: 0 }, req });
     const q = (ev.find((e) => e.t === "done") as { quotes: { ok: boolean; price?: number; cost?: number }[] }).quotes.find((x) => x.ok)!;
     expect(q.price).toBeCloseTo(q.cost!, 1);
+  });
+
+  it("运费试算的多箱试算：员工和主管理员都能用、看公司成本和利润；新客户按临时加价（员工不能低于全局默认）；不能选没授权的客户", async () => {
+    const { multiTrialQuoteAction } = await import("@/app/multiActions");
+    const mreq: ShipmentRequest = {
+      ...req,
+      pkg: { length: 0, width: 0, height: 0, weight: 0, displayUnitSystem: 3, signServiceType: 0, insuranceService: 0, currency: "USD", pieces: [{ length: 18, width: 14, height: 12, weight: 40, qty: 6 }] },
+      // 试算不填货物信息
+      skuList: [{ sku: "", productNameCn: "", productNameEn: "", quantity: 1, declaredUnitPrice: 0, declaredCurrency: "USD", hsCode: "", productNature: "2,4", length: 0, width: 0, height: 0, weight: 0, unit: 3 }],
+    };
+    const multiCodes = db.listChannels(true).filter((c) => /HWT|MWT/.test(c.name)).map((c) => c.code);
+    expect(multiCodes.length).toBeGreaterThan(0);
+    const g = db.getSettings().markup;
+    st.setStaffAccess(sid, { mode: "list", customers: { [String(cid)]: "view" } });
+    asStaff();
+    // 新客户：所有启用的多箱渠道，看得到成本和利润
+    const p = await multiTrialQuoteAction({ customerId: 0, markup: { percent: g.percent + 10 }, req: mreq });
+    expect(p.errors).toBeUndefined();
+    expect(p.quotes!.map((q) => q.channelCode).sort()).toEqual([...multiCodes].sort());
+    for (const q of p.quotes!.filter((x) => x.ok)) {
+      expect(q.cost).toBeGreaterThan(0);
+      expect(q.price!).toBeGreaterThan(q.cost!);
+      expect(typeof q.profit).toBe("number");
+    }
+    expect(p.quotes!.some((q) => q.ok)).toBe(true);
+    // 员工给新客户填的加价不能低于全局默认；不是数字的不行
+    expect((await multiTrialQuoteAction({ customerId: 0, markup: { percent: 0, fixed: 0, minProfit: 0 }, req: mreq })).errors).toEqual([qs.STAFF_PROSPECT_MARKUP_ERROR]);
+    expect((await multiTrialQuoteAction({ customerId: 0, markup: { percent: "x" as unknown as number }, req: mreq })).errors).toEqual(["加价要填数字"]);
+    // 授权给他的客户（查看权限就够）：这个客户没开通多箱渠道 → 提示开通
+    expect((await multiTrialQuoteAction({ customerId: cid, req: mreq })).errors?.[0]).toMatch(/还没有开通多箱渠道/);
+    db.setCustomerChannels(cid, [...db.customerChannels(cid).map((c) => c.code), ...multiCodes]);
+    const c = await multiTrialQuoteAction({ customerId: cid, req: mreq });
+    expect(c.quotes!.some((q) => q.ok && q.cost! > 0 && typeof q.profit === "number")).toBe(true);
+    // 没授权的客户、公司自用账户都不行
+    expect((await multiTrialQuoteAction({ customerId: other, req: mreq })).errors?.[0]).toMatch(/没有这个客户的权限/);
+    expect((await multiTrialQuoteAction({ customerId: house, req: mreq })).errors?.[0]).toMatch(/没有这个客户的权限/);
+    // 主管理员可以按成本试算
+    asOwner();
+    const o = await multiTrialQuoteAction({ customerId: 0, markup: { percent: 0, fixed: 0, minProfit: 0 }, req: mreq });
+    const oq = o.quotes!.find((q) => q.ok)!;
+    expect(oq.price).toBeCloseTo(oq.cost!, 0);
+    // 没登录后台不行
+    S.jar.clear();
+    expect((await multiTrialQuoteAction({ customerId: 0, req: mreq })).errors).toEqual(["请先登录后台"]);
+    db.setCustomerChannels(cid, db.customerChannels(cid).map((x) => x.code).filter((x) => !multiCodes.includes(x)));
   });
 
   it("客户详情“渠道与价格”：员工看不到服务商返利；主管理员看得到", async () => {

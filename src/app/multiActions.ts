@@ -10,13 +10,16 @@ import { getCustomer } from "@/lib/db";
 import { InsufficientBalanceError } from "@/lib/ledger";
 import { publicError } from "@/lib/portal";
 import { cleanRequest, n, str } from "@/lib/sanitize";
-import { createLabel, PriceChangedError, quoteMulti, validateRequest } from "@/lib/service";
+import { createLabel, PriceChangedError, quoteMulti, quoteMultiForProspect, validateRequest } from "@/lib/service";
 import { ShipBestError } from "@/lib/shipbest/client";
 import { displayChannel } from "@/lib/channelDisplay";
 import { tMsg, getT } from "@/lib/prefs";
 import { hasAcceptedTerms } from "@/lib/terms";
 import type { ShipmentRequest } from "@/lib/shipbest/types";
 import { multiEnabled } from "@/lib/multiAccess";
+import { negativeRule } from "@/lib/markup";
+import type { PartialRule } from "@/lib/pricing";
+import { staffProspectMarkupError } from "@/lib/quoteStream";
 
 export interface MultiQuote {
   channelCode: string;
@@ -28,8 +31,10 @@ export interface MultiQuote {
   zone?: string | null;
   /** 会多收钱的提醒（例如超重 / 超尺寸箱子的附加费） */
   warning?: string;
-  /** 只有主管理员看得到 */
+  /** 公司成本：主管理员看得到；运费试算里员工也看得到 */
   cost?: number;
+  /** 利润（只在运费试算里给） */
+  profit?: number;
 }
 
 /** 谁在操作：后台登录的人（要指定客户）或客户自己 */
@@ -74,6 +79,63 @@ export async function multiQuoteAction(input: { customerId?: number; req: Shipme
     return { quotes };
   } catch (e) {
     return { errors: [await tMsg(publicError((e as Error).message))] };
+  }
+}
+
+/**
+ * 运费试算（后台，不出单）里的多箱试算：主管理员和员工都能用，和普通试算一样看公司成本和利润。
+ * customerId 不填 / 0 = 还没开户的新客户：用所有已启用的多箱渠道、按临时填写的加价试算（员工填的加价不能低于全局默认）。
+ * 选了客户：按这个客户开通的多箱渠道和他的加价算（员工只能选授权给他的客户，查看权限就够）。
+ */
+export async function multiTrialQuoteAction(input: { customerId?: number; markup?: PartialRule; req: ShipmentRequest }): Promise<{ errors?: string[]; quotes?: MultiQuote[] }> {
+  const fail = async (m: string) => ({ errors: [await tMsg(m)] });
+  const a = await currentAdmin();
+  if (!a) return fail("请先登录后台");
+  const customerId = Number(input.customerId) || 0;
+  if (customerId) {
+    const denied = customerDenied(a, customerId, "view");
+    if (denied) return fail(denied);
+    if (!getCustomer(customerId)) return fail("客户不存在");
+  }
+  // 临时加价：留空 = 按全局 / 渠道设置；填了要是数字
+  const m: PartialRule = { percent: null, fixed: null, minProfit: null };
+  if (!customerId) {
+    for (const k of ["percent", "fixed", "minProfit"] as const) {
+      const v = input.markup?.[k];
+      if (v === null || v === undefined) continue;
+      if (typeof v !== "number" || !Number.isFinite(v)) return fail("加价要填数字");
+      m[k] = v;
+    }
+    const neg = negativeRule(m);
+    if (neg) return fail(neg);
+    if (a.role === "staff") {
+      const low = staffProspectMarkupError(m);
+      if (low) return fail(low);
+    }
+  }
+  const req = cleanRequest(input.req);
+  if (!req.pkg.pieces?.length) return fail("请填写箱规和箱数");
+  const bad = validateRequest(req, { forQuote: true });
+  if (bad.length) return { errors: await Promise.all(bad.map((x) => tMsg(x))) };
+  try {
+    const list = customerId ? await quoteMulti(customerId, req) : await quoteMultiForProspect(req, m);
+    const quotes: MultiQuote[] = [];
+    for (const q of list) {
+      quotes.push({
+        channelCode: q.channelCode,
+        channelName: displayChannel(q.channelCode).name || q.channelName,
+        ok: q.ok,
+        error: q.ok ? undefined : await tMsg(q.error ?? ""),
+        price: q.price,
+        currency: q.currency,
+        zone: q.zone,
+        ...(q.ok && q.warning ? { warning: await tMsg(q.warning) } : {}),
+        ...(q.ok ? { cost: q.cost, profit: q.profit } : {}),
+      });
+    }
+    return { quotes };
+  } catch (e) {
+    return fail((e as Error).message);
   }
 }
 

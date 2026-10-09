@@ -9,7 +9,7 @@ import { useT, useTMsg } from "@/components/I18n";
 import { money } from "@/lib/pricing";
 import { DEFAULT_ITEM_SKU } from "@/lib/sanitize";
 import { checkMultiBox, expandPieces, multiBoxRule, multiBoxWarnings, summarizePieces, type MultiBoxRule, type Piece } from "@/lib/multiBox";
-import { multiCreateAction, multiQuoteAction, type MultiQuote } from "@/app/multiActions";
+import { multiCreateAction, multiQuoteAction, multiTrialQuoteAction, type MultiQuote } from "@/app/multiActions";
 import type { Address, ShipmentRequest } from "@/lib/shipbest/types";
 
 type Line = { length: string; width: string; height: string; weight: string; qty: string };
@@ -26,13 +26,18 @@ export interface MultiCustomer {
 /**
  * 多箱寄出：一个寄件地址、一个收件地址，按箱规填（长宽高、单箱重量、几箱），
  * 一票按总重量计价（UPS HWT / FedEx MWT）。填的时候实时显示总箱数、总重量、计费重和渠道要求是否满足。
+ * quote = 后台运费试算（只报价、不出单）：可以选“新客户 / 自定义加价”，显示公司成本和利润。
  */
 export default function MultiBoxForm(props: {
-  mode: "admin" | "portal";
+  mode: "admin" | "portal" | "quote";
   /** 后台：选客户 */
   customers?: MultiCustomer[];
   /** 客户 OMS：自己开通的多箱渠道 */
   channels?: string[];
+  /** 运费试算：所有已启用的多箱渠道（试算新客户用） */
+  allChannels?: string[];
+  /** 运费试算：默认选中的客户（0 / 不填 = 新客户） */
+  defaultCustomerId?: number;
   defaultSender: Address | null;
   senders?: { id: number; label: string; address: Address; isDefault: boolean }[];
   showCost?: boolean;
@@ -40,7 +45,10 @@ export default function MultiBoxForm(props: {
   const t = useT();
   const tm = useTMsg();
   const router = useRouter();
-  const [customerId, setCustomerId] = useState<number | undefined>(props.customers?.[0]?.id);
+  const trial = props.mode === "quote";
+  const [customerId, setCustomerId] = useState<number | undefined>(
+    trial ? (props.customers?.some((c) => c.id === props.defaultCustomerId) ? props.defaultCustomerId : 0) : props.customers?.[0]?.id,
+  );
   const customer = props.customers?.find((c) => c.id === customerId);
   const firstSender = props.senders?.find((s) => s.isDefault)?.address ?? props.senders?.[0]?.address ?? customer?.sender ?? props.defaultSender;
   const [sender, setSender] = useState<Partial<Address>>(firstSender ?? { country: "US" });
@@ -48,12 +56,14 @@ export default function MultiBoxForm(props: {
   const [lines, setLines] = useState<Line[]>([{ ...EMPTY_LINE }, { ...EMPTY_LINE }]);
   const [item, setItem] = useState({ name: "", hs: "", value: "", sku: "" });
   const [ref, setRef] = useState("");
+  // 运费试算新客户时临时填写的加价（留空 = 全局 / 渠道设置）
+  const [markup, setMarkup] = useState({ percent: "", fixed: "", minProfit: "" });
   const [quotes, setQuotes] = useState<MultiQuote[] | null>(null);
   const [picked, setPicked] = useState<string | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
   const [busy, start] = useTransition();
 
-  const channelNames = props.mode === "admin" ? customer?.channels ?? [] : props.channels ?? [];
+  const channelNames = props.mode === "portal" ? props.channels ?? [] : trial && !customerId ? props.allChannels ?? [] : customer?.channels ?? [];
   const rules = useMemo(() => {
     const out: MultiBoxRule[] = [];
     for (const n of channelNames) {
@@ -102,7 +112,10 @@ export default function MultiBoxForm(props: {
   const quote = () => {
     setErrors([]);
     start(async () => {
-      const r = await multiQuoteAction({ customerId, req: buildReq() });
+      const opt = (v: string) => (v.trim() === "" ? null : Number(v));
+      const r = trial
+        ? await multiTrialQuoteAction({ customerId, req: buildReq(), markup: { percent: opt(markup.percent), fixed: opt(markup.fixed), minProfit: opt(markup.minProfit) } })
+        : await multiQuoteAction({ customerId, req: buildReq() });
       if (r.errors) {
         setErrors(r.errors);
         setQuotes(null);
@@ -130,6 +143,8 @@ export default function MultiBoxForm(props: {
   };
 
   const noChannel = !channelNames.length;
+  // 运费试算：主管理员和员工都看公司成本和利润
+  const showCost = trial || !!props.showCost;
 
   return (
     <div className="multi-box">
@@ -153,8 +168,44 @@ export default function MultiBoxForm(props: {
         </div>
       )}
 
+      {trial && (
+        <div className="card">
+          <div className="row">
+            <label className="f" style={{ minWidth: 240 }}>
+              <span>{t("按哪个客户的价格试算")}</span>
+              <select
+                value={customerId ?? 0}
+                onChange={(e) => {
+                  const id = Number(e.target.value);
+                  dirty(setCustomerId)(id);
+                  const c = props.customers?.find((x) => x.id === id);
+                  setSender(c?.sender ?? props.defaultSender ?? { country: "US" });
+                }}
+              >
+                <option value={0}>{t("新客户 / 自定义加价")}</option>
+                {props.customers?.map((c) => <option key={c.id} value={c.id}>{c.name}{c.channels.length ? "" : ` ${t("（未开通多箱渠道）")}`}</option>)}
+              </select>
+              <span className="small muted">{customer ? t("按这个客户已开通的多箱渠道和他的加价试算") : t("用所有已启用的多箱渠道，按右边填写的加价试算")}</span>
+            </label>
+            {!customer && (
+              <>
+                <label className="f" style={{ width: 120 }}>{t("加价 %")}<input type="number" min="0" step="0.01" value={markup.percent} placeholder={t("全局设置")} onChange={(e) => dirty(setMarkup)({ ...markup, percent: e.target.value })} /></label>
+                <label className="f" style={{ width: 120 }}>{t("每单固定加价")}<input type="number" min="0" step="0.01" value={markup.fixed} placeholder={t("全局设置")} onChange={(e) => dirty(setMarkup)({ ...markup, fixed: e.target.value })} /></label>
+                <label className="f" style={{ width: 120 }}>{t("每单最低利润")}<input type="number" min="0" step="0.01" value={markup.minProfit} placeholder={t("全局设置")} onChange={(e) => dirty(setMarkup)({ ...markup, minProfit: e.target.value })} /></label>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {noChannel && (
-        <div className="alert warn">{props.mode === "admin" ? t("这个客户还没有开通多箱渠道（UPS HWT / FedEx MWT），请到客户详情 → 渠道与价格里开通。") : t("您的账户还没有开通多箱渠道（UPS HWT / FedEx MWT），请联系客服开通。")}</div>
+        <div className="alert warn">
+          {props.mode === "portal"
+            ? t("您的账户还没有开通多箱渠道（UPS HWT / FedEx MWT），请联系客服开通。")
+            : trial && !customer
+              ? t("没有启用的多箱渠道（UPS HWT / FedEx MWT），请先到“设置”里同步渠道")
+              : t("这个客户还没有开通多箱渠道（UPS HWT / FedEx MWT），请到客户详情 → 渠道与价格里开通。")}
+        </div>
       )}
 
       {rules.map((r) => (
@@ -224,7 +275,8 @@ export default function MultiBoxForm(props: {
         </div>
 
         {rules.map((r) => {
-          const errs = filled.length ? checkMultiBox(r, filled, items, { forOrder: true, state: recipient.province }) : [];
+          // 试算不填货物信息：不检查品名 / 海关编码（出单时再检查）
+          const errs = filled.length ? checkMultiBox(r, filled, items, { forOrder: !trial, state: recipient.province }) : [];
           const warns = filled.length && !errs.length ? multiBoxWarnings(r, filled) : [];
           const bill = summarizePieces(filled, r).billable;
           return (
@@ -247,7 +299,7 @@ export default function MultiBoxForm(props: {
         })}
       </div>
 
-      <div className="card">
+      {!trial && <div className="card">
         <h2>{t("货物信息")}</h2>
         <div className="grid">
           <label className="f"><span className="req">{t("英文品名")}</span><input value={item.name} maxLength={50} placeholder={t("例如 Cotton T-shirts")} onChange={(e) => dirty(setItem)({ ...item, name: e.target.value })} /><span className="field-hint muted">{t("不能有中文，建议写清楚是什么货")}</span></label>
@@ -256,7 +308,7 @@ export default function MultiBoxForm(props: {
           <label className="f">{t("SKU（可选）")}<input value={item.sku} maxLength={64} onChange={(e) => dirty(setItem)({ ...item, sku: e.target.value })} /></label>
           <label className="f">{t("自定义单号（可选）")}<input value={ref} maxLength={50} onChange={(e) => setRef(e.target.value)} /></label>
         </div>
-      </div>
+      </div>}
 
       <div className="card">
         <div className="card-head">
@@ -269,24 +321,27 @@ export default function MultiBoxForm(props: {
             <>
               <div className="table-wrap">
                 <table className="list card-table mb-quotes">
-                  <thead><tr><th></th><th>{t("渠道")}</th><th>{t("分区")}</th>{props.showCost && <th className="num">{t("我们的成本")}</th>}<th className="num">{t("运费")}</th></tr></thead>
+                  <thead><tr>{!trial && <th></th>}<th>{t("渠道")}</th><th>{t("分区")}</th>{showCost && <th className="num">{t("我们的成本")}</th>}<th className="num">{trial ? t("客户价") : t("运费")}</th>{trial && <th className="num">{t("利润")}</th>}</tr></thead>
                   <tbody>
                     {quotes.map((q) => (
                       <tr key={q.channelCode} style={{ opacity: q.ok ? 1 : 0.65 }}>
-                        <td className="c-check"><input type="radio" name="mb-ch" disabled={!q.ok} checked={picked === q.channelCode} onChange={() => setPicked(q.channelCode)} /></td>
+                        {!trial && <td className="c-check"><input type="radio" name="mb-ch" disabled={!q.ok} checked={picked === q.channelCode} onChange={() => setPicked(q.channelCode)} /></td>}
                         <td className="c-main"><ChannelLabel code={q.channelCode} name={q.channelName} size="md" />{!q.ok && <div className="small warn-text">{q.error}</div>}{q.ok && q.warning && <div className="small warn-text">⚠ {q.warning}</div>}</td>
                         <td data-label={t("分区")}>{q.zone ?? "-"}</td>
-                        {props.showCost && <td className="num muted" data-label={t("我们的成本")}>{q.cost !== undefined ? money(q.cost) : "-"}</td>}
-                        <td className="num" data-label={t("运费")}><b>{q.ok ? money(q.price, q.currency) : t("不可用")}</b>{q.ok && sum.billable > 0 && q.price !== undefined && <div className="small muted">{t("约 {p}/lb", { p: (q.price / sum.billable).toFixed(2) })}</div>}</td>
+                        {showCost && <td className="num muted" data-label={t("我们的成本")}>{q.cost !== undefined ? money(q.cost) : "-"}</td>}
+                        <td className="num" data-label={trial ? t("客户价") : t("运费")}><b>{q.ok ? money(q.price, q.currency) : t("不可用")}</b>{q.ok && sum.billable > 0 && q.price !== undefined && <div className="small muted">{t("约 {p}/lb", { p: (q.price / sum.billable).toFixed(2) })}</div>}</td>
+                        {trial && <td className="num profit-pos" data-label={t("利润")}>{q.ok && q.profit !== undefined ? money(q.profit) : "-"}</td>}
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
               <p className="small muted">{t("运费不含住宅地址、偏远地区等附加费，以承运商实际账单为准（多退少补）。")}</p>
-              <div className="row" style={{ justifyContent: "flex-end" }}>
-                <button type="button" className="primary" disabled={busy || !quotes.some((q) => q.ok && q.channelCode === picked)} onClick={submit}>{busy ? t("处理中…") : t("确认下单（{n} 箱）", { n: sum.boxes })}</button>
-              </div>
+              {!trial && (
+                <div className="row" style={{ justifyContent: "flex-end" }}>
+                  <button type="button" className="primary" disabled={busy || !quotes.some((q) => q.ok && q.channelCode === picked)} onClick={submit}>{busy ? t("处理中…") : t("确认下单（{n} 箱）", { n: sum.boxes })}</button>
+                </div>
+              )}
             </>
           ) : (
             <div className="alert warn">{t("没有可用的多箱渠道")}</div>

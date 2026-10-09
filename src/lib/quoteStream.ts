@@ -22,22 +22,11 @@ import { setInternalCustomerCheck } from "./staffStore";
 // 员工权限里要排除公司自用账户（成本价）：staffStore 不打开数据库，在这里告诉它怎么判断（auth.ts 里也注册了）
 setInternalCustomerCheck(isInternalCustomer);
 
-/**
- * 员工给还没开户的新客户试算时看到的报价：只有客户价（和限时活动的活动名、原价）。
- * 成本、原价、利润、用时、加价规则都不给：知道规则和客户价就能倒推出成本。
- * （员工自己负责 / 授权的客户可以看全部数据，包括成本和利润，见 runQuoteStream）
- */
-export function staffQuote(q: ChannelQuote): Omit<ChannelQuote, "cost" | "listCost" | "profit" | "ms" | "rule"> {
-  const { cost: _c, listCost: _l, profit: _p, ms: _m, rule: _r, ...rest } = q;
-  void [_c, _l, _p, _m, _r];
-  return rest;
-}
-
 export const STAFF_PROSPECT_MARKUP_ERROR = "员工试算新客户时，临时加价不能低于全局默认加价（留空 = 按全局默认）";
 
 /**
  * 员工给还没开户的新客户试算：填了的临时加价（加价 %、固定加价、最低利润）每一项都不能低于全局默认，
- * 不然填 0 / 0 / 0 试算出来的“客户价”就是成本价。留空的照旧沿用全局 / 渠道设置。
+ * 报给新客户的价不能低于公司定的底线（和员工给客户设加价的规则一样）。留空的照旧沿用全局 / 渠道设置。
  */
 export function staffProspectMarkupError(m: PartialRule): string | null {
   const g = getSettings().markup;
@@ -92,7 +81,7 @@ export async function runQuoteStream(who: QuoteStreamWho, input: QuoteStreamInpu
   if (who.kind !== "admin") return fail(["请先登录后台"]);
   const admin = who.admin;
 
-  /* ---------- 后台运费试算（员工也能用：自己负责 / 授权的客户看全部数据；新客户试算只看客户价） ---------- */
+  /* ---------- 后台运费试算（员工也能用：看公司成本和利润；只能选自己负责 / 授权的客户） ---------- */
   if (input.mode === "admin") {
     const customerId = Number(input.customerId) || 0;
     if (customerId && !customerAccess(admin, customerId)) return fail(["你没有这个客户的权限，请找主管理员授权"]);
@@ -107,10 +96,9 @@ export async function runQuoteStream(who: QuoteStreamWho, input: QuoteStreamInpu
       const low = staffProspectMarkupError(m);
       if (low) return fail([low]);
     }
-    // 员工：授权给他的客户看全部数据（成本、利润、加价规则，他要知道自己客户的利润）；新客户试算只看客户价
+    // 员工试算和主管理员一样看公司成本、利润、加价规则（他要知道报价的利润；新客户的加价不能低于全局默认，上面已经检查）
     const shape = (q: ChannelQuote) => {
       if (admin.role !== "staff") return q;
-      if (!customerId) return staffQuote(q);
       const { ms: _ms, ...full } = q;
       void _ms;
       return full;

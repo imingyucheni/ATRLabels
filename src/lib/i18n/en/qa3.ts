@@ -138,7 +138,7 @@ export const qa3: Record<string, string> = {
   "提成按客户算：你自己开的客户默认归你（利润的 {r}% 给你，其余归公司），其他客户由主管理员分配；每个客户的比例可以单独调整。提成 = 这个客户每单的利润 × 比例；没绑定销售的客户利润归公司。亏损单冲减提成，取消单按手续费差额算，补差会影响利润。结算由主管理员操作。": "Commission is per customer: customers you open are yours by default ({r}% of profit to you, the rest to the company); other customers are assigned by the owner, and each customer's rate can be adjusted. Commission = that customer's profit per order × rate; customers without a sales profile keep all profit with the company. Loss-making orders reduce commission, cancelled orders count the fee difference, and adjustments change profit. Payouts are settled by the owner.",
   "你还没有提成记录。你自己开的客户会自动归你（利润的 {r}%）；别的客户需要主管理员分配给你。": "No commission yet. Customers you open are assigned to you automatically ({r}% of profit); other customers need to be assigned to you by the owner.",
   "提成 = 这个客户每单的利润 × 比例，每个客户单独设；员工自己开的客户默认归他（按“员工账号”页的默认提成）。选“无销售”，这个客户的利润全部归公司。": "Commission = this customer's profit per order × rate, set per customer; customers opened by a staff member are theirs by default (at the default rate on the Staff accounts page). Choose “No sales” and all of this customer's profit stays with the company.",
-  "员工（二级管理员）可以：开客户账号、改客户资料和登录、设置客户的渠道和邮费（加价，不能低于全局默认）、确认客户充值；在“我的看板”看自己负责的客户（授权给他的、归他名下的）的消费、面单、成本、利润，以及自己的提成（自己开的客户默认归他）。看不到其他客户、报表、全部面单记录、系统设置，也不能加款 / 扣款、改信用额度。": "Staff can open customer accounts, edit customer details and logins, set customers' services and pricing (markup, not below the global default) and confirm top-ups. Under My dashboard they see spend, labels, cost and profit for their own customers (granted to them or assigned to them), plus their own commission (customers they open are theirs by default). They can't see other customers, reports, all label records or system settings, and can't add/deduct balance or change credit limits.",
+  "员工（二级管理员）可以：开客户账号、改客户资料和登录、设置客户的渠道和邮费（加价，不能低于全局默认）、确认客户充值；在“我的看板”看自己负责的客户（授权给他的、归他名下的）的消费、面单、成本、利润，以及自己的提成（自己开的客户默认归他）；运费试算（单个包裹和多箱）显示公司成本和利润。看不到其他客户、报表、全部面单记录、系统设置，也不能加款 / 扣款、改信用额度。": "Staff can open customer accounts, edit customer details and logins, set customers' services and pricing (markup, not below the global default) and confirm top-ups. Under My dashboard they see spend, labels, cost and profit for their own customers (granted to them or assigned to them), plus their own commission (customers they open are theirs by default). Rate quotes (single parcel and multi-box) show company cost and profit. They can't see other customers, reports, all label records or system settings, and can't add/deduct balance or change credit limits.",
   "员工开的客户：默认提成": "Customers opened by staff: default commission",
   "提成比例（利润 %）": "Commission rate (% of profit)",
   "员工自己新开的客户默认归他：这个客户每单利润按这个比例给员工，其余归公司（例如 30% 给员工、70% 归公司）。比例记在每个客户上，之后可以在客户详情 → 渠道与价格 →“销售归属（佣金）”里单独调整；这里改了只影响以后新开的客户。主管理员开的客户默认不归任何员工，利润全部归公司。": "Customers a staff member opens are theirs by default: this share of each order's profit goes to the staff member and the rest to the company (e.g. 30% to staff, 70% to the company). The rate is stored on each customer and can be adjusted later in customer details → Services & pricing → Sales (commission); changing it here only affects customers opened from now on. Customers opened by the owner aren't assigned to any staff member, so all their profit stays with the company.",
@@ -264,4 +264,16 @@ export const qa3: Record<string, string> = {
   "回传店铺失败": "Couldn't push to the store",
   "查看批次 →": "View batch →",
   "eBay 授权已过期，请重新连接 eBay 店铺": "eBay authorization expired — please reconnect your eBay store",
+  // 运费试算：多箱
+  "单个包裹": "Single parcel",
+  "多箱（UPS HWT / FedEx MWT）": "Multi-box (UPS HWT / FedEx MWT)",
+  "“我们的成本”是公司在服务商的结算价（公司实际付的运费），利润 = 客户价 − 成本（渠道有服务商返利的，利润里含返利）。":
+    "“Our cost” is the company's settlement price with the provider (what the company actually pays). Profit = customer price − cost (including the provider rebate on services that have one).",
+  "同一个寄件地址、同一个收件地址的多箱货，一票按总重量计价，比一箱一箱单独寄便宜。按箱规填尺寸、单箱重量和箱数。":
+    "Several boxes from the same sender to the same recipient ship as one order priced on total weight — cheaper than shipping each box separately. Enter the dimensions, weight per box and number of boxes for each box size.",
+  "按这个客户已开通的多箱渠道和他的加价试算": "Quotes this customer's enabled multi-box services at their markup",
+  "用所有已启用的多箱渠道，按右边填写的加价试算": "Quotes all enabled multi-box services at the markup entered on the right",
+  "没有启用的多箱渠道（UPS HWT / FedEx MWT），请先到“设置”里同步渠道": "No multi-box services (UPS HWT / FedEx MWT) are enabled. Sync services under Settings first",
+  "加价要填数字": "Markups must be numbers",
+  "请先登录后台": "Please sign in to the admin first",
 };

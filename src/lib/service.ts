@@ -546,11 +546,26 @@ export class NoChannelsError extends Error {
 export async function quoteForProspect(req: ShipmentRequest, markup: PartialRule, hooks?: QuoteHooks): Promise<ChannelQuote[]> {
   const channels = forDestination(listChannels(true), req).filter((c) => !isMultiBoxName(c.name));
   if (!channels.length) throw new Error("没有启用的物流渠道，请先到“设置”里同步渠道");
-  const gm = getSettings().markup;
-  // 和真实客户一样算：渠道长期返利兜底、限时活动价（在 pickRule 里和平时价取低的）
-  const ruleOf = (c: { code: string; markup?: PartialRule | null; rebate?: number }) => ({ ...resolveRule(gm, c.markup, markup), source: "prospect", ...((c.rebate ?? 0) > 0 ? { rebate: c.rebate } : {}) });
+  const ruleOf = prospectRule(markup);
   const results = await quoteChannels(channels, (c) => quoteOne(0, c.code, c.name, req, ruleOf(c)), req, hooks);
   return flagJiaguCoverage(fillZones(results)).sort((a, b) => Number(b.ok) - Number(a.ok) || (a.price ?? 0) - (b.price ?? 0));
+}
+
+/** 新客户试算的加价：全局 → 渠道 → 临时填写的；和真实客户一样算渠道长期返利兜底、限时活动价（在 pickRule 里和平时价取低的） */
+function prospectRule(markup: PartialRule) {
+  const gm = getSettings().markup;
+  return (c: { code: string; markup?: PartialRule | null; rebate?: number }) => ({ ...resolveRule(gm, c.markup, markup), source: "prospect", ...((c.rebate ?? 0) > 0 ? { rebate: c.rebate } : {}) });
+}
+
+/** 多箱试算（后台，不出单）：还没开户的新客户，用所有已启用的多箱渠道（UPS HWT / FedEx MWT）、按临时填写的加价试算 */
+export async function quoteMultiForProspect(raw: ShipmentRequest, markup: PartialRule): Promise<ChannelQuote[]> {
+  if (!raw.pkg.pieces?.length) throw new Error("请填写箱规和箱数");
+  const req = withPieceTotals(raw);
+  const channels = listChannels(true).filter((c) => isMultiBoxName(c.name) && !isDhlCode(c.code));
+  if (!channels.length) throw new Error("没有启用的多箱渠道（UPS HWT / FedEx MWT），请先到“设置”里同步渠道");
+  const ruleOf = prospectRule(markup);
+  const results = await quoteChannels(channels, (c) => quoteOne(0, c.code, c.name, req, ruleOf(c)), req);
+  return results.sort((a, b) => Number(b.ok) - Number(a.ok) || (a.price ?? 0) - (b.price ?? 0));
 }
 
 /* ---------------- 下单出面单 ---------------- */

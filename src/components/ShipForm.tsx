@@ -117,8 +117,6 @@ export default function ShipForm(props: {
   /** 可以“保存草稿”（客户自助 / 管理员自用下单）；draft = 打开的草稿，出单成功后自动删掉 */
   draftScope?: DraftScope;
   draft?: OrderDraft;
-  /** 员工（二级管理员）试算：不显示成本、利润 */
-  hideCost?: boolean;
 }) {
   const router = useRouter();
   const t = useT();
@@ -218,8 +216,6 @@ export default function ShipForm(props: {
   const [savingDraft, startSaveDraft] = useTransition();
 
   const [quotes, setQuotes] = useState<Quote[] | null>(null);
-  // 员工：授权客户的报价带成本和利润（服务器决定），新客户试算没有 → 按收到的数据决定显示哪些列
-  const hideCost = !!props.hideCost && !(quotes ?? []).some((q) => q.ok && q.cost !== undefined && q.cost !== null);
   // 默认显示全部渠道：送不到的也列出来（灰色、不能选、显示原因）
   const [onlyAvailable, setOnlyAvailable] = useState(true);
   const [errors, setErrors] = useState<string[]>([]);
@@ -867,7 +863,7 @@ export default function ShipForm(props: {
                 ) : re ? (
                   <tr><th>{t("渠道")}</th><th>{t("分区")}</th><th className="num">{t("我们的成本")}</th><th className="num">{t("客户价（出单价）")}</th><th></th></tr>
                 ) : (
-                  <tr><th>{t("渠道")}</th><th>{t("分区")}</th>{!hideCost && <><th className="num">{t("原价")}</th><th className="num">{t("我们的成本")}</th><th>{t("加价规则")}</th></>}<th className="num">{t("客户价")}</th>{!hideCost && <th className="num">{t("利润")}</th>}</tr>
+                  <tr><th>{t("渠道")}</th><th>{t("分区")}</th><th className="num">{t("原价")}</th><th className="num">{t("我们的成本")}</th><th>{t("加价规则")}</th><th className="num">{t("客户价")}</th><th className="num">{t("利润")}</th></tr>
                 )}
               </thead>
               <tbody>
@@ -895,14 +891,13 @@ export default function ShipForm(props: {
                       <td className="q-zone" data-label={t("分区")}>{q.zone ?? "-"}{!portal && q.zoneEstimated && <span className="small muted" title={t("嘉谷未返回分区，按同一目的地其他渠道的分区估算")}>{t("（参考）")}</span>}</td>
                       {!portal && (
                         <>
-                          {!hideCost && <td className="num muted">{money(q.listCost)}</td>}
-                          {!hideCost && <td className="num">{money(q.cost, q.currency)}</td>}
-                          {/* 员工拿到的报价不带加价规则（规则 + 客户价能倒推成本），这一列不显示 */}
-                          {!hideCost && <td className="small">{q.rule ? <>{signedPercent(q.rule.percent)} + {q.rule.fixed}{t("，最低利润")} {q.rule.minProfit}</> : "-"}</td>}
+                          <td className="num muted">{money(q.listCost)}</td>
+                          <td className="num">{money(q.cost, q.currency)}</td>
+                          <td className="small">{q.rule ? <>{signedPercent(q.rule.percent)} + {q.rule.fixed}{t("，最低利润")} {q.rule.minProfit}</> : "-"}</td>
                         </>
                       )}
                       <td className="num q-price"><b>{money(q.price, q.currency)}</b>{portal && q.price === bestPrice && <div className="small profit-pos">{t("最低价")}</div>}{q.promo && <div className="small" style={{ textAlign: "right" }}><span className="badge promo">{tm(q.promo.label)}</span> <s className="muted">{money(q.promo.originalPrice, q.currency)}</s><div className="muted">{t("活动至 {d}", { d: q.promo.endsOn.slice(5) })}</div></div>}{q.warning && <div className="small warn-text" style={{ maxWidth: 260, marginLeft: "auto", textAlign: "left" }}>⚠ {tm(q.warning)}</div>}</td>
-                      {!portal && !hideCost && <td className="num profit-pos">{money(q.profit)}</td>}
+                      {!portal && <td className="num profit-pos">{money(q.profit)}</td>}
                       {portal && (
                         <td className="q-act">
                           {afford(q.price!).ok ? (
@@ -921,7 +916,7 @@ export default function ShipForm(props: {
                   ) : (
                     <tr key={q.channelCode} className="row-disabled">
                       <td className="q-ch"><ChannelLabel code={q.channelCode} name={q.channelName} size="md" /></td>
-                      <td className="small q-err" colSpan={portal ? 3 : costTable || re ? 4 : hideCost ? 2 : 6} style={{ color: "var(--err)" }}>
+                      <td className="small q-err" colSpan={portal ? 3 : costTable || re ? 4 : 6} style={{ color: "var(--err)" }}>
                         <b>{/不通邮|派送范围|未覆盖/.test(q.error ?? "") ? t("地址未覆盖") : t("不可用")}</b>
                         {q.error && !/^地址未覆盖/.test(q.error) ? `${t("：")}${tm(q.error)}` : q.error ? `${t("：")}${tm(q.error.replace(/^地址未覆盖：/, ""))}` : ""}
                       </td>
