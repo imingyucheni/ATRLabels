@@ -1,5 +1,6 @@
 "use server";
 
+import { listProducts } from "@/lib/products";
 import { revalidatePath } from "next/cache";
 import { currentCustomerId, impersonatedCustomerId, isLoggedIn, portalActor } from "@/lib/auth";
 import { hasAcceptedTerms } from "@/lib/terms";
@@ -65,7 +66,7 @@ export async function createBatchJobAction(fd: FormData): Promise<{ jobId?: numb
     // 空行保留：报错里的“第几行”和 Excel 里看到的行号一致
     const rows = await readOrderSheet(file.name, Buffer.from(await file.arrayBuffer()));
     const channels = fd.getAll("channels").map((v) => str(v, 50)).filter(Boolean);
-    const { orders, error } = parseOrders(rows, senderFor(customerId));
+    const { orders, error } = parseOrders(rows, senderFor(customerId), listProducts(customerId));
     if (error) return { error };
     const jobId = createJob({
       customerId,

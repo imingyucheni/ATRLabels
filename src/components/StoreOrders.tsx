@@ -25,8 +25,10 @@ export interface StoreOrderView {
   pushError: string | null;
   /** 收件信息不全，不能导入 */
   issue?: "no_address" | "hidden";
-  /** 以前发过同样商品组合时用的包裹（自动带出） */
+  /** 以前发过同样商品组合时用的包裹，或存过的常用产品的包裹（自动带出） */
   suggest?: Pkg | null;
+  /** suggest 来自常用产品 */
+  suggestFromProduct?: boolean;
   /** 买家选的配送方式 / 留言 */
   shippingMethod?: string | null;
   note?: string | null;
@@ -197,7 +199,7 @@ export default function StoreOrders({ rows, presets, senders, defaultUnit = 3 }:
             </div>
           )}
           <p className="small muted" style={{ margin: "8px 0 0" }}>
-            {t("每个订单在下面的表格里填自己的尺寸和重量；以前发过同样商品的订单会自动带出上次的包裹。")}
+            {t("每个订单在下面的表格里填自己的尺寸和重量；存过的常用产品、以前发过同样商品的订单会自动带出包裹。")}
           </p>
 
           {error && <div className="alert err" style={{ marginTop: 12 }}>{t(error)}</div>}
@@ -273,7 +275,7 @@ export default function StoreOrders({ rows, presets, senders, defaultUnit = 3 }:
                             />
                           </span>
                         ))}
-                        {remembered.has(r.id) && <div className="small muted">{t("按上次同款商品带出")}</div>}
+                        {remembered.has(r.id) && <div className="small muted">{r.suggestFromProduct ? t("按常用产品带出") : t("按上次同款商品带出")}</div>}
                       </div>
                     ) : (
                       <span className="small muted">-</span>

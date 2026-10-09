@@ -148,7 +148,7 @@ export const stores: Record<string, string> = {
   "重量": "Weight",
   "填到勾选的 {n} 单": "Apply to {n} selected",
   "只填没填的": "Fill empty only",
-  "每个订单在下面的表格里填自己的尺寸和重量；以前发过同样商品的订单会自动带出上次的包裹。": "Each order has its own size and weight in the table below; orders with items you've shipped before are pre-filled with the last package used.",
+  "每个订单在下面的表格里填自己的尺寸和重量；存过的常用产品、以前发过同样商品的订单会自动带出包裹。": "Each order has its own size and weight in the table below. Orders matching a saved product, or items you've shipped before, are pre-filled with that package.",
   "有 {n} 个勾选的订单没填完尺寸或重量（已标红）": "{n} selected orders are missing size or weight (highlighted in red)",
   "包裹（长×宽×高 {l} · 重量 {w}）": "Package (L×W×H {l} · weight {w})",
   "按上次同款商品带出": "Pre-filled from your last shipment of these items",

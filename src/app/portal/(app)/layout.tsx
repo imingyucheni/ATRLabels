@@ -58,6 +58,7 @@ export default async function PortalLayout({ children }: { children: React.React
               ...(storesOn ? [{ href: "/portal/stores", label: "店铺订单", icon: "store" as const, count: storeOpen }] : []),
               { href: "/portal/drafts", label: "待出单", icon: "sheet", count: drafts },
               { href: "/portal/shipments", label: "我的面单", icon: "list" },
+              { href: "/portal/products", label: "常用产品", icon: "product" },
             ],
           },
           // 开通了 DHL 渠道的客户才能国际下单

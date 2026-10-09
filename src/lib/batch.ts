@@ -3,6 +3,7 @@
  * 上传 ShipBest 标准导单模板 → 每单按所选渠道逐个试算 → 每单默认选最便宜（可改）→ 勾选订单提交 → 刷新面单 → 合并打印。
  * 任务在服务进程里后台执行，页面轮询进度；服务重启后打开任务页会自动继续。
  */
+import { fillFromProduct, type SavedProduct } from "./products";
 import { localizeChannelName, publicChannel, stripProviderTag } from "./carriers";
 import { checkAddress, needsAck, type AddressCheck } from "./addressCheck";
 import ExcelJS from "exceljs";
@@ -366,7 +367,7 @@ export function isShipBestTemplate(header: string[]) {
   return h.includes("自定义单号") && h.some((x) => x.startsWith("收件联系人姓"));
 }
 
-export function parseOrders(rows: string[][], defaultSender: Address | null): { orders: ParsedOrder[]; error?: string } {
+export function parseOrders(rows: string[][], defaultSender: Address | null, products: SavedProduct[] = []): { orders: ParsedOrder[]; error?: string } {
   const st = getSettings();
   // 表头一般在第 1 行；前面可能有标题行、空行（空行现在保留着，多看几行）
   const headerIdx = rows.slice(0, 20).findIndex((r) => !!r && isShipBestTemplate(r));
@@ -501,6 +502,8 @@ export function parseOrders(rows: string[][], defaultSender: Address | null): { 
       o.errors = [INTL_IMPORT_MSG];
       continue;
     }
+    // 只填了 SKU 的常用产品：带出品名、申报价和包裹尺寸重量
+    if (products.length) fillFromProduct(o.req, products);
     const { pkg } = o.req;
     // SKU 尺寸没填时用包裹尺寸（接口要求必填）；单件重量没填时按包裹重量均摊
     const totalQty = o.req.skuList.reduce((a, s) => a + (s.quantity || 1), 0) || 1;

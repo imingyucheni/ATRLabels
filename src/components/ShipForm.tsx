@@ -8,6 +8,8 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { houseCreateAction, resubmitCreateAction } from "@/app/actions";
 import type { SavedSender } from "@/lib/senders";
+import type { SavedProduct } from "@/lib/products";
+import { saveProductAction } from "@/app/productActions";
 import { portalCreateAction, portalReorderAction, saveSenderBookAction } from "@/app/portal/actions";
 import type { PublicQuote } from "@/lib/portal";
 import AddressFields, { SENDER_EXAMPLE } from "@/components/AddressFields";
@@ -97,6 +99,8 @@ export default function ShipForm(props: {
   recentPackages?: RecentPackage[];
   /** 发过的商品：输入 SKU 自动带出品名、申报价、海关编码 */
   skuPresets?: SkuPreset[];
+  /** 常用产品（商品信息 + 包裹尺寸重量）：选一下把商品明细和包裹都填好；客户 OMS 里还能“存为常用产品” */
+  products?: SavedProduct[];
   /** 再来一单：复制一张以前的订单（地址、包裹、商品），订单号留空，正常下单 */
   copy?: { request: ShipmentRequest; remark: string | null };
   /** 国际下单（DHL）：收件国家默认空、商品明细多原产国、海关编码必填 */
@@ -454,6 +458,47 @@ export default function ShipForm(props: {
   }
 
   const setSku = (i: number, patch: Partial<Sku>) => dirty(setSkus)(skus.map((s, j) => (j === i ? { ...s, ...patch } : s)));
+
+  /* ---------- 常用产品 ---------- */
+  const [products, setProducts] = useState<SavedProduct[]>(props.products ?? []);
+  const [productId, setProductId] = useState<number | null>(null);
+  const [productMsg, setProductMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [savingProduct, startSaveProduct] = useTransition();
+  const skuOf = (p: SavedProduct): Sku => ({
+    sku: p.sku,
+    productNameCn: p.productNameCn === p.productNameEn ? "" : p.productNameCn,
+    productNameEn: p.productNameEn,
+    quantity: String(p.quantity || 1),
+    declaredUnitPrice: p.declaredUnitPrice ? String(p.declaredUnitPrice) : "",
+    hsCode: p.hsCode,
+    productNature: p.productNature || "2,4",
+    originCountry: p.originCountry,
+    material: p.material,
+  });
+  /** 选了常用产品：商品明细换成这个产品，包裹尺寸重量和单位按产品填 */
+  const applyProduct = (p: SavedProduct, typedSku?: string) => {
+    setProductId(p.id);
+    setProductMsg(null);
+    dirty(setDimU)(p.dimUnit);
+    setWtU(p.weightUnit);
+    setPkg({ length: String(p.length), width: String(p.width), height: String(p.height), weight: String(p.weight) });
+    setSkus([{ ...skuOf(p), ...(typedSku !== undefined ? { sku: typedSku } : {}) }]);
+  };
+  const onSaveProduct = () => {
+    const s0 = skus[0];
+    startSaveProduct(async () => {
+      const r = await saveProductAction({
+        sku: s0.sku, productNameEn: s0.productNameEn, productNameCn: s0.productNameCn, declaredUnitPrice: Number(s0.declaredUnitPrice) || 0, hsCode: s0.hsCode,
+        productNature: s0.productNature, material: s0.material, originCountry: s0.originCountry, quantity: Number(s0.quantity) || 1,
+        length: Number(pkg.length) || 0, width: Number(pkg.width) || 0, height: Number(pkg.height) || 0, weight: Number(pkg.weight) || 0, dimUnit: dimU, weightUnit: wtU,
+      });
+      if (r.error) return setProductMsg({ ok: false, text: r.error });
+      setProducts(r.products!);
+      setProductId(r.id!);
+      setProductMsg({ ok: true, text: t("已存为常用产品“{name}”，下次在“包裹”上方直接选", { name: r.products!.find((x) => x.id === r.id)?.name ?? "" }) });
+    });
+  };
+  const picked = products.find((p) => p.id === productId);
   const bestPrice = quotes?.filter((q) => q.ok).map((q) => q.price!)[0];
 
   const skuTable = (req: string) => (
@@ -482,6 +527,12 @@ export default function ShipForm(props: {
                           list={props.skuPresets?.length ? "sku-presets" : undefined}
                           onChange={(e) => {
                             const v = e.target.value;
+                            // 存过的常用产品：带出商品信息；只有这一个商品、包裹还没填时，连包裹尺寸重量一起带出
+                            const prod = products.find((x) => x.sku && x.sku.toUpperCase() === v.trim().toUpperCase());
+                            if (prod) {
+                              if (skus.length === 1 && !pkg.length && !pkg.width && !pkg.height && !pkg.weight) return applyProduct(prod, v);
+                              return setSku(i, { ...skuOf(prod), sku: v, quantity: s.quantity });
+                            }
                             // 输入 / 选中以前发过的 SKU：带出品名、申报价、海关编码等（数量不变）
                             const p = props.skuPresets?.find((x) => x.sku === v.trim());
                             setSku(i, p ? {
@@ -551,7 +602,21 @@ export default function ShipForm(props: {
                 </tbody>
               </table>
             </div>
-            <button className="small" style={{ marginTop: 8 }} onClick={() => dirty(setSkus)([...skus, emptySku()])}>{t("＋ 添加商品")}</button>
+            <div className="row" style={{ marginTop: 8, gap: 8 }}>
+              <button className="small" onClick={() => dirty(setSkus)([...skus, emptySku()])}>{t("＋ 添加商品")}</button>
+              {portal && (
+                <button
+                  type="button"
+                  className="small"
+                  disabled={savingProduct || skus.length !== 1}
+                  title={skus.length !== 1 ? t("只有一个商品的包裹可以存为常用产品") : t("把这个商品和包裹尺寸重量存起来，下次直接选")}
+                  onClick={onSaveProduct}
+                >
+                  {savingProduct ? t("保存中…") : t("存为常用产品")}
+                </button>
+              )}
+              {productMsg && <span className="small" style={{ color: productMsg.ok ? "var(--accent)" : "var(--err)" }}>{productMsg.text}</span>}
+            </div>
     </>
   );
 
@@ -708,6 +773,24 @@ export default function ShipForm(props: {
             </div>
           </div>
         </div>
+        {products.length > 0 && (
+          <div className="pkg-presets product-pick">
+            <span className="small muted">{t("常用产品")}</span>
+            <select
+              value=""
+              aria-label={t("常用产品")}
+              onChange={(e) => {
+                const p = products.find((x) => x.id === Number(e.target.value));
+                if (p) applyProduct(p);
+              }}
+            >
+              <option value="">{t("选择常用产品，带出商品和包裹尺寸重量…")}</option>
+              {products.map((p) => <option key={p.id} value={p.id}>{p.name}{p.quantity > 1 ? ` ×${p.quantity}` : ""} · {p.length}×{p.width}×{p.height} {p.dimUnit} · {p.weight} {p.weightUnit}</option>)}
+            </select>
+            {picked && <span className="small" style={{ color: "var(--accent)" }}>{t("已带出“{name}”的商品和包裹，可以再修改", { name: picked.name })}</span>}
+            {portal && <a className="small" href="/portal/products">{t("管理常用产品")}</a>}
+          </div>
+        )}
         {!!props.recentPackages?.length && (
           <div className="pkg-presets">
             <span className="small muted">{t("常用尺寸")}</span>

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { listProducts } from "@/lib/products";
 import { requireCustomer } from "@/lib/auth";
 import { customerChannels, getSettings } from "@/lib/db";
 import { listSenders } from "@/lib/senders";
@@ -39,7 +40,7 @@ export default async function PortalShipPage({ searchParams }: { searchParams: P
       )}
       <DraftList scope="portal" drafts={draftRows(me.id, { us: "/portal/ship", intl: "/portal/intl" })} currentId={draft?.id} max={MAX_DRAFTS} newHref={`/portal/ship?n=${Date.now()}`} />
       {src && <div className="alert info">{t("已复制订单 {no} 的收件人、包裹和商品，修改后查询运费下单。", { no: src.ref })}</div>}
-      <ShipForm key={draft ? `d${draft.id}` : src ? `c${src.id}` : `new${sp.n ?? ""}`} mode="portal" draftScope="portal" draft={draft ?? undefined} copy={src ?? undefined} recentPackages={recentPackages(me.id)} skuPresets={skuPresets(me.id)} senders={listSenders(me.id)} defaultSender={s.sender} wallet={{ balance: me.balance, creditLimit: me.creditLimit, rule: s.balanceRule }} defaultUnit={s.defaultUnit} defaultCurrency={s.defaultCurrency} />
+      <ShipForm key={draft ? `d${draft.id}` : src ? `c${src.id}` : `new${sp.n ?? ""}`} mode="portal" draftScope="portal" draft={draft ?? undefined} copy={src ?? undefined} recentPackages={recentPackages(me.id)} skuPresets={skuPresets(me.id)} products={listProducts(me.id)} senders={listSenders(me.id)} defaultSender={s.sender} wallet={{ balance: me.balance, creditLimit: me.creditLimit, rule: s.balanceRule }} defaultUnit={s.defaultUnit} defaultCurrency={s.defaultCurrency} />
     </>
   );
 }
