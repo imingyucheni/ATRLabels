@@ -290,12 +290,16 @@ describe("安全修复", () => {
 
   /* ---------------- 3. 员工倒推不出成本 ---------------- */
 
-  it("员工的报价里没有加价规则（加价 %、返利、活动）；主管理员有", async () => {
+  it("员工：授权给他的客户看全部数据（成本、利润、加价规则）；新客户试算只有客户价；主管理员都有", async () => {
     st.setStaffAccess(sid, { mode: "list", customers: { [String(cid)]: "view" } });
-    const staffEv = await collect({ kind: "admin", admin: staffWho }, { mode: "admin", customerId: cid, req });
-    const staffQuotes = [...(staffEv.find((e) => e.t === "done") as { quotes: Record<string, unknown>[] }).quotes, ...staffEv.filter((e) => e.t === "q").map((e) => (e as { q: Record<string, unknown> }).q)];
-    expect(staffQuotes.some((q) => q.ok && typeof q.price === "number")).toBe(true);
-    for (const q of staffQuotes) for (const k of ["rule", "cost", "listCost", "profit", "ms"]) expect(q, k).not.toHaveProperty(k);
+    const quotesOf = (ev: import("@/lib/quoteStream").QuoteStreamEvent[]) => [...(ev.find((e) => e.t === "done") as { quotes: Record<string, unknown>[] }).quotes, ...ev.filter((e) => e.t === "q").map((e) => (e as { q: Record<string, unknown> }).q)];
+    const staffQuotes = quotesOf(await collect({ kind: "admin", admin: staffWho }, { mode: "admin", customerId: cid, req }));
+    expect(staffQuotes.some((q) => q.ok && typeof q.price === "number" && typeof q.cost === "number" && typeof q.profit === "number" && q.rule)).toBe(true);
+    for (const q of staffQuotes) expect(q).not.toHaveProperty("ms");
+    // 新客户试算（没选客户）：只有客户价
+    const prospect = quotesOf(await collect({ kind: "admin", admin: staffWho }, { mode: "admin", customerId: 0, markup: { percent: 50 }, req }));
+    expect(prospect.some((q) => q.ok && typeof q.price === "number")).toBe(true);
+    for (const q of prospect) for (const k of ["rule", "cost", "listCost", "profit", "ms"]) expect(q, k).not.toHaveProperty(k);
     const ownerEv = await collect({ kind: "admin", admin: owner }, { mode: "admin", customerId: cid, req });
     const ownerQuotes = (ownerEv.find((e) => e.t === "done") as { quotes: Record<string, unknown>[] }).quotes;
     expect(ownerQuotes.some((q) => q.ok && q.rule && typeof q.cost === "number")).toBe(true);

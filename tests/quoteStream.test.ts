@@ -54,7 +54,7 @@ describe("边查边报（下单页查询运费）", () => {
     expect(start.channels.every((c) => !/·\s*SB/.test(c.name))).toBe(true);
   });
 
-  it("后台：主管理员看得到成本和每个渠道的用时；员工看不到成本；没有这个客户权限的员工被拒绝", async () => {
+  it("后台：主管理员看得到成本和每个渠道的用时；员工看得到授权客户的成本（没有用时）；没有这个客户权限的员工被拒绝", async () => {
     const owner = { kind: "admin" as const, admin: { role: "owner" as const, id: 0 as const, name: "主管理员" } };
     const ev = await collect(owner, { mode: "admin", customerId: cid, req });
     const done = ev.find((e) => e.t === "done") as { quotes: { ok: boolean; cost?: number; ms?: number }[] };
@@ -71,7 +71,8 @@ describe("边查边报（下单页查询运费）", () => {
     grantCustomer(sid, cid, "view");
     const ok = await collect(staff, { mode: "admin", customerId: cid, req });
     const d2 = ok.find((e) => e.t === "done") as { quotes: Record<string, unknown>[] };
-    expect(d2.quotes.every((q) => q.cost === undefined && q.profit === undefined)).toBe(true);
+    expect(d2.quotes.some((q) => q.ok && typeof q.cost === "number" && typeof q.profit === "number")).toBe(true);
+    expect(d2.quotes.every((q) => q.ms === undefined)).toBe(true);
     // 员工不能用“管理员下单”（成本价）
     expect(await collect(staff, { mode: "house", req })).toEqual([{ t: "err", errors: ["只有主管理员可以这样操作"] }]);
   });

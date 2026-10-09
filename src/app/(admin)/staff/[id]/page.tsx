@@ -6,7 +6,8 @@ import { listCustomers } from "@/lib/db";
 import { accessOf, customerLevel, getStaff } from "@/lib/staffStore";
 import { money } from "@/lib/pricing";
 import { getT } from "@/lib/prefs";
-import { setStaffAccessAction } from "@/app/staffActions";
+import { bindStaffSalesAction, setStaffAccessAction } from "@/app/staffActions";
+import { listSales, salesOfStaff } from "@/lib/commission";
 import SetAllSelects from "@/components/SetAllSelects";
 
 export const dynamic = "force-dynamic";
@@ -26,11 +27,34 @@ export default async function StaffAccessPage({ params }: { params: Promise<{ id
     <>
       <div className="page-head">
         <div>
-          <h1>{t("客户权限：{name}", { name: s.name })}</h1>
+          <h1>{t("员工：{name} · 提成和客户权限", { name: s.name })}</h1>
           <p className="page-sub">{t("能操作 {e} 个 · 只能看 {v} 个 · 看不到 {n} 个", { e: counts.edit, v: counts.view, n: counts.none })}</p>
         </div>
         <Link href="/staff">{t("← 返回")}</Link>
       </div>
+
+      {(() => {
+        const rep = salesOfStaff(s.id);
+        const reps = listSales().filter((r) => r.active && (!r.staffId || r.staffId === s.id));
+        return (
+          <FlashForm action={bindStaffSalesAction} submitLabel="保存" className="card" alwaysSubmit>
+            <input type="hidden" name="id" value={s.id} />
+            <h2 style={{ marginTop: 0 }}>{t("提成（绑定销售）")}</h2>
+            <p className="small muted">{t("绑定后：这个员工新开的客户自动归到这个销售名下；归属这个销售的客户，订单按“销售佣金”里的比例（客户单独比例 / 销售默认比例）算提成。员工在“我的看板”里能看到自己的提成（应结、已结）。一个客户只能归一个销售，换人在客户详情 → 渠道与价格 → 销售里改。")}</p>
+            <div className="row" style={{ gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
+              <label className="f" style={{ minWidth: 240 }}>{t("绑定的销售")}
+                <select name="salesId" key={rep ? rep.id : "none"} defaultValue={rep ? String(rep.id) : ""}>
+                  <option value="">{t("不绑定（不算提成）")}</option>
+                  {reps.map((r) => <option key={r.id} value={r.id}>{r.name}{r.rate !== null ? ` · ${r.rate}%` : ""}</option>)}
+                  <option value="new">{t("新建同名销售：{name}", { name: s.name })}</option>
+                </select>
+              </label>
+              <label className="f" style={{ width: 200 }}>{t("新建时的默认比例（利润 %，可以不填）")}<input name="rate" type="number" step="0.01" min="0" max="100" placeholder="10" /></label>
+            </div>
+            {rep && <p className="small" style={{ marginBottom: 0 }}>{t("现在绑定：{name}（默认比例 {rate}）", { name: rep.name, rate: rep.rate !== null ? `${rep.rate}%` : t("未设") })} · <Link href={`/commissions/${rep.id}`}>{t("看佣金明细 →")}</Link></p>}
+          </FlashForm>
+        );
+      })()}
 
       <FlashForm action={setStaffAccessAction} submitLabel="保存客户权限" className="card" review>
         <input type="hidden" name="id" value={s.id} />

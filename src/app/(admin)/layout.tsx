@@ -61,6 +61,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         }
         logout={logoutAction}
         groups={staff ? [
+          { items: [{ href: "/my", label: "我的看板", icon: "dashboard" }] },
           {
             title: "客户",
             items: [

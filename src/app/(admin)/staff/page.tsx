@@ -6,6 +6,7 @@ import { listCustomers } from "@/lib/db";
 import { fmtTime } from "@/lib/time";
 import { getT } from "@/lib/prefs";
 import { createStaffAction, updateStaffAction } from "@/app/staffActions";
+import { salesOfStaff } from "@/lib/commission";
 
 export const dynamic = "force-dynamic";
 
@@ -28,13 +29,13 @@ export default async function StaffPage() {
       <div className="page-head">
         <div>
           <h1>{t("员工账号")}</h1>
-          <p className="page-sub">{t("员工（二级管理员）可以：开客户账号、改客户资料和登录、设置客户的渠道和邮费（加价）、确认客户充值。看不到成本、利润、报表、面单记录、系统设置，也不能加款 / 扣款、改信用额度。")}</p>
+          <p className="page-sub">{t("员工（二级管理员）可以：开客户账号、改客户资料和登录、设置客户的渠道和邮费（加价，不能低于全局默认）、确认客户充值；在“我的看板”看自己负责的客户（授权给他的、归他名下的）的消费、面单、成本、利润，以及自己的提成。看不到其他客户、报表、全部面单记录、系统设置，也不能加款 / 扣款、改信用额度。")}</p>
         </div>
       </div>
 
       <div className="card table-wrap">
         <table className="card-table">
-          <thead><tr><th>{t("姓名")}</th><th>{t("登录名")}</th><th>{t("状态")}</th><th>{t("客户权限")}</th><th>{t("确认密码")}</th><th>{t("最近登录")}</th><th>{t("操作")}</th></tr></thead>
+          <thead><tr><th>{t("姓名")}</th><th>{t("登录名")}</th><th>{t("状态")}</th><th>{t("客户权限")}</th><th>{t("提成（销售）")}</th><th>{t("确认密码")}</th><th>{t("最近登录")}</th><th>{t("操作")}</th></tr></thead>
           <tbody>
             {list.map((s) => (
               <tr key={s.id}>
@@ -49,6 +50,12 @@ export default async function StaffPage() {
                         {n.edit + n.view === 0 ? <span className="warn-text">{t("还没授权客户")}</span> : t("能操作 {e} · 只能看 {v}", { e: n.edit, v: n.view })}
                       </Link>
                     );
+                  })()}
+                </td>
+                <td data-label={t("提成（销售）")}>
+                  {(() => {
+                    const rep = salesOfStaff(s.id);
+                    return <Link href={`/staff/${s.id}`}>{rep ? `${rep.name}${rep.rate !== null ? ` · ${rep.rate}%` : ""}` : <span className="muted">{t("未绑定")}</span>}</Link>;
                   })()}
                 </td>
                 <td data-label={t("确认密码")}>{s.hasPin ? t("已设置") : <span className="warn-text">{t("还没设置")}</span>}</td>

@@ -23,6 +23,8 @@ export interface SalesRep {
   note: string | null;
   active: boolean;
   createdAt: string;
+  /** 绑定的员工账号（员工在自己的看板里看这个销售的提成） */
+  staffId: number | null;
 }
 
 export interface Assignment {
@@ -120,6 +122,10 @@ function ensureTables() {
     })();
     if (fk) conn.pragma("foreign_keys = ON");
   }
+  // 员工账号绑定销售（算提成）：一个员工对应一个销售
+  if (!(conn.prepare("PRAGMA table_info(sales_reps)").all() as { name: string }[]).some((c) => c.name === "staff_id")) {
+    conn.exec("ALTER TABLE sales_reps ADD COLUMN staff_id INTEGER");
+  }
   return conn;
 }
 
@@ -132,8 +138,49 @@ export function shipmentLocalDate(s: Shipment): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-type RepRow = { id: number; name: string; phone: string | null; email: string | null; rate: number | null; note: string | null; active: number; created_at: string };
-const toRep = (r: RepRow): SalesRep => ({ id: r.id, name: r.name, phone: r.phone, email: r.email, rate: r.rate, note: r.note, active: !!r.active, createdAt: r.created_at });
+type RepRow = { id: number; name: string; phone: string | null; email: string | null; rate: number | null; note: string | null; active: number; created_at: string; staff_id: number | null };
+const toRep = (r: RepRow): SalesRep => ({ id: r.id, name: r.name, phone: r.phone, email: r.email, rate: r.rate, note: r.note, active: !!r.active, createdAt: r.created_at, staffId: r.staff_id ?? null });
+
+/** 员工账号绑定的销售（没绑定 = null） */
+export function salesOfStaff(staffId: number): SalesRep | null {
+  const r = ensureTables().prepare("SELECT * FROM sales_reps WHERE staff_id = ?").get(staffId) as RepRow | undefined;
+  return r ? toRep(r) : null;
+}
+
+/**
+ * 员工账号绑定销售（算提成）：一个员工对应一个销售，一个销售也只对应一个员工。
+ * salesId = null 解除绑定；"new" = 用员工的名字新建一个销售再绑定（默认比例 defaultRate，可以不填）。
+ */
+export function bindStaffSales(staffId: number, staffName: string, salesId: number | "new" | null, defaultRate?: number | string | null): SalesRep | null {
+  const conn = ensureTables();
+  let target: number | null = null;
+  if (salesId === "new") {
+    const exists = conn.prepare("SELECT id FROM sales_reps WHERE name = ?").get(staffName.trim()) as { id: number } | undefined;
+    target = exists?.id ?? saveSales({ name: staffName, rate: defaultRate ?? null });
+  } else if (salesId !== null) {
+    if (!getSales(salesId)) throw new Error("销售不存在");
+    target = salesId;
+  }
+  if (target !== null) {
+    const other = conn.prepare("SELECT staff_id FROM sales_reps WHERE id = ?").get(target) as { staff_id: number | null } | undefined;
+    if (other?.staff_id && other.staff_id !== staffId) throw new Error("这个销售已经绑定了别的员工账号，请先在那个员工那里解除绑定");
+  }
+  conn.transaction(() => {
+    conn.prepare("UPDATE sales_reps SET staff_id = NULL WHERE staff_id = ?").run(staffId);
+    if (target !== null) conn.prepare("UPDATE sales_reps SET staff_id = ? WHERE id = ?").run(staffId, target);
+  })();
+  return target === null ? null : getSales(target);
+}
+
+/**
+ * 员工新开的客户自动归到他绑定的销售（全部订单都算）。客户已经有销售的不动。
+ * 销售没有默认比例时也先归过去，佣金页会提示“未设比例”，主管理员再填。
+ */
+export function autoAssignToStaffSales(customerId: number, staffId: number, by: string) {
+  const rep = salesOfStaff(staffId);
+  if (!rep || currentAssignment(customerId)) return;
+  ensureTables().prepare("INSERT INTO customer_sales (customer_id, sales_id, rate, start_date, created_by) VALUES (?,?,NULL,'',?)").run(customerId, rep.id, by);
+}
 
 export function listSales(): SalesRep[] {
   return (ensureTables().prepare("SELECT * FROM sales_reps ORDER BY active DESC, name").all() as RepRow[]).map(toRep);

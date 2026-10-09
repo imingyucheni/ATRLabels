@@ -123,3 +123,22 @@ export async function setCustomerStaffAction(_: FlashState, fd: FormData): Promi
     return fail(e);
   }
 }
+
+/* ---------- 主管理员：员工账号绑定销售（算提成） ---------- */
+
+export async function bindStaffSalesAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  await requireAdmin();
+  const id = Number(fd.get("id"));
+  const s = getStaff(id);
+  if (!s) return { error: "员工不存在" };
+  const raw = String(fd.get("salesId") ?? "");
+  try {
+    const { bindStaffSales } = await import("@/lib/commission");
+    const rep = bindStaffSales(id, s.name, raw === "new" ? "new" : Number(raw) > 0 ? Number(raw) : null, str(fd.get("rate"), 10) || null);
+    revalidatePath(`/staff/${id}`);
+    revalidatePath("/staff");
+    return { ok: rep ? `已绑定销售“${rep.name}”：他名下客户的订单按销售佣金的比例算提成，员工在“我的看板”里能看到` : "已解除绑定" };
+  } catch (e) {
+    return fail(e);
+  }
+}

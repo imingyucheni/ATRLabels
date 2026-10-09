@@ -1,5 +1,6 @@
 "use server";
 
+import { autoAssignToStaffSales } from "@/lib/commission";
 import { revalidatePath } from "next/cache";
 import { setMultiEnabled } from "@/lib/multiAccess";
 import { redirect } from "next/navigation";
@@ -116,7 +117,7 @@ export async function loginAction(_: unknown, fd: FormData) {
   }
   clearFailures(key);
   await createSession(staff ?? undefined);
-  redirect(staff ? "/customers" : "/");
+  redirect(staff ? "/my" : "/");
 }
 
 export async function logoutAction() {
@@ -333,7 +334,11 @@ export async function saveCustomerAction(_: FlashState, fd: FormData): Promise<F
   logMarkupChange({ scope: "customer", customerId: savedId, label: name, before: beforeMarkup, after: ruleFromForm(fd) });
   revalidatePath("/customers");
   // 员工新建的客户：自动加进他的名单（能操作），不然建完自己就看不到了
-  if (isNew && who.role === "staff") grantCustomer(who.id, savedId);
+  if (isNew && who.role === "staff") {
+    grantCustomer(who.id, savedId);
+    // 员工绑定了销售（算提成）：他开的客户自动归到他名下
+    autoAssignToStaffSales(savedId, who.id, who.name);
+  }
   if (isNew) {
     if (email) {
       updateCustomerPortal(savedId, { email, enabled: true, creditLimit: 0 });

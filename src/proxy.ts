@@ -25,7 +25,7 @@ function guardAdmin(req: NextRequest): NextResponse | null {
   if (PUBLIC.some((re) => re.test(path))) return null;
   const w = who(req);
   if (!w) return NextResponse.redirect(loginUrl(req));
-  if (w.role === "staff" && !staffCanOpen(path)) return NextResponse.redirect(siteUrl(req, "/customers"));
+  if (w.role === "staff" && !staffCanOpen(path)) return NextResponse.redirect(siteUrl(req, "/my"));
   // 员工打开没授权给他的客户（详情、对账单、扣款明细…），或者客户编号不是纯数字（5.0、%35、0x5…）：跳回客户列表。
   // 这里不打开数据库，判断不了公司自用账户（skipInternal）；客户页面自己会再完整检查一遍权限
   if (w.role === "staff") {

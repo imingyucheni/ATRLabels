@@ -23,8 +23,9 @@ import { setInternalCustomerCheck } from "./staffStore";
 setInternalCustomerCheck(isInternalCustomer);
 
 /**
- * 员工看到的报价：只有客户价（和限时活动的活动名、原价）。
- * 成本、原价、利润、用时、加价规则（加价 %、固定加价、返利、活动）都不给：知道规则和客户价就能倒推出成本。
+ * 员工给还没开户的新客户试算时看到的报价：只有客户价（和限时活动的活动名、原价）。
+ * 成本、原价、利润、用时、加价规则都不给：知道规则和客户价就能倒推出成本。
+ * （员工自己负责 / 授权的客户可以看全部数据，包括成本和利润，见 runQuoteStream）
  */
 export function staffQuote(q: ChannelQuote): Omit<ChannelQuote, "cost" | "listCost" | "profit" | "ms" | "rule"> {
   const { cost: _c, listCost: _l, profit: _p, ms: _m, rule: _r, ...rest } = q;
@@ -91,7 +92,7 @@ export async function runQuoteStream(who: QuoteStreamWho, input: QuoteStreamInpu
   if (who.kind !== "admin") return fail(["请先登录后台"]);
   const admin = who.admin;
 
-  /* ---------- 后台运费试算（员工也能用，只看客户价） ---------- */
+  /* ---------- 后台运费试算（员工也能用：自己负责 / 授权的客户看全部数据；新客户试算只看客户价） ---------- */
   if (input.mode === "admin") {
     const customerId = Number(input.customerId) || 0;
     if (customerId && !customerAccess(admin, customerId)) return fail(["你没有这个客户的权限，请找主管理员授权"]);
@@ -106,7 +107,14 @@ export async function runQuoteStream(who: QuoteStreamWho, input: QuoteStreamInpu
       const low = staffProspectMarkupError(m);
       if (low) return fail([low]);
     }
-    const shape = (q: ChannelQuote) => (admin.role === "staff" ? staffQuote(q) : q);
+    // 员工：授权给他的客户看全部数据（成本、利润、加价规则，他要知道自己客户的利润）；新客户试算只看客户价
+    const shape = (q: ChannelQuote) => {
+      if (admin.role !== "staff") return q;
+      if (!customerId) return staffQuote(q);
+      const { ms: _ms, ...full } = q;
+      void _ms;
+      return full;
+    };
     return run(customerId, req, false, shape, customerId ? undefined : m);
   }
 

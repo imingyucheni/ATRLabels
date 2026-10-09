@@ -44,7 +44,7 @@ describe("后台页面要先登录（proxy 拦截，页面不渲染）", () => {
     }
   });
 
-  it("员工登录：只能开客户、咨询、试算、财务、我的账号；其他页面跳回客户列表", async () => {
+  it("员工登录：只能开我的看板、客户、咨询、试算、财务、我的账号；其他页面跳回我的看板", async () => {
     const st = await import("@/lib/staffStore");
     const { staffToken } = await import("@/lib/adminSession");
     const id = st.createStaff({ name: "Amy", username: "amy", password: "amy-pass-1" });
@@ -53,13 +53,13 @@ describe("后台页面要先登录（proxy 拦截，页面不渲染）", () => {
     // 新员工默认一个客户都看不到：打开客户详情被挡回列表
     expect(proxy(req("/customers/3", { cookie })).headers.get("location")).toBe("http://localhost:3000/customers?denied=customer");
     st.setStaffAccess(id, { mode: "list", customers: { "3": "view" } });
-    for (const p of ["/customers", "/customers/3?tab=pricing", "/customers/3/statement", "/finance", "/quote", "/leads", "/account"]) expect(proxy(req(p, { cookie })).headers.get("location"), p).toBeNull();
+    for (const p of ["/my", "/customers", "/customers/3?tab=pricing", "/customers/3/statement", "/finance", "/quote", "/leads", "/account"]) expect(proxy(req(p, { cookie })).headers.get("location"), p).toBeNull();
     expect(proxy(req("/customers/4", { cookie })).headers.get("location")).toBe("http://localhost:3000/customers?denied=customer");
     // 全部客户模式，单独排除 4 号
     st.setStaffAccess(id, { mode: "all", customers: { "4": "none" } });
     expect(proxy(req("/customers/9", { cookie })).headers.get("location")).toBeNull();
     expect(proxy(req("/customers/4/charges", { cookie })).headers.get("location")).toBe("http://localhost:3000/customers?denied=customer");
-    for (const p of ["/", "/reports", "/shipments", "/settings", "/commissions", "/staff", "/backups"]) expect(proxy(req(p, { cookie })).headers.get("location"), p).toBe("http://localhost:3000/customers");
+    for (const p of ["/", "/reports", "/shipments", "/settings", "/commissions", "/staff", "/backups"]) expect(proxy(req(p, { cookie })).headers.get("location"), p).toBe("http://localhost:3000/my");
     // 停用后：直接跳登录页
     st.setStaffActive(id, false);
     expect(proxy(req("/customers", { cookie })).headers.get("location")).toBe("http://localhost:3000/login");

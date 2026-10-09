@@ -56,10 +56,11 @@ export function verifyAdminToken(token: string | undefined | null): boolean {
 }
 
 /**
- * 员工能打开的后台页面：客户（开户、设置邮费）、客户咨询、运费试算、财务充值确认、自己的账号。
- * 其他页面（概览、报表、面单记录、设置、备份、佣金…）看得到成本和利润，只有主管理员能开。
+ * 员工能打开的后台页面：我的看板（自己负责的客户的消费、成本、利润和自己的提成）、客户（开户、设置邮费）、
+ * 客户咨询、运费试算、财务充值确认、自己的账号。
+ * 其他页面（概览、报表、面单记录、设置、备份、佣金…）是全部客户的数据，只有主管理员能开。
  */
-export const STAFF_PAGES = [/^\/customers(\/|$)/, /^\/leads(\/|$)/, /^\/quote(\/|$)/, /^\/finance(\/|$)/, /^\/account(\/|$)/];
+export const STAFF_PAGES = [/^\/my(\/|$)/, /^\/customers(\/|$)/, /^\/leads(\/|$)/, /^\/quote(\/|$)/, /^\/finance(\/|$)/, /^\/account(\/|$)/];
 export const staffCanOpen = (path: string) => STAFF_PAGES.some((re) => re.test(path));
 
 /**
