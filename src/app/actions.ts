@@ -1,5 +1,6 @@
 "use server";
 
+import { assignNewCustomerToStaff } from "@/lib/commission";
 import { revalidatePath } from "next/cache";
 import { setMultiEnabled } from "@/lib/multiAccess";
 import { redirect } from "next/navigation";
@@ -333,7 +334,16 @@ export async function saveCustomerAction(_: FlashState, fd: FormData): Promise<F
   logMarkupChange({ scope: "customer", customerId: savedId, label: name, before: beforeMarkup, after: ruleFromForm(fd) });
   revalidatePath("/customers");
   // 员工新建的客户：自动加进他的名单（能操作），不然建完自己就看不到了
-  if (isNew && who.role === "staff") grantCustomer(who.id, savedId);
+  if (isNew && who.role === "staff") {
+    grantCustomer(who.id, savedId);
+    // 员工自己开的客户默认归他：提成按设置的比例（默认利润的 30%，其余归公司），之后可以在客户详情里单独改
+    try {
+      assignNewCustomerToStaff(savedId, who, getSettings().staffCommissionRate ?? 30);
+    } catch (e) {
+      // 自动归属没成功（例如同名销售已经绑定了别的员工）不影响开户：主管理员在客户详情里再分配
+      console.warn(`[提成] 客户 ${savedId} 没能自动归到员工 ${who.name}：${(e as Error).message}`);
+    }
+  }
   if (isNew) {
     if (email) {
       updateCustomerPortal(savedId, { email, enabled: true, creditLimit: 0 });

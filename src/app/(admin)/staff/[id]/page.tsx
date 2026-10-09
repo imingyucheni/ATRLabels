@@ -41,7 +41,7 @@ export default async function StaffAccessPage({ params }: { params: Promise<{ id
           <FlashForm action={bindStaffSalesAction} submitLabel="保存" className="card" alwaysSubmit>
             <input type="hidden" name="id" value={s.id} />
             <h2 style={{ marginTop: 0 }}>{t("提成（绑定销售）")}</h2>
-            <p className="small muted">{t("提成是按客户绑定的：在客户详情 → 渠道与价格 →“销售归属（佣金）”里给客户选这个销售和比例（例如利润的 5%），每个客户可以不同；没绑定销售的客户，利润全部归公司。这里把员工账号和他的销售对应起来，员工在“我的看板”里就能看到自己的提成（应结、已结）。")}</p>
+            <p className="small muted">{t("提成是按客户绑定的：员工自己新开的客户默认归他，比例按“员工账号”页的默认提成；其他客户在客户详情 → 渠道与价格 →“销售归属（佣金）”里选销售和比例，每个客户可以不同、随时调整；没绑定销售的客户，利润全部归公司。这里把员工账号和他的销售对应起来（员工第一次开客户时没绑定会自动用他的名字新建），员工在“我的看板”里就能看到自己的提成。")}</p>
             <div className="row" style={{ gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
               <label className="f" style={{ minWidth: 240 }}>{t("绑定的销售")}
                 <select name="salesId" key={rep ? rep.id : "none"} defaultValue={rep ? String(rep.id) : ""}>

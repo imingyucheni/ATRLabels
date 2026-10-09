@@ -142,3 +142,18 @@ export async function bindStaffSalesAction(_: FlashState, fd: FormData): Promise
     return fail(e);
   }
 }
+
+/** 主管理员：员工新开客户的默认提成比例（利润 %，其余归公司）；只影响以后新开的客户 */
+export async function saveStaffCommissionRateAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  await requireAdmin();
+  try {
+    const { parseRate } = await import("@/lib/commission");
+    const { saveSettings } = await import("@/lib/db");
+    const rate = parseRate(fd.get("rate"));
+    saveSettings({ staffCommissionRate: rate });
+    revalidatePath("/staff");
+    return { ok: `已保存：员工以后新开的客户默认提成 ${rate}%（其余 ${Math.round((100 - rate) * 100) / 100}% 归公司），已有客户不变` };
+  } catch (e) {
+    return fail(e);
+  }
+}

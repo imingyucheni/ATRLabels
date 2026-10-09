@@ -11,7 +11,7 @@ import { localizeChannelName } from "@/lib/carriers";
 import StatusBadge from "@/components/StatusBadge";
 import TrackingLink from "@/components/TrackingLink";
 import Profit from "@/components/Profit";
-import { shipmentProfit } from "@/lib/db";
+import { getSettings, shipmentProfit } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -72,7 +72,7 @@ export default async function MyDashboard({ searchParams }: { searchParams: Prom
         {c ? (
           <>
             <p className="small muted" style={{ marginTop: 0 }}>
-              {t("提成按客户算：归你名下的每个客户有自己的比例（例如利润的 5%），提成 = 这个客户每单的利润 × 比例；没绑定销售的客户利润归公司。亏损单冲减提成，取消单按手续费差额算，补差会影响利润。客户归属和比例由主管理员设置，结算也由主管理员操作。")}
+              {t("提成按客户算：你自己开的客户默认归你（利润的 {r}% 给你，其余归公司），其他客户由主管理员分配；每个客户的比例可以单独调整。提成 = 这个客户每单的利润 × 比例；没绑定销售的客户利润归公司。亏损单冲减提成，取消单按手续费差额算，补差会影响利润。结算由主管理员操作。", { r: getSettings().staffCommissionRate ?? 30 })}
             </p>
             <div className="stats" style={{ margin: 0 }}>
               <div className="stat"><div className="muted">{t("销售")}</div><div className="v" style={{ fontSize: 18 }}>{c.rep.name}</div></div>
@@ -103,7 +103,7 @@ export default async function MyDashboard({ searchParams }: { searchParams: Prom
             )}
           </>
         ) : (
-          <p className="muted" style={{ marginBottom: 0 }}>{t("你的账号还没有绑定销售。请找主管理员在“员工账号”里给你绑定，再把你负责的客户绑定到你名下并设好比例，看板里就会显示你的提成。")}</p>
+          <p className="muted" style={{ marginBottom: 0 }}>{t("你还没有提成记录。你自己开的客户会自动归你（利润的 {r}%）；别的客户需要主管理员分配给你。", { r: getSettings().staffCommissionRate ?? 30 })}</p>
         )}
       </div>
 

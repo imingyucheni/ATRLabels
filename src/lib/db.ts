@@ -426,6 +426,8 @@ export interface Settings {
   sender: Address | null;
   /** 官方账单补差如何转嫁给客户 */
   adjustmentPolicy: AdjustmentPolicy;
+  /** 员工新开的客户默认归开户的员工，提成按利润的这个百分比（其余归公司）；每个客户之后可以单独改 */
+  staffCommissionRate: number;
   /** 客户端显示的公司名称 */
   brandName: string;
   /** 客户端显示的客服联系方式 */
@@ -507,6 +509,7 @@ const DEFAULT_SETTINGS: Settings = {
   defaultCurrency: "USD",
   sender: null,
   adjustmentPolicy: "with_markup",
+  staffCommissionRate: 30,
   brandName: "ATRShip",
   supportContact: "",
   stamp: { ...DEFAULT_STAMP, enabled: false },

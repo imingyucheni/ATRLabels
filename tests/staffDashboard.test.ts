@@ -57,6 +57,21 @@ describe("员工看板和提成", () => {
     com.bindStaffSales(a, "Sand", rep.id);
   });
 
+  it("员工自己开的客户默认归他：按默认提成比例（30%）记在客户上；没绑定销售会自动新建；已经有销售的不动", () => {
+    const c = st.createStaff({ name: "Cara", username: "cara", password: "cara-pass-1" });
+    expect(com.salesOfStaff(c)).toBeNull();
+    const cid = cust("Cara 开的客户");
+    com.assignNewCustomerToStaff(cid, { id: c, name: "Cara" }, db.getSettings().staffCommissionRate);
+    const rep = com.salesOfStaff(c)!;
+    expect(rep.name).toBe("Cara");
+    expect(com.currentAssignment(cid)).toMatchObject({ salesId: rep.id, rate: 30 });
+    // 之后可以单独调整
+    com.assignCustomer(cid, { salesId: rep.id, rate: 20, startDate: "" });
+    expect(com.currentAssignment(cid)?.rate).toBe(20);
+    com.assignNewCustomerToStaff(cid, { id: c, name: "Cara" }, 30);
+    expect(com.currentAssignment(cid)?.rate).toBe(20);
+  });
+
   it("看板只算自己负责的客户（授权的 + 归自己名下的），有成本、利润和自己的提成", async () => {
     const sid = st.listStaff().find((s) => s.username === "sand")!.id;
     const rep = com.salesOfStaff(sid)!;

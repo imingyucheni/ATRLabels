@@ -355,6 +355,18 @@ export function salesNameByCustomer(): Map<number, string> {
   return m;
 }
 
+/**
+ * 员工新开的客户：默认归开户的员工（他绑定的销售；还没绑定就用他的名字新建一个销售并绑定），
+ * 这个客户的提成比例 = rate（例如 30 = 利润的 30% 给员工，70% 归公司）。比例记在这个客户上，之后可以单独改。
+ * 客户已经有销售的不动。
+ */
+export function assignNewCustomerToStaff(customerId: number, staff: { id: number; name: string }, rate: number) {
+  if (currentAssignment(customerId)) return;
+  const rep = salesOfStaff(staff.id) ?? bindStaffSales(staff.id, staff.name, "new");
+  if (!rep) return;
+  ensureTables().prepare("INSERT INTO customer_sales (customer_id, sales_id, rate, start_date, created_by) VALUES (?,?,?,'',?)").run(customerId, rep.id, parseRate(rate), staff.name);
+}
+
 /** 结算：把截至 upTo（含）还没结的佣金一次结清；没有可结的返回 null */
 export function settle(salesId: number, upTo: string, note: string | null, by: string): Payout | null {
   if (!isDate(upTo)) throw new Error("请选择结算截止日期");

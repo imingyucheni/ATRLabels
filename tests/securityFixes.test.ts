@@ -360,6 +360,18 @@ describe("安全修复", () => {
     mk.setCustomerChannelMarkups(cid, { [code]: {} });
   });
 
+  it("员工新开客户：自动授权给他，并默认归他（提成按默认比例 30%）", async () => {
+    asStaff();
+    // 开户成功后跳到新客户的页面（redirect 在测试里是抛错）
+    expect(await thrown(actions.saveCustomerAction(null, fd({ name: "员工开的新客户", contact: "Lee", contactTitle: "老板", phone: "6265550100", address: "1 Test St", email: "lee-staff@example.test" })))).toMatch(/NEXT_REDIRECT:\/customers\/\d+/);
+    const created = db.listCustomers().find((c) => c.name === "员工开的新客户")!;
+    expect(created).toBeTruthy();
+    const com = await import("@/lib/commission");
+    const rep = com.salesOfStaff(sid)!;
+    expect(com.currentAssignment(created.id)).toMatchObject({ salesId: rep.id, rate: 30 });
+    asOwner();
+  });
+
   /* ---------------- 5. 登录限次不能被用来锁别人的账号 ---------------- */
 
   it("后台登录：别人换着 IP 输错 50 次以上，主管理员用对的密码照样能登录；同一个 IP 输错 10 次才挡", async () => {

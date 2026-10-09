@@ -24,6 +24,7 @@ export const patterns: [RegExp, string][] = [
   [/^海关编码（HS）至少 (\d+) 位数字$/, "HS code must be at least $1 digits"],
 
   /* ---------- 限时活动 / 负数加价 ---------- */
+  [/^已保存：员工以后新开的客户默认提成 ([\d.]+)%（其余 ([\d.]+)% 归公司），已有客户不变$/, "Saved: customers opened by staff from now on default to $1% commission ($2% to the company); existing customers are unchanged"],
   [/^已绑定销售“(.+)”：给客户绑定这个销售和比例后，员工在“我的看板”里能看到提成$/, "Linked to sales profile “$1”: once customers are assigned to it with a rate, the staff member sees the commission under My dashboard"],
   [/^items\[(\d+)\]\.unitValue 必填（单件申报价值 USD，大于 0）$/, "items[$1].unitValue is required (declared value per unit in USD, greater than 0)"],
   [/^items\[(\d+)\]\.quantity 必填（大于等于 1）$/, "items[$1].quantity is required (at least 1)"],
