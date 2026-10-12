@@ -220,3 +220,71 @@ describe("FedEx 面单默认加印位置", () => {
     expect(presetForChannel("GOFO-（91710） · SB")).toBeNull();
   });
 });
+
+describe("ShipBest 待出单但带了出单失败原因（尾程拒单）", () => {
+  it("刷新时按出单失败处理：向服务商取消、全额退款、记下原因；客户看到的是整理过的说法", async () => {
+    const db = await import("@/lib/db");
+    const svc = await import("@/lib/service");
+    const ledger = await import("@/lib/ledger");
+    const sb = await import("@/lib/shipbest/client");
+    const { publicError } = await import("@/lib/portal");
+    await svc.syncChannels();
+    const cid = db.saveCustomer(null, { name: "尾程拒单客户", contact: null, phone: null, email: null, note: null, markup: {} });
+    db.setCustomerChannels(cid, db.listChannels().filter((c) => !c.code.startsWith("JG") && !c.code.startsWith("DHL") && !/HWT|MWT/.test(c.name)).map((c) => c.code));
+    ledger.addLedger({ customerId: cid, type: "topup", amount: 100, createdBy: "admin" });
+    const q = (await svc.quoteAll(cid, req)).find((x) => x.ok)!;
+    const id = await svc.createLabel({ customerId: cid, channelCode: q.channelCode, req, expectedPrice: q.price!, customerRef: "REMOTE-1", waitForLabel: false });
+    const before = ledger.balanceOf(cid);
+    const raw = 'Logistics provider error. Please contact the provider: ShipBest 订单出单异常：{"code":500,"msg":"创建尾程失败：供应商响应异常：Cannot create order: Delivery address is located in a remote mountain area that is currently not serviceable.","data":null}';
+    const client = sb.getShipBestClient();
+    const origGet = client.getOrder.bind(client);
+    const cancelled: unknown[] = [];
+    const origCancel = client.cancelOrder.bind(client);
+    client.getOrder = async (k) => ({ ...(await origGet(k)), status: 2, trackingNo: "", labelUrl: "", errorMsg: raw });
+    client.cancelOrder = async (k) => { cancelled.push(k); return origCancel(k); };
+    try {
+      await svc.refreshShipment(id);
+    } finally {
+      client.getOrder = origGet;
+      client.cancelOrder = origCancel;
+    }
+    const s = db.getShipment(id)!;
+    expect(cancelled).toHaveLength(1);
+    expect(s.status).toBe("cancelled");
+    expect(s.errorMsg).toContain(svc.SB_FAILED_MSG);
+    expect(s.errorMsg).toContain("not serviceable");
+    expect(ledger.balanceOf(cid)).toBeCloseTo(before + s.price, 2);
+    // 客户看到的：不带服务商名称和接口原文
+    const pub = publicError(s.errorMsg);
+    expect(pub).toMatch(/^出单失败，系统已自动取消并全额退款/);
+    expect(pub).toContain("偏远");
+    expect(pub).not.toMatch(/ShipBest|Logistics provider|code/);
+    // 同一个订单号可以重新下单（之前那张已经取消）
+    const q2 = (await svc.quoteAll(cid, req)).find((x) => x.ok)!;
+    await expect(svc.createLabel({ customerId: cid, channelCode: q2.channelCode, req, expectedPrice: q2.price!, customerRef: "REMOTE-1", waitForLabel: false })).resolves.toBeGreaterThan(0);
+  });
+
+  it("服务商取消不了：保持出单异常（不再显示等待出单），客户可以申请取消", async () => {
+    const db = await import("@/lib/db");
+    const svc = await import("@/lib/service");
+    const ledger = await import("@/lib/ledger");
+    const sb = await import("@/lib/shipbest/client");
+    const cid = db.saveCustomer(null, { name: "尾程拒单客户 2", contact: null, phone: null, email: null, note: null, markup: {} });
+    db.setCustomerChannels(cid, db.listChannels().filter((c) => !c.code.startsWith("JG") && !c.code.startsWith("DHL") && !/HWT|MWT/.test(c.name)).map((c) => c.code));
+    ledger.addLedger({ customerId: cid, type: "topup", amount: 100, createdBy: "admin" });
+    const q = (await svc.quoteAll(cid, req)).find((x) => x.ok)!;
+    const id = await svc.createLabel({ customerId: cid, channelCode: q.channelCode, req, expectedPrice: q.price!, waitForLabel: false });
+    const client = sb.getShipBestClient();
+    const origGet = client.getOrder.bind(client);
+    const origCancel = client.cancelOrder.bind(client);
+    client.getOrder = async (k) => ({ ...(await origGet(k)), status: 2, trackingNo: "", labelUrl: "", errorMsg: "创建尾程失败：供应商响应异常" });
+    client.cancelOrder = async () => { throw new sb.ShipBestError(11203, "nonsupport"); };
+    try {
+      await svc.refreshShipment(id);
+    } finally {
+      client.getOrder = origGet;
+      client.cancelOrder = origCancel;
+    }
+    expect(db.getShipment(id)).toMatchObject({ status: "exception", errorMsg: "创建尾程失败：供应商响应异常" });
+  });
+});

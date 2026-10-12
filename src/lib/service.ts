@@ -721,6 +721,9 @@ export async function createLabel(input: CreateInput): Promise<number> {
   return id;
 }
 
+/** ShipBest 出单失败、系统已自动取消退款时记在订单上的说明（后面接服务商给的原因） */
+export const SB_FAILED_MSG = "出单失败，系统已自动取消并全额退款，请修改后重新下单或换其他渠道。原因：";
+
 /** 自动备用：备用渠道的利润率至少要有这么多才切（按客户价算） */
 export const FAILOVER_MIN_MARGIN = 0.05;
 
@@ -810,6 +813,7 @@ export async function refreshShipment(id: number): Promise<Shipment> {
   // 从这里到写回之间没有等待，读到的就是最新状态
   const cur = getShipment(id) ?? s;
   let justTimedOut = false;
+  let sbFailed = false;
   if (d.status === 6) {
     if (cur.status !== "cancelled") Object.assign(patch, cancelPatch(cur, wasLabeled(cur)));
   } else if (cur.status === "cancelled") {
@@ -817,6 +821,14 @@ export async function refreshShipment(id: number): Promise<Shipment> {
     if (d.status === 4) patch.errorMsg = "本地已取消并退款，但服务商显示已出面单，请和服务商核实是否已作废";
   } else if (cur.status !== "cancel_requested") {
     patch.status = d.status === 4 ? "labeled" : d.status === 3 ? "exception" : "pending";
+    // ShipBest：状态还是“待出单”，但带了出单失败的原因（例如尾程拒单：偏远地区不派送）→ 这单不会再出面单了，按出单失败处理
+    if (patch.status === "pending" && !patch.labelUrl && d.errorMsg && !isJiaguCode(s.channelCode) && !isDhlCode(s.channelCode)) {
+      patch.status = "exception";
+      if (cur.status !== "exception") {
+        logProviderEvent(s.customNo, "系统", "系统判断", null, "服务商显示待出单，但返回了出单失败的原因，按出单失败处理");
+        sbFailed = true;
+      }
+    }
     // 嘉谷：下单 5 分钟还没有面单基本就是出问题了 → 标异常，让客户联系我们或先换渠道重新下单，我们再找嘉谷处理
     if (patch.status === "pending" && !patch.labelUrl && isJiaguCode(s.channelCode) && labelOverdue(s.createdAt)) {
       patch.status = "exception";
@@ -837,6 +849,16 @@ export async function refreshShipment(id: number): Promise<Shipment> {
     notifyLater(s.customerId, "exception", { zh: `订单 ${ref} 出单超时，已自动取消`, en: `Order ${ref} timed out and was cancelled` }, {
       zh: [`订单 ${ref} 的渠道出单超时，系统已自动取消并全额退回余额，请换其他渠道重新下单。`],
       en: [`Order ${ref} timed out on this service. It has been cancelled and fully refunded; please ship it again with another service.`],
+    });
+    return getShipment(id)!;
+  }
+  // ShipBest 出单失败（不会再出面单）：马上向服务商取消这张单并全额退款，客户修改后重新下单或换渠道，和下单时直接被拒一样
+  if (sbFailed && (await autoVoid(getShipment(id)!, `${SB_FAILED_MSG}${d.errorMsg}`))) {
+    const ref = s.customerRef || s.customNo;
+    const reason = publicError(d.errorMsg);
+    notifyLater(s.customerId, "exception", { zh: `订单 ${ref} 出单失败，已自动取消`, en: `Order ${ref} failed and was cancelled` }, {
+      zh: [`订单 ${ref} 没能出面单${reason ? `：${reason}` : ""}。系统已自动取消并全额退回余额，请修改后重新下单或换其他渠道。`],
+      en: [`No label could be created for order ${ref}${reason ? `: ${reason}` : ""}. It has been cancelled and fully refunded; please correct it and ship again, or use another service.`],
     });
     return getShipment(id)!;
   }

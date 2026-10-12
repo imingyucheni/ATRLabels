@@ -150,6 +150,13 @@ export function portalChannelCodes(customerId: number): string[] {
 
 export function publicError(msg?: string | null): string {
   if (!msg) return "该渠道暂不可用";
+  // 系统自动取消退款的说明：前半句原样给客户，后面的服务商原因再整理
+  const failed = msg.match(/^(出单失败，系统已自动取消并全额退款，请修改后重新下单或换其他渠道。原因：)([\s\S]*)$/);
+  if (failed) return failed[1] + publicError(failed[2]);
+  // 尾程拒单：偏远地区等送不到的地址
+  if (/not (currently )?serviceable|remote (mountain )?area|偏远地区|不派送/i.test(msg)) return "地址未覆盖：这个地址在承运商的偏远 / 不派送区域，请换其他渠道";
+  // 尾程（承运商）没有接单：不给客户看服务商之间的原文
+  if (/创建尾程失败|供应商响应异常|Logistics provider error/i.test(msg)) return "承运商没有接这一单，请检查地址和包裹信息后重新下单，或换其他渠道";
   // 去掉错误码前缀，例如 “[10024] ”（只去开头或冒号后的，不动“邮编[78701]”这类内容）
   // 去掉服务商名称（客户不需要知道是哪家服务商）
   const raw = msg
