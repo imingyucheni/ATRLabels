@@ -319,4 +319,7 @@ export const qa3: Record<string, string> = {
   "没填": "Not provided",
   "第 {n} 行": "Row {n}",
   "暂不可用": "Temporarily unavailable",
+  "正在试算 {n} 单，其他订单可以继续选渠道、勾选和修改": "Quoting {n} order(s) — you can keep choosing services, ticking and editing the others",
+  "等正在试算的订单算完再整批重新试算": "Wait for the orders being quoted to finish before re-quoting the whole batch",
+  "还有 {n} 单在试算，算完就可以提交": "{n} order(s) still being quoted — you can submit once they finish",
 };

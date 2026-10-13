@@ -210,6 +210,35 @@ describe("批量导入：行号、邮编、国际件、表格渠道、运费变�
     expect(job.rows[0].status).toBe("created");
   }, 30_000);
 
+  it("改了一单在重新试算时：别的单照样能选渠道、勾选、修改；提交要等试算完；期间又改的单也会算完", async () => {
+    const refs = ["LIVE-1", "LIVE-2", "LIVE-3"];
+    const orders = refs.map((ref, i) => ({ rowNo: i + 2, customerRef: ref, fileChannel: "", req: req("78701", ref), errors: [] }));
+    const jobId = batch.createJob({ customerId: cid, createdBy: "customer", filename: "l.xlsx", channels: ["LP10210028", "LP10210029"], pickMode: "cheapest", orders });
+    batch.ensureRunning(jobId);
+    let job = await wait(jobId, ["ready"]);
+    const [r1, r2, r3] = refs.map((ref) => job.rows.find((r) => r.customerRef === ref)!);
+    const edit = (r: typeof r1, zip: string) => {
+      const q = req(zip, r.customerRef!);
+      return batch.updateRow(jobId, r.id, { recipient: q.recipient, pkg: q.pkg });
+    };
+    // 改第一单 → 这一单重新试算，任务变成“试算中”
+    expect(edit(r1, "73301")).toBeNull();
+    expect(batch.getJob(jobId)!.status).toBe("quoting");
+    // 别的单：换渠道、取消勾选、再改一单，都可以
+    const other = r2.quotes.find((q) => q.ok && q.code !== r2.channelCode)!;
+    expect(() => batch.chooseRowChannel(jobId, r2.id, other.code)).not.toThrow();
+    expect(() => batch.setSelected(jobId, [r3.id])).not.toThrow();
+    expect(edit(r3, "73301")).toBeNull();
+    // 提交和整批重新试算要等试算完
+    expect(() => batch.confirmJob(jobId)).toThrow(/不能下单/);
+    expect(() => batch.requote(jobId, ["LP10210029"])).toThrow(/正在处理中/);
+    job = await wait(jobId, ["ready"]);
+    expect(job.rows.find((r) => r.id === r1.id)).toMatchObject({ status: "quoted" });
+    expect(job.rows.find((r) => r.id === r3.id)).toMatchObject({ status: "quoted" });
+    expect(job.rows.find((r) => r.id === r2.id)!.channelCode).toBe(other.code);
+    expect(job.rows.find((r) => r.id === r2.id)!.selected).toBe(false);
+  }, 30_000);
+
   it("提交过程中被取消勾选的单（例如店铺同步发现已取消）：跳过不下单", async () => {
     const orders = ["SKIP-1", "SKIP-2"].map((ref, i) => ({ rowNo: i + 2, customerRef: ref, fileChannel: "", req: req("78701", ref), errors: [] }));
     const jobId = batch.createJob({ customerId: cid, createdBy: "customer", filename: "s.xlsx", channels: ["LP10210029"], pickMode: "cheapest", orders });

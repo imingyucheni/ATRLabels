@@ -836,10 +836,14 @@ export function deleteJob(jobId: number) {
 
 const customerOf = (jobId: number) => (db().prepare("SELECT customer_id FROM batch_jobs WHERE id = ?").get(jobId) as { customer_id: number }).customer_id;
 
-function assertEditable(jobId: number) {
+/**
+ * rows = 只动单行（选渠道、勾选、改一单、删单）：有几单在（重新）试算时也可以操作别的单，
+ * 这些操作只碰已经试算好的单，不会和后台试算抢同一行；整批的操作（换渠道重新试算）还是要等试算完。
+ */
+function assertEditable(jobId: number, scope: "rows" | "job" = "job") {
   const j = getJob(jobId);
   if (!j) throw new Error("任务不存在");
-  if (j.status !== "ready") throw new Error("任务正在处理中，请稍后再改");
+  if (j.status !== "ready" && !(scope === "rows" && j.status === "quoting")) throw new Error("任务正在处理中，请稍后再改");
   return j;
 }
 
@@ -872,7 +876,7 @@ function pickFor(quotes: RowQuote[], rule: string, fileChannel: string | null, c
 
 /** 单独改某一单的渠道 */
 export function chooseRowChannel(jobId: number, rowId: number, code: string) {
-  assertEditable(jobId);
+  assertEditable(jobId, "rows");
   const r = jobRows(jobId).find((x) => x.id === rowId);
   if (!r || r.status !== "quoted") throw new Error("这一单不能修改");
   const q = (JSON.parse(r.quotes_json ?? "[]") as RowQuote[]).find((x) => x.code === code && x.ok);
@@ -882,7 +886,7 @@ export function chooseRowChannel(jobId: number, rowId: number, code: string) {
 
 /** 批量改渠道，返回改成功和无法改（该渠道没报价）的数量 */
 export function chooseAll(jobId: number, rule: string, rowIds?: number[]) {
-  assertEditable(jobId);
+  assertEditable(jobId, "rows");
   let changed = 0;
   let skipped = 0;
   for (const r of jobRows(jobId)) {
@@ -898,7 +902,7 @@ export function chooseAll(jobId: number, rule: string, rowIds?: number[]) {
 }
 
 export function setSelected(jobId: number, rowIds: number[] | "all" | "none") {
-  assertEditable(jobId);
+  assertEditable(jobId, "rows");
   for (const r of jobRows(jobId)) {
     if (r.status !== "quoted") continue;
     const sel = rowIds === "all" ? 1 : rowIds === "none" ? 0 : rowIds.includes(r.id) ? 1 : 0;
@@ -911,7 +915,7 @@ export function setSelected(jobId: number, rowIds: number[] | "all" | "none") {
  * 返回校验错误（有错就不保存）。
  */
 export function updateRow(jobId: number, rowId: number, patch: { recipient: Address; pkg: Pick<ShipmentRequest["pkg"], "length" | "width" | "height" | "weight" | "displayUnitSystem"> }): string | null {
-  assertEditable(jobId);
+  assertEditable(jobId, "rows");
   const r = jobRows(jobId).find((x) => x.id === rowId);
   if (!r || r.status === "created" || r.status === "pending" || r.shipment_id) return "这一单不能修改";
   const job = getJob(jobId)!;
@@ -942,8 +946,9 @@ export function updateRow(jobId: number, rowId: number, patch: { recipient: Addr
 
 /** 删除还没提交的订单（待出单的订单还没扣款，可以直接删除） */
 export function deleteRows(jobId: number, rowIds: number[]) {
-  assertEditable(jobId);
-  const ids = jobRows(jobId).filter((r) => rowIds.includes(r.id) && r.status !== "created").map((r) => r.id);
+  assertEditable(jobId, "rows");
+  // 正在试算的单先不删（后台还在写它），试算完再删
+  const ids = jobRows(jobId).filter((r) => rowIds.includes(r.id) && r.status !== "created" && r.status !== "pending").map((r) => r.id);
   const stmt = db().prepare("DELETE FROM batch_job_rows WHERE id = ? AND job_id = ? AND status != 'created'");
   db().transaction(() => ids.forEach((id) => stmt.run(id, jobId)))();
   // 批次里没有订单了就删掉批次
@@ -1018,7 +1023,16 @@ async function pool<T>(items: T[], size: number, fn: (t: T) => Promise<void>) {
 async function quoteJob(jobId: number) {
   const job = getJob(jobId)!;
   const codes = job.channels.map((c) => c.code);
-  const pending = jobRows(jobId).filter((r) => r.status === "pending");
+  // 试算期间客户又改了别的单（变成待试算）：一轮算完再看一遍，全部算完才算“待确认”
+  for (let round = 0; round < 50; round++) {
+    const pending = jobRows(jobId).filter((r) => r.status === "pending");
+    if (!pending.length) break;
+    await quoteRows(jobId, job, codes, pending);
+  }
+  setJob(jobId, "ready");
+}
+
+async function quoteRows(jobId: number, job: BatchJob, codes: string[], pending: ReturnType<typeof jobRows>) {
   // 每单在每个渠道试算一次；同时最多 3 个请求，避免触发频率限制
   await pool(pending, 3, async (r) => {
     const req = JSON.parse(r.req_json) as ShipmentRequest;
@@ -1063,7 +1077,6 @@ async function quoteJob(jobId: number) {
       setRow(r.id, { status: "error", quotes_json: JSON.stringify(quotes), channel_code: null, channel_name: null, price: null, error: `所有渠道都无法报价：${quotes[0]?.error ?? "没有可用渠道"}` });
     }
   });
-  setJob(jobId, "ready");
 }
 
 /** 提交勾选的订单 */

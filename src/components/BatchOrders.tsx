@@ -226,6 +226,9 @@ export default function BatchOrders(props: {
 
   /* ---------- 任务 ---------- */
   const editable = job.status === "ready";
+  // 有几单在（重新）试算时，别的单照样可以选渠道、勾选、修改、删除；提交和整批重新试算要等试算完
+  const rowsEditable = editable || job.status === "quoting";
+  const requoting = job.status === "quoting" ? job.rows.filter((r) => r.status === "pending").length : 0;
   const working = ["quoting", "creating", "labeling"].includes(job.status);
   const quoted = job.rows.filter((r) => r.status === "quoted");
   const chosen = quoted.filter((r) => r.selected && r.channelCode);
@@ -275,8 +278,10 @@ export default function BatchOrders(props: {
         </div>
         {working && (
           <p className="muted">
-            {job.status === "quoting" ? t("正在用 {n} 个渠道逐单试算", { n: job.channels.length }) : job.status === "creating" ? t("正在逐单提交") : t("正在等待面单生成")}…
-            {job.status === "quoting" ? ` ${processed}/${job.rows.length}` : ""}{t("（可以离开这个页面，稍后回来查看）")}
+            {job.status === "quoting" && processed > 0
+              ? t("正在试算 {n} 单，其他订单可以继续选渠道、勾选和修改", { n: requoting })
+              : <>{job.status === "quoting" ? t("正在用 {n} 个渠道逐单试算", { n: job.channels.length }) : job.status === "creating" ? t("正在逐单提交") : t("正在等待面单生成")}…
+            {job.status === "quoting" ? ` ${processed}/${job.rows.length}` : ""}{t("（可以离开这个页面，稍后回来查看）")}</>}
           </p>
         )}
         {job.error && <div className="alert warn">{tr(job.error)}</div>}
@@ -291,7 +296,7 @@ export default function BatchOrders(props: {
           {!house && <div className="stat"><div className="muted">{props.mode === "portal" ? t("账户可用余额") : t("客户可用余额")}</div><div className={`v ${job.available < total ? "profit-neg" : ""}`}>{money(job.available)}</div></div>}
         </div>
 
-        {editable && quoted.length > 0 && (
+        {rowsEditable && quoted.length > 0 && (
           <div style={{ display: "grid", gap: 10, borderTop: "1px solid var(--line)", paddingTop: 12 }}>
             <div className="row" style={{ gap: 8 }}>
               <span className="small muted">{t("勾选的订单：")}</span>
@@ -329,16 +334,19 @@ export default function BatchOrders(props: {
                   /> <ChannelLabel code={c.code} name={c.name} />
                 </label>
               ))}
-              <button className="small" disabled={busy || !requoteSet.size} onClick={() => act(() => requoteAction(job.id, [...requoteSet]))}>{t("重新试算")}</button>
+              <button className="small" disabled={busy || !requoteSet.size || !editable} title={editable ? undefined : t("等正在试算的订单算完再整批重新试算")} onClick={() => act(() => requoteAction(job.id, [...requoteSet]))}>{t("重新试算")}</button>
             </div>
           </div>
         )}
 
         <div className="row" style={{ marginTop: 12 }}>
-          {editable && quoted.length > 0 && (
-            <button className="primary" onClick={onSubmit} disabled={busy || !chosen.length}>
-              {t("提交订单（{n} 单 · 预计应付 {amount}）", { n: chosen.length, amount: money(total) })}
-            </button>
+          {rowsEditable && quoted.length > 0 && (
+            <>
+              <button className="primary" onClick={onSubmit} disabled={busy || !chosen.length || !editable}>
+                {t("提交订单（{n} 单 · 预计应付 {amount}）", { n: chosen.length, amount: money(total) })}
+              </button>
+              {!editable && <span className="small muted">{t("还有 {n} 单在试算，算完就可以提交", { n: requoting })}</span>}
+            </>
           )}
           {labeled.length > 0 && (
             <>
@@ -369,22 +377,22 @@ export default function BatchOrders(props: {
             <input type="checkbox" checked={onlyProblems} onChange={(e) => setOnlyProblems(e.target.checked)} /> {t("只看有问题的订单")}
           </label>
         </div>
-        {dupes > 0 && editable && (
+        {dupes > 0 && rowsEditable && (
           <div className="alert warn">⚠ {t("{n} 单的订单号在别的批次里还没提交，可能是重复导入，已默认不勾选。同一个订单号只能下一次单，哪边先提交就算哪边的。", { n: dupes })}</div>
         )}
-        {storeGone > 0 && editable && (
+        {storeGone > 0 && rowsEditable && (
           <div className="alert warn">⚠ {t("{n} 单在店铺里已经取消或已在别处发货，已取消勾选，不会提交。确认还要发货的请手动勾选。", { n: storeGone })}</div>
         )}
-        {otherWarn > 0 && editable && (
+        {otherWarn > 0 && rowsEditable && (
           <div className="alert warn">⚠ {t("{n} 单有提醒（见每单的说明），已默认不勾选，确认没问题再勾选提交。", { n: otherWarn })}</div>
         )}
-        {fileNotes > 0 && editable && (
+        {fileNotes > 0 && rowsEditable && (
           <div className="alert warn">⚠ {t("{n} 单表格里指定的物流产品用不了，已暂选最便宜的渠道并取消勾选，请确认渠道后再勾选提交。", { n: fileNotes })}</div>
         )}
-        {addrIssues > 0 && editable && (
+        {addrIssues > 0 && rowsEditable && (
           <div className="alert warn">⚠ {t("{n} 单的收件地址核对有问题（查不到或缺公寓号），已默认不勾选。地址写错了点收件人旁边的“修改”；确认没问题的直接勾选就能提交（只是提醒，不影响下单）。", { n: addrIssues })}</div>
         )}
-        {problems > 0 && editable && <p className="small muted">{t("有错误的订单不会提交。点收件人旁边的“修改”改好后会自动重新试算。")}</p>}
+        {problems > 0 && rowsEditable && <p className="small muted">{t("有错误的订单不会提交。点收件人旁边的“修改”改好后会自动重新试算。")}</p>}
       </div>
 
       <div className="card table-wrap">
@@ -392,7 +400,7 @@ export default function BatchOrders(props: {
           <thead>
             <tr>
               <th style={{ width: 32 }}>
-                {editable && quoted.length > 0 && (
+                {rowsEditable && quoted.length > 0 && (
                   <input
                     type="checkbox"
                     aria-label={t("全选")}
@@ -415,7 +423,7 @@ export default function BatchOrders(props: {
                 : r.shipmentStatus === "cancelled"
                   ? [t("已取消"), ""]
                   : r.labelPending ? [t("已扣款 · 面单生成中"), "pending"] : [t(ROW_STATUS[r.status][0]), ROW_STATUS[r.status][1]];
-              const rowEditable = editable && r.status === "quoted";
+              const rowEditable = rowsEditable && r.status === "quoted";
               return (
                 <tr key={r.id} className={(r.warning || addrBad(r)) && r.status === "quoted" ? "row-warn" : undefined}>
                   <td>
@@ -436,7 +444,7 @@ export default function BatchOrders(props: {
                   <td className="nowrap">{r.customerRef ?? "-"}<div className="small muted">{t("第 {n} 行", { n: r.rowNo })}</div></td>
                   <td className="small bt-recip">
                     {r.recipient}
-                    {editable && r.status !== "created" && r.status !== "pending" && !r.shipmentId && (
+                    {rowsEditable && r.status !== "created" && r.status !== "pending" && !r.shipmentId && (
                       <button type="button" className="small" style={{ marginLeft: 6, padding: "0 8px", height: 24 }} disabled={busy} onClick={() => openEdit(r)}>{t("修改")}</button>
                     )}
                     {r.address && r.status !== "created" && (
