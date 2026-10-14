@@ -276,7 +276,13 @@ describe("批量导入：行号、邮编、国际件、表格渠道、运费变�
     // 异常的原单：用同一个订单号重新下单成功后已经取消
     expect(db.getShipment(oldB)!.status).toBe("cancelled");
     expect(() => batch.retryRows(jobId)).toThrow(/没有需要重新下单/);
-  }, 40_000);
+    // 指定渠道：重新试算后都用这个渠道；客户没开通的渠道不行
+    db.updateShipment(na.shipmentId!, { status: "cancelled" });
+    expect(() => batch.retryRows(jobId, undefined, "LP10210433")).toThrow(/没有开通/);
+    expect(batch.retryRows(jobId, undefined, "LP10210030")).toBe(1);
+    job = await wait(jobId, ["ready"]);
+    expect(job.rows.find((r) => r.id === a.id)).toMatchObject({ status: "quoted", channelCode: "LP10210030", selected: true });
+  }, 60_000);
 
   it("提交过程中被取消勾选的单（例如店铺同步发现已取消）：跳过不下单", async () => {
     const orders = ["SKIP-1", "SKIP-2"].map((ref, i) => ({ rowNo: i + 2, customerRef: ref, fileChannel: "", req: req("78701", ref), errors: [] }));

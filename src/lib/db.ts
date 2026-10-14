@@ -270,6 +270,8 @@ function migrate(conn: Database.Database) {
   if (!rcols.includes("addr_json")) conn.exec("ALTER TABLE batch_job_rows ADD COLUMN addr_json TEXT");
   // 统一重新下单时记下原来失败 / 取消的渠道：重新试算时先避开它，选别的渠道
   if (!rcols.includes("avoid_channel")) conn.exec("ALTER TABLE batch_job_rows ADD COLUMN avoid_channel TEXT");
+  // 统一重新下单时指定的渠道（重新试算后默认选它）
+  if (!rcols.includes("pick_channel")) conn.exec("ALTER TABLE batch_job_rows ADD COLUMN pick_channel TEXT");
   const addCust: [string, string][] = [
     ["portal_email", "TEXT"],
     ["password_hash", "TEXT"],

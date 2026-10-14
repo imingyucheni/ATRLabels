@@ -692,6 +692,7 @@ export function flagStoreRow(jobId: number, rowNo: number, gone: boolean) {
 interface JobRowDb {
   id: number;
   avoid_channel?: string | null;
+  pick_channel?: string | null;
   job_id: number;
   row_no: number;
   customer_ref: string | null;
@@ -710,7 +711,7 @@ interface JobRowDb {
   addr_json?: string | null;
 }
 
-type RowPatch = Partial<Pick<JobRowDb, "channel_code" | "channel_name" | "price" | "currency" | "status" | "error" | "shipment_id" | "quotes_json" | "selected" | "addr_json" | "avoid_channel">>;
+type RowPatch = Partial<Pick<JobRowDb, "channel_code" | "channel_name" | "price" | "currency" | "status" | "error" | "shipment_id" | "quotes_json" | "selected" | "addr_json" | "avoid_channel" | "pick_channel">>;
 
 function jobRows(jobId: number): JobRowDb[] {
   return db().prepare("SELECT * FROM batch_job_rows WHERE job_id = ? ORDER BY row_no").all(jobId) as JobRowDb[];
@@ -993,7 +994,7 @@ export function retryableRows(jobId: number): number[] {
  * 出单异常的原单：用同一个订单号下新单成功时，系统会顺带取消原单并退款（closeSupersededExceptions）。
  * 返回退回的行数。
  */
-export function retryRows(jobId: number, rowIds?: number[]): number {
+export function retryRows(jobId: number, rowIds?: number[], rule = "cheapest"): number {
   const j = getJob(jobId);
   if (!j) throw new Error("任务不存在");
   if (j.status === "creating" || j.status === "labeling") throw new Error("任务正在处理中，请稍后再试");
@@ -1002,13 +1003,15 @@ export function retryRows(jobId: number, rowIds?: number[]): number {
   // 用客户现在开通的所有渠道试算（批次导入后才开通的渠道也算进来，例如换一家服务商的同类渠道）
   const current = customerChannels(j.customerId).filter((c) => !isMultiBoxName(c.name)).map((c) => c.code);
   const codes = [...new Set([...j.channels.map((c) => c.code), ...current])].filter((c) => current.includes(c));
+  if (rule !== "cheapest" && !current.includes(rule)) throw new Error("这个渠道客户没有开通，请先在客户详情里开通");
   if (codes.length) db().prepare("UPDATE batch_jobs SET channels_json = ? WHERE id = ?").run(JSON.stringify(codes), jobId);
   const rows = jobRows(jobId);
   for (const id of ids) {
     const r = rows.find((x) => x.id === id)!;
     const old = r.shipment_id ? getShipment(r.shipment_id) : null;
     // 原来那个渠道出了问题：重新试算时先避开它，默认选别的渠道里最便宜的（还是可以手动选回来）
-    setRow(id, { status: "pending", shipment_id: null, selected: 1, error: null, channel_code: null, channel_name: null, price: null, avoid_channel: old?.channelCode ?? r.channel_code });
+    // 指定了渠道：重新试算后选它（这单报不出价时改选别的里最便宜的，并写明原因）
+    setRow(id, { status: "pending", shipment_id: null, selected: 1, error: null, channel_code: null, channel_name: null, price: null, avoid_channel: old?.channelCode ?? r.channel_code, pick_channel: rule === "cheapest" ? null : rule });
   }
   setJob(jobId, "quoting");
   ensureRunning(jobId);
@@ -1107,13 +1110,22 @@ async function quoteRows(jobId: number, job: BatchJob, codes: string[], pending:
     // 统一重新下单的行：先避开原来出问题的渠道（别的渠道都报不出价时才用回它）
     const avoid = r.avoid_channel && quotes.some((q) => q.ok && q.code !== r.avoid_channel) ? r.avoid_channel : null;
     const pickable = avoid ? quotes.filter((q) => q.code !== avoid) : quotes;
-    const chosen = keep ? { quote: keep } : pickFor(pickable, avoid ? "cheapest" : job.pickMode, r.file_channel, job.customerId);
+    // 统一重新下单时指定了渠道：有报价就用它；没有报价就选别的里最便宜的，不勾选并写明原因
+    const fixed = r.pick_channel ? quotes.find((q) => q.ok && q.code === r.pick_channel) : undefined;
+    const fixedMiss = !!r.pick_channel && !fixed;
+    const chosen = keep
+      ? { quote: keep }
+      : fixed
+        ? { quote: fixed }
+        : fixedMiss
+          ? { quote: pickFor(pickable, "cheapest", null, job.customerId).quote, note: "指定的渠道这单没有报价，已暂选最便宜的渠道，请确认后再勾选提交" }
+          : pickFor(pickable, avoid ? "cheapest" : job.pickMode, r.file_channel, job.customerId);
     // 表格里指定的渠道这单用不了：暂选最便宜的，但不勾选、写明原因，让客户确认（不能悄悄换成别的物流商）
     const pick = chosen.quote ?? (chosen.note ? pickFor(quotes, "cheapest", null, job.customerId).quote : undefined);
     if (pick) {
       setRow(r.id, {
         status: "quoted", quotes_json: JSON.stringify(quotes), channel_code: pick.code, channel_name: pick.name, price: pick.price!, currency: pick.currency ?? null,
-        error: chosen.note ?? null, ...(chosen.note ? { selected: 0 } : {}), avoid_channel: null,
+        error: chosen.note ?? null, ...(chosen.note ? { selected: 0 } : {}), avoid_channel: null, pick_channel: null,
       });
     } else {
       setRow(r.id, { status: "error", quotes_json: JSON.stringify(quotes), channel_code: null, channel_name: null, price: null, error: `所有渠道都无法报价：${quotes[0]?.error ?? "没有可用渠道"}` });

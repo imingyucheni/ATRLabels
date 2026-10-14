@@ -175,8 +175,8 @@ export async function deleteRowsAction(jobId: number, rowIds: number[]) {
 }
 
 /** 取消了 / 出单异常的订单统一重新下单（退回待试算，试算完勾选提交） */
-export async function retryRowsAction(jobId: number, rowIds?: number[]) {
-  return edit(jobId, () => `已把 ${retryRows(jobId, rowIds?.map(Number))} 单退回重新试算，算完勾选后点“提交订单”`);
+export async function retryRowsAction(jobId: number, rowIds?: number[], rule = "cheapest") {
+  return edit(jobId, () => `已把 ${retryRows(jobId, rowIds?.map(Number), str(rule, 50) || "cheapest")} 单退回重新试算，算完勾选后点“提交订单”`);
 }
 
 export async function requoteAction(jobId: number, channels: string[]) {

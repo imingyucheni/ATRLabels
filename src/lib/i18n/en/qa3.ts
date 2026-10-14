@@ -331,4 +331,11 @@ export const qa3: Record<string, string> = {
   "任务正在处理中，请稍后再试": "The batch is being processed — please try again shortly",
   "订单信息和订单号不变，用客户现在开通的所有渠道重新试算，默认避开原来出问题的渠道、选别的渠道里最便宜的；算完检查后勾选提交。出单异常的原单在新单下单成功后自动取消退款": "Order details and refs stay the same. They're re-quoted with all services currently enabled, skipping the service that failed and picking the cheapest of the rest; check, tick and submit. A failed original is cancelled and refunded once the new label is created.",
   "把 {n} 单已取消 / 出单异常的订单统一重新下单？会用现在开通的所有渠道重新试算，默认避开原来的渠道；算完检查渠道后点“提交订单”才会下单。": "Re-order all {n} cancelled / failed order(s)? They'll be re-quoted with all services currently enabled, skipping the original service by default. Nothing ships until you check the services and click “Submit orders”.",
+  "重新下单用哪个渠道": "Service for re-ordering",
+  "最便宜的渠道（避开原来的渠道）": "Cheapest service (skip the original)",
+  "固定：{name}": "Fixed: {name}",
+  "订单信息和订单号不变，用客户现在开通的所有渠道重新试算，按左边选的方式选渠道；算完检查后勾选提交。出单异常的原单在新单下单成功后自动取消退款": "Order details and refs stay the same. They're re-quoted with all services currently enabled and the service is chosen as selected on the left; check, tick and submit. A failed original is cancelled and refunded once the new label is created.",
+  "把 {n} 单已取消 / 出单异常的订单统一重新下单？会重新试算并按选的方式选渠道，算完检查后点“提交订单”才会下单。": "Re-order all {n} cancelled / failed order(s)? They'll be re-quoted and the service chosen as selected. Nothing ships until you check them and click “Submit orders”.",
+  "这个渠道客户没有开通，请先在客户详情里开通": "This service isn't enabled for the customer — enable it in the customer details first",
+  "指定的渠道这单没有报价，已暂选最便宜的渠道，请确认后再勾选提交": "The chosen service has no rate for this order, so the cheapest one was picked for now. Check it, then tick to submit.",
 };

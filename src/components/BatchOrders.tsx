@@ -81,6 +81,7 @@ export default function BatchOrders(props: {
   const [bulkChannel, setBulkChannel] = useState("");
   // 修改某一单（收件人 / 包裹）
   type Draft = { rowId: number; rowNo: number; recipient: Partial<Address>; pkg: Record<"length" | "width" | "height" | "weight", string>; unit: number; suggestion?: Partial<Address> | null; error?: string | null };
+  const [retryRule, setRetryRule] = useState("cheapest");
   const [draft, setDraft] = useState<Draft | null>(null);
   const house = props.mode === "house";
   const [custId, setCustId] = useState<number | undefined>(house ? props.customers?.[0]?.id : undefined);
@@ -363,18 +364,24 @@ export default function BatchOrders(props: {
             </>
           )}
           {retryable.length > 0 && !working && (
-            <button
-              className="accent-outline"
-              disabled={busy}
-              title={t("订单信息和订单号不变，用客户现在开通的所有渠道重新试算，默认避开原来出问题的渠道、选别的渠道里最便宜的；算完检查后勾选提交。出单异常的原单在新单下单成功后自动取消退款")}
-              onClick={() => {
-                if (window.confirm(t("把 {n} 单已取消 / 出单异常的订单统一重新下单？会用现在开通的所有渠道重新试算，默认避开原来的渠道；算完检查渠道后点“提交订单”才会下单。", { n: retryable.length }))) {
-                  act(() => retryRowsAction(job.id, retryable.map((r) => r.id)));
-                }
-              }}
-            >
-              {t("统一重新下单（{n} 单）", { n: retryable.length })}
-            </button>
+            <span className="row" style={{ gap: 6, alignItems: "center" }}>
+              <select className="small" style={{ width: "auto" }} value={retryRule} onChange={(e) => setRetryRule(e.target.value)} aria-label={t("重新下单用哪个渠道")}>
+                <option value="cheapest">{t("最便宜的渠道（避开原来的渠道）")}</option>
+                {channelsOf(job.customerId).map((c) => <option key={c.code} value={c.code}>{t("固定：{name}", { name: chName(c.code, c.name).name })}</option>)}
+              </select>
+              <button
+                className="accent-outline"
+                disabled={busy}
+                title={t("订单信息和订单号不变，用客户现在开通的所有渠道重新试算，按左边选的方式选渠道；算完检查后勾选提交。出单异常的原单在新单下单成功后自动取消退款")}
+                onClick={() => {
+                  if (window.confirm(t("把 {n} 单已取消 / 出单异常的订单统一重新下单？会重新试算并按选的方式选渠道，算完检查后点“提交订单”才会下单。", { n: retryable.length }))) {
+                    act(() => retryRowsAction(job.id, retryable.map((r) => r.id), retryRule));
+                  }
+                }}
+              >
+                {t("统一重新下单（{n} 单）", { n: retryable.length })}
+              </button>
+            </span>
           )}
           {job.rows.length > 0 && <a className="btn" href={`/api/batch/${job.id}/export`}>{t("导出 CSV")}</a>}
           {editable && created.length === 0 && (
