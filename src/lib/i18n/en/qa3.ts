@@ -322,4 +322,6 @@ export const qa3: Record<string, string> = {
   "正在试算 {n} 单，其他订单可以继续选渠道、勾选和修改": "Quoting {n} order(s) — you can keep choosing services, ticking and editing the others",
   "等正在试算的订单算完再整批重新试算": "Wait for the orders being quoted to finish before re-quoting the whole batch",
   "还有 {n} 单在试算，算完就可以提交": "{n} order(s) still being quoted — you can submit once they finish",
+  "订单号 {ref} 还有一张没取消的单（{no}，{status}），同一个订单号不能重复下单，新单的订单号已经改成 {next}（可以再改）。": "Order ref {ref} still has an active order ({no}, {status}). The same ref can't be used twice, so the new order's ref has been changed to {next} (you can edit it).",
+  "查看那张单 →": "View that order →",
 };

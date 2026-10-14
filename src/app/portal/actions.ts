@@ -22,7 +22,7 @@ import { adminOrigin } from "@/lib/sites";
 import { usStateCode } from "@/lib/geo";
 import { isPaperSize, PAPER_LABEL } from "@/lib/labelLayout";
 import { deleteSender, listSenders, saveSender, setDefaultSender } from "@/lib/senders";
-import { activeShipmentByRef, duplicateRefMessage, getCustomer, getCustomerLogin, getPasswordHash, getSettings, getShipment, isInternalCustomer, setCustomerLabelPaper, setCustomerPassword, setCustomerSender, setLabelNote } from "@/lib/db";
+import { activeShipmentByRef, duplicateRefMessage, reorderRef, getCustomer, getCustomerLogin, getPasswordHash, getSettings, getShipment, isInternalCustomer, setCustomerLabelPaper, setCustomerPassword, setCustomerSender, setLabelNote } from "@/lib/db";
 import { InsufficientBalanceError } from "@/lib/ledger";
 import { cancelWindowHours, cancelWindowPassed, ownsShipment, publicError, toPublicQuote, type PublicQuote } from "@/lib/portal";
 import { cleanAddress, cleanRequest, n, str } from "@/lib/sanitize";
@@ -126,7 +126,7 @@ export async function portalCreateAction(input: {
     // 订单号重复的先拦下（不用再去核对地址）
     const ref = str(input.customerRef, 50);
     const dupe = ref ? activeShipmentByRef(me.id, ref) : undefined;
-    if (dupe) return { error: await tMsg(duplicateRefMessage(ref, dupe)) };
+    if (dupe) return { error: await tMsg(duplicateRefMessage(ref, dupe, reorderRef(me.id, ref))) };
     // 地址有问题（查不到 / 缺公寓号）时必须客户确认过才能下单
     const address = await checkAddress(cleanRequest(input.req).recipient);
     if (needsAck(address) && !input.addressAck) {
@@ -170,7 +170,7 @@ export async function portalReorderAction(input: {
   try {
     const ref = str(input.customerRef, 50);
     const dupe = ref ? activeShipmentByRef(me.id, ref) : undefined;
-    if (dupe) return { error: await tMsg(duplicateRefMessage(ref, dupe)) };
+    if (dupe) return { error: await tMsg(duplicateRefMessage(ref, dupe, reorderRef(me.id, ref))) };
     const req = cleanRequest(input.req);
     const address = await checkAddress(req.recipient);
     if (needsAck(address) && !input.addressAck) {

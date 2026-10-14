@@ -7,7 +7,7 @@ import { fillFromProduct, type SavedProduct } from "./products";
 import { localizeChannelName, publicChannel, stripProviderTag } from "./carriers";
 import { checkAddress, needsAck, type AddressCheck } from "./addressCheck";
 import ExcelJS from "exceljs";
-import { activeShipmentByRef, customerChannels, db, duplicateRefMessage, getChannel, getCustomer, getSettings, getShipment, listChannels, type Channel, type ShipmentStatus } from "./db";
+import { activeShipmentByRef, customerChannels, db, duplicateRefMessage, reorderRef, getChannel, getCustomer, getSettings, getShipment, listChannels, type Channel, type ShipmentStatus } from "./db";
 import { InsufficientBalanceError } from "./ledger";
 import { createLabel, PriceChangedError, primeQuotes, quoteChannel, refreshShipment, validateRequest, forDestination } from "./service";
 import type { Address, ShipmentRequest, SkuItem, UnitSystem } from "./shipbest/types";
@@ -643,7 +643,7 @@ export function createJob(input: {
     for (const o of input.orders) {
       // 订单号已经下过单（没取消）：直接标错误，不能提交
       const shipped = o.customerRef ? activeShipmentByRef(input.customerId, o.customerRef) : undefined;
-      if (shipped) o.errors.push(duplicateRefMessage(o.customerRef, shipped));
+      if (shipped) o.errors.push(duplicateRefMessage(o.customerRef, shipped, reorderRef(input.customerId, o.customerRef)));
       const dupe = o.customerRef && !shipped ? duplicateWarning(input.customerId, o.customerRef, jobId) : null;
       const warning = [o.warning, dupe].filter(Boolean).join("；") || null;
       stmt.run(jobId, o.rowNo, o.customerRef || null, JSON.stringify(o.req), o.fileChannel || null, o.errors.length ? "error" : "pending", o.errors.join("；") || null, warning, warning || o.errors.length ? 0 : 1);
@@ -920,7 +920,7 @@ export function updateRow(jobId: number, rowId: number, patch: { recipient: Addr
   if (!r || r.status === "created" || r.status === "pending" || r.shipment_id) return "这一单不能修改";
   const job = getJob(jobId)!;
   const shipped = r.customer_ref ? activeShipmentByRef(job.customerId, r.customer_ref) : undefined;
-  if (shipped) return duplicateRefMessage(r.customer_ref!, shipped);
+  if (shipped) return duplicateRefMessage(r.customer_ref!, shipped, reorderRef(job.customerId, r.customer_ref));
   const req = JSON.parse(r.req_json) as ShipmentRequest;
   const old = req.pkg;
   const recipient = { ...patch.recipient };

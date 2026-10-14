@@ -109,6 +109,18 @@ describe("异常单修改后重新下单", () => {
     }
   });
 
+  it("同一个订单号还有没取消的单：提示里建议一个新单号（原单号加字母），中英文都有", async () => {
+    const q = (await svc.quoteAll(cid, req(1))).find((x) => x.ok)!;
+    await svc.createLabel({ customerId: cid, channelCode: q.channelCode, req: req(1), expectedPrice: q.price!, customerRef: "113-7777777-0000001", waitForLabel: false });
+    const err = await svc.createLabel({ customerId: cid, channelCode: q.channelCode, req: req(1), expectedPrice: q.price!, customerRef: "113-7777777-0000001", waitForLabel: false }).then(() => "", (e: Error) => e.message);
+    expect(err).toMatch(/已经下过单/);
+    expect(err).toContain("也可以把订单号改成 113-7777777-0000001A 再下单");
+    const { translateMessage } = await import("@/lib/i18n");
+    expect(translateMessage("en", err)).toMatch(/change the order ref to 113-7777777-0000001A/);
+    // 用建议的单号可以直接下
+    await expect(svc.createLabel({ customerId: cid, channelCode: q.channelCode, req: req(1), expectedPrice: q.price!, customerRef: "113-7777777-0000001A", waitForLabel: false })).resolves.toBeGreaterThan(0);
+  });
+
   it("已取消的单可以重新下单：订单号默认加 A / B，批次里这一行换成新单，不会再去取消原单", async () => {
     const q = (await svc.quoteAll(cid, req(1))).find((x) => x.ok)!;
     const id = await svc.createLabel({ customerId: cid, channelCode: q.channelCode, req: req(1), expectedPrice: q.price!, customerRef: "111-2574169-8848244", waitForLabel: false });

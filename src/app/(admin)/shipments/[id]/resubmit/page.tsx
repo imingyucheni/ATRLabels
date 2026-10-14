@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import ShipForm from "@/components/ShipForm";
-import { getSettings, getShipment, isInternalCustomer, reorderRef } from "@/lib/db";
+import { activeShipmentByRef, getSettings, getShipment, isInternalCustomer, reorderRef, STATUS_LABEL } from "@/lib/db";
 import { listProviderEvents } from "@/lib/providerLog";
 import { fmtTime } from "@/lib/time";
 import { getLang } from "@/lib/prefs";
@@ -24,6 +24,8 @@ export default async function ResubmitPage({ params, searchParams }: { params: P
   const last = listProviderEvents(s.customNo).filter((e) => e.provider !== "系统" && !/^成功/.test(e.message)).slice(-1)[0];
 
   const wasCancelled = s.status === "cancelled";
+  // 同一个订单号还有别的有效单（例如之前那张还在等服务商处理）：新单默认换一个订单号（原单号后面加字母）
+  const other = s.customerRef ? activeShipmentByRef(s.customerId, s.customerRef) : undefined;
   if ((s.status !== "exception" && !wasCancelled) || s.replacedBy) {
     return (
       <>
@@ -49,6 +51,12 @@ export default async function ResubmitPage({ params, searchParams }: { params: P
         </div>
         <Link href={returnTo ?? `/shipments/${s.id}`}>{returnTo ? t("← 返回批次") : t("← 返回订单")}</Link>
       </div>
+      {other && (
+        <div className="alert info">
+          {t("订单号 {ref} 还有一张没取消的单（{no}，{status}），同一个订单号不能重复下单，新单的订单号已经改成 {next}（可以再改）。", { ref: s.customerRef ?? "", no: other.tracking_no ?? other.custom_no, status: t(STATUS_LABEL[other.status]), next: reorderRef(s.customerId, s.customerRef) })}{" "}
+          <Link href={`/shipments/${other.id}`}>{t("查看那张单 →")}</Link>
+        </div>
+      )}
       {!wasCancelled && <div className="alert err">
         <b>{t("原订单异常")}</b>{t("：")}{tm(s.errorMsg) || t("服务商没有返回具体原因")}
         {last && <div className="small" style={{ marginTop: 4 }}>{t("服务商最近一次返回（{time}）", { time: fmtTime(last.lastAt) })}{t("：")}{t(last.action)} · {last.code ? `[${last.code}] ` : ""}{last.message}</div>}
@@ -62,7 +70,7 @@ export default async function ResubmitPage({ params, searchParams }: { params: P
           channelCode: s.channelCode,
           request: { sender: s.sender, recipient: s.recipient, pkg: s.pkg, skuList: s.skuList },
           remark: s.remark,
-          customerRef: wasCancelled ? reorderRef(s.customerId, s.customerRef) : s.customerRef,
+          customerRef: wasCancelled || other ? reorderRef(s.customerId, s.customerRef) : s.customerRef,
           cancelled: wasCancelled,
           returnTo,
         }}

@@ -1312,11 +1312,13 @@ export function activeShipmentByRef(customerId: number, ref: string, opts: { api
 }
 
 /** 订单号重复时的提示 */
-export function duplicateRefMessage(ref: string, s: { custom_no: string; tracking_no: string | null; created_at: string; status?: ShipmentStatus }) {
+export function duplicateRefMessage(ref: string, s: { custom_no: string; tracking_no: string | null; created_at: string; status?: ShipmentStatus }, suggest?: string) {
   // 写上那张单现在的状态：等待出单的多半是卡住了，要先去那张单刷新状态或取消
   const st = s.status ? `，${STATUS_LABEL[s.status]}` : "";
   const tip = s.status === "pending" ? "这张单还在等待出单：请先打开它点“刷新状态”，出不了单的再取消，然后才能重新下单" : "如需重新下单，请先取消原订单";
-  return `订单号 ${ref} 已经下过单（${s.tracking_no ?? s.custom_no}，${fmtTime(s.created_at).slice(0, 10)}${st}），不能重复下单。${tip}`;
+  // 建议一个没用过的新单号（原单号后面加字母），客户改一下就能马上下单
+  const alt = suggest && suggest !== ref ? `；也可以把订单号改成 ${suggest} 再下单` : "";
+  return `订单号 ${ref} 已经下过单（${s.tracking_no ?? s.custom_no}，${fmtTime(s.created_at).slice(0, 10)}${st}），不能重复下单。${tip}${alt}`;
 }
 
 export function findShipmentByKey(key: string): {

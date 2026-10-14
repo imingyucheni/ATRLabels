@@ -21,6 +21,7 @@ import {
   isTestAccount,
   TEST_ACCOUNT_ENV,
   duplicateRefMessage,
+  reorderRef,
 } from "./db";
 import { precheck, rememberQuote } from "./coverage";
 import { downloadLabel, readLabel } from "./labels";
@@ -611,7 +612,7 @@ export async function createLabel(input: CreateInput): Promise<number> {
   const ref = input.customerRef?.trim() || "";
   // 同一个订单号不能重复下单（取消后可以重新下）
   const dupe = ref ? activeShipmentByRef(customerId, ref, { apiTest: !!input.simulate }) : undefined;
-  if (dupe) throw new Error(duplicateRefMessage(ref, dupe));
+  if (dupe) throw new Error(duplicateRefMessage(ref, dupe, reorderRef(customerId, ref)));
   const errors = validateRequest(req);
   if (errors.length) throw new Error(errors.join("；"));
 
@@ -644,7 +645,7 @@ export async function createLabel(input: CreateInput): Promise<number> {
   const id = db().transaction(() => {
     // 试算期间可能已经有同号的单提交了（重复点击 / 两个页面同时下单），入库前再查一次
     const again = ref ? activeShipmentByRef(customerId, ref, { apiTest: !!input.simulate }) : undefined;
-    if (again) throw new Error(duplicateRefMessage(ref, again));
+    if (again) throw new Error(duplicateRefMessage(ref, again, reorderRef(customerId, ref)));
     const newId = insertShipment({
     customNo,
     customerId,
