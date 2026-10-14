@@ -366,9 +366,9 @@ export default function BatchOrders(props: {
             <button
               className="accent-outline"
               disabled={busy}
-              title={t("订单信息和订单号不变，退回重新试算，算完勾选后提交；出单异常的原单在新单下单成功后自动取消退款")}
+              title={t("订单信息和订单号不变，用客户现在开通的所有渠道重新试算，默认避开原来出问题的渠道、选别的渠道里最便宜的；算完检查后勾选提交。出单异常的原单在新单下单成功后自动取消退款")}
               onClick={() => {
-                if (window.confirm(t("把 {n} 单已取消 / 出单异常的订单统一重新下单？会退回重新试算，算完勾选后点“提交订单”才会下单。", { n: retryable.length }))) {
+                if (window.confirm(t("把 {n} 单已取消 / 出单异常的订单统一重新下单？会用现在开通的所有渠道重新试算，默认避开原来的渠道；算完检查渠道后点“提交订单”才会下单。", { n: retryable.length }))) {
                   act(() => retryRowsAction(job.id, retryable.map((r) => r.id)));
                 }
               }}

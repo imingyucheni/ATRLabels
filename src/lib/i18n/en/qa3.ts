@@ -329,4 +329,6 @@ export const qa3: Record<string, string> = {
   "统一重新下单（{n} 单）": "Re-order all ({n})",
   "没有需要重新下单的订单": "No orders need re-ordering",
   "任务正在处理中，请稍后再试": "The batch is being processed — please try again shortly",
+  "订单信息和订单号不变，用客户现在开通的所有渠道重新试算，默认避开原来出问题的渠道、选别的渠道里最便宜的；算完检查后勾选提交。出单异常的原单在新单下单成功后自动取消退款": "Order details and refs stay the same. They're re-quoted with all services currently enabled, skipping the service that failed and picking the cheapest of the rest; check, tick and submit. A failed original is cancelled and refunded once the new label is created.",
+  "把 {n} 单已取消 / 出单异常的订单统一重新下单？会用现在开通的所有渠道重新试算，默认避开原来的渠道；算完检查渠道后点“提交订单”才会下单。": "Re-order all {n} cancelled / failed order(s)? They'll be re-quoted with all services currently enabled, skipping the original service by default. Nothing ships until you check the services and click “Submit orders”.",
 };

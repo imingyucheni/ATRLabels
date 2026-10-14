@@ -255,6 +255,13 @@ describe("批量导入：行号、邮编、国际件、表格渠道、运费变�
     expect(batch.retryableRows(jobId).sort()).toEqual([a.id, b.id].sort());
     expect(batch.retryRows(jobId)).toBe(2);
     job = await wait(jobId, ["ready"]);
+    // 批次导入时只选了 LP10210029：重新下单用客户现在开通的所有渠道试算，并且先避开原来出问题的渠道
+    expect(job.channels.map((c) => c.code).sort()).toEqual(["LP10210028", "LP10210029", "LP10210030"]);
+    for (const id of [a.id, b.id]) {
+      const r = job.rows.find((x) => x.id === id)!;
+      expect(r.quotes.some((q) => q.code === "LP10210028")).toBe(true);
+      expect(r.channelCode).not.toBe("LP10210029");
+    }
     expect(job.rows.find((r) => r.id === a.id)).toMatchObject({ status: "quoted", shipmentId: null, selected: true });
     expect(job.rows.find((r) => r.id === b.id)).toMatchObject({ status: "quoted", shipmentId: null, selected: true });
     expect(job.rows.find((r) => r.id === c.id)!.status).toBe("created");

@@ -268,6 +268,8 @@ function migrate(conn: Database.Database) {
   if (!rcols.includes("warning")) conn.exec("ALTER TABLE batch_job_rows ADD COLUMN warning TEXT");
   // 收件地址核对结果（JSON）
   if (!rcols.includes("addr_json")) conn.exec("ALTER TABLE batch_job_rows ADD COLUMN addr_json TEXT");
+  // 统一重新下单时记下原来失败 / 取消的渠道：重新试算时先避开它，选别的渠道
+  if (!rcols.includes("avoid_channel")) conn.exec("ALTER TABLE batch_job_rows ADD COLUMN avoid_channel TEXT");
   const addCust: [string, string][] = [
     ["portal_email", "TEXT"],
     ["password_hash", "TEXT"],
