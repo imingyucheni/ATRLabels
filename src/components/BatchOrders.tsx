@@ -232,7 +232,7 @@ export default function BatchOrders(props: {
   const rowsEditable = editable || job.status === "quoting";
   const requoting = job.status === "quoting" ? job.rows.filter((r) => r.status === "pending").length : 0;
   // 已下单但后来取消了 / 出单异常的：可以统一重新下单
-  const retryable = job.rows.filter((r) => r.status === "created" && (r.shipmentStatus === "cancelled" || r.shipmentStatus === "exception"));
+  const retryable = job.rows.filter((r) => (r.status === "created" && (r.shipmentStatus === "cancelled" || r.shipmentStatus === "exception")) || ((r.status === "error" || r.status === "failed") && !r.shipmentId && r.quotes.length > 0));
   const working = ["quoting", "creating", "labeling"].includes(job.status);
   const quoted = job.rows.filter((r) => r.status === "quoted");
   const chosen = quoted.filter((r) => r.selected && r.channelCode);
@@ -300,7 +300,7 @@ export default function BatchOrders(props: {
           {!house && <div className="stat"><div className="muted">{props.mode === "portal" ? t("账户可用余额") : t("客户可用余额")}</div><div className={`v ${job.available < total ? "profit-neg" : ""}`}>{money(job.available)}</div></div>}
         </div>
 
-        {rowsEditable && quoted.length > 0 && (
+        {rowsEditable && (quoted.length > 0 || problems > 0) && (
           <div style={{ display: "grid", gap: 10, borderTop: "1px solid var(--line)", paddingTop: 12 }}>
             <div className="row" style={{ gap: 8 }}>
               <span className="small muted">{t("勾选的订单：")}</span>

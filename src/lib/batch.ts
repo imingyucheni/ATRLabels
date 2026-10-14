@@ -982,6 +982,8 @@ export function listDraftRows(customerId?: number) {
 export function retryableRows(jobId: number): number[] {
   return jobRows(jobId)
     .filter((r) => {
+      // 没下成的（所有渠道都报不出价 / 下单失败）也可以统一重新试算
+      if ((r.status === "error" || r.status === "failed") && !r.shipment_id && r.quotes_json) return true;
       if (r.status !== "created" || !r.shipment_id) return false;
       const s = getShipment(r.shipment_id);
       return !!s && (s.status === "cancelled" || s.status === "exception") && !s.replacedBy;
@@ -1064,7 +1066,12 @@ async function pool<T>(items: T[], size: number, fn: (t: T) => Promise<void>) {
 
 async function quoteJob(jobId: number) {
   const job = getJob(jobId)!;
-  const codes = job.channels.map((c) => c.code);
+  // 只用客户现在还开通着的渠道（导入后关掉的渠道不再试算，不然每单都多一行“不可用”）；
+  // 原来选的渠道全都关掉了，就用客户现在开通的所有渠道
+  const current = customerChannels(job.customerId).filter((c) => !isMultiBoxName(c.name)).map((c) => c.code);
+  const kept = job.channels.map((c) => c.code).filter((c) => current.includes(c));
+  const codes = kept.length ? kept : current;
+  if (codes.join() !== job.channels.map((c) => c.code).join() && codes.length) db().prepare("UPDATE batch_jobs SET channels_json = ? WHERE id = ?").run(JSON.stringify(codes), jobId);
   // 试算期间客户又改了别的单（变成待试算）：一轮算完再看一遍，全部算完才算“待确认”
   for (let round = 0; round < 50; round++) {
     const pending = jobRows(jobId).filter((r) => r.status === "pending");
