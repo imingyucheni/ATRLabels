@@ -324,4 +324,9 @@ export const qa3: Record<string, string> = {
   "还有 {n} 单在试算，算完就可以提交": "{n} order(s) still being quoted — you can submit once they finish",
   "订单号 {ref} 还有一张没取消的单（{no}，{status}），同一个订单号不能重复下单，新单的订单号已经改成 {next}（可以再改）。": "Order ref {ref} still has an active order ({no}, {status}). The same ref can't be used twice, so the new order's ref has been changed to {next} (you can edit it).",
   "查看那张单 →": "View that order →",
+  "订单信息和订单号不变，退回重新试算，算完勾选后提交；出单异常的原单在新单下单成功后自动取消退款": "Order details and refs stay the same. They go back for re-quoting; tick and submit once quoted. A failed original is cancelled and refunded automatically once the new label is created.",
+  "把 {n} 单已取消 / 出单异常的订单统一重新下单？会退回重新试算，算完勾选后点“提交订单”才会下单。": "Re-order all {n} cancelled / failed order(s)? They go back for re-quoting; nothing is shipped until you tick them and click “Submit orders”.",
+  "统一重新下单（{n} 单）": "Re-order all ({n})",
+  "没有需要重新下单的订单": "No orders need re-ordering",
+  "任务正在处理中，请稍后再试": "The batch is being processed — please try again shortly",
 };

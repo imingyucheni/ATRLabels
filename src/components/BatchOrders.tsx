@@ -13,6 +13,7 @@ import {
   deleteBatchJobAction,
   getBatchJobAction,
   requoteAction,
+  retryRowsAction,
   setSelectedAction,
   updateRowAction,
   type BatchJobView,
@@ -229,6 +230,8 @@ export default function BatchOrders(props: {
   // 有几单在（重新）试算时，别的单照样可以选渠道、勾选、修改、删除；提交和整批重新试算要等试算完
   const rowsEditable = editable || job.status === "quoting";
   const requoting = job.status === "quoting" ? job.rows.filter((r) => r.status === "pending").length : 0;
+  // 已下单但后来取消了 / 出单异常的：可以统一重新下单
+  const retryable = job.rows.filter((r) => r.status === "created" && (r.shipmentStatus === "cancelled" || r.shipmentStatus === "exception"));
   const working = ["quoting", "creating", "labeling"].includes(job.status);
   const quoted = job.rows.filter((r) => r.status === "quoted");
   const chosen = quoted.filter((r) => r.selected && r.channelCode);
@@ -358,6 +361,20 @@ export default function BatchOrders(props: {
               </a>
               <a className="btn" href={`/api/batch/${job.id}/labels`}>{t("打包下载（每单一个 PDF）")}</a>
             </>
+          )}
+          {retryable.length > 0 && !working && (
+            <button
+              className="accent-outline"
+              disabled={busy}
+              title={t("订单信息和订单号不变，退回重新试算，算完勾选后提交；出单异常的原单在新单下单成功后自动取消退款")}
+              onClick={() => {
+                if (window.confirm(t("把 {n} 单已取消 / 出单异常的订单统一重新下单？会退回重新试算，算完勾选后点“提交订单”才会下单。", { n: retryable.length }))) {
+                  act(() => retryRowsAction(job.id, retryable.map((r) => r.id)));
+                }
+              }}
+            >
+              {t("统一重新下单（{n} 单）", { n: retryable.length })}
+            </button>
           )}
           {job.rows.length > 0 && <a className="btn" href={`/api/batch/${job.id}/export`}>{t("导出 CSV")}</a>}
           {editable && created.length === 0 && (

@@ -239,6 +239,38 @@ describe("批量导入：行号、邮编、国际件、表格渠道、运费变�
     expect(job.rows.find((r) => r.id === r2.id)!.selected).toBe(false);
   }, 30_000);
 
+  it("统一重新下单：取消了 / 出单异常的行退回重新试算，再提交；异常的原单在新单成功后取消退款", async () => {
+    const refs = ["RETRY-1", "RETRY-2", "RETRY-3"];
+    const orders = refs.map((ref, i) => ({ rowNo: i + 2, customerRef: ref, fileChannel: "", req: req("78701", ref), errors: [] }));
+    const jobId = batch.createJob({ customerId: cid, createdBy: "customer", filename: "r.xlsx", channels: ["LP10210029"], pickMode: "cheapest", orders });
+    batch.ensureRunning(jobId);
+    await wait(jobId, ["ready"]);
+    batch.confirmJob(jobId);
+    let job = await wait(jobId, ["done", "ready"]);
+    const [a, b, c] = refs.map((ref) => job.rows.find((r) => r.customerRef === ref)!);
+    expect([a, b, c].every((r) => r.status === "created")).toBe(true);
+    // 第一单取消了，第二单出单异常，第三单正常
+    db.updateShipment(a.shipmentId!, { status: "cancelled" });
+    db.updateShipment(b.shipmentId!, { status: "exception", sbStatus: 3, errorMsg: "测试异常", trackingNo: null, labelUrl: null, labelPath: null });
+    expect(batch.retryableRows(jobId).sort()).toEqual([a.id, b.id].sort());
+    expect(batch.retryRows(jobId)).toBe(2);
+    job = await wait(jobId, ["ready"]);
+    expect(job.rows.find((r) => r.id === a.id)).toMatchObject({ status: "quoted", shipmentId: null, selected: true });
+    expect(job.rows.find((r) => r.id === b.id)).toMatchObject({ status: "quoted", shipmentId: null, selected: true });
+    expect(job.rows.find((r) => r.id === c.id)!.status).toBe("created");
+    const oldB = b.shipmentId!;
+    batch.confirmJob(jobId);
+    job = await wait(jobId, ["done", "ready"]);
+    const na = job.rows.find((r) => r.id === a.id)!;
+    const nb = job.rows.find((r) => r.id === b.id)!;
+    expect(na.status).toBe("created");
+    expect(nb.status).toBe("created");
+    expect(nb.shipmentId).not.toBe(oldB);
+    // 异常的原单：用同一个订单号重新下单成功后已经取消
+    expect(db.getShipment(oldB)!.status).toBe("cancelled");
+    expect(() => batch.retryRows(jobId)).toThrow(/没有需要重新下单/);
+  }, 40_000);
+
   it("提交过程中被取消勾选的单（例如店铺同步发现已取消）：跳过不下单", async () => {
     const orders = ["SKIP-1", "SKIP-2"].map((ref, i) => ({ rowNo: i + 2, customerRef: ref, fileChannel: "", req: req("78701", ref), errors: [] }));
     const jobId = batch.createJob({ customerId: cid, createdBy: "customer", filename: "s.xlsx", channels: ["LP10210029"], pickMode: "cheapest", orders });

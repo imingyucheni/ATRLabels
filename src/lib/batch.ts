@@ -976,6 +976,34 @@ export function listDraftRows(customerId?: number) {
   });
 }
 
+/** 已下单、但后来取消了或出单异常（还没重新下过单）的行：可以统一重新下单 */
+export function retryableRows(jobId: number): number[] {
+  return jobRows(jobId)
+    .filter((r) => {
+      if (r.status !== "created" || !r.shipment_id) return false;
+      const s = getShipment(r.shipment_id);
+      return !!s && (s.status === "cancelled" || s.status === "exception") && !s.replacedBy;
+    })
+    .map((r) => r.id);
+}
+
+/**
+ * 统一重新下单：把取消了 / 出单异常的行退回“待试算”（订单信息不变，订单号不变），重新试算后勾选提交。
+ * 出单异常的原单：用同一个订单号下新单成功时，系统会顺带取消原单并退款（closeSupersededExceptions）。
+ * 返回退回的行数。
+ */
+export function retryRows(jobId: number, rowIds?: number[]): number {
+  const j = getJob(jobId);
+  if (!j) throw new Error("任务不存在");
+  if (j.status === "creating" || j.status === "labeling") throw new Error("任务正在处理中，请稍后再试");
+  const ids = retryableRows(jobId).filter((id) => !rowIds || rowIds.includes(id));
+  if (!ids.length) throw new Error("没有需要重新下单的订单");
+  for (const id of ids) setRow(id, { status: "pending", shipment_id: null, selected: 1, error: null });
+  setJob(jobId, "quoting");
+  ensureRunning(jobId);
+  return ids.length;
+}
+
 /** 换一组渠道重新试算（未下单的订单） */
 export function requote(jobId: number, channels: string[]) {
   assertEditable(jobId);

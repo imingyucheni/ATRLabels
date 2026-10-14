@@ -1,5 +1,6 @@
 /** 带变量的整句提示：[中文正则, 英文替换]（用 $1 $2 引用） */
 export const patterns: [RegExp, string][] = [
+  [/^已把 (\d+) 单退回重新试算，算完勾选后点“提交订单”$/, "Sent $1 order(s) back for re-quoting. Tick them and click “Submit orders” once quoted."],
   [/^常用产品最多保存 (\d+) 个$/, "You can save up to $1 products"],
   /* ---------- 余额 / 报价（下单时服务器返回） ---------- */
   [/^余额不足：当前余额 (-?[\d.]+)（信用额度 ([\d.]+)），需要先充值才能继续下单$/, "Insufficient balance: current balance $1 (credit limit $2). Please top up to keep creating labels"],
