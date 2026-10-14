@@ -264,7 +264,7 @@ describe("ShipBest 待出单但带了出单失败原因（尾程拒单）", () =
     await expect(svc.createLabel({ customerId: cid, channelCode: q2.channelCode, req, expectedPrice: q2.price!, customerRef: "REMOTE-1", waitForLabel: false })).resolves.toBeGreaterThan(0);
   });
 
-  it("服务商取消不了：保持出单异常（不再显示等待出单），客户可以申请取消", async () => {
+  it("服务商不支持取消（没出过面单的死单）：本地取消并全额退款", async () => {
     const db = await import("@/lib/db");
     const svc = await import("@/lib/service");
     const ledger = await import("@/lib/ledger");
@@ -285,6 +285,41 @@ describe("ShipBest 待出单但带了出单失败原因（尾程拒单）", () =
       client.getOrder = origGet;
       client.cancelOrder = origCancel;
     }
-    expect(db.getShipment(id)).toMatchObject({ status: "exception", errorMsg: "创建尾程失败：供应商响应异常" });
+    // 服务商不支持取消、但从没出过面单：本地取消并全额退款
+    expect(db.getShipment(id)!.status).toBe("cancelled");
+    expect(db.getShipment(id)!.errorMsg).toContain(svc.SB_FAILED_MSG);
+    expect(ledger.balanceOf(cid)).toBeCloseTo(100, 2);
+  });
+});
+
+describe("以前就卡在“出单异常”、服务商又取消不了的死单", () => {
+  it("点“刷新状态”时本地取消并全额退款", async () => {
+    const db = await import("@/lib/db");
+    const svc = await import("@/lib/service");
+    const ledger = await import("@/lib/ledger");
+    const sb = await import("@/lib/shipbest/client");
+    await svc.syncChannels();
+    const cid = db.saveCustomer(null, { name: "卡住的异常单", contact: null, phone: null, email: null, note: null, markup: {} });
+    db.setCustomerChannels(cid, db.listChannels().filter((c) => !c.code.startsWith("JG") && !c.code.startsWith("DHL") && !/HWT|MWT/.test(c.name)).map((c) => c.code));
+    ledger.addLedger({ customerId: cid, type: "topup", amount: 100, createdBy: "admin" });
+    const q = (await svc.quoteAll(cid, req)).find((x) => x.ok)!;
+    const id = await svc.createLabel({ customerId: cid, channelCode: q.channelCode, req, expectedPrice: q.price!, customerRef: "STUCK-1", waitForLabel: false });
+    const msg = "ShipBest 订单出单异常：Channel assignment failed.";
+    db.updateShipment(id, { status: "exception", sbStatus: 2, errorMsg: msg });
+    const client = sb.getShipBestClient();
+    const origGet = client.getOrder.bind(client);
+    const origCancel = client.cancelOrder.bind(client);
+    client.getOrder = async (k) => ({ ...(await origGet(k)), status: 2, trackingNo: "", labelUrl: "", errorMsg: msg });
+    client.cancelOrder = async () => { throw new sb.ShipBestError(11203, "该订单不支持取消"); };
+    try {
+      await svc.refreshShipment(id);
+    } finally {
+      client.getOrder = origGet;
+      client.cancelOrder = origCancel;
+    }
+    expect(db.getShipment(id)!.status).toBe("cancelled");
+    expect(ledger.balanceOf(cid)).toBeCloseTo(100, 2);
+    // 之后同一个订单号可以重新下单
+    await expect(svc.createLabel({ customerId: cid, channelCode: q.channelCode, req, expectedPrice: q.price!, customerRef: "STUCK-1", waitForLabel: false })).resolves.toBeGreaterThan(0);
   });
 });

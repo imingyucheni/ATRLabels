@@ -824,8 +824,9 @@ export async function refreshShipment(id: number): Promise<Shipment> {
     // ShipBest：状态还是“待出单”，但带了出单失败的原因（例如尾程拒单：偏远地区不派送）→ 这单不会再出面单了，按出单失败处理
     if (patch.status === "pending" && !patch.labelUrl && d.errorMsg && !isJiaguCode(s.channelCode) && !isDhlCode(s.channelCode)) {
       patch.status = "exception";
-      if (cur.status !== "exception") {
-        logProviderEvent(s.customNo, "系统", "系统判断", null, "服务商显示待出单，但返回了出单失败的原因，按出单失败处理");
+      // 新变成失败的、或者以前就卡在“出单异常”的（之前没取消掉）：都去取消退款
+      if (cur.status === "pending" || (cur.status === "exception" && !cur.replacedBy)) {
+        if (cur.status !== "exception") logProviderEvent(s.customNo, "系统", "系统判断", null, "服务商显示待出单，但返回了出单失败的原因，按出单失败处理");
         sbFailed = true;
       }
     }
@@ -853,7 +854,8 @@ export async function refreshShipment(id: number): Promise<Shipment> {
     return getShipment(id)!;
   }
   // ShipBest 出单失败（不会再出面单）：马上向服务商取消这张单并全额退款，客户修改后重新下单或换渠道，和下单时直接被拒一样
-  if (sbFailed && (await autoVoid(getShipment(id)!, `${SB_FAILED_MSG}${d.errorMsg}`))) {
+  // 服务商说这单“不支持取消”（没分到渠道、没出过面单，服务商那边本来就是死单，不会扣费）：本地取消并全额退款，同样处理
+  if (sbFailed && ((await autoVoid(getShipment(id)!, `${SB_FAILED_MSG}${d.errorMsg}`)) || voidDeadOrder(id, `${SB_FAILED_MSG}${d.errorMsg}`))) {
     const ref = s.customerRef || s.customNo;
     const reason = publicError(d.errorMsg);
     notifyLater(s.customerId, "exception", { zh: `订单 ${ref} 出单失败，已自动取消`, en: `Order ${ref} failed and was cancelled` }, {
@@ -938,6 +940,25 @@ async function autoVoid(s: Shipment, note: string, sbCharged = false): Promise<b
 }
 
 /**
+ * ShipBest 那边的死单：异常，或者“待出单”但带了失败原因，并且从没出过面单（服务商不会为它扣费）。
+ * 嘉谷超时的单不算（面单可能晚点又出来），DHL 也不算。
+ */
+function deadSbOrder(s: Shipment): boolean {
+  if (isJiaguCode(s.channelCode) || isDhlCode(s.channelCode) || wasLabeled(s) || s.trackingNo || s.labelUrl) return false;
+  return s.sbStatus === 3 || (s.sbStatus === 2 && !!s.errorMsg);
+}
+
+/** 服务商取消不了、但从没出过面单的失败单：本地取消并全额退款（服务商不会为没出面单的单扣费） */
+function voidDeadOrder(id: number, note: string): boolean {
+  const s = getShipment(id);
+  if (!s || s.status === "cancelled" || !deadSbOrder(s)) return false;
+  updateShipment(id, { ...cancelPatch(s, false, { cancelFee: 0, sbCancelFee: 0 }), errorMsg: note });
+  settleCancel(id);
+  logProviderEvent(s.customNo, "系统", "系统判断", null, "服务商不支持取消，但这单没出过面单：本地取消并全额退款");
+  return true;
+}
+
+/**
  * 客户用同一个订单号重新下单成功后，关闭之前出单异常的那张：
  * 能向服务商作废的直接取消并全额退款；服务商那边本来就是异常、没出面单的，本地取消退款；
  * 作废不了的先关联到新单，之后如果面单迟到了，刷新时会自动作废。
@@ -953,7 +974,7 @@ async function closeSupersededExceptions(customerId: number, ref: string, newId:
     logProviderEvent(old.customNo, "系统", "同一订单号重新下单", null, `新单 ${fresh.customNo}`);
     const note = `已用同一订单号重新下单（新单 ${fresh.customNo}），原单已取消并全额退款`;
     if (await autoVoid(old, note)) continue;
-    if (old.sbStatus === 3 && !wasLabeled(old)) {
+    if (deadSbOrder(old)) {
       updateShipment(id, { ...cancelPatch(old, false), errorMsg: `已用同一订单号重新下单（新单 ${fresh.customNo}）。服务商那边是异常单、没有出面单，原单已取消并全额退款` });
       settleCancel(id);
     }
@@ -1151,8 +1172,8 @@ export async function resubmitShipment(input: Omit<CreateInput, "customerId"> & 
   } catch (e) {
     const msg = (e as Error).message;
     logProviderEvent(old.customNo, provider, "申请取消", e instanceof ShipBestError ? e.code : null, `失败：${msg}`);
-    if (old.sbStatus === 3 && !wasLabeled(old)) {
-      // 服务商那边就是异常单、没有出面单，不会扣费：本地取消并全额退回
+    if (deadSbOrder(old)) {
+      // 服务商那边就是异常单（或待出单但已失败）、没有出面单，不会扣费：本地取消并全额退回
       updateShipment(old.id, { ...cancelPatch(old, false), errorMsg: `已修改后重新下单（新单 ${fresh.customNo}）。服务商那边是异常单、没有出面单，原单已取消并全额退回` });
       settleCancel(old.id);
       return { id, old: "cancelled" };

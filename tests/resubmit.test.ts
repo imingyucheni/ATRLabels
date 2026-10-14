@@ -92,7 +92,9 @@ describe("异常单修改后重新下单", () => {
     const orig = client.cancelOrder.bind(client);
     client.cancelOrder = async () => { throw new sb.ShipBestError(11203, "The order was nonsupport cancelled!"); };
     try {
+      // 状态不明：服务商那边还是“待出单”、也没给失败原因（带了失败原因的是死单，会直接本地取消退款）
       const old = await failedOrder(2, "112-2");
+      db.updateShipment(old.id, { errorMsg: null });
       const r = await resubmit(old.id);
       expect(r.old).toBe("requested");
       const o = db.getShipment(old.id)!;
