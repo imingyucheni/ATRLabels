@@ -17,6 +17,7 @@ import {
   readOrderSheet,
   requote,
   retryRows,
+  fetchMissingLabels,
   senderFor,
   setSelected,
   updateRow,
@@ -177,6 +178,17 @@ export async function deleteRowsAction(jobId: number, rowIds: number[]) {
 /** 取消了 / 出单异常的订单统一重新下单（退回待试算，试算完勾选提交） */
 export async function retryRowsAction(jobId: number, rowIds?: number[], rule = "cheapest") {
   return edit(jobId, () => `已把 ${retryRows(jobId, rowIds?.map(Number), str(rule, 50) || "cheapest")} 单退回重新试算，算完勾选后点“提交订单”`);
+}
+
+/** 已出单但面单文件没取到的：重新取 */
+export async function fetchMissingLabelsAction(jobId: number): Promise<{ error?: string; message?: string }> {
+  try {
+    await ownJob(jobId);
+    const r = await fetchMissingLabels(jobId);
+    return r.left ? { error: `已取回 ${r.fixed} 张，还有 ${r.left} 张没取到，请稍后再试或打开那一单点“刷新状态”` } : { message: `已取回 ${r.fixed} 张面单` };
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
 }
 
 export async function requoteAction(jobId: number, channels: string[]) {

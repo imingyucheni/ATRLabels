@@ -1232,13 +1232,29 @@ async function refreshCreatedLabels(jobId: number, timeoutMs = 180_000) {
     const pending = jobRows(jobId)
       .filter((r) => r.status === "created" && r.shipment_id)
       .map((r) => getShipment(r.shipment_id!)!)
-      .filter((s) => s && s.status === "pending");
+      // 还在等面单的，和已出单但面单文件没下载下来的
+      .filter((s) => s && (s.status === "pending" || (s.status === "labeled" && !s.labelPath)));
     if (!pending.length) return;
     await pool(pending, 3, async (s) => {
       await refreshShipment(s.id).catch(() => null);
     });
     await new Promise((r) => setTimeout(r, 2000));
   }
+}
+
+/** 本批次已出单、但面单文件没取到的：再向服务商取一次（合并打印才不会少） */
+export async function fetchMissingLabels(jobId: number): Promise<{ fixed: number; left: number }> {
+  const missing = () =>
+    jobRows(jobId)
+      .filter((r) => r.status === "created" && r.shipment_id)
+      .map((r) => getShipment(r.shipment_id!)!)
+      .filter((s) => s && s.status === "labeled" && !s.labelPath);
+  const before = missing();
+  await pool(before, 3, async (s) => {
+    await refreshShipment(s.id).catch(() => null);
+  });
+  const left = missing().length;
+  return { fixed: before.length - left, left };
 }
 
 async function waitLabels(jobId: number) {

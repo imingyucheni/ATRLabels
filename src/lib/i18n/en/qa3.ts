@@ -338,4 +338,7 @@ export const qa3: Record<string, string> = {
   "把 {n} 单已取消 / 出单异常的订单统一重新下单？会重新试算并按选的方式选渠道，算完检查后点“提交订单”才会下单。": "Re-order all {n} cancelled / failed order(s)? They'll be re-quoted and the service chosen as selected. Nothing ships until you check them and click “Submit orders”.",
   "这个渠道客户没有开通，请先在客户详情里开通": "This service isn't enabled for the customer — enable it in the customer details first",
   "指定的渠道这单没有报价，已暂选最便宜的渠道，请确认后再勾选提交": "The chosen service has no rate for this order, so the cheapest one was picked for now. Check it, then tick to submit.",
+  "{n} 单已经出单，但面单文件还没取到（{rows}），合并打印里暂时没有它们。": "{n} order(s) have labels but the label files haven't been fetched yet ({rows}), so they're not in the merged print yet.",
+  "重新取面单": "Fetch labels again",
+  "面单文件未取到": "Label file not fetched",
 };

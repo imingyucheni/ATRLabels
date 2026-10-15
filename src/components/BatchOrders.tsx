@@ -14,6 +14,7 @@ import {
   getBatchJobAction,
   requoteAction,
   retryRowsAction,
+  fetchMissingLabelsAction,
   setSelectedAction,
   updateRowAction,
   type BatchJobView,
@@ -241,6 +242,8 @@ export default function BatchOrders(props: {
   const createdTotal = created.reduce((a, r) => a + (r.price ?? 0), 0);
   // 能打印的面单：出单异常、已取消的不打
   const labeled = created.filter((r) => r.hasLabel && r.shipmentStatus !== "cancelled" && r.shipmentStatus !== "exception");
+  // 已出单（有运单号）但面单文件没取到的：合并打印里没有它们，提示重新取
+  const noFile = created.filter((r) => !r.hasLabel && r.shipmentStatus === "labeled");
   const problems = job.rows.filter((r) => r.status === "error" || r.status === "failed" || r.shipmentStatus === "exception").length;
   const dupes = quoted.filter((r) => r.warningKind === "duplicate").length;
   // 店铺里已经取消 / 在别处发货的店铺订单（同步时自动取消了勾选）
@@ -289,6 +292,12 @@ export default function BatchOrders(props: {
           </p>
         )}
         {job.error && <div className="alert warn">{tr(job.error)}</div>}
+        {noFile.length > 0 && !working && (
+          <div className="alert warn row" style={{ justifyContent: "space-between" }}>
+            <span>{t("{n} 单已经出单，但面单文件还没取到（{rows}），合并打印里暂时没有它们。", { n: noFile.length, rows: noFile.map((r) => t("第 {n} 行", { n: r.rowNo })).join(t("、")) })}</span>
+            <button className="small primary" disabled={busy} onClick={() => act(() => fetchMissingLabelsAction(job.id))}>{t("重新取面单")}</button>
+          </div>
+        )}
         {error && <div className="alert err">{tr(error)}</div>}
         {notice && <div className="alert ok">{tr(notice)}</div>}
 
@@ -530,6 +539,7 @@ export default function BatchOrders(props: {
                       <div className="nowrap" style={{ marginTop: 4 }}>
                         <a href={`${props.mode === "portal" ? "/portal" : ""}/shipments/${r.shipmentId}`}>{r.trackingNo ?? t("查看")}</a>
                         {r.hasLabel && r.shipmentStatus !== "cancelled" && <> · <a href={`/api/labels/${r.shipmentId}`} target="_blank">{t("面单")}</a></>}
+                        {!r.hasLabel && r.shipmentStatus === "labeled" && <> · <span className="warn-text">{t("面单文件未取到")}</span></>}
                       </div>
                     ) : null}
                     {r.shipmentStatus === "cancelled" && r.shipmentId && (

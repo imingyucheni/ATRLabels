@@ -1211,7 +1211,16 @@ export async function refreshPendingShipments(limit = 60) {
       )
       .all() as { id: number }[]
   ).map((r) => r.id);
-  for (const id of [...ids, ...watched]) await refreshShipment(id).catch(() => null);
+  // 已出单、但面单文件没下载下来的（下载时网络出错等）：再取一次，不然合并打印少这一张
+  const noFile = (
+    db()
+      .prepare(
+        `SELECT id FROM shipments WHERE status = 'labeled' AND label_path IS NULL AND created_at >= datetime('now', '-3 days')
+         ORDER BY id DESC LIMIT 30`,
+      )
+      .all() as { id: number }[]
+  ).map((r) => r.id);
+  for (const id of [...ids, ...watched, ...noFile]) await refreshShipment(id).catch(() => null);
   return ids.length;
 }
 

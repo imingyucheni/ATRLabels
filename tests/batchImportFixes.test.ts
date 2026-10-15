@@ -311,6 +311,23 @@ describe("批量导入：行号、邮编、国际件、表格渠道、运费变�
     db.setCustomerChannels(cid, ["LP10210028", "LP10210029", "LP10210030"]);
   }, 40_000);
 
+  it("已出单但面单文件没下载下来：可以重新取，取回后合并打印就有它", async () => {
+    const orders = ["FILE-1", "FILE-2"].map((ref, i) => ({ rowNo: i + 2, customerRef: ref, fileChannel: "", req: req("78701", ref), errors: [] }));
+    const jobId = batch.createJob({ customerId: cid, createdBy: "customer", filename: "f2.xlsx", channels: ["LP10210029"], pickMode: "cheapest", orders });
+    batch.ensureRunning(jobId);
+    await wait(jobId, ["ready"]);
+    batch.confirmJob(jobId);
+    let job = await wait(jobId, ["done", "ready"]);
+    const r = job.rows[0];
+    expect(job.rows.every((x) => x.hasLabel)).toBe(true);
+    // 模拟下载面单时网络出错：有运单号、状态已出单，但没有面单文件
+    db.updateShipment(r.shipmentId!, { labelPath: null, labelMime: null });
+    job = batch.getJob(jobId)!;
+    expect(job.rows.find((x) => x.id === r.id)).toMatchObject({ hasLabel: false, shipmentStatus: "labeled" });
+    expect(await batch.fetchMissingLabels(jobId)).toEqual({ fixed: 1, left: 0 });
+    expect(batch.getJob(jobId)!.rows.find((x) => x.id === r.id)!.hasLabel).toBe(true);
+  }, 40_000);
+
   it("提交过程中被取消勾选的单（例如店铺同步发现已取消）：跳过不下单", async () => {
     const orders = ["SKIP-1", "SKIP-2"].map((ref, i) => ({ rowNo: i + 2, customerRef: ref, fileChannel: "", req: req("78701", ref), errors: [] }));
     const jobId = batch.createJob({ customerId: cid, createdBy: "customer", filename: "s.xlsx", channels: ["LP10210029"], pickMode: "cheapest", orders });

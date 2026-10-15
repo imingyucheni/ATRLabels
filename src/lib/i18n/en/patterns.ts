@@ -1,5 +1,7 @@
 /** 带变量的整句提示：[中文正则, 英文替换]（用 $1 $2 引用） */
 export const patterns: [RegExp, string][] = [
+  [/^已取回 (\d+) 张面单$/, "Fetched $1 label(s)"],
+  [/^已取回 (\d+) 张，还有 (\d+) 张没取到，请稍后再试或打开那一单点“刷新状态”$/, "Fetched $1; $2 still missing. Try again later, or open the order and click “Refresh status”."],
   [/^已把 (\d+) 单退回重新试算，算完勾选后点“提交订单”$/, "Sent $1 order(s) back for re-quoting. Tick them and click “Submit orders” once quoted."],
   [/^常用产品最多保存 (\d+) 个$/, "You can save up to $1 products"],
   /* ---------- 余额 / 报价（下单时服务器返回） ---------- */
