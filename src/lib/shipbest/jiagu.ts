@@ -44,6 +44,9 @@ export const DEFAULT_JG_WAREHOUSES: Record<string, string> = {
   "591208": "230759", // Ontrac-SG-B-XT-预上网 · Ontrac-91710-230490（同一个仓库）
   "582918": "230496", // UPS-NEW-HWT-XT（多箱）· SG-UPS-92335（9774 Calabash Ave, Fontana CA 92335）
   "580457": "230244", // Fedex MWT末端-W（多箱）· CA-92337-11010（不可处理退件）
+  // UPS-NG 住宅 / 商业两个产品：同一个仓库（5228 Edison Ave, Chino CA 91710）
+  "595598": "231048", // UPS-NG-Resi-S2（住宅：只能寄住宅地址，商业地址会被拒）
+  "595600": "231048", // UPS-NG-Comm-S2（商业：商业 / 模糊地址都能寄，住宅地址按商业价结算）
 };
 
 /** 嘉谷的仓库（设置页选仓库时显示名称和地址，方便核对） */
@@ -56,6 +59,7 @@ export const JG_WAREHOUSE_INFO: Record<string, { name: string; address: string }
   "230244": { name: "CA-92337-11010（不可处理退件）", address: "" },
   // 第二个 FedEx NG 渠道（备用）的仓库
   "230206": { name: "SG-HX-CA 91762", address: "1380 W Mission Blvd, Ontario, CA 91762" },
+  "231048": { name: "UPS-G-91710-230490", address: "5228 Edison Ave, Chino, CA 91710" },
 };
 
 export interface JiaguConfig {

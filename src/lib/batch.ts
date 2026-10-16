@@ -4,7 +4,7 @@
  * 任务在服务进程里后台执行，页面轮询进度；服务重启后打开任务页会自动继续。
  */
 import { fillFromProduct, type SavedProduct } from "./products";
-import { localizeChannelName, publicChannel, stripProviderTag } from "./carriers";
+import { channelAddressKind, RESI_BUSINESS_ERROR, localizeChannelName, publicChannel, stripProviderTag } from "./carriers";
 import { checkAddress, needsAck, type AddressCheck } from "./addressCheck";
 import ExcelJS from "exceljs";
 import { activeShipmentByRef, customerChannels, db, duplicateRefMessage, reorderRef, getChannel, getCustomer, getSettings, getShipment, listChannels, type Channel, type ShipmentStatus } from "./db";
@@ -1105,10 +1105,16 @@ async function quoteRows(jobId: number, job: BatchJob, codes: string[], pending:
         quotes.push({ code, name: getChannel(code)?.name ?? code, ok: false, error: (e as Error).message });
       }
     }
-    quotes.sort((a, b) => Number(b.ok) - Number(a.ok) || (a.price ?? 0) - (b.price ?? 0));
     // 收件地址核对：有问题的单默认不勾选，客户确认（重新勾选）后才提交
     const firstCheck = !r.addr_json;
     const addr = await checkAddress(req.recipient);
+    // 商业地址：住宅渠道（只收住宅地址）会被承运商拒单，不让它被选上
+    if (addr.business === true) {
+      for (const [i, q] of quotes.entries()) {
+        if (q.ok && channelAddressKind(getChannel(q.code)?.name ?? q.name) === "resi") quotes[i] = { code: q.code, name: q.name, ok: false, error: RESI_BUSINESS_ERROR };
+      }
+    }
+    quotes.sort((a, b) => Number(b.ok) - Number(a.ok) || (a.price ?? 0) - (b.price ?? 0));
     const addrPatch: RowPatch = { addr_json: addr.status === "unavailable" || addr.status === "skipped" ? null : JSON.stringify(addr) };
     if (firstCheck && needsAck(addr)) addrPatch.selected = 0;
     setRow(r.id, addrPatch);

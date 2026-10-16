@@ -92,6 +92,8 @@ const FRAGMENTS: [string, string][] = [
   ["不预上网", "No pre-scan"],
   ["预上网", "Pre-scan"],
   ["多箱", "Multi-box"],
+  ["Ground 住宅", "Ground Residential"],
+  ["Ground 商业", "Ground Commercial"],
 ];
 function fragments(msg: string) {
   let out = msg;

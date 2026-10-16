@@ -54,6 +54,8 @@ describe("嘉谷万邑接口", () => {
     expect(jg.buildJiaguBody(cfg, req, 590297).WarehouseID).toBe(229615); // UPS
     expect(jg.buildJiaguBody(cfg, req, 580469).WarehouseID).toBe(230759); // OnTrac
     expect(jg.buildJiaguBody(cfg, req, 591208).WarehouseID).toBe(230759); // OnTrac 预上网
+    expect(jg.buildJiaguBody(cfg, req, 595598).WarehouseID).toBe(231048); // UPS-NG 住宅
+    expect(jg.buildJiaguBody(cfg, req, 595600).WarehouseID).toBe(231048); // UPS-NG 商业
     expect(jg.buildJiaguBody(cfg, req, 568995).WarehouseID).toBe(221121); // Fedex-Economy-SMP-TY · GDE-ONE-91761
     expect(jg.buildJiaguBody(cfg, req, 111).WarehouseID).toBe(999); // 后台设置的
     expect(b.OrderType).toBe(20120);
@@ -368,6 +370,23 @@ describe("嘉谷万邑接口", () => {
     expect(matchChannel("OnTrac Pre-scan")).toBe("JG-591208");
     expect(matchChannel("OnTrac 预上网")).toBe("JG-591208");
     expect(matchChannel("OnTrac")).toBe("JG-580469");
+    // UPS-NG 住宅 / 商业：客户分得清，也有说明
+    const { channelAddressKind } = await import("@/lib/carriers");
+    expect(defaultPublicName("UPS-NG-Resi-S2 · GDE")).toBe("UPS Ground 住宅");
+    expect(defaultPublicName("UPS-NG-Comm-S2 · GDE")).toBe("UPS Ground 商业");
+    expect(defaultPublicName("UPS-D-GROUND-923 · GDE")).toBe("UPS");
+    expect(localizeChannelName("UPS Ground 住宅", "en")).toBe("UPS Ground Residential");
+    expect(translateMessage("en", "UPS Ground 商业")).toBe("UPS Ground Commercial");
+    expect(channelNameHint("UPS-NG-Resi-S2 · GDE")).toMatch(/^住宅渠道/);
+    expect(channelNameHint("UPS Ground 商业")).toMatch(/^商业渠道/);
+    expect(channelNameHint("UPS Ground Residential")).toMatch(/^住宅渠道/);
+    expect(channelAddressKind("UPS-NG-Comm-S2 · GDE")).toBe("comm");
+    expect(channelAddressKind("Fedex-Economy-SMP-TY · GDE")).toBeNull();
+    expect(channelAddressKind("Gofo Express")).toBeNull();
+    db.upsertChannels([{ code: "JG-595598", name: "UPS-NG-Resi-S2 · GDE" }, { code: "JG-595600", name: "UPS-NG-Comm-S2 · GDE" }]);
+    expect(matchChannel("UPS Ground 住宅")).toBe("JG-595598");
+    expect(matchChannel("UPS Ground Commercial")).toBe("JG-595600");
+    expect((await import("@/lib/portal")).publicError("Invalid commercial address for residential service")).toMatch(/^住宅渠道只能寄住宅地址/);
     // ShipBest 的名称照旧（带不带“· SB”标记都一样）
     expect(defaultPublicName("GOFO-（91710）")).toBe("Gofo Express");
     expect(defaultPublicName("GOFO-（91710） · SB")).toBe("Gofo Express");

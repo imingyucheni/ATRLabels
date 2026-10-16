@@ -4,6 +4,7 @@
  */
 import { customerChannels, db, getSettings, getShipment, listAdjustments, listShipments, type Shipment, type ShipmentFilter, type ShipmentStatus } from "./db";
 import { displayChannel } from "./channelDisplay";
+import { RESI_BUSINESS_ERROR } from "./carriers";
 import type { ChannelQuote } from "./service";
 import { stampFor, stampText } from "./stamp";
 import type { Address, PackageInfo, SkuItem } from "./shipbest/types";
@@ -42,6 +43,7 @@ export function toPublicQuote(q: ChannelQuote): PublicQuote {
  */
 export function publicQuoteError(msg?: string | null): string {
   const raw = msg ?? "";
+  if (raw.startsWith(RESI_BUSINESS_ERROR) || /住宅渠道.*商业地址|商业地址.*住宅|commercial address/i.test(raw)) return RESI_BUSINESS_ERROR;
   if (/不通邮|派送范围|未覆盖|not (be )?deliver|no service|邮编.*(不支持|不派|无法)/i.test(raw)) return "地址未覆盖：这个渠道送不到该邮编";
   if (/尺寸|长度|周长|体积|边长|size|length|girth|dimension/i.test(raw)) return "超出尺寸范围：这个渠道不支持该包裹尺寸";
   if (/重量段|分区价格|分区代码|重量|超重|weight|\boz\b|\blb/i.test(raw)) return "不支持该重量或地区";
@@ -153,6 +155,8 @@ export function publicError(msg?: string | null): string {
   // 系统自动取消退款的说明：前半句原样给客户，后面的服务商原因再整理
   const failed = msg.match(/^(出单失败，系统已自动取消并全额退款，请修改后重新下单或换其他渠道。原因：)([\s\S]*)$/);
   if (failed) return failed[1] + publicError(failed[2]);
+  // 住宅渠道下了商业地址（承运商拒单）
+  if (/住宅渠道.*商业地址|商业地址.*住宅|commercial address/i.test(msg)) return RESI_BUSINESS_ERROR;
   // 尾程拒单：偏远地区等送不到的地址
   if (/not (currently )?serviceable|remote (mountain )?area|偏远地区|不派送/i.test(msg)) return "地址未覆盖：这个地址在承运商的偏远 / 不派送区域，请换其他渠道";
   // 尾程（承运商）没有接单：不给客户看服务商之间的原文

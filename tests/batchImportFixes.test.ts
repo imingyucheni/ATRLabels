@@ -363,4 +363,34 @@ describe("批量导入：行号、邮编、国际件、表格渠道、运费变�
     expect(yes).toMatchObject({ status: "created", shipmentId: same });
     expect(elsewhere).not.toBe(same);
   }, 30_000);
+
+  it("商业地址：住宅渠道（只收住宅地址）不会被选上，报价里写明原因；住宅地址照常可以用", async () => {
+    const codes = ["LP10210028", "LP10210029"];
+    // 先看哪个渠道最便宜，把它当成住宅渠道
+    const probe = [{ rowNo: 2, customerRef: "RESI-0", fileChannel: "", req: req("78701", "RESI-0"), errors: [] }];
+    const run = (id: number) => (batch.ensureRunning(id), wait(id, ["ready"]));
+    const p = await run(batch.createJob({ customerId: cid, createdBy: "customer", filename: "r0.xlsx", channels: codes, pickMode: "cheapest", orders: probe }));
+    const cheapest = p.rows[0].channelCode!;
+    const before = db.getChannel(cheapest)!.name;
+    db.db().prepare("UPDATE channels SET name = ? WHERE code = ?").run("UPS-NG-Resi-S2 · SB", cheapest);
+    try {
+      const biz = req("78701", "RESI-BIZ");
+      biz.recipient.address2 = "Suite 200";
+      const home = req("78701", "RESI-HOME");
+      const orders = [
+        { rowNo: 2, customerRef: "RESI-BIZ", fileChannel: "", req: biz, errors: [] },
+        { rowNo: 3, customerRef: "RESI-HOME", fileChannel: "", req: home, errors: [] },
+      ];
+      const job = await run(batch.createJob({ customerId: cid, createdBy: "customer", filename: "r1.xlsx", channels: codes, pickMode: "cheapest", orders }));
+      const [b, h] = job.rows;
+      expect(b.address?.business).toBe(true);
+      expect(b.channelCode).not.toBe(cheapest);
+      expect(b.quotes.find((q) => q.code === cheapest)).toMatchObject({ ok: false, error: expect.stringMatching(/^住宅渠道只能寄住宅地址/) });
+      expect(h.channelCode).toBe(cheapest);
+      const { publicRowError } = await import("@/lib/portal");
+      expect(publicRowError(`所有渠道都无法报价：${b.quotes.find((q) => q.code === cheapest)!.error}`)).toMatch(/住宅渠道只能寄住宅地址/);
+    } finally {
+      db.db().prepare("UPDATE channels SET name = ? WHERE code = ?").run(before, cheapest);
+    }
+  }, 30_000);
 });

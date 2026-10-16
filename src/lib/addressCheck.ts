@@ -231,8 +231,10 @@ function mockCheck(a: Partial<Address>): AddressCheck {
     return { status: "not_found", message: "地址库里查不到这个地址，可能不存在或写错了" };
   if (/\b(APARTMENTS?|TOWER|CONDO)\b/.test(street) && !up(a.address2)) return { status: "missing_unit", message: "这个地址需要公寓 / 单元号（Apt / Unit / Suite）" };
   const std = street.replace(/\bSTREET\b/, "ST").replace(/\bAVENUE\b/, "AVE").replace(/\bROAD\b/, "RD").replace(/\bBOULEVARD\b/, "BLVD");
-  if (std !== street) return { status: "corrected", suggestion: { ...a, address1: std }, message: "地址存在，建议的标准写法如下" };
-  return { status: "ok", message: "地址已验证" };
+  // 有公司名或 Suite / Ste 的当商业地址（其他的不判断）
+  const biz = a.corporateName?.trim() || /\b(SUITE|STE)\b/.test(`${street} ${up(a.address2)}`) ? { business: true } : {};
+  if (std !== street) return { status: "corrected", ...biz, suggestion: { ...a, address1: std }, message: "地址存在，建议的标准写法如下" };
+  return { status: "ok", ...biz, message: "地址已验证" };
 }
 
 export async function checkAddress(a: Partial<Address> | null | undefined, opts: { fresh?: boolean; force?: boolean } = {}): Promise<AddressCheck> {

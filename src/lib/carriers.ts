@@ -88,6 +88,9 @@ export function defaultPublicName(channelName: string, carrierId?: string | null
   // FedEx 分 Ground（NG / Ground）和 Economy（SmartPost）两种服务，名称要分开，同一个客户可以同时开通
   const service = c.id === "fedex" ? fedexService(own) : null;
   if (service) return `${c.fullName} ${service}`;
+  // 只收住宅 / 只按商业价的渠道（例如 UPS-NG-Resi / UPS-NG-Comm）：名字里带上，客户分得清，也可以同时开通
+  const kind = channelAddressKind(own);
+  if (kind) return `${c.fullName}${/(^|[^A-Z])NG([^A-Z]|$)|GROUND/i.test(own) ? " Ground" : ""} ${kind === "resi" ? "住宅" : "商业"}`;
   // 同一物流商有“预上网”和普通两种（例如 OnTrac）：预上网的名字后面带上，客户看得出是两个渠道，也可以同时开通
   if (/(?<!不)预上网/.test(own)) return `${c.fullName} 预上网`;
   if (tagged || /[\u3400-\u9fff]/.test(clean)) return c.fullName;
@@ -111,6 +114,8 @@ const NAME_EN: [RegExp, string][] = [
   [/不预上网/g, "No pre-scan"],
   [/预上网/g, "Pre-scan"],
   [/多箱/g, "Multi-box"],
+  [/住宅/g, "Residential"],
+  [/商业/g, "Commercial"],
 ];
 
 export function localizeChannelName(name: string, lang: string | null | undefined): string {
@@ -125,8 +130,29 @@ export function channelNameHint(name: string | null | undefined): string | null 
   const n = name ?? "";
   if (/(?<!不)预上网|Pre-scan/i.test(n) && !/No pre-scan/i.test(n)) return "预上网：出单后运单号会提前有物流记录（上网），不用等快递揽收扫描";
   if (/多箱|Multi-box/i.test(n)) return "多箱：一票多箱寄同一个地址，按总重量计价";
+  const kind = channelAddressKind(n);
+  if (kind === "resi") return RESI_HINT;
+  if (kind === "comm") return COMM_HINT;
   return null;
 }
+
+const RESI_HINT = "住宅渠道：只能寄住宅地址，寄商业地址会被拒单";
+const COMM_HINT = "商业渠道：商业地址、不确定是住宅还是商业的地址都能寄；寄住宅地址按商业价格结算";
+
+/** 住宅渠道（只收住宅地址）遇到商业地址：报价时直接标成不可用，出单被拒时也用这个说法 */
+export const RESI_BUSINESS_ERROR = "住宅渠道只能寄住宅地址：这个地址是商业地址，请选商业渠道或其他渠道";
+
+/**
+ * 渠道只收哪类地址：resi = 住宅渠道（商业地址会被拒单），comm = 商业渠道（都能寄，按商业价结算）。
+ * 认渠道原名（UPS-NG-Resi-S2 / UPS-NG-Comm-S2）和客户看到的名称（UPS Ground 住宅 / Residential）。
+ */
+export function channelAddressKind(name: string | null | undefined): "resi" | "comm" | null {
+  const n = name ?? "";
+  if (/(^|[^A-Za-z])Resi(dential)?([^A-Za-z]|$)|住宅/i.test(n)) return "resi";
+  if (/(^|[^A-Za-z])Comm(ercial)?([^A-Za-z]|$)|商业/i.test(n)) return "comm";
+  return null;
+}
+
 
 /** FedEx 的服务类型：Economy / SmartPost / SMP → Economy (SmartPost)；NG / Ground → Ground */
 function fedexService(name: string): string | null {

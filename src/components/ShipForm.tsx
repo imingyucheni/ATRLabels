@@ -1,5 +1,6 @@
 "use client";
 
+import { channelAddressKind, RESI_BUSINESS_ERROR } from "@/lib/carriers";
 import ChannelLabel, { useChannelDisplay } from "@/components/ChannelLabel";
 import AddressCheckPanel from "@/components/AddressCheckPanel";
 import type { AddressCheck } from "@/lib/addressCheck";
@@ -396,6 +397,8 @@ export default function ShipForm(props: {
   }, [requote]);
 
   const addrNeedsAck = !!addr && ["missing_unit", "bad_unit", "not_found"].includes(addr.status);
+  // 地址核对认出是商业地址：住宅渠道（只收住宅地址）会被承运商拒单，价格下面提醒
+  const warnOf = (q: Quote) => (addr?.business === true && channelAddressKind(q.channelName) === "resi" ? RESI_BUSINESS_ERROR : q.warning);
 
   async function onCreate(q: Quote) {
     if (addrNeedsAck && !addrAck) {
@@ -961,7 +964,7 @@ export default function ShipForm(props: {
                         </td>
                         <td className="q-zone" data-label={t("分区")}>{q.zone ?? "-"}{q.zoneEstimated && <span className="small muted" title={t("服务商没有返回分区，按同一目的地其他渠道的分区估算")}>{t("（参考）")}</span>}</td>
                         <td className="num muted q-cost" data-label={costTable ? t("原价") : t("我们的成本")}>{money(costTable ? q.listCost : q.cost)}</td>
-                        <td className="num q-price"><b>{money(q.price, q.currency)}</b>{q.price === bestPrice && <div className="small profit-pos">{t("最低")}</div>}{q.promo && <div className="small" style={{ textAlign: "right" }}><span className="badge promo">{tm(q.promo.label)}</span> <s className="muted">{money(q.promo.originalPrice, q.currency)}</s><div className="muted">{t("活动至 {d}", { d: q.promo.endsOn.slice(5) })}</div></div>}{q.warning && <div className="small warn-text" style={{ maxWidth: 260, marginLeft: "auto", textAlign: "left" }}>⚠ {tm(q.warning)}</div>}</td>
+                        <td className="num q-price"><b>{money(q.price, q.currency)}</b>{q.price === bestPrice && <div className="small profit-pos">{t("最低")}</div>}{q.promo && <div className="small" style={{ textAlign: "right" }}><span className="badge promo">{tm(q.promo.label)}</span> <s className="muted">{money(q.promo.originalPrice, q.currency)}</s><div className="muted">{t("活动至 {d}", { d: q.promo.endsOn.slice(5) })}</div></div>}{warnOf(q) && <div className="small warn-text" style={{ maxWidth: 260, marginLeft: "auto", textAlign: "left" }}>⚠ {tm(warnOf(q)!)}</div>}</td>
                         <td className="q-act">
                           <button className="primary small" disabled={!!creating} onClick={() => onCreate(q)}>
                             {creating === q.channelCode ? t("出单中…") : re ? t("用此渠道重新出单") : t("用此渠道出单")}
@@ -979,7 +982,7 @@ export default function ShipForm(props: {
                           <td className="small">{q.rule ? <>{signedPercent(q.rule.percent)} + {q.rule.fixed}{t("，最低利润")} {q.rule.minProfit}</> : "-"}</td>
                         </>
                       )}
-                      <td className="num q-price"><b>{money(q.price, q.currency)}</b>{portal && q.price === bestPrice && <div className="small profit-pos">{t("最低价")}</div>}{q.promo && <div className="small" style={{ textAlign: "right" }}><span className="badge promo">{tm(q.promo.label)}</span> <s className="muted">{money(q.promo.originalPrice, q.currency)}</s><div className="muted">{t("活动至 {d}", { d: q.promo.endsOn.slice(5) })}</div></div>}{q.warning && <div className="small warn-text" style={{ maxWidth: 260, marginLeft: "auto", textAlign: "left" }}>⚠ {tm(q.warning)}</div>}</td>
+                      <td className="num q-price"><b>{money(q.price, q.currency)}</b>{portal && q.price === bestPrice && <div className="small profit-pos">{t("最低价")}</div>}{q.promo && <div className="small" style={{ textAlign: "right" }}><span className="badge promo">{tm(q.promo.label)}</span> <s className="muted">{money(q.promo.originalPrice, q.currency)}</s><div className="muted">{t("活动至 {d}", { d: q.promo.endsOn.slice(5) })}</div></div>}{warnOf(q) && <div className="small warn-text" style={{ maxWidth: 260, marginLeft: "auto", textAlign: "left" }}>⚠ {tm(warnOf(q)!)}</div>}</td>
                       {!portal && <td className="num profit-pos">{money(q.profit)}</td>}
                       {portal && (
                         <td className="q-act">
