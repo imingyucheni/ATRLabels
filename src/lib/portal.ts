@@ -155,6 +155,8 @@ export function publicError(msg?: string | null): string {
   // 系统自动取消退款的说明：前半句原样给客户，后面的服务商原因再整理
   const failed = msg.match(/^(出单失败，系统已自动取消并全额退款，请修改后重新下单或换其他渠道。原因：)([\s\S]*)$/);
   if (failed) return failed[1] + publicError(failed[2]);
+  // 本地取消后服务商又出了面单、系统去作废：是我们和服务商之间的事，客户只需要知道已取消退款
+  if (/服务商又出了面单/.test(msg)) return "订单已取消并全额退款";
   // 住宅渠道下了商业地址（承运商拒单）
   if (/住宅渠道.*商业地址|商业地址.*住宅|commercial address/i.test(msg)) return RESI_BUSINESS_ERROR;
   // 尾程拒单：偏远地区等送不到的地址

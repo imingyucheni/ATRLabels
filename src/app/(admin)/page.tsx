@@ -43,6 +43,7 @@ export default async function Dashboard() {
   const todo: { label: string; n: number; href: string; tone?: "warn" | "bad" }[] = [
     { label: t("待审充值"), n: pendingTopups, href: "/finance#topups", tone: "warn" },
     { label: t("取消处理中"), n: attention.filter((s) => s.status === "cancel_requested").length, href: "/shipments?status=cancel_requested", tone: "warn" },
+    { label: t("重复面单待作废"), n: listShipments({ status: "late_label", limit: 100 }).length, href: "/shipments?status=late_label", tone: "bad" },
     { label: t("出单异常"), n: attention.filter((s) => s.status === "exception").length, href: "/shipments?status=exception", tone: "bad" },
     { label: t("面单生成中"), n: attention.filter((s) => s.status === "pending").length, href: "/shipments?status=pending" },
     { label: t("密码重置申请"), n: pendingResets().length, href: "/customers" },

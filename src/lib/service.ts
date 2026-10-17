@@ -41,7 +41,7 @@ import { recordSpeed } from "./speedStats";
 import { aesRequired, dhlSettings, hsDigits, isDhlCode, isInternational } from "./shipbest/dhl";
 import { guessCarrier } from "./carriers";
 import { publicError } from "./portal";
-import { logProviderEvent, recordLabelFailure } from "./providerLog";
+import { listProviderEvents, logProviderEvent, recordLabelFailure } from "./providerLog";
 import { SB_STATUS } from "./shipbest/types";
 import type { Address, FeeQuote, ShipmentRequest } from "./shipbest/types";
 import { isCountryCode, isUsZip, usStateCode } from "./geo";
@@ -800,6 +800,11 @@ export async function refreshShipment(id: number): Promise<Shipment> {
 
   // 面单先下载好（要等），再读最新状态决定怎么改：等待期间可能已经取消 / 申请取消 / 确认取消，
   // 不能用等待之前的旧快照把状态改回去（例如把已经退款的单改回“已出单”）
+  // 本地已取消的单不取面单（面单不能再用）；服务商后来又出了面单的，下面会去作废
+  if (s.status === "cancelled") {
+    patch.trackingNo = s.trackingNo;
+    patch.labelUrl = s.labelUrl;
+  }
   if (patch.labelUrl && !s.labelPath) {
     try {
       const saved = await downloadLabel(patch.labelUrl, s.customNo, { from: senderLines(s.sender) });
@@ -815,11 +820,16 @@ export async function refreshShipment(id: number): Promise<Shipment> {
   const cur = getShipment(id) ?? s;
   let justTimedOut = false;
   let sbFailed = false;
+  let lateLabel = false;
   if (d.status === 6) {
     if (cur.status !== "cancelled") Object.assign(patch, cancelPatch(cur, wasLabeled(cur)));
+    // 本地已取消的：服务商也取消了。之前“重复面单待作废”的，说明换成已作废
+    else patch.errorMsg = cur.errorMsg?.startsWith(LATE_LABEL_FAILED) ? "服务商后来又出的那张面单已经作废，不会重复扣费" : cur.errorMsg;
   } else if (cur.status === "cancelled") {
-    // 本地已经取消并退款的单不能被刷新“复活”；服务商那边却显示已出面单的，提示管理员核实
-    if (d.status === 4) patch.errorMsg = "本地已取消并退款，但服务商显示已出面单，请和服务商核实是否已作废";
+    // 本地已经取消并退款的单不能被刷新“复活”，取消时记下的说明也不换成服务商的原文
+    patch.errorMsg = cur.errorMsg;
+    // 服务商那边却是已出面单（例如本地按死单取消退款后，服务商又把面单出了）→ 自动向服务商作废，不能两张都扣费
+    if (d.status === 4) lateLabel = true;
   } else if (cur.status !== "cancel_requested") {
     patch.status = d.status === 4 ? "labeled" : d.status === 3 ? "exception" : "pending";
     // ShipBest：状态还是“待出单”，但带了出单失败的原因（例如尾程拒单：偏远地区不派送）→ 这单不会再出面单了，按出单失败处理
@@ -844,6 +854,8 @@ export async function refreshShipment(id: number): Promise<Shipment> {
 
   updateShipment(id, patch);
   settleCancel(id);
+
+  if (lateLabel) return voidLateLabel(getShipment(id)!, d.trackingNo);
 
   // 嘉谷超时：马上向嘉谷作废这张单并全额退款，客户直接换渠道重下，不会出现“后来面单又出来了、两张都扣费”
   if (justTimedOut && (await autoVoid(getShipment(id)!, JG_TIMEOUT_VOIDED_MSG))) {
@@ -938,6 +950,43 @@ async function autoVoid(s: Shipment, note: string, sbCharged = false): Promise<b
   updateShipment(s.id, { ...cancelPatch(latest, false, { cancelFee: 0, sbCancelFee }), sbStatus: 6, errorMsg: note });
   settleCancel(s.id);
   return true;
+}
+
+/** 本地已取消退款、服务商后来又出了面单，自动作废没成功时记在订单上的说明开头（后台“重复面单”列表按这个找） */
+export const LATE_LABEL_FAILED = "重复面单待作废：";
+const LATE_VOID_ACTION = "作废迟到的面单";
+/** 自动作废最多试几次（之后等管理员到服务商后台作废） */
+export const LATE_VOID_MAX_TRIES = 5;
+
+/**
+ * 本地已经取消并退款（服务商当时不让取消、按死单处理的），服务商后来却又出了面单：
+ * 马上向服务商作废这张面单，避免客户换渠道重新下单后服务商那边两张面单都扣费。
+ * 作废不了的写明运单号，后台首页“重复面单待作废”里能看到，管理员到服务商后台作废后点“刷新状态”。
+ */
+async function voidLateLabel(s: Shipment, trackingNo: string | null | undefined): Promise<Shipment> {
+  const provider = providerOf(s.channelCode);
+  const tn = trackingNo ? `（运单号 ${trackingNo}）` : "";
+  // 同样的失败只记一行（times 累加）
+  const tries = listProviderEvents(s.customNo).filter((e) => e.action === LATE_VOID_ACTION).reduce((a, e) => a + (e.times || 1), 0);
+  if (tries >= LATE_VOID_MAX_TRIES) return s;
+  try {
+    await clientFor(s).cancelOrder(s.orderNo ? { orderNo: s.orderNo } : { customNo: s.customNo });
+  } catch (e) {
+    const msg = (e as Error).message;
+    logProviderEvent(s.customNo, provider, LATE_VOID_ACTION, e instanceof ShipBestError ? e.code : null, `失败：${msg}`);
+    updateShipment(s.id, {
+      errorMsg: `${LATE_LABEL_FAILED}这单本地已取消并全额退款，服务商后来又出了面单${tn}，系统自动作废没成功（${msg}）。请到服务商后台作废这张面单，避免重复扣费，作废后点“刷新状态”`,
+    });
+    return getShipment(s.id)!;
+  }
+  logProviderEvent(s.customNo, provider, LATE_VOID_ACTION, null, `成功${tn}`);
+  // 服务商可能按已出面单收我们取消费：按设置的比例记下（对账用），客户那边早就全额退了，不变
+  updateShipment(s.id, {
+    sbStatus: 6,
+    sbCancelFee: defaultCancelFees({ ...s, sbStatus: 4 }).sbCancelFee,
+    errorMsg: `这单本地已取消并全额退款后，服务商又出了面单${tn}，系统已自动向服务商作废，不会重复扣费`,
+  });
+  return getShipment(s.id)!;
 }
 
 /**
@@ -1220,7 +1269,17 @@ export async function refreshPendingShipments(limit = 60) {
       )
       .all() as { id: number }[]
   ).map((r) => r.id);
-  for (const id of [...ids, ...watched, ...noFile]) await refreshShipment(id).catch(() => null);
+  // 本地按死单取消退款、服务商没确认过取消的 ShipBest 单：继续盯 3 天，服务商后来又出了面单就自动作废（不能两张都扣费）
+  const voided = (
+    db()
+      .prepare(
+        `SELECT id FROM shipments WHERE status = 'cancelled' AND channel_code NOT LIKE 'JG-%' AND channel_code NOT LIKE 'DHL-%'
+         AND (sb_status IN (2, 3) OR (sb_status = 4 AND error_msg LIKE ?)) AND created_at >= datetime('now', '-3 days')
+         ORDER BY id DESC LIMIT 30`,
+      )
+      .all(`${LATE_LABEL_FAILED}%`) as { id: number }[]
+  ).map((r) => r.id);
+  for (const id of [...ids, ...watched, ...noFile, ...voided]) await refreshShipment(id).catch(() => null);
   return ids.length;
 }
 

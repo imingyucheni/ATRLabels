@@ -85,6 +85,7 @@ export default async function ShipmentsPage({ searchParams }: { searchParams: Pr
           <select name="status" defaultValue={sp.status ?? ""}>
             <option value="">{t("全部")}</option>
             {Object.entries(STATUS_LABEL).map(([k, v]) => <option key={k} value={k}>{t(v)}</option>)}
+            <option value="late_label">{t("重复面单待作废")}</option>
           </select>
         </label>
         <label className="f">{t("开始日期")}<input type="date" name="from" defaultValue={sp.from} /></label>

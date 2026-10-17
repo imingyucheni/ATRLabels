@@ -38,7 +38,7 @@ describe("安全检查修复", () => {
     return svc.createLabel({ customerId: cid, channelCode: q.channelCode, req, expectedPrice: q.price!, customerRef: ref, waitForLabel: false });
   }
 
-  it("已取消并退款的单，刷新时服务商还显示已出面单：不会变回已出单，只提示核实", async () => {
+  it("已取消并退款的单，刷新时服务商还显示已出面单：不会变回已出单，自动向服务商作废", async () => {
     const id = await order("H-1");
     const client = sb.getShipBestClient();
     const orig = client.cancelOrder.bind(client);
@@ -60,7 +60,8 @@ describe("安全检查修复", () => {
     }
     const s = db.getShipment(id)!;
     expect(s.status).toBe("cancelled");
-    expect(s.errorMsg).toContain("核实");
+    expect(s.errorMsg).toContain("系统已自动向服务商作废");
+    expect(s.sbStatus).toBe(6);
     expect(ledger.balanceOf(cid)).toBe(bal);
   });
 
@@ -289,6 +290,89 @@ describe("ShipBest 待出单但带了出单失败原因（尾程拒单）", () =
     expect(db.getShipment(id)!.status).toBe("cancelled");
     expect(db.getShipment(id)!.errorMsg).toContain(svc.SB_FAILED_MSG);
     expect(ledger.balanceOf(cid)).toBeCloseTo(100, 2);
+  });
+});
+
+describe("本地按死单取消退款后，服务商又把面单出了（重复面单）", () => {
+  it("后台定时刷新会盯着这张单：服务商出了面单就自动作废，客户不受影响；作废不了的进“重复面单待作废”", async () => {
+    const db = await import("@/lib/db");
+    const svc = await import("@/lib/service");
+    const ledger = await import("@/lib/ledger");
+    const sb = await import("@/lib/shipbest/client");
+    const { publicError } = await import("@/lib/portal");
+    await svc.syncChannels();
+    const cid = db.saveCustomer(null, { name: "重复面单客户", contact: null, phone: null, email: null, note: null, markup: {} });
+    db.setCustomerChannels(cid, db.listChannels().filter((c) => !c.code.startsWith("JG") && !c.code.startsWith("DHL") && !/HWT|MWT/.test(c.name)).map((c) => c.code));
+    ledger.addLedger({ customerId: cid, type: "topup", amount: 100, createdBy: "admin" });
+    const client = sb.getShipBestClient();
+    const origGet = client.getOrder.bind(client);
+    const origCancel = client.cancelOrder.bind(client);
+    const make = async (ref: string) => {
+      const q = (await svc.quoteAll(cid, req)).find((x) => x.ok)!;
+      const id = await svc.createLabel({ customerId: cid, channelCode: q.channelCode, req, expectedPrice: q.price!, customerRef: ref, waitForLabel: false });
+      db.db().prepare("UPDATE shipments SET created_at = datetime('now', '-1 minute') WHERE id = ?").run(id);
+      return id;
+    };
+    // 服务商：先是“待出单 + 失败原因”、不让取消 → 本地按死单取消退款
+    let sbState: { status: number; trackingNo: string; labelUrl: string; errorMsg: string } = { status: 2, trackingNo: "", labelUrl: "", errorMsg: "创建尾程失败：供应商响应异常" };
+    let cancelOk = false;
+    const cancels: unknown[] = [];
+    client.getOrder = async (k) => ({ ...(await origGet(k)), ...sbState });
+    // 只记这个客户的单（前面测试留下的已取消单也会被刷新到）
+    const mine = (k: { orderNo?: string; customNo?: string }) =>
+      !!db.db().prepare("SELECT 1 FROM shipments WHERE customer_id = ? AND (custom_no = ? OR order_no = ?)").get(cid, k.customNo ?? "", k.orderNo ?? "");
+    client.cancelOrder = async (k) => { if (mine(k)) cancels.push(k); if (!cancelOk) throw new sb.ShipBestError(11203, "该订单不支持取消"); return origCancel(k); };
+    try {
+      const id = await make("DUP-1");
+      await svc.refreshShipment(id);
+      expect(db.getShipment(id)!.status).toBe("cancelled");
+      expect(ledger.balanceOf(cid)).toBeCloseTo(100, 2);
+      // 服务商还在“待出单”：继续盯，不动
+      await svc.refreshPendingShipments();
+      expect(db.getShipment(id)!.errorMsg).toContain(svc.SB_FAILED_MSG);
+      // 服务商后来把面单出了：自动作废，客户余额不变，面单不挂到这张已取消的单上
+      sbState = { status: 4, trackingNo: "GFUS0001", labelUrl: "https://example.com/l.pdf", errorMsg: "" };
+      cancelOk = true;
+      cancels.length = 0;
+      await svc.refreshPendingShipments();
+      let s = db.getShipment(id)!;
+      expect(cancels).toHaveLength(1);
+      expect(s).toMatchObject({ status: "cancelled", sbStatus: 6 });
+      expect(s.labelPath).toBeFalsy();
+      expect(s.errorMsg).toMatch(/服务商又出了面单（运单号 GFUS0001），系统已自动向服务商作废/);
+      expect(publicError(s.errorMsg)).toBe("订单已取消并全额退款");
+      expect(ledger.balanceOf(cid)).toBeCloseTo(100, 2);
+      // 作废过了：不再盯
+      cancels.length = 0;
+      await svc.refreshPendingShipments();
+      expect(cancels).toHaveLength(0);
+
+      // 另一张：服务商出了面单但作废不了 → 写明运单号，进“重复面单待作废”，最多试几次
+      sbState = { status: 2, trackingNo: "", labelUrl: "", errorMsg: "创建尾程失败：供应商响应异常" };
+      cancelOk = false;
+      const id2 = await make("DUP-2");
+      await svc.refreshShipment(id2);
+      expect(db.getShipment(id2)!.status).toBe("cancelled");
+      sbState = { status: 4, trackingNo: "GFUS0002", labelUrl: "https://example.com/l2.pdf", errorMsg: "" };
+      cancels.length = 0;
+      for (let i = 0; i < svc.LATE_VOID_MAX_TRIES + 2; i++) await svc.refreshPendingShipments();
+      s = db.getShipment(id2)!;
+      expect(s.status).toBe("cancelled");
+      expect(s.errorMsg!.startsWith(svc.LATE_LABEL_FAILED)).toBe(true);
+      expect(s.errorMsg).toContain("GFUS0002");
+      expect(db.listShipments({ status: "late_label" }).map((x) => x.id)).toContain(id2);
+      const { listProviderEvents } = await import("@/lib/providerLog");
+      expect(listProviderEvents(s.customNo).filter((e) => e.action === "作废迟到的面单").reduce((a, e) => a + e.times, 0)).toBe(svc.LATE_VOID_MAX_TRIES);
+      expect(cancels).toHaveLength(svc.LATE_VOID_MAX_TRIES);
+      // 管理员到服务商后台作废后点“刷新状态”：服务商显示已取消 → 从列表里消失
+      sbState = { status: 6, trackingNo: "GFUS0002", labelUrl: "", errorMsg: "" };
+      await svc.refreshShipment(id2);
+      expect(db.getShipment(id2)!.sbStatus).toBe(6);
+      expect(db.listShipments({ status: "late_label" }).map((x) => x.id)).not.toContain(id2);
+    } finally {
+      client.getOrder = origGet;
+      client.cancelOrder = origCancel;
+    }
   });
 });
 

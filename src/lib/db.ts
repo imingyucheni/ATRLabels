@@ -1209,7 +1209,10 @@ export function listShipments(f: ShipmentFilter = {}): Shipment[] {
     where.push("s.customer_id = ?");
     args.push(f.customerId);
   }
-  if (f.status) {
+  if (f.status === "late_label") {
+    // 重复面单待作废：本地已取消退款，服务商后来又出了面单、自动作废没成功（见 service.ts LATE_LABEL_FAILED）
+    where.push("s.status = 'cancelled' AND COALESCE(s.sb_status, 0) <> 6 AND s.error_msg LIKE '重复面单待作废：%'");
+  } else if (f.status) {
     where.push("s.status = ?");
     args.push(f.status);
   }
