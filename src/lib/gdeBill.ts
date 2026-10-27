@@ -274,7 +274,7 @@ export interface GdeCharge {
   customerName: string | null;
   /** 服务商向我们多收（正）/ 退（负） */
   costAmount: number;
-  /** 向客户补收（正）/ 退（负）；没关联到面单的是 0 */
+  /** 向客户补收（只补不退：嘉谷少收 / 退给我们的，客户这边是 0）；没关联到面单的也是 0 */
   customerAmount: number;
   /** 客户看得到的说明（不写服务商名称和成本金额） */
   reason: string;
@@ -337,7 +337,8 @@ const feeNames = (lines: GdeLine[]) => [...new Set(lines.flatMap((l) => l.fees.f
 
 export function buildGdePreview(wb: GdeWorkbook, opts: GdeOptions): GdePreview {
   const conn = ensureTables();
-  // 嘉谷账单的补差（补收、运费差额）一律按这一单下单时的加价比例向客户多退少补（不看通用的补差转嫁设置）
+  // 嘉谷账单的补差（补收、运费差额）一律按这一单下单时的加价比例向客户补收（不看通用的补差转嫁设置）；
+  // 只补不退：嘉谷少收 / 退给我们的，只记在我们的成本上，不退给客户
   const policy: AdjustmentPolicy = "with_markup";
   const importedRows = conn.prepare("SELECT sig, amount FROM provider_bill_lines WHERE provider = 'jiagu'").all() as { sig: string; amount: number }[];
   const imported = new Set(importedRows.map((r) => r.sig));
@@ -456,7 +457,7 @@ export function buildGdePreview(wb: GdeWorkbook, opts: GdeOptions): GdePreview {
           const l = g.base[0];
           charges.push({
             sheet: l.sheet, kind: "base", tracking: l.tracking, refNo: l.refNo, shipmentId: sid, customNo: s.customNo, customerId: s.customerId, customerName: s.customerName ?? null,
-            costAmount: diff, customerAmount: internal ? 0 : customerAmountFor(diff, policy, s.rule),
+            costAmount: diff, customerAmount: internal || diff < 0 ? 0 : customerAmountFor(diff, policy, s.rule),
             reason: reasonText("base", fees, l.weight, l.dims, diff < 0), detail,
             weight: l.weight, dims: l.dims, product: l.product, shipDate: l.shipDate, zone: l.zone, sigs: g.base.map((x) => x.sig),
           });
@@ -477,7 +478,7 @@ export function buildGdePreview(wb: GdeWorkbook, opts: GdeOptions): GdePreview {
       charges.push({
         sheet: l.sheet, kind: "extra", tracking: l.tracking, refNo: l.refNo,
         shipmentId: ok ? sid : null, customNo: ok ? s.customNo : null, customerId: ok ? s.customerId : null, customerName: ok ? s.customerName ?? null : null,
-        costAmount: l.amount, customerAmount: ok && !internal ? customerAmountFor(l.amount, policy, s.rule) : 0,
+        costAmount: l.amount, customerAmount: ok && !internal && l.amount > 0 ? customerAmountFor(l.amount, policy, s.rule) : 0,
         reason: reasonText("extra", feeNames([l]), l.weight, l.dims),
         detail: l.fees.map((f) => `${f.name} ${f.amount.toFixed(2)}`).join(" + "),
         weight: l.weight, dims: l.dims, product: l.product, shipDate: l.shipDate, zone: l.zone, sigs: [l.sig],
@@ -531,7 +532,8 @@ export function importGdeBill(filename: string, wb: GdeWorkbook, opts: GdeOption
         rowNo: i + 1,
         matchKey: c.tracking || c.refNo,
         shipmentId: c.shipmentId,
-        customerId: c.customerId,
+        // 嘉谷少收 / 退给我们的：只记我们的成本（对账用），不挂到客户名下，客户的补差明细和对账单里没有这一笔
+        customerId: c.costAmount < 0 ? null : c.customerId,
         costAmount: c.costAmount,
         customerAmount: c.customerAmount,
         reason: c.reason,

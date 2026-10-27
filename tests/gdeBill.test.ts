@@ -218,6 +218,26 @@ describe("嘉谷对账单导入", () => {
     expect(g.openBillIssueCount()).toBe(0);
   });
 
+  it("只补不退：嘉谷少收（运费账单比成本低、补收表里是负数）只记我们的成本，不退给客户，客户的补差明细里也没有", async () => {
+    await ship("H008", "labeled");
+    const before = ledger.balanceOf(cid);
+    const wb = (await g.parseGdeWorkbook(await workbook([
+      { name: "10.13GOFO账单", kind: "base", lines: [{ tracking: "GFUSH008", ref: "ATR-H", total: 4.2, fees: { 运费: 4.2 } }] },
+      { name: "10.13GOFO补收账单", kind: "extra", lines: [{ tracking: "GFUSH008", ref: "ATR-H", total: -0.3, fees: { 运费: -0.3 } }] },
+    ])))!;
+    const p = g.buildGdePreview(wb, { baseDiff: true });
+    expect(p.charges.map((c) => [c.kind, c.costAmount, c.customerAmount])).toEqual([["base", -0.8, 0], ["extra", -0.3, 0]]);
+    expect(p.totals.customerTotal).toBe(0);
+    const r = g.importGdeBill("10.13.xlsx", wb, { baseDiff: true });
+    expect(ledger.balanceOf(cid)).toBeCloseTo(before, 2);
+    const adj = db.listAdjustments({ batchId: r.batchId! });
+    expect(adj.map((a) => [a.shipmentId, a.customerId, a.costAmount, a.customerAmount])).toEqual([[ids.H008, null, -0.8, 0], [ids.H008, null, -0.3, 0]]);
+    // 客户那边看不到
+    expect(db.listAdjustments({ customerId: cid }).some((a) => a.batchId === r.batchId)).toBe(false);
+    const { customerAdjustmentSheet } = await import("@/lib/adjustmentExport");
+    expect(customerAdjustmentSheet(r.batchId!, cid)!.rows.filter((x) => x.length > 2)).toHaveLength(1); // 只有合计行
+  });
+
   it("补传以前的文件：行都导入过了就跳过；同一张表里金额改过的不重复算，列出来核对", async () => {
     await ship("G007", "labeled");
     const v1: Sheet[] = [{ name: "10.12GOFO账单", kind: "base", lines: [{ tracking: "GFUSG007", ref: "ATR-G", total: 5, fees: { 运费: 5 } }, { tracking: "GFUS777777", ref: "114-0000000-0000000", total: 3, fees: { 运费: 3 } }] }];

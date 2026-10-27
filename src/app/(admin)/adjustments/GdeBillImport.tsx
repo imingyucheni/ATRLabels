@@ -46,7 +46,7 @@ export default function GdeBillImport() {
   function onImport() {
     if (!form || !preview) return;
     const p = preview;
-    const msg = t("确认导入这个账单？\n新的 {n} 行会记下来（以后再上传同一个累计账单时自动跳过）。\n记补差 {c} 笔：服务商 {cost}，向客户补收 / 退 {cust}（马上记入客户余额）。\n需要核对的 {i} 条不会动客户余额。", {
+    const msg = t("确认导入这个账单？\n新的 {n} 行会记下来（以后再上传同一个累计账单时自动跳过）。\n记补差 {c} 笔：服务商 {cost}，向客户补收 {cust}（马上记入客户余额；嘉谷少收的不退给客户）。\n需要核对的 {i} 条不会动客户余额。", {
       n: p.totals.newLines, c: p.charges.length, cost: money(p.totals.costToBook), cust: money(p.totals.customerTotal), i: p.issues.filter((x) => x.level === "warn").length,
     });
     if (!window.confirm(msg)) return;
@@ -65,7 +65,7 @@ export default function GdeBillImport() {
     <div className="card">
       <h2>{t("嘉谷（GDE）对账单")}</h2>
       <p className="small muted" style={{ marginTop: 0 }}>
-        {t("嘉谷每周发的 Excel 账单直接上传（一周一张表、累计的也可以）：系统按运单号 / 我们的单号对应到订单，补收的费用和运费账单的差额按这一单下单时的加价比例向客户多退少补；已取消的单还被收费、状态对不上的单进“嘉谷账单待核对”，和嘉谷沟通处理。以前导入过的行自动跳过。")}
+        {t("嘉谷每周发的 Excel 账单直接上传（一周一张表、累计的也可以）：系统按运单号 / 我们的单号对应到订单，补收的费用和运费账单多收的差额按这一单下单时的加价比例向客户补收（只补不退，嘉谷少收的只记在我们的成本上）；已取消的单还被收费、状态对不上的单进“嘉谷账单待核对”，和嘉谷沟通处理。以前导入过的行自动跳过。")}
       </p>
       <form action={(fd) => analyze(fd)} className="row">
         <FilePick name="file" accept=".xlsx" required />
@@ -84,7 +84,7 @@ export default function GdeBillImport() {
             <div className="stat"><div className="muted">{t("新的行")}</div><div className="v">{preview.totals.newLines}</div><div className="small muted">{t("之前导入过 {n} 行（跳过）", { n: preview.totals.alreadyImported })}</div>{preview.totals.revised > 0 && <div className="small warn-text">{t("其中 {n} 行金额和以前导入的不一样（要核对）", { n: preview.totals.revised })}</div>}</div>
             <div className="stat"><div className="muted">{t("新账单金额")}</div><div className="v">{money(preview.totals.newBilled)}</div><div className="small muted">{t("对应到系统订单 {n} 行", { n: preview.totals.matched })}</div></div>
             <div className="stat"><div className="muted">{t("记补差")}</div><div className="v">{preview.charges.length}</div><div className="small muted">{t("服务商 {a}", { a: money(preview.totals.costToBook) })}</div></div>
-            <div className="stat"><div className="muted">{t("向客户补收(+)/退(-)")}</div><div className="v">{money(preview.totals.customerTotal)}</div><div className="small muted">{t(preview.policyLabel)}</div></div>
+            <div className="stat"><div className="muted">{t("向客户补收")}</div><div className="v">{money(preview.totals.customerTotal)}</div><div className="small muted">{t(preview.policyLabel)}</div></div>
             <div className="stat"><div className="muted">{t("需要核对")}</div><div className={`v ${warns.length ? "profit-neg" : ""}`}>{warns.length}</div></div>
             <div className="stat"><div className="muted">{t("系统里没有的单")}</div><div className="v">{preview.notInSystem.count}</div><div className="small muted">{money(preview.notInSystem.total)}</div></div>
           </div>
@@ -132,7 +132,7 @@ export default function GdeBillImport() {
               <tbody>
                 {preview.charges.map((c, i) => (
                   <tr key={i}>
-                    <td className="small">{c.kind === "extra" ? t("补收") : t("运费差额")}<div className="muted">{c.sheet}</div></td>
+                    <td className="small">{c.kind === "extra" ? t("补收") : t("运费差额")}{c.costAmount < 0 && <div className="profit-pos">{t("嘉谷少收，不退客户")}</div>}<div className="muted">{c.sheet}</div></td>
                     <td className="small">{c.tracking || c.refNo}</td>
                     <td>{c.shipmentId ? <>{c.customNo}<div className="small muted">{c.customerName}</div></> : <span className="warn-text small">{t("不自动关联")}</span>}</td>
                     <td className="num">{money(c.costAmount)}</td>
