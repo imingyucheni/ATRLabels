@@ -81,7 +81,7 @@ export default function GdeBillImport() {
           {preview.totals.newLines > 0 && !preview.totals.matched && <div className="alert warn">{t("新的行一单都没对应上系统里的订单：请确认现在是正式环境（不是模拟 / 沙盒），以及这是我们自己账户的账单。")}</div>}
           {!preview.totals.newLines && <div className="alert info">{t("这个账单里的 {n} 行之前都导入过了，没有新的内容。", { n: preview.totals.lines })}</div>}
           <div className="stats">
-            <div className="stat"><div className="muted">{t("新的行")}</div><div className="v">{preview.totals.newLines}</div><div className="small muted">{t("之前导入过 {n} 行（跳过）", { n: preview.totals.alreadyImported })}</div></div>
+            <div className="stat"><div className="muted">{t("新的行")}</div><div className="v">{preview.totals.newLines}</div><div className="small muted">{t("之前导入过 {n} 行（跳过）", { n: preview.totals.alreadyImported })}</div>{preview.totals.revised > 0 && <div className="small warn-text">{t("其中 {n} 行金额和以前导入的不一样（要核对）", { n: preview.totals.revised })}</div>}</div>
             <div className="stat"><div className="muted">{t("新账单金额")}</div><div className="v">{money(preview.totals.newBilled)}</div><div className="small muted">{t("对应到系统订单 {n} 行", { n: preview.totals.matched })}</div></div>
             <div className="stat"><div className="muted">{t("记补差")}</div><div className="v">{preview.charges.length}</div><div className="small muted">{t("服务商 {a}", { a: money(preview.totals.costToBook) })}</div></div>
             <div className="stat"><div className="muted">{t("向客户补收(+)/退(-)")}</div><div className="v">{money(preview.totals.customerTotal)}</div><div className="small muted">{t(preview.policyLabel)}</div></div>

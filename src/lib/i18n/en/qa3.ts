@@ -430,4 +430,6 @@ export const qa3: Record<string, string> = {
   "运费差额未处理": "Postage difference skipped",
   "已补过": "Already adjusted",
   "系统（账单已退回）": "System (refunded in bill)",
+  "账单金额改过": "Bill amount changed",
+  "其中 {n} 行金额和以前导入的不一样（要核对）": "{n} of them differ from what was imported before (review)",
 };

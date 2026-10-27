@@ -218,6 +218,28 @@ describe("嘉谷对账单导入", () => {
     expect(g.openBillIssueCount()).toBe(0);
   });
 
+  it("补传以前的文件：行都导入过了就跳过；同一张表里金额改过的不重复算，列出来核对", async () => {
+    await ship("G007", "labeled");
+    const v1: Sheet[] = [{ name: "10.12GOFO账单", kind: "base", lines: [{ tracking: "GFUSG007", ref: "ATR-G", total: 5, fees: { 运费: 5 } }, { tracking: "GFUS777777", ref: "114-0000000-0000000", total: 3, fees: { 运费: 3 } }] }];
+    const wb1 = (await g.parseGdeWorkbook(await workbook(v1)))!;
+    g.importGdeBill("10.12.xlsx", wb1, { baseDiff: true });
+    // 再传一次（或者传更早的、内容一样的文件）：都导入过了
+    expect(() => g.importGdeBill("10.12-again.xlsx", wb1, { baseDiff: true })).toThrow(/都导入过了/);
+    // 嘉谷改过 10.12 这张表：G 从 5.00 改成 5.80 → 不当成新的一笔再加 5.80，也不自动补差，列出来核对
+    const v2: Sheet[] = [{ name: "10.12GOFO账单", kind: "base", lines: [{ tracking: "GFUSG007", ref: "ATR-G", total: 5.8, fees: { 运费: 5.8 } }, v1[0].lines[1]] }];
+    const wb2 = (await g.parseGdeWorkbook(await workbook(v2)))!;
+    const p = g.buildGdePreview(wb2, { baseDiff: true });
+    expect(p.totals).toMatchObject({ newLines: 1, revised: 1, alreadyImported: 1 });
+    expect(p.charges).toEqual([]);
+    expect(p.issues).toEqual([expect.objectContaining({ type: "bill_changed", shipmentId: ids.G007, amount: 5.8, message: expect.stringMatching(/以前 5\.00，这次 5\.80/) })]);
+    g.importGdeBill("10.12-v2.xlsx", wb2, { baseDiff: true });
+    expect(g.listBillIssues({ status: "open", shipmentId: ids.G007 })[0]).toMatchObject({ type: "bill_changed" });
+    // 记成“改过”的行不算进运费合计：之后这一单的运费差额还是按 5.00 算
+    const wb3 = (await g.parseGdeWorkbook(await workbook([{ name: "10.19GOFO补收账单", kind: "extra", lines: [{ tracking: "GFUSG007", ref: "ATR-G", total: 0.4, fees: { 偏远费: 0.4 } }] }])))!;
+    expect(g.buildGdePreview(wb3, { baseDiff: true }).charges).toEqual([expect.objectContaining({ kind: "extra", costAmount: 0.4 })]);
+    expect(() => g.importGdeBill("10.12-v2.xlsx", wb2, { baseDiff: true })).toThrow(/都导入过了/);
+  });
+
   it("取消处理中（已向服务商申请取消）的单被收费：也要核对；同一单再出现只更新、不重复加", async () => {
     await ship("F006", "cancel_requested");
     const wb = (await g.parseGdeWorkbook(await workbook([{ name: "10.29GOFO账单", kind: "base", lines: [{ tracking: "GFUSF006", ref: "ATR-F", total: 4, fees: { 运费: 4 } }] }])))!;

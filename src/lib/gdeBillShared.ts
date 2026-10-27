@@ -12,10 +12,11 @@ export const GDE_FEES = [
 
 
 /** 账单核对出来的问题类型（warn 的会进“嘉谷账单待核对”，处理完手动标记） */
-export type GdeIssueType = "cancelled_charged" | "status_mismatch" | "refund_mismatch" | "not_found" | "channel" | "base_diff_off" | "legacy_dup";
+export type GdeIssueType = "cancelled_charged" | "bill_changed" | "status_mismatch" | "refund_mismatch" | "not_found" | "channel" | "base_diff_off" | "legacy_dup";
 
 export const GDE_ISSUE_LABEL: Record<GdeIssueType, string> = {
   cancelled_charged: "已取消仍被收费",
+  bill_changed: "账单金额改过",
   status_mismatch: "状态对不上",
   refund_mismatch: "退款对不上",
   not_found: "系统里找不到",

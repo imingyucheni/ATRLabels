@@ -204,6 +204,9 @@ function parseSummary(rows: string[][]): GdeSummary {
   return { payments, paymentTotal: r2(payments.reduce((a, p) => a + p.amount, 0)), balance, extras };
 }
 
+/** 判重的“行”：签名去掉金额和序号（同一张表、同一单、同一箱） */
+const lineKey = (sig: string) => sig.replace(/\|[-\d.]+#\d+$/, "");
+
 /* ---------------- 已导入的行 ---------------- */
 
 function ensureTables() {
@@ -305,7 +308,9 @@ export interface GdePreview {
   charges: GdeCharge[];
   issues: GdeIssue[];
   notInSystem: { count: number; total: number; lines: { sheet: string; tracking: string; refNo: string; amount: number }[] };
-  totals: { lines: number; newLines: number; alreadyImported: number; newBilled: number; matched: number; costToBook: number; customerTotal: number };
+  totals: { lines: number; newLines: number; alreadyImported: number; revised: number; newBilled: number; matched: number; costToBook: number; customerTotal: number };
+  /** 金额改过的行（导入时记成 revised，不算进运费 / 补收合计） */
+  revisedSigs: string[];
   policy: AdjustmentPolicy;
   policyLabel: string;
   /** 已取消的单：按账单算出服务商实收的取消费（导入时写回面单，对账用） */
@@ -334,7 +339,11 @@ export function buildGdePreview(wb: GdeWorkbook, opts: GdeOptions): GdePreview {
   const conn = ensureTables();
   // 嘉谷账单的补差（补收、运费差额）一律按这一单下单时的加价比例向客户多退少补（不看通用的补差转嫁设置）
   const policy: AdjustmentPolicy = "with_markup";
-  const imported = new Set((conn.prepare("SELECT sig FROM provider_bill_lines WHERE provider = 'jiagu'").all() as { sig: string }[]).map((r) => r.sig));
+  const importedRows = conn.prepare("SELECT sig, amount FROM provider_bill_lines WHERE provider = 'jiagu'").all() as { sig: string; amount: number }[];
+  const imported = new Set(importedRows.map((r) => r.sig));
+  // 同一张表、同一单、同一箱以前导入过（不管金额）：这次金额不一样就是账单改过，要核对，不能当成新的一笔再算一次
+  const importedAt = new Map<string, number[]>();
+  for (const r of importedRows) importedAt.set(lineKey(r.sig), [...(importedAt.get(lineKey(r.sig)) ?? []), r.amount]);
   // 用通用补差导入导过的（不是这里导的）：同一单同样金额的补收不再记
   const legacy = new Set<string>();
   for (const a of conn
@@ -362,12 +371,17 @@ export function buildGdePreview(wb: GdeWorkbook, opts: GdeOptions): GdePreview {
 
   const sheets: GdePreview["sheets"] = [];
   const fresh: { line: GdeLine; sid: number | null }[] = [];
+  const revised: { line: GdeLine; sid: number | null; before: number[] }[] = [];
   let lineCount = 0;
   for (const s of wb.sheets) {
     const news = s.lines.filter((l) => !imported.has(l.sig));
     lineCount += s.lines.length;
     sheets.push({ name: s.name, kind: s.kind, lines: s.lines.length, newLines: news.length, total: s.total, newTotal: r2(news.reduce((a, l) => a + l.amount, 0)), stated: s.stated });
-    for (const l of news) fresh.push({ line: l, sid: match(l)?.id ?? null });
+    for (const l of news) {
+      const before = importedAt.get(lineKey(l.sig));
+      if (before) revised.push({ line: l, sid: match(l)?.id ?? null, before });
+      else fresh.push({ line: l, sid: match(l)?.id ?? null });
+    }
   }
 
   const charges: GdeCharge[] = [];
@@ -377,6 +391,13 @@ export function buildGdePreview(wb: GdeWorkbook, opts: GdeOptions): GdePreview {
   const outside: GdePreview["notInSystem"]["lines"] = [];
   const issue = (level: GdeIssue["level"], type: GdeIssueType, l: GdeLine, sid: number | null, customNo: string | null, amount: number, message: string, sheet = l.sheet) =>
     issues.push({ level, type, sheet, tracking: l.tracking || l.refNo, orderNo: l.orderNo, refNo: l.refNo, customNo, shipmentId: sid, amount: r2(amount), message });
+
+  // 以前导入过的表里，这一单的金额变了（嘉谷改过账单，或者上传了旧版本的文件）：不自动处理，列出来核对
+  for (const { line: l, sid, before } of revised) {
+    const s = sid ? getShipment(sid) : null;
+    issue("warn", "bill_changed", l, sid, s?.customNo ?? null, l.amount,
+      `账单「${l.sheet}」里这一单的金额和以前导入的不一样：以前 ${before.map((b) => b.toFixed(2)).join(" / ")}，这次 ${l.amount.toFixed(2)}。没有自动处理（不会重复收），请和嘉谷核对哪个对`);
+  }
 
   // 系统里找不到的单（直接在嘉谷下的单等）：只列出来
   for (const { line: l, sid } of fresh) {
@@ -473,8 +494,9 @@ export function buildGdePreview(wb: GdeWorkbook, opts: GdeOptions): GdePreview {
     notInSystem: { count: outside.length, total: sum(outside.map((l) => l.amount)), lines: outside },
     totals: {
       lines: lineCount,
-      newLines: fresh.length,
-      alreadyImported: lineCount - fresh.length,
+      newLines: fresh.length + revised.length,
+      alreadyImported: lineCount - fresh.length - revised.length,
+      revised: revised.length,
       newBilled: sum(fresh.map((f) => f.line.amount)),
       matched: fresh.filter((f) => f.sid).length,
       costToBook: sum(charges.map((c) => c.costAmount)),
@@ -484,6 +506,7 @@ export function buildGdePreview(wb: GdeWorkbook, opts: GdeOptions): GdePreview {
     policyLabel: ADJUSTMENT_POLICY_LABEL[policy],
     cancelFees,
     resolved,
+    revisedSigs: revised.map((r) => r.line.sig),
   };
 }
 
@@ -527,6 +550,7 @@ export function importGdeBill(filename: string, wb: GdeWorkbook, opts: GdeOption
        VALUES (?, 'jiagu', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     const linked = new Set<number>();
+    const revisedSigs = new Set(preview.revisedSigs);
     for (const s of wb.sheets) {
       for (const l of s.lines) {
         const ci = byLineSig.get(l.sig);
@@ -534,7 +558,7 @@ export function importGdeBill(filename: string, wb: GdeWorkbook, opts: GdeOption
         const adj = ci !== undefined && !linked.has(ci) ? adjIds[ci] ?? null : null;
         if (ci !== undefined) linked.add(ci);
         const sid = (findShipmentByKey(l.tracking) ?? findShipmentByKey(l.refNo) ?? findShipmentByKey(l.orderNo))?.id ?? null;
-        ins.run(billId, l.sig, l.sheet, l.kind, l.rowNo, l.tracking, l.refNo, l.orderNo, l.amount,
+        ins.run(billId, l.sig, l.sheet, revisedSigs.has(l.sig) ? "revised" : l.kind, l.rowNo, l.tracking, l.refNo, l.orderNo, l.amount,
           JSON.stringify({ box: l.box, product: l.product, shipDate: l.shipDate, zone: l.zone, weight: l.weight, dims: l.dims, fees: l.fees }), sid, adj);
       }
     }
