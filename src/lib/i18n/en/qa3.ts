@@ -346,4 +346,6 @@ export const qa3: Record<string, string> = {
   "住宅渠道只能寄住宅地址：这个地址是商业地址，请选商业渠道或其他渠道": "This residential-only service can't ship to this address because it's a commercial address. Choose the commercial service or another one.",
   "重复面单待作废": "Duplicate labels to void",
   "订单已取消并全额退款": "The order was cancelled and fully refunded",
+  "发给客户的语言": "Language of the message to the customer",
+  "复制英文版": "Copy English version",
 };

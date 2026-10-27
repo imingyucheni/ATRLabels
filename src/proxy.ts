@@ -82,7 +82,33 @@ const hostOf = (u?: string) => {
   }
 };
 
+/**
+ * 链接带 ?lang=en / ?lang=zh（例如发给英文客户的开户信息里的登录地址）：记下语言，跳回同一个网址（去掉参数），
+ * 页面直接按这个语言显示。跳转用请求的主机名（不能换成 ADMIN_URL：OMS 的网址要留在 OMS）。
+ */
+function langSwitch(req: NextRequest): NextResponse | null {
+  const want = req.nextUrl.searchParams.get("lang");
+  if (want !== "en" && want !== "zh") return null;
+  const params = new URLSearchParams(req.nextUrl.search);
+  params.delete("lang");
+  const rest = params.toString();
+  const to = req.nextUrl.pathname + (rest ? `?${rest}` : "");
+  const host = (req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? "").split(",")[0].trim();
+  const proto = (req.headers.get("x-forwarded-proto") ?? req.nextUrl.protocol.replace(":", "")).split(",")[0].trim() || "http";
+  let target: URL;
+  try {
+    target = host ? new URL(to, `${proto}://${host}`) : new URL(to, req.nextUrl.origin);
+  } catch {
+    target = new URL(to, req.nextUrl.origin);
+  }
+  const res = NextResponse.redirect(target);
+  res.cookies.set("atr_lang", want, { path: "/", maxAge: 31536000, sameSite: "lax" });
+  return res;
+}
+
 export function proxy(req: NextRequest) {
+  const lang = langSwitch(req);
+  if (lang) return lang;
   const omsUrl = process.env.OMS_URL?.replace(/\/+$/, "");
   const omsHost = hostOf(omsUrl);
   const adminHost = hostOf(process.env.ADMIN_URL);

@@ -37,6 +37,17 @@ describe("后台页面要先登录（proxy 拦截，页面不渲染）", () => {
     expect(proxy(req("/customers", { cookie: `atr_session=${old}.${"0".repeat(64)}` })).status).toBe(307);
   });
 
+  it("链接带 ?lang=en：记下英文，跳回同一个网址（去掉参数、主机名不变）；其他值不管", () => {
+    const r = proxy(req("/portal/login?lang=en", { "x-forwarded-host": "atrship.com", "x-forwarded-proto": "https" }));
+    expect(r.status).toBe(307);
+    expect(r.headers.get("location")).toBe("https://atrship.com/portal/login");
+    expect(r.cookies.get("atr_lang")?.value).toBe("en");
+    const z = proxy(req("/portal/reset?token=abc&lang=zh"));
+    expect(z.headers.get("location")).toBe("http://localhost:3000/portal/reset?token=abc");
+    expect(z.cookies.get("atr_lang")?.value).toBe("zh");
+    expect(proxy(req("/portal/login?lang=fr")).status).not.toBe(307);
+  });
+
   it("登录了能打开；登录页、客户 OMS、官网、接口不拦", () => {
     expect(proxy(req("/customers", { cookie: `atr_session=${token}` })).headers.get("location")).toBeNull();
     for (const p of ["/login", "/portal", "/portal/ship", "/site", "/site/developers", "/api/v1/rates", "/manifest.webmanifest", "/icon.svg"]) {
