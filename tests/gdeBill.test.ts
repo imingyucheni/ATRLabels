@@ -238,6 +238,29 @@ describe("嘉谷对账单导入", () => {
     expect(customerAdjustmentSheet(r.batchId!, cid)!.rows.filter((x) => x.length > 2)).toHaveLength(1); // 只有合计行
   });
 
+  it("只补不退之前导入的：可以一键撤回当时退给客户的补差，补收的不动", async () => {
+    await ship("J009", "labeled");
+    await ship("K010", "labeled");
+    const wb = (await g.parseGdeWorkbook(await workbook([{ name: "10.14GOFO账单", kind: "base", lines: [
+      { tracking: "GFUSJ009", ref: "ATR-J", total: 4.98, fees: { 运费: 4.98 } },
+      { tracking: "GFUSK010", ref: "ATR-K", total: 5.5, fees: { 运费: 5.0, 燃油附加费: 0.5 } },
+    ] }])))!;
+    const r = g.importGdeBill("10.14.xlsx", wb, { baseDiff: true });
+    // 模拟旧版本：嘉谷少收的 0.02 也退给了客户
+    const neg = db.listAdjustments({ batchId: r.batchId! }).find((a) => a.costAmount < 0)!;
+    db.db().prepare("UPDATE adjustments SET customer_id = ?, customer_amount = -0.02 WHERE id = ?").run(cid, neg.id);
+    ledger.postAdjustment(neg.id, cid, ids.J009, -0.02, neg.reason);
+    const charged = ledger.balanceOf(cid);
+    expect(g.gdeCustomerRefunds(r.billId)).toEqual({ count: 1, total: -0.02 });
+    expect(g.revokeGdeRefunds(r.billId)).toBe(1);
+    expect(ledger.balanceOf(cid)).toBeCloseTo(charged - 0.02, 2);
+    expect(g.gdeCustomerRefunds(r.billId)).toEqual({ count: 0, total: 0 });
+    const after = db.listAdjustments({ batchId: r.batchId! });
+    expect(after.find((a) => a.id === neg.id)).toMatchObject({ customerId: null, customerAmount: 0, costAmount: -0.02 });
+    // 补收的那笔（K 的燃油附加费）不动
+    expect(after.find((a) => a.shipmentId === ids.K010)).toMatchObject({ customerId: cid, costAmount: 0.5, customerAmount: 0.53 });
+  });
+
   it("补传以前的文件：行都导入过了就跳过；同一张表里金额改过的不重复算，列出来核对", async () => {
     await ship("G007", "labeled");
     const v1: Sheet[] = [{ name: "10.12GOFO账单", kind: "base", lines: [{ tracking: "GFUSG007", ref: "ATR-G", total: 5, fees: { 运费: 5 } }, { tracking: "GFUS777777", ref: "114-0000000-0000000", total: 3, fees: { 运费: 3 } }] }];

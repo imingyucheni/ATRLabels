@@ -86,6 +86,7 @@ patterns.push(
   [/^账单扣了 ([\d.-]+)，但系统里这单是「(.+)」，请核对（没有向客户收）$/, "The bill charged $1, but the order is “$2” in the system; please check (customer not charged)"],
   [/^补收 ([\d.-]+)，但系统里这单是「(.+)」，没有自动向客户收；需要的话导入后到补差批次里手动关联$/, "Surcharge $1, but the order is “$2” in the system, so the customer wasn't charged automatically; link it manually in the adjustment batch after import if needed"],
   [/^承运商账单 ([\d.]+)$/, "Carrier bill $1"],
+  [/^已撤回 (\d+) 笔退给客户的补差（改成只记成本）$/, "Took back $1 customer refund(s) (now recorded on our cost only)"],
   [/^系统里「(.+?)」（客户已全额退款），但嘉谷还在收这一单的钱：(.+)，净收 ([\d.-]+)。请和嘉谷核对$/, "“$1” in the system (customer fully refunded), but GDE is still charging for this order: $2; net $3. Please check with GDE"],
   [/^嘉谷账单已全部退回（扣 ([\d.-]+)，退 ([\d.-]+)）$/, "Fully refunded in the GDE bill (charged $1, refunded $2)"],
   [/^账单「(.+?)」里这一单的金额和以前导入的不一样：以前 (.+?)，这次 ([\d.-]+)。没有自动处理（不会重复收），请和嘉谷核对哪个对$/, "In bill sheet “$1” this order's amount differs from what was imported before: before $2, now $3. Not processed automatically (no double charge); please confirm with GDE which is right"],

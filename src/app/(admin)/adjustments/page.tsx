@@ -5,13 +5,14 @@ import { money } from "@/lib/pricing";
 import ImportAdjustments from "./ImportAdjustments";
 import GdeBillImport from "./GdeBillImport";
 import { getT } from "@/lib/prefs";
-import { listGdeBills, openBillIssueCount } from "@/lib/gdeBill";
+import { gdeCustomerRefunds, listGdeBills, openBillIssueCount } from "@/lib/gdeBill";
 
 export default async function AdjustmentsPage() {
   const t = await getT();
   const batches = listAdjustmentBatches();
   const bills = listGdeBills();
   const reviews = openBillIssueCount();
+  const oldRefunds = bills.map((b) => ({ id: b.id, filename: b.filename, ...gdeCustomerRefunds(b.id) })).filter((x) => x.count);
   const { adjustmentPolicy } = getSettings();
   return (
     <>
@@ -25,6 +26,11 @@ export default async function AdjustmentsPage() {
       {reviews > 0 && (
         <div className="alert warn">{t("嘉谷账单有 {n} 条待核对（例如已取消的单还在被收费），客户余额没有动。", { n: reviews })} <Link href="/adjustments/gde/review">{t("去核对 →")}</Link></div>
       )}
+      {oldRefunds.map((x) => (
+        <div key={x.id} className="alert warn">
+          {t("“{name}”是按旧规则导入的，嘉谷少收的 {n} 笔退给了客户（共 {a}）。", { name: x.filename, n: x.count, a: money(-x.total) })} <Link href={`/adjustments/gde/${x.id}`}>{t("去撤回 →")}</Link>
+        </div>
+      ))}
       <GdeBillImport />
       {bills.length > 0 && (
         <div className="card table-wrap">

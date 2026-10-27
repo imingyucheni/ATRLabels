@@ -434,4 +434,10 @@ export const qa3: Record<string, string> = {
   "确认导入这个账单？\n新的 {n} 行会记下来（以后再上传同一个累计账单时自动跳过）。\n记补差 {c} 笔：服务商 {cost}，向客户补收 {cust}（马上记入客户余额；嘉谷少收的不退给客户）。\n需要核对的 {i} 条不会动客户余额。": "Import this bill?\n{n} new lines will be recorded (skipped next time the cumulative bill is uploaded).\n{c} adjustments: provider {cost}, charged to customers {cust} (posted to balances now; amounts GDE billed less are not refunded to customers).\nThe {i} items to review won't change customer balances.",
   "向客户补收": "Charged to customers",
   "嘉谷少收，不退客户": "GDE billed less — not refunded to customer",
+  "这次导入时还是旧规则：嘉谷少收的 {n} 笔退给了客户（共 {a}）。现在是只补不退，可以把这些退款撤回（从客户余额里扣回，补差改成只记我们的成本），补收的不动。": "This import used the old rule: {n} amount(s) GDE billed less were refunded to customers ({a} in total). The rule is now charge-only; you can take these refunds back (deducted from customer balances, recorded on our cost only). Surcharges are not affected.",
+  "撤回退给客户的补差": "Take back customer refunds",
+  "确认撤回？{n} 笔共 {a} 会从客户余额里扣回。": "Take back? {n} refund(s) totaling {a} will be deducted from customer balances.",
+  "“{name}”是按旧规则导入的，嘉谷少收的 {n} 笔退给了客户（共 {a}）。": "“{name}” was imported under the old rule: {n} amount(s) GDE billed less were refunded to customers ({a} in total).",
+  "去撤回 →": "Take back →",
+  "没有退给客户的补差": "No refunds to customers",
 };

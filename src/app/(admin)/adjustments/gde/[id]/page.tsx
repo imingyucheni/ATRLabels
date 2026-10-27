@@ -3,8 +3,8 @@ import { notFound } from "next/navigation";
 import { fmtTime } from "@/lib/time";
 import { money } from "@/lib/pricing";
 import FlashForm from "@/components/FlashForm";
-import { deleteGdeBillAction } from "@/app/gdeBillActions";
-import { getGdeBill } from "@/lib/gdeBill";
+import { deleteGdeBillAction, revokeGdeRefundsAction } from "@/app/gdeBillActions";
+import { gdeCustomerRefunds, getGdeBill } from "@/lib/gdeBill";
 import { GDE_KIND_LABEL } from "@/lib/gdeBillShared";
 import { getLang } from "@/lib/prefs";
 import { makeT, translateMessage } from "@/lib/i18n";
@@ -50,6 +50,17 @@ export default async function GdeBillPage({ params }: { params: Promise<{ id: st
         <div className="stat"><div className="muted">{t("需要核对")}</div><div className={`v ${warns.length ? "profit-neg" : ""}`}>{warns.length}</div></div>
         <div className="stat"><div className="muted">{t("系统里没有的单")}</div><div className="v">{notInSystem.count}</div><div className="small muted">{money(notInSystem.total)}</div></div>
       </div>
+      {(() => {
+        const refunds = gdeCustomerRefunds(b.id);
+        return refunds.count ? (
+          <div className="alert warn">
+            <p style={{ margin: "0 0 8px" }}>{t("这次导入时还是旧规则：嘉谷少收的 {n} 笔退给了客户（共 {a}）。现在是只补不退，可以把这些退款撤回（从客户余额里扣回，补差改成只记我们的成本），补收的不动。", { n: refunds.count, a: money(-refunds.total) })}</p>
+            <FlashForm action={revokeGdeRefundsAction} submitLabel="撤回退给客户的补差" submitClass="primary small" confirm={t("确认撤回？{n} 笔共 {a} 会从客户余额里扣回。", { n: refunds.count, a: money(-refunds.total) })}>
+              <input type="hidden" name="id" value={b.id} />
+            </FlashForm>
+          </div>
+        ) : null;
+      })()}
       {b.adjustmentBatchId && <p><Link href={`/adjustments/${b.adjustmentBatchId}`}>{t("查看这次记的补差明细（可以手动关联、导出给客户）→")}</Link></p>}
       {summary && (
         <p className="small">

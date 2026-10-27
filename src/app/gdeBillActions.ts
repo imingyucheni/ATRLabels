@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/auth";
-import { buildGdePreview, deleteGdeBill, importGdeBill, parseGdeWorkbook, reopenBillIssue, resolveBillIssue, type GdePreview } from "@/lib/gdeBill";
+import { buildGdePreview, deleteGdeBill, importGdeBill, parseGdeWorkbook, reopenBillIssue, resolveBillIssue, revokeGdeRefunds, type GdePreview } from "@/lib/gdeBill";
 import type { FlashState } from "@/app/actions";
 
 /** 读上传的嘉谷对账单 */
@@ -67,4 +67,14 @@ export async function reopenBillIssueAction(_: FlashState, fd: FormData): Promis
   reopenBillIssue(Number(fd.get("id")));
   revalidatePath("/adjustments/gde/review");
   return { ok: "已重新打开" };
+}
+
+/** 只补不退之前导入的账单：撤回当时退给客户的补差 */
+export async function revokeGdeRefundsAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  await requireAdmin();
+  const id = Number(fd.get("id"));
+  const n = revokeGdeRefunds(id);
+  revalidatePath("/adjustments");
+  revalidatePath(`/adjustments/gde/${id}`);
+  return { ok: n ? `已撤回 ${n} 笔退给客户的补差（改成只记成本）` : "没有退给客户的补差" };
 }

@@ -711,3 +711,35 @@ export function gdeDisputeText(issues: BillIssue[]): string {
     `合计 ${total.toFixed(2)} USD`,
   ].join("\n");
 }
+
+/* ---------------- 旧规则退给客户的补差（只补不退之前导入的） ---------------- */
+
+/** 这次导入里退给客户的补差（只补不退之前的版本会把嘉谷少收的也退给客户） */
+export function gdeCustomerRefunds(billId: number): { count: number; total: number } {
+  const conn = ensureTables();
+  const r = conn
+    .prepare(
+      `SELECT COUNT(*) AS n, COALESCE(SUM(a.customer_amount), 0) AS t FROM adjustments a JOIN provider_bills b ON b.adjustment_batch_id = a.batch_id
+       WHERE b.id = ? AND a.customer_amount < 0`,
+    )
+    .get(billId) as { n: number; t: number };
+  return { count: r.n, total: r2(r.t) };
+}
+
+/**
+ * 撤回这次导入里退给客户的补差：客户余额里的这几笔退款删掉，补差记录改成只记我们的成本（不挂客户），
+ * 和现在“只补不退”导入的结果一样。补收的不动。
+ */
+export function revokeGdeRefunds(billId: number): number {
+  const conn = ensureTables();
+  const ids = (conn
+    .prepare("SELECT a.id FROM adjustments a JOIN provider_bills b ON b.adjustment_batch_id = a.batch_id WHERE b.id = ? AND a.customer_amount < 0")
+    .all(billId) as { id: number }[]).map((r) => r.id);
+  conn.transaction(() => {
+    for (const id of ids) {
+      conn.prepare("DELETE FROM ledger WHERE adjustment_id = ?").run(id);
+      conn.prepare("UPDATE adjustments SET customer_id = NULL, customer_amount = 0 WHERE id = ?").run(id);
+    }
+  })();
+  return ids.length;
+}
