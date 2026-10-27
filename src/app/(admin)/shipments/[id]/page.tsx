@@ -11,6 +11,7 @@ import { isPaperSize } from "@/lib/labelLayout";
 import { money, signedPercent } from "@/lib/pricing";
 import { defaultCancelFees, JG_LABEL_TIMEOUT_MIN, JG_LABEL_TIMEOUT_MSG, JG_TIMEOUT_VOIDED_MSG, providerOf } from "@/lib/service";
 import { listProviderEvents } from "@/lib/providerLog";
+import { listBillIssues } from "@/lib/gdeBill";
 import { isJiaguCode, jgOrders, jiaguConfig, orderWarehouse, parseJgCode } from "@/lib/shipbest/jiagu";
 import { stripProviderTag } from "@/lib/carriers";
 import CopyText from "@/components/CopyText";
@@ -117,6 +118,11 @@ export default async function ShipmentDetail({ params }: { params: Promise<{ id:
         const n = getShipment(s.replacedBy);
         return <div className="alert ok">{t("这张订单已经修改后重新下单")}{t("：")}<Link href={`/shipments/${s.replacedBy}`}>{t("新单 {no} →", { no: n?.customNo ?? String(s.replacedBy) })}</Link></div>;
       })()}
+      {listBillIssues({ status: "open", shipmentId: s.id }).map((i) => (
+        <div key={i.id} className="alert warn">
+          <b>{t("嘉谷账单待核对")}{t("：")}</b>{translateMessage(lang, i.message)} <Link href="/adjustments/gde/review">{t("去核对 →")}</Link>
+        </div>
+      ))}
       {(() => {
         const from = replacedFrom(s.id);
         return from ? <div className="alert">{t("由异常单修改后重新下单")}{t("：")}<Link href={`/shipments/${from.id}`}>{t("原单 {no}", { no: from.customNo })}</Link></div> : null;

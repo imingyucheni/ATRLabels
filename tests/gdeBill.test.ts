@@ -67,7 +67,7 @@ describe("嘉谷对账单导入", () => {
   let g: typeof import("@/lib/gdeBill");
   let cid: number;
   const ids: Record<string, number> = {};
-  const ship = async (key: string, status: "labeled" | "cancelled") => {
+  const ship = async (key: string, status: "labeled" | "cancelled" | "cancel_requested") => {
     const q = (await svc.quoteAll(cid, req)).find((x) => x.ok)!;
     const id = await svc.createLabel({ customerId: cid, channelCode: q.channelCode, req, expectedPrice: q.price!, waitForLabel: false });
     db.db().prepare("UPDATE shipments SET channel_code = 'JG-580914', channel_name = 'GOFO-LAX-917(不预上网) · GDE', tracking_no = ?, status = ?, quoted_cost = 5, actual_cost = NULL WHERE id = ?").run(`GFUS${key}`, status, id);
@@ -118,13 +118,15 @@ describe("嘉谷对账单导入", () => {
     expect(await g.parseGdeWorkbook(Buffer.from(await other.xlsx.writeBuffer()))).toBeNull();
   });
 
-  it("预览：运费差额和补收记补差，已取消被扣费、找不到的单列出来核对", async () => {
+  it("预览：运费差额和补收按加价比例记补差，已取消还被收费、找不到的单列出来核对", async () => {
+    // 通用的补差转嫁设置是“按成本”，嘉谷账单照样按这一单的加价比例收
+    db.saveSettings({ adjustmentPolicy: "at_cost" });
     const wb = (await g.parseGdeWorkbook(await workbook(week1())))!;
     const p = g.buildGdePreview(wb, { baseDiff: true });
     expect(p.totals).toMatchObject({ lines: 8, newLines: 8, alreadyImported: 0, matched: 6 });
     const a = p.charges.find((c) => c.tracking === "GFUSA001")!;
     expect(a).toMatchObject({ kind: "base", costAmount: 1.2, shipmentId: ids.A001 });
-    // 默认按加价比例转嫁（5%）：1.20 → 1.26
+    // 按下单时的加价比例（5%）：1.20 → 1.26
     expect(a.customerAmount).toBe(1.26);
     expect(a.reason).toBe("承运商账单运费差额：燃油附加费（账单重量 1.2 KG）");
     const b = p.charges.find((c) => c.tracking === "GFUSB002")!;
@@ -133,9 +135,12 @@ describe("嘉谷对账单导入", () => {
     // 客户看到的说明：不带服务商名称、不带成本金额
     for (const c of p.charges) expect(c.reason).not.toMatch(/嘉谷|GDE|SMM|\d+\.\d{2}/);
     expect(p.charges).toHaveLength(2);
-    // 已取消：扣 5.00 退 4.50 → 服务商实收取消费 0.50；扣了没退的要核对
-    expect(p.cancelFees).toEqual([{ shipmentId: ids.C003, amount: 0.5 }]);
-    expect(p.issues.find((i) => i.shipmentId === ids.D004)).toMatchObject({ level: "warn", message: expect.stringMatching(/已取消.*扣了 6\.00.*还没有退回/) });
+    // 已取消的单只要嘉谷还收着钱就要核对：扣 5.00 退 4.50（还收 0.50）、扣 6.00 没退
+    expect(p.issues.find((i) => i.shipmentId === ids.C003)).toMatchObject({ level: "warn", type: "cancelled_charged", amount: 0.5, orderNo: "SMMUSC003", message: expect.stringMatching(/已取消.*运费 5\.00，已退回 4\.50，净收 0\.50/) });
+    expect(p.issues.find((i) => i.shipmentId === ids.D004)).toMatchObject({ level: "warn", type: "cancelled_charged", amount: 6, message: expect.stringMatching(/运费 6\.00，净收 6\.00/) });
+    // 对账用：记下服务商实际收了多少（客户不受影响）
+    expect(p.cancelFees).toEqual([{ shipmentId: ids.C003, amount: 0.5 }, { shipmentId: ids.D004, amount: 6 }]);
+    expect(p.policyLabel).toMatch(/加价比例/);
     expect(p.issues.some((i) => i.level === "warn" && /本系统的格式/.test(i.message))).toBe(true);
     expect(p.notInSystem).toMatchObject({ count: 2, total: 5.43 });
     // 不勾选运费差额：只说明，不记
@@ -154,6 +159,15 @@ describe("嘉谷对账单导入", () => {
     expect(r.batchId).toBeTruthy();
     expect(ledger.balanceOf(cid)).toBeCloseTo(before - 1.26 - 2.77, 2);
     expect(db.getShipment(ids.C003)!.sbCancelFee).toBe(0.5);
+    // 已取消还被收费的两单 + 找不到的一单进“嘉谷账单待核对”
+    expect(g.openBillIssueCount()).toBe(3);
+    const open = g.listBillIssues({ status: "open" });
+    expect(open[0]).toMatchObject({ type: "cancelled_charged", customerName: "账单客户", shipmentStatus: "cancelled" });
+    const text = g.gdeDisputeText(open);
+    expect(text).toContain("运单号 GFUSC003；订单号 SMMUSC003；客户单号 ATR-C");
+    expect(text).toContain("GFUSD004");
+    expect(text).toContain("合计 6.50 USD");
+    expect(g.listBillIssues({ status: "open", shipmentId: ids.D004 })).toHaveLength(1);
     const adj = db.listAdjustments({ batchId: r.batchId! });
     expect(adj.map((x) => [x.shipmentId, x.costAmount, x.customerAmount])).toEqual([[ids.A001, 1.2, 1.26], [ids.B002, 2.63, 2.77]]);
     expect(db.getAdjustmentBatch(r.batchId!)!.note).toBe("承运商账单 10.19");
@@ -167,14 +181,31 @@ describe("嘉谷对账单导入", () => {
     // 同一个文件再导入：都导入过了
     expect(() => g.importGdeBill("Atronia-10.19.xlsx", wb, { baseDiff: true })).toThrow(/都导入过了/);
     // 下一周的累计账单：前一周的表原样还在，新加一张补收表 → 只处理新的一行，A 的运费差额不会再记一次
-    const next: Sheet[] = [...week1(), { name: "10.27GOFO补收账单", kind: "extra", lines: [{ tracking: "GFUSA001", ref: "ATR-A", total: 0.53, fees: { 偏远费: 0.53 } }] }];
+    // 嘉谷这周把 D 的 6.00 退回了 → D 的核对自动标记已处理
+    const next: Sheet[] = [
+      ...week1(),
+      { name: "10.27GOFO补收账单", kind: "extra", lines: [{ tracking: "GFUSA001", ref: "ATR-A", total: 0.53, fees: { 偏远费: 0.53 } }] },
+      { name: "10.27GOFO取消手续费", kind: "extra", lines: [{ tracking: "GFUSD004", ref: "ATR-D", total: -6, fees: { 运费: -6 } }] },
+    ];
     const wb2 = (await g.parseGdeWorkbook(await workbook(next)))!;
     const p = g.buildGdePreview(wb2, { baseDiff: true });
-    expect(p.totals).toMatchObject({ newLines: 1, alreadyImported: 8 });
+    expect(p.totals).toMatchObject({ newLines: 2, alreadyImported: 8 });
     expect(p.charges).toHaveLength(1);
     expect(p.charges[0]).toMatchObject({ kind: "extra", tracking: "GFUSA001", costAmount: 0.53 });
+    expect(p.resolved).toEqual([{ shipmentId: ids.D004, note: expect.stringMatching(/全部退回/) }]);
     const r2 = g.importGdeBill("Atronia-10.27.xlsx", wb2, { baseDiff: true });
     expect(db.getAdjustmentBatch(r2.batchId!)!.note).toBe("承运商账单 10.27");
+    expect(db.getShipment(ids.D004)!.sbCancelFee).toBe(0);
+    expect(g.listBillIssues({ status: "open", shipmentId: ids.D004 })).toHaveLength(0);
+    expect(g.listBillIssues({ status: "resolved" })[0]).toMatchObject({ shipmentId: ids.D004, resolvedBy: expect.stringMatching(/系统/) });
+    expect(g.openBillIssueCount()).toBe(2);
+    // 和嘉谷沟通完手动标记；标错了可以重新打开
+    const c = g.listBillIssues({ status: "open", shipmentId: ids.C003 })[0];
+    g.resolveBillIssue(c.id, "嘉谷说取消费 0.50 是合同规定的", "主管理员");
+    expect(g.openBillIssueCount()).toBe(1);
+    expect(() => g.resolveBillIssue(c.id, "again", "x")).toThrow(/处理过了/);
+    g.reopenBillIssue(c.id);
+    expect(g.openBillIssueCount()).toBe(2);
 
     // 撤销第一次导入：补差和客户余额里的补差一起撤回，可以重新导入
     const mid = ledger.balanceOf(cid);
@@ -183,6 +214,23 @@ describe("嘉谷对账单导入", () => {
     expect(ledger.balanceOf(cid)).toBeCloseTo(mid + 1.26 + 2.77, 2);
     const again = g.buildGdePreview(wb2, { baseDiff: true });
     expect(again.totals.newLines).toBe(8);
+    // 第一次导入时标出来的核对一起删掉
+    expect(g.openBillIssueCount()).toBe(0);
+  });
+
+  it("取消处理中（已向服务商申请取消）的单被收费：也要核对；同一单再出现只更新、不重复加", async () => {
+    await ship("F006", "cancel_requested");
+    const wb = (await g.parseGdeWorkbook(await workbook([{ name: "10.29GOFO账单", kind: "base", lines: [{ tracking: "GFUSF006", ref: "ATR-F", total: 4, fees: { 运费: 4 } }] }])))!;
+    const p = g.buildGdePreview(wb, { baseDiff: true });
+    expect(p.issues).toEqual([expect.objectContaining({ type: "cancelled_charged", shipmentId: ids.F006, amount: 4, message: expect.stringMatching(/取消处理中/) })]);
+    expect(p.cancelFees).toEqual([]);
+    expect(p.charges).toEqual([]);
+    g.importGdeBill("f.xlsx", wb, { baseDiff: true });
+    const wb2 = (await g.parseGdeWorkbook(await workbook([{ name: "10.30GOFO补收账单", kind: "extra", lines: [{ tracking: "GFUSF006", ref: "ATR-F", total: 1, fees: { 偏远费: 1 } }] }])))!;
+    g.importGdeBill("f2.xlsx", wb2, { baseDiff: true });
+    const open = g.listBillIssues({ status: "open", shipmentId: ids.F006 });
+    expect(open).toHaveLength(1);
+    expect(open[0]).toMatchObject({ amount: 5, message: expect.stringMatching(/运费 4\.00，补收 1\.00，净收 5\.00/) });
   });
 
   it("用通用补差表导入过的同一笔补收：不再重复记", async () => {
@@ -193,5 +241,14 @@ describe("嘉谷对账单导入", () => {
     const p = g.buildGdePreview(wb, { baseDiff: true });
     expect(p.charges).toHaveLength(0);
     expect(p.issues.some((i) => /之前用补差表导入过/.test(i.message))).toBe(true);
+  });
+});
+
+describe("嘉谷账单核对说明的英文", () => {
+  it("已取消仍被收费 / 已全部退回", async () => {
+    const { translateMessage } = await import("@/lib/i18n");
+    expect(translateMessage("en", "系统里「已取消」（客户已全额退款），但嘉谷还在收这一单的钱：运费 5.00，已退回 4.50，净收 0.50。请和嘉谷核对"))
+      .toBe("“Cancelled” in the system (customer fully refunded), but GDE is still charging for this order: Postage 5.00, refunded 4.50; net 0.50. Please check with GDE");
+    expect(translateMessage("en", "嘉谷账单已全部退回（扣 6.00，退 6.00）")).toBe("Fully refunded in the GDE bill (charged 6.00, refunded 6.00)");
   });
 });

@@ -113,7 +113,12 @@ const FRAGMENTS: [string, string][] = [
   ["保险费", "Insurance"],
   ["退件费", "Return fee"],
   ["其他费", "Other fees"],
+  ["已退回", "refunded"],
+  ["补收", "surcharge"],
+  ["取消处理中", "Cancellation pending"],
+  ["已取消", "Cancelled"],
   ["运费", "Postage"],
+  ["，", ", "],
   ["Ground 住宅", "Ground Residential"],
   ["Ground 商业", "Ground Commercial"],
 ];

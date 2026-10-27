@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/auth";
-import { buildGdePreview, deleteGdeBill, importGdeBill, parseGdeWorkbook, type GdePreview } from "@/lib/gdeBill";
+import { buildGdePreview, deleteGdeBill, importGdeBill, parseGdeWorkbook, reopenBillIssue, resolveBillIssue, type GdePreview } from "@/lib/gdeBill";
 import type { FlashState } from "@/app/actions";
 
 /** 读上传的嘉谷对账单 */
@@ -46,4 +46,25 @@ export async function deleteGdeBillAction(_: FlashState, fd: FormData): Promise<
   deleteGdeBill(Number(fd.get("id")));
   revalidatePath("/adjustments");
   redirect("/adjustments");
+}
+
+/** 嘉谷账单待核对：和嘉谷沟通完，标记已处理 */
+export async function resolveBillIssueAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  const who = await requireAdmin();
+  const note = String(fd.get("note") ?? "").trim();
+  if (!note) return { error: "请写一句处理结果，例如“嘉谷已同意退款”" };
+  try {
+    resolveBillIssue(Number(fd.get("id")), note, who.name || "主管理员");
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+  revalidatePath("/adjustments/gde/review");
+  return { ok: "已标记处理" };
+}
+
+export async function reopenBillIssueAction(_: FlashState, fd: FormData): Promise<FlashState> {
+  await requireAdmin();
+  reopenBillIssue(Number(fd.get("id")));
+  revalidatePath("/adjustments/gde/review");
+  return { ok: "已重新打开" };
 }

@@ -86,6 +86,8 @@ patterns.push(
   [/^账单扣了 ([\d.-]+)，但系统里这单是「(.+)」，请核对（没有向客户收）$/, "The bill charged $1, but the order is “$2” in the system; please check (customer not charged)"],
   [/^补收 ([\d.-]+)，但系统里这单是「(.+)」，没有自动向客户收；需要的话导入后到补差批次里手动关联$/, "Surcharge $1, but the order is “$2” in the system, so the customer wasn't charged automatically; link it manually in the adjustment batch after import if needed"],
   [/^承运商账单 ([\d.]+)$/, "Carrier bill $1"],
+  [/^系统里「(.+?)」（客户已全额退款），但嘉谷还在收这一单的钱：(.+)，净收 ([\d.-]+)。请和嘉谷核对$/, "“$1” in the system (customer fully refunded), but GDE is still charging for this order: $2; net $3. Please check with GDE"],
+  [/^嘉谷账单已全部退回（扣 ([\d.-]+)，退 ([\d.-]+)）$/, "Fully refunded in the GDE bill (charged $1, refunded $2)"],
 );
 
 /* ---------- 承运商账单补差说明（嘉谷对账单导入，lib/gdeBill.ts reasonText）；费用名称由 index.ts 的 FRAGMENTS 换成英文 ---------- */

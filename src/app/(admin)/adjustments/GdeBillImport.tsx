@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { importGdeBillAction, previewGdeBillAction } from "@/app/gdeBillActions";
 import type { GdePreview } from "@/lib/gdeBill";
-import { GDE_KIND_LABEL } from "@/lib/gdeBillShared";
+import { GDE_ISSUE_LABEL, GDE_KIND_LABEL } from "@/lib/gdeBillShared";
 import { money } from "@/lib/pricing";
 import FilePick from "@/components/FilePick";
 import { useT, useTMsg } from "@/components/I18n";
@@ -65,7 +65,7 @@ export default function GdeBillImport() {
     <div className="card">
       <h2>{t("嘉谷（GDE）对账单")}</h2>
       <p className="small muted" style={{ marginTop: 0 }}>
-        {t("嘉谷每周发的 Excel 账单直接上传（一周一张表、累计的也可以）：系统按运单号 / 我们的单号对应到订单，补收的费用和运费账单的差额按补差规则向客户多退少补，已取消被扣费、状态对不上、系统里没有的单列出来核对。以前导入过的行自动跳过。")}
+        {t("嘉谷每周发的 Excel 账单直接上传（一周一张表、累计的也可以）：系统按运单号 / 我们的单号对应到订单，补收的费用和运费账单的差额按这一单下单时的加价比例向客户多退少补；已取消的单还被收费、状态对不上的单进“嘉谷账单待核对”，和嘉谷沟通处理。以前导入过的行自动跳过。")}
       </p>
       <form action={(fd) => analyze(fd)} className="row">
         <FilePick name="file" accept=".xlsx" required />
@@ -120,7 +120,7 @@ export default function GdeBillImport() {
 
           {warns.length > 0 && (
             <>
-              <h3>{t("需要核对（不动客户余额）")}</h3>
+              <h3>{t("需要核对（导入后进“嘉谷账单待核对”，不动客户余额）")}</h3>
               <IssueTable issues={warns} />
             </>
           )}
@@ -178,10 +178,11 @@ function IssueTable({ issues }: { issues: GdePreview["issues"] }) {
   return (
     <div className="table-wrap" style={{ maxHeight: 320, overflowY: "auto" }}>
       <table>
-        <thead><tr><th>{t("表")}</th><th>{t("运单号")}</th><th>{t("订单")}</th><th className="num">{t("金额")}</th><th>{t("说明")}</th></tr></thead>
+        <thead><tr><th>{t("问题")}</th><th>{t("表")}</th><th>{t("运单号")}</th><th>{t("订单")}</th><th className="num">{t("金额")}</th><th>{t("说明")}</th></tr></thead>
         <tbody>
           {issues.map((x, i) => (
             <tr key={i}>
+              <td className="small"><span className={`badge ${x.type === "cancelled_charged" ? "exception" : x.level === "warn" ? "warn" : ""}`}>{t(GDE_ISSUE_LABEL[x.type])}</span></td>
               <td className="small">{x.sheet}</td>
               <td className="small">{x.tracking}</td>
               <td className="small">{x.shipmentId ? <a href={`/shipments/${x.shipmentId}`}>{x.customNo}</a> : "-"}</td>

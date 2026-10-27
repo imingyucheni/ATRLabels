@@ -32,9 +32,9 @@ import { cellText, customerAmountFor } from "./adjustments";
 import { postAdjustment } from "./ledger";
 import { isJiaguCode } from "./shipbest/jiagu";
 import { assertZipSize } from "./zip";
-import { GDE_FEES, type GdeKind } from "./gdeBillShared";
+import { GDE_FEES, type GdeIssueType, type GdeKind } from "./gdeBillShared";
 
-export { GDE_FEES, GDE_KIND_LABEL, type GdeKind } from "./gdeBillShared";
+export { GDE_FEES, GDE_ISSUE_LABEL, GDE_KIND_LABEL, type GdeIssueType, type GdeKind } from "./gdeBillShared";
 
 export interface GdeLine {
   sheet: string;
@@ -233,7 +233,28 @@ function ensureTables() {
     adjustment_id INTEGER
   );
   CREATE UNIQUE INDEX IF NOT EXISTS idx_bill_line_sig ON provider_bill_lines(provider, sig);
-  CREATE INDEX IF NOT EXISTS idx_bill_line_ship ON provider_bill_lines(shipment_id)`);
+  CREATE INDEX IF NOT EXISTS idx_bill_line_ship ON provider_bill_lines(shipment_id);
+  CREATE TABLE IF NOT EXISTS provider_bill_issues (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    bill_id INTEGER NOT NULL REFERENCES provider_bills(id) ON DELETE CASCADE,
+    provider TEXT NOT NULL,
+    type TEXT NOT NULL,
+    shipment_id INTEGER,
+    tracking TEXT,
+    order_no TEXT,
+    ref_no TEXT,
+    custom_no TEXT,
+    sheet TEXT,
+    amount REAL NOT NULL,
+    message TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'open',
+    note TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    resolved_at TEXT,
+    resolved_by TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_bill_issue_open ON provider_bill_issues(provider, status)`);
   return conn;
 }
 
@@ -266,8 +287,12 @@ export interface GdeCharge {
 
 export interface GdeIssue {
   level: "warn" | "info";
+  type: GdeIssueType;
   sheet: string;
   tracking: string;
+  /** 嘉谷的订单号（SMM…），和嘉谷沟通时用 */
+  orderNo: string;
+  refNo: string;
   customNo: string | null;
   shipmentId: number | null;
   amount: number;
@@ -285,6 +310,8 @@ export interface GdePreview {
   policyLabel: string;
   /** 已取消的单：按账单算出服务商实收的取消费（导入时写回面单，对账用） */
   cancelFees: { shipmentId: number; amount: number }[];
+  /** 之前标记“已取消仍被收费”、这次账单已经全部退回的单：导入时自动标记已解决 */
+  resolved: { shipmentId: number; note: string }[];
 }
 
 export interface GdeOptions {
@@ -305,7 +332,8 @@ const feeNames = (lines: GdeLine[]) => [...new Set(lines.flatMap((l) => l.fees.f
 
 export function buildGdePreview(wb: GdeWorkbook, opts: GdeOptions): GdePreview {
   const conn = ensureTables();
-  const policy = getSettings().adjustmentPolicy;
+  // 嘉谷账单的补差（补收、运费差额）一律按这一单下单时的加价比例向客户多退少补（不看通用的补差转嫁设置）
+  const policy: AdjustmentPolicy = "with_markup";
   const imported = new Set((conn.prepare("SELECT sig FROM provider_bill_lines WHERE provider = 'jiagu'").all() as { sig: string }[]).map((r) => r.sig));
   // 用通用补差导入导过的（不是这里导的）：同一单同样金额的补收不再记
   const legacy = new Set<string>();
@@ -321,7 +349,7 @@ export function buildGdePreview(wb: GdeWorkbook, opts: GdeOptions): GdePreview {
       .prepare("SELECT COALESCE(SUM(a.cost_amount), 0) AS s FROM provider_bill_lines l JOIN adjustments a ON a.id = l.adjustment_id WHERE l.kind = 'base' AND l.shipment_id = ?")
       .get(sid) as { s: number };
     const by = (k: GdeKind) => rows.find((r) => r.kind === k)?.s ?? 0;
-    return { base: by("base"), cancel: by("cancel"), diff: diff.s };
+    return { base: by("base"), cancel: by("cancel"), extra: by("extra"), diff: diff.s };
   };
 
   const cache = new Map<string, ReturnType<typeof findShipmentByKey>>();
@@ -345,15 +373,16 @@ export function buildGdePreview(wb: GdeWorkbook, opts: GdeOptions): GdePreview {
   const charges: GdeCharge[] = [];
   const issues: GdeIssue[] = [];
   const cancelFees: GdePreview["cancelFees"] = [];
+  const resolved: GdePreview["resolved"] = [];
   const outside: GdePreview["notInSystem"]["lines"] = [];
-  const issue = (level: GdeIssue["level"], l: GdeLine, sid: number | null, customNo: string | null, amount: number, message: string) =>
-    issues.push({ level, sheet: l.sheet, tracking: l.tracking || l.refNo, customNo, shipmentId: sid, amount: r2(amount), message });
+  const issue = (level: GdeIssue["level"], type: GdeIssueType, l: GdeLine, sid: number | null, customNo: string | null, amount: number, message: string, sheet = l.sheet) =>
+    issues.push({ level, type, sheet, tracking: l.tracking || l.refNo, orderNo: l.orderNo, refNo: l.refNo, customNo, shipmentId: sid, amount: r2(amount), message });
 
   // 系统里找不到的单（直接在嘉谷下的单等）：只列出来
   for (const { line: l, sid } of fresh) {
     if (sid) continue;
     outside.push({ sheet: l.sheet, tracking: l.tracking, refNo: l.refNo, amount: l.amount });
-    if (/^ATR/i.test(l.refNo)) issue("warn", l, null, null, l.amount, "单号是本系统的格式，但系统里找不到这一单（可能是测试 / 沙盒环境下的单）");
+    if (/^ATR/i.test(l.refNo)) issue("warn", "not_found", l, null, null, l.amount, "单号是本系统的格式，但系统里找不到这一单（可能是测试 / 沙盒环境下的单）");
   }
 
   // 按面单汇总运费账单和取消退款
@@ -369,24 +398,31 @@ export function buildGdePreview(wb: GdeWorkbook, opts: GdeOptions): GdePreview {
     const s = getShipment(sid)!;
     const internal = isInternalCustomer(s.customerId);
     const first = g.base[0] ?? g.cancel[0] ?? g.extra[0];
-    if (!isJiaguCode(s.channelCode)) issue("warn", first, sid, s.customNo, first.amount, `系统里这单不是 GDE 渠道（${s.channelName ?? s.channelCode}），请核对`);
+    if (!isJiaguCode(s.channelCode)) issue("warn", "channel", first, sid, s.customNo, first.amount, `系统里这单不是 GDE 渠道（${s.channelName ?? s.channelCode}），请核对`);
     const p = prior(sid);
     const billed = r2(p.base + g.base.reduce((a, l) => a + l.amount, 0));
     const refunded = r2(p.cancel + g.cancel.reduce((a, l) => a + l.amount, 0));
     const st = STATUS_LABEL[s.status] ?? s.status;
+    // 系统里已取消（或正在取消）的单：嘉谷不应该再收钱。只要还收着（扣的运费 + 补收 - 退回 > 0）就标出来，要和嘉谷核对
+    const cancelled = s.status === "cancelled" || s.status === "cancel_requested";
 
-    if (s.status === "cancelled") {
-      if (g.base.length || g.cancel.length) {
-        const net = r2(billed + refunded);
-        if (billed > 0 && refunded === 0) issue("warn", first, sid, s.customNo, billed, `系统里已取消（已全额退给客户），但账单扣了 ${billed.toFixed(2)}，还没有退回，请找服务商退款`);
-        else if (refunded !== 0) {
-          // 服务商实际收的取消费 = 扣的运费 - 退回的
-          if (net >= 0 && Math.abs(net - (s.sbCancelFee ?? 0)) >= 0.01) cancelFees.push({ shipmentId: sid, amount: net });
-          if (net > 0.005) issue("info", first, sid, s.customNo, net, `已取消：账单扣 ${billed.toFixed(2)}、退回 ${(-refunded).toFixed(2)}，服务商实收取消费 ${net.toFixed(2)}（客户不受影响）`);
-        }
+    if (cancelled) {
+      const extra = r2(p.extra + g.extra.reduce((a, l) => a + l.amount, 0));
+      const net = r2(billed + extra + refunded);
+      const sheets = [...new Set([...g.base, ...g.extra, ...g.cancel].map((l) => l.sheet))].join("、");
+      if (net > 0.005) {
+        const parts = [billed ? `运费 ${billed.toFixed(2)}` : "", extra ? `补收 ${extra.toFixed(2)}` : "", refunded ? `已退回 ${(-refunded).toFixed(2)}` : ""].filter(Boolean).join("，");
+        issue("warn", "cancelled_charged", first, sid, s.customNo, net, `系统里「${st}」（客户已全额退款），但嘉谷还在收这一单的钱：${parts}，净收 ${net.toFixed(2)}。请和嘉谷核对`, sheets);
+      } else if (billed > 0 || extra > 0) {
+        resolved.push({ shipmentId: sid, note: `嘉谷账单已全部退回（扣 ${r2(billed + extra).toFixed(2)}，退 ${(-refunded).toFixed(2)}）` });
+      }
+      // 已取消的单：服务商实际收的取消费 = 扣的 - 退回的（对账用，客户不受影响；嘉谷之后退了，再导入时会更新）
+      if (s.status === "cancelled" && (g.base.length || g.cancel.length)) {
+        const fee = Math.max(0, r2(billed + refunded));
+        if (Math.abs(fee - (s.sbCancelFee ?? 0)) >= 0.01) cancelFees.push({ shipmentId: sid, amount: fee });
       }
     } else if (g.cancel.length) {
-      issue("warn", first, sid, s.customNo, refunded, `账单里这单有取消退款 ${(-refunded).toFixed(2)}，但系统里是「${st}」，请核对`);
+      issue("warn", "refund_mismatch", first, sid, s.customNo, refunded, `账单里这单有取消退款 ${(-refunded).toFixed(2)}，但系统里是「${st}」，请核对`);
     }
 
     if (g.base.length && s.status === "labeled") {
@@ -403,19 +439,20 @@ export function buildGdePreview(wb: GdeWorkbook, opts: GdeOptions): GdePreview {
             reason: reasonText("base", fees, l.weight, l.dims, diff < 0), detail,
             weight: l.weight, dims: l.dims, product: l.product, shipDate: l.shipDate, zone: l.zone, sigs: g.base.map((x) => x.sig),
           });
-        } else issue("info", g.base[0], sid, s.customNo, diff, `运费账单和下单成本差 ${diff.toFixed(2)}（${detail}），没有勾选“差额也补差”，不处理`);
+        } else issue("info", "base_diff_off", g.base[0], sid, s.customNo, diff, `运费账单和下单成本差 ${diff.toFixed(2)}（${detail}），没有勾选“差额也补差”，不处理`);
       }
-    } else if (g.base.length && s.status !== "cancelled") {
-      issue("warn", g.base[0], sid, s.customNo, billed, `账单扣了 ${billed.toFixed(2)}，但系统里这单是「${st}」，请核对（没有向客户收）`);
+    } else if (g.base.length && !cancelled) {
+      issue("warn", "status_mismatch", g.base[0], sid, s.customNo, billed, `账单扣了 ${billed.toFixed(2)}，但系统里这单是「${st}」，请核对（没有向客户收）`);
     }
 
     for (const l of g.extra) {
       if (legacy.has(`${normalizeTrackingKey(l.tracking || l.refNo)}|${l.amount.toFixed(2)}`) || legacy.has(`#${sid}|${l.amount.toFixed(2)}`)) {
-        issue("info", l, sid, s.customNo, l.amount, "之前用补差表导入过同样金额的补差，跳过（不会重复收）");
+        issue("info", "legacy_dup", l, sid, s.customNo, l.amount, "之前用补差表导入过同样金额的补差，跳过（不会重复收）");
         continue;
       }
       const ok = s.status === "labeled";
-      if (!ok) issue("warn", l, sid, s.customNo, l.amount, `补收 ${l.amount.toFixed(2)}，但系统里这单是「${st}」，没有自动向客户收；需要的话导入后到补差批次里手动关联`);
+      // 已取消的单上面已经标了“已取消仍被收费”；其他状态（等待出单、异常）单独标
+      if (!ok && !cancelled) issue("warn", "status_mismatch", l, sid, s.customNo, l.amount, `补收 ${l.amount.toFixed(2)}，但系统里这单是「${st}」，没有自动向客户收；需要的话导入后到补差批次里手动关联`);
       charges.push({
         sheet: l.sheet, kind: "extra", tracking: l.tracking, refNo: l.refNo,
         shipmentId: ok ? sid : null, customNo: ok ? s.customNo : null, customerId: ok ? s.customerId : null, customerName: ok ? s.customerName ?? null : null,
@@ -446,6 +483,7 @@ export function buildGdePreview(wb: GdeWorkbook, opts: GdeOptions): GdePreview {
     policy,
     policyLabel: ADJUSTMENT_POLICY_LABEL[policy],
     cancelFees,
+    resolved,
   };
 }
 
@@ -502,6 +540,25 @@ export function importGdeBill(filename: string, wb: GdeWorkbook, opts: GdeOption
     }
     // 已取消的单：记下服务商实收的取消费（对账用，客户不受影响）
     for (const f of preview.cancelFees) updateShipment(f.shipmentId, { sbCancelFee: f.amount });
+    // 要核对的问题进“嘉谷账单待核对”：同一单同一类问题还没处理的，更新金额和说明，不重复加
+    const findOpen = conn.prepare(
+      "SELECT id FROM provider_bill_issues WHERE provider = 'jiagu' AND status = 'open' AND type = ? AND (shipment_id = ? OR (shipment_id IS NULL AND ? IS NULL AND tracking = ?))",
+    );
+    const upd = conn.prepare("UPDATE provider_bill_issues SET amount = ?, message = ?, sheet = ?, updated_at = datetime('now') WHERE id = ?");
+    const add = conn.prepare(
+      `INSERT INTO provider_bill_issues (bill_id, provider, type, shipment_id, tracking, order_no, ref_no, custom_no, sheet, amount, message)
+       VALUES (?, 'jiagu', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    );
+    for (const i of preview.issues.filter((x) => x.level === "warn")) {
+      const hit = findOpen.get(i.type, i.shipmentId, i.shipmentId, i.tracking) as { id: number } | undefined;
+      if (hit) upd.run(i.amount, i.message, i.sheet, hit.id);
+      else add.run(billId, i.type, i.shipmentId, i.tracking, i.orderNo, i.refNo, i.customNo, i.sheet, i.amount, i.message);
+    }
+    // 之前标了“已取消仍被收费”、这次嘉谷已经全部退回的：自动标记已处理
+    const done = conn.prepare(
+      "UPDATE provider_bill_issues SET status = 'resolved', note = ?, resolved_at = datetime('now'), resolved_by = '系统（账单已退回）' WHERE provider = 'jiagu' AND status = 'open' AND type = 'cancelled_charged' AND shipment_id = ?",
+    );
+    for (const r of preview.resolved) done.run(r.note, r.shipmentId);
     return { billId, batchId };
   })();
 
@@ -551,4 +608,80 @@ export function deleteGdeBill(id: number) {
     if (b.adjustment_batch_id) conn.prepare("DELETE FROM adjustment_batches WHERE id = ?").run(b.adjustment_batch_id);
     conn.prepare("DELETE FROM provider_bills WHERE id = ?").run(id);
   })();
+}
+
+/* ---------------- 嘉谷账单待核对 ---------------- */
+
+export interface BillIssue {
+  id: number;
+  billId: number;
+  type: GdeIssueType;
+  shipmentId: number | null;
+  tracking: string | null;
+  orderNo: string | null;
+  refNo: string | null;
+  customNo: string | null;
+  sheet: string | null;
+  amount: number;
+  message: string;
+  status: "open" | "resolved";
+  note: string | null;
+  createdAt: string;
+  updatedAt: string;
+  resolvedAt: string | null;
+  resolvedBy: string | null;
+  customerName: string | null;
+  shipmentStatus: string | null;
+}
+
+export function listBillIssues(f: { status?: "open" | "resolved"; shipmentId?: number; limit?: number } = {}): BillIssue[] {
+  const conn = ensureTables();
+  const where = ["i.provider = 'jiagu'"];
+  const args: (string | number)[] = [];
+  if (f.status) { where.push("i.status = ?"); args.push(f.status); }
+  if (f.shipmentId) { where.push("i.shipment_id = ?"); args.push(f.shipmentId); }
+  const rows = conn
+    .prepare(
+      `SELECT i.*, c.name AS customer_name, s.status AS shipment_status FROM provider_bill_issues i
+       LEFT JOIN shipments s ON s.id = i.shipment_id LEFT JOIN customers c ON c.id = s.customer_id
+       WHERE ${where.join(" AND ")} ORDER BY CASE i.type WHEN 'cancelled_charged' THEN 0 ELSE 1 END, i.id DESC LIMIT ?`,
+    )
+    .all(...args, f.limit ?? 500) as Record<string, unknown>[];
+  return rows.map((r) => ({
+    id: r.id as number, billId: r.bill_id as number, type: r.type as GdeIssueType, shipmentId: (r.shipment_id as number) ?? null,
+    tracking: (r.tracking as string) ?? null, orderNo: (r.order_no as string) ?? null, refNo: (r.ref_no as string) ?? null, customNo: (r.custom_no as string) ?? null,
+    sheet: (r.sheet as string) ?? null, amount: r.amount as number, message: r.message as string, status: r.status as BillIssue["status"], note: (r.note as string) ?? null,
+    createdAt: r.created_at as string, updatedAt: r.updated_at as string, resolvedAt: (r.resolved_at as string) ?? null, resolvedBy: (r.resolved_by as string) ?? null,
+    customerName: (r.customer_name as string) ?? null, shipmentStatus: (r.shipment_status as string) ?? null,
+  }));
+}
+
+export function openBillIssueCount(): number {
+  return (ensureTables().prepare("SELECT COUNT(*) AS n FROM provider_bill_issues WHERE provider = 'jiagu' AND status = 'open'").get() as { n: number }).n;
+}
+
+/** 标记已处理（和嘉谷沟通完、对方退款了或确认没问题），写一句处理结果 */
+export function resolveBillIssue(id: number, note: string, by: string) {
+  const r = ensureTables()
+    .prepare("UPDATE provider_bill_issues SET status = 'resolved', note = ?, resolved_at = datetime('now'), resolved_by = ? WHERE id = ? AND status = 'open'")
+    .run(note.trim().slice(0, 500) || null, by, id);
+  if (!r.changes) throw new Error("这条已经处理过了，或者不存在");
+}
+
+/** 重新打开（标错了） */
+export function reopenBillIssue(id: number) {
+  ensureTables().prepare("UPDATE provider_bill_issues SET status = 'open', resolved_at = NULL, resolved_by = NULL WHERE id = ?").run(id);
+}
+
+/** 发给嘉谷的核对说明（已取消仍被收费的单），可以直接复制到微信 / 邮件 */
+export function gdeDisputeText(issues: BillIssue[]): string {
+  const list = issues.filter((i) => i.type === "cancelled_charged" && i.status === "open");
+  if (!list.length) return "";
+  const cid = getSettings().jiagu?.customerId;
+  const total = r2(list.reduce((a, i) => a + i.amount, 0));
+  return [
+    `您好，以下 ${list.length} 单我们这边已经取消，但对账单里还在收费，麻烦帮忙核查并退款，谢谢！${cid ? `（客户 ID ${cid}）` : ""}`,
+    ...list.map((i, n) => `${n + 1}. 运单号 ${i.tracking ?? "-"}；订单号 ${i.orderNo || "-"}；客户单号 ${i.refNo || i.customNo || "-"}；账单 ${i.sheet ?? "-"}；净收 ${i.amount.toFixed(2)} USD`),
+    `合计 ${total.toFixed(2)} USD`,
+  ].join("\n");
 }

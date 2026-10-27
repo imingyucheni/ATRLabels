@@ -10,3 +10,16 @@ export const GDE_FEES = [
   "改地址服务费", "保险费", "退件费", "人工分拣费", "危险品附加费", "其他费",
 ];
 
+
+/** 账单核对出来的问题类型（warn 的会进“嘉谷账单待核对”，处理完手动标记） */
+export type GdeIssueType = "cancelled_charged" | "status_mismatch" | "refund_mismatch" | "not_found" | "channel" | "base_diff_off" | "legacy_dup";
+
+export const GDE_ISSUE_LABEL: Record<GdeIssueType, string> = {
+  cancelled_charged: "已取消仍被收费",
+  status_mismatch: "状态对不上",
+  refund_mismatch: "退款对不上",
+  not_found: "系统里找不到",
+  channel: "渠道对不上",
+  base_diff_off: "运费差额未处理",
+  legacy_dup: "已补过",
+};

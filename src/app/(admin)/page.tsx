@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { openBillIssueCount } from "@/lib/gdeBill";
 import GoLiveChecklist from "@/components/GoLiveChecklist";
 import { listChannels, listCustomers, listShipments, shipmentProfit } from "@/lib/db";
 import { pendingResets } from "@/lib/passwordReset";
@@ -43,6 +44,7 @@ export default async function Dashboard() {
   const todo: { label: string; n: number; href: string; tone?: "warn" | "bad" }[] = [
     { label: t("待审充值"), n: pendingTopups, href: "/finance#topups", tone: "warn" },
     { label: t("取消处理中"), n: attention.filter((s) => s.status === "cancel_requested").length, href: "/shipments?status=cancel_requested", tone: "warn" },
+    { label: t("嘉谷账单待核对"), n: openBillIssueCount(), href: "/adjustments/gde/review", tone: "bad" },
     { label: t("重复面单待作废"), n: listShipments({ status: "late_label", limit: 100 }).length, href: "/shipments?status=late_label", tone: "bad" },
     { label: t("出单异常"), n: attention.filter((s) => s.status === "exception").length, href: "/shipments?status=exception", tone: "bad" },
     { label: t("面单生成中"), n: attention.filter((s) => s.status === "pending").length, href: "/shipments?status=pending" },

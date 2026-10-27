@@ -5,12 +5,13 @@ import { money } from "@/lib/pricing";
 import ImportAdjustments from "./ImportAdjustments";
 import GdeBillImport from "./GdeBillImport";
 import { getT } from "@/lib/prefs";
-import { listGdeBills } from "@/lib/gdeBill";
+import { listGdeBills, openBillIssueCount } from "@/lib/gdeBill";
 
 export default async function AdjustmentsPage() {
   const t = await getT();
   const batches = listAdjustmentBatches();
   const bills = listGdeBills();
+  const reviews = openBillIssueCount();
   const { adjustmentPolicy } = getSettings();
   return (
     <>
@@ -21,6 +22,9 @@ export default async function AdjustmentsPage() {
         {t("系统按运单号（或 ShipBest 单号 / 自定义单号）自动对应到面单和客户。当前转嫁规则：")}<b>{t(ADJUSTMENT_POLICY_LABEL[adjustmentPolicy])}</b>
         {t("（")}<Link href="/settings#rules">{t("修改")}</Link>{t("）。")}
       </p>
+      {reviews > 0 && (
+        <div className="alert warn">{t("嘉谷账单有 {n} 条待核对（例如已取消的单还在被收费），客户余额没有动。", { n: reviews })} <Link href="/adjustments/gde/review">{t("去核对 →")}</Link></div>
+      )}
       <GdeBillImport />
       {bills.length > 0 && (
         <div className="card table-wrap">
