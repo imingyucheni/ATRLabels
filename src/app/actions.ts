@@ -75,6 +75,7 @@ import { listSenders, saveSender } from "@/lib/senders";
 import { clearCredentials, readablePassword, rememberCredentials } from "@/lib/credentials";
 import { clearBlocks, importCoverage, lookupZip, parseCoverageWorkbook, removeCoverage, setPrefilter } from "@/lib/coverage";
 import { addLedger, balanceOf, postAdjustment } from "@/lib/ledger";
+import { parseGdeWorkbook } from "@/lib/gdeBill";
 import { getT } from "@/lib/prefs";
 import { isUsZip } from "@/lib/geo";
 import { saveChannelSample } from "@/lib/labels";
@@ -724,7 +725,12 @@ export async function parseAdjustmentFileAction(fd: FormData): Promise<{ error?:
   if (!(file instanceof File) || !file.size) return { error: "请选择文件" };
   if (file.size > 10 * 1024 * 1024) return { error: "文件不能超过 10MB" };
   try {
-    return { sheet: await parseSheet(file.name, Buffer.from(await file.arrayBuffer())) };
+    const buf = Buffer.from(await file.arrayBuffer());
+    // 嘉谷的对账单（一周一张表、很多张）：用专门的导入，自动识别每张表
+    if (file.name.toLowerCase().endsWith(".xlsx") && (await parseGdeWorkbook(buf).catch(() => null))) {
+      return { error: "这是嘉谷的对账单，请用上面的“嘉谷（GDE）对账单”上传，系统会自动识别每张表（补收、运费账单、取消退款）" };
+    }
+    return { sheet: await parseSheet(file.name, buf) };
   } catch (e) {
     return { error: (e as Error).message };
   }

@@ -79,7 +79,7 @@ export function resetSandboxData(): { shipments: number } {
   const conn = db();
   const shipments = (conn.prepare("SELECT COUNT(*) AS n FROM shipments").get() as { n: number }).n;
   const tables = [
-    "ledger", "adjustments", "adjustment_batches", "batch_job_rows", "batch_jobs", "topup_requests",
+    "ledger", "provider_bill_lines", "provider_bills", "adjustments", "adjustment_batches", "batch_job_rows", "batch_jobs", "topup_requests",
     "provider_events", "provider_orders", "mock_orders", "password_resets", "terms_acceptances", "email_log", "leads", "shipments",
   ];
   conn.transaction(() => {

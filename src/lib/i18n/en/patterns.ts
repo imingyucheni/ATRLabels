@@ -75,3 +75,35 @@ export const patterns: [RegExp, string][] = [
   [/^实重 (.+)$/, "Actual weight $1"],
   [/^分区 (.+) → (zone\d+)$/, "Zone $1 → $2"],
 ];
+
+/* ---------- 嘉谷对账单导入：核对说明（后台） ---------- */
+patterns.push(
+  [/^系统里这单不是 GDE 渠道（(.+)），请核对$/, "This order isn't on a GDE service in the system ($1); please check"],
+  [/^系统里已取消（已全额退给客户），但账单扣了 ([\d.-]+)，还没有退回，请找服务商退款$/, "Cancelled in the system (customer fully refunded), but the bill charged $1 and it hasn't been refunded; ask the provider for a refund"],
+  [/^已取消：账单扣 ([\d.-]+)、退回 ([\d.-]+)，服务商实收取消费 ([\d.-]+)（客户不受影响）$/, "Cancelled: billed $1, refunded $2, provider kept a $3 cancellation fee (customer unaffected)"],
+  [/^账单里这单有取消退款 ([\d.-]+)，但系统里是「(.+)」，请核对$/, "The bill refunds $1 for this order, but it's “$2” in the system; please check"],
+  [/^运费账单和下单成本差 ([\d.-]+)（(.+)），没有勾选“差额也补差”，不处理$/, "Postage bill differs from booked cost by $1 ($2); “adjust differences” is off, so not processed"],
+  [/^账单扣了 ([\d.-]+)，但系统里这单是「(.+)」，请核对（没有向客户收）$/, "The bill charged $1, but the order is “$2” in the system; please check (customer not charged)"],
+  [/^补收 ([\d.-]+)，但系统里这单是「(.+)」，没有自动向客户收；需要的话导入后到补差批次里手动关联$/, "Surcharge $1, but the order is “$2” in the system, so the customer wasn't charged automatically; link it manually in the adjustment batch after import if needed"],
+  [/^承运商账单 ([\d.]+)$/, "Carrier bill $1"],
+);
+
+/* ---------- 承运商账单补差说明（嘉谷对账单导入，lib/gdeBill.ts reasonText）；费用名称由 index.ts 的 FRAGMENTS 换成英文 ---------- */
+const BILL_HEADS: [string, string][] = [
+  ["补收", "Carrier bill surcharge"],
+  ["运费差额（退）", "Carrier bill postage difference (refund)"],
+  ["运费差额", "Carrier bill postage difference"],
+];
+const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+for (const [zh, en] of BILL_HEADS) {
+  const h = `^承运商账单${esc(zh)}`;
+  for (const [fees, enFees] of [["：(.+?)", ": $1"], ["", ""]] as const) {
+    const n = fees ? 1 : 0;
+    patterns.push(
+      [new RegExp(`${h}${fees}（账单重量 (.+?)，尺寸 (.+)）$`), `${en}${enFees} (billed weight $${n + 1}, size $${n + 2})`],
+      [new RegExp(`${h}${fees}（账单重量 (.+?)）$`), `${en}${enFees} (billed weight $${n + 1})`],
+      [new RegExp(`${h}${fees}（尺寸 (.+?)）$`), `${en}${enFees} (size $${n + 1})`],
+      [new RegExp(`${h}${fees}$`), `${en}${enFees}`],
+    );
+  }
+}
