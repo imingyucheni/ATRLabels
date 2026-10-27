@@ -440,4 +440,5 @@ export const qa3: Record<string, string> = {
   "“{name}”是按旧规则导入的，嘉谷少收的 {n} 笔退给了客户（共 {a}）。": "“{name}” was imported under the old rule: {n} amount(s) GDE billed less were refunded to customers ({a} in total).",
   "去撤回 →": "Take back →",
   "没有退给客户的补差": "No refunds to customers",
+  "下单时按预报重量和分区收费，承运商官方账单出来后，如果实际结算重量、尺寸、分区不同或有附加费，会补收差额，自动从账户余额扣除。": "Labels are charged by the declared weight and zone. When the carrier's bill shows a different weight, size or zone, or extra surcharges, the difference is charged and deducted from your balance automatically.",
 };

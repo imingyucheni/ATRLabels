@@ -22,7 +22,7 @@ export function customerAdjustmentSheet(batchId: number, customerId: number) {
 
   return {
     filename: `补差明细-${customer.name}-${batch.note || batch.createdAt.slice(0, 10)}.csv`,
-    header: ["我方单号", "运单号", ...safe.map((i) => header[i]), ...diffHeader, "说明", "补收(+)/退还(-)"],
+    header: ["我方单号", "运单号", ...safe.map((i) => header[i]), ...diffHeader, "说明", rows.some((a) => a.customerAmount < 0) ? "补收(+)/退还(-)" : "补收"],
     rows: [
       ...rows.map((a) => [a.customNo, a.trackingNo ?? a.matchKey, ...safe.map((i) => a.raw?.[i] ?? ""), ...diffCell(a.raw), a.reason, a.customerAmount.toFixed(2)]),
       [],

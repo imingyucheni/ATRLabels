@@ -37,7 +37,7 @@ export default async function AdjustmentsPage() {
           <h2>{t("嘉谷账单导入记录")}</h2>
           <table>
             <thead>
-              <tr><th>{t("导入时间")}</th><th>{t("文件")}</th><th className="num">{t("新的行")}</th><th className="num">{t("账单金额")}</th><th className="num">{t("记补差")}</th><th className="num">{t("向客户补收/退")}</th><th className="num">{t("需要核对")}</th><th></th></tr>
+              <tr><th>{t("导入时间")}</th><th>{t("文件")}</th><th className="num">{t("新的行")}</th><th className="num">{t("账单金额")}</th><th className="num">{t("记补差")}</th><th className="num">{t("向客户补收")}</th><th className="num">{t("需要核对")}</th><th></th></tr>
             </thead>
             <tbody>
               {bills.map((b) => {

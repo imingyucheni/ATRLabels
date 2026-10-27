@@ -15,11 +15,15 @@ export default async function PortalAdjustments() {
   const rows = listOwnAdjustments(me.id);
   const batches = [...new Set(rows.map((r) => r.batchId))];
   const total = rows.reduce((a, r) => a + r.amount, 0);
+  // 只补不退：没有退还的记录时，标题和说明里不提“退还”
+  const hasRefund = rows.some((r) => r.amount < 0);
   return (
     <>
       <h1>{t("补差明细")}</h1>
       <p className="muted">
-        {t("下单时按预报重量和分区收费，承运商官方账单出来后，如果实际结算重量或分区不同，会多退少补。补差会自动从账户余额扣除或退回。")}
+        {hasRefund
+          ? t("下单时按预报重量和分区收费，承运商官方账单出来后，如果实际结算重量或分区不同，会多退少补。补差会自动从账户余额扣除或退回。")
+          : t("下单时按预报重量和分区收费，承运商官方账单出来后，如果实际结算重量、尺寸、分区不同或有附加费，会补收差额，自动从账户余额扣除。")}
       </p>
       <div className="stats">
         <div className="stat"><div className="muted">{t("补差合计")}</div><div className="v">{money(total)}</div></div>
@@ -36,7 +40,7 @@ export default async function PortalAdjustments() {
       )}
       <div className="card table-wrap">
         <table>
-          <thead><tr><th>{t("日期")}</th><th>{t("单号")}</th><th>{t("运单号")}</th><th>{t("原因")}</th><th className="num">{t("补收(+)/退还(-)")}</th></tr></thead>
+          <thead><tr><th>{t("日期")}</th><th>{t("单号")}</th><th>{t("运单号")}</th><th>{t("原因")}</th><th className="num">{hasRefund ? t("补收(+)/退还(-)") : t("补收")}</th></tr></thead>
           <tbody>
             {rows.map((r) => (
               <tr key={r.id}>

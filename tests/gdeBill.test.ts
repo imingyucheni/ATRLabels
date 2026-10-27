@@ -175,6 +175,8 @@ describe("嘉谷对账单导入", () => {
     const { customerAdjustmentSheet } = await import("@/lib/adjustmentExport");
     const sheet = customerAdjustmentSheet(r.batchId!, cid)!;
     expect(sheet.header.join(",")).not.toMatch(/服务商|账单,|产品|核对/);
+    // 只补不退：明细的金额列标题不提“退还”
+    expect(sheet.header.at(-1)).toBe("补收");
     expect(JSON.stringify(sheet.rows)).not.toMatch(/GOFO-LAX|10\.19GOFO|下单时成本/);
     expect(g.listGdeBills()[0]).toMatchObject({ id: r.billId, adjustmentBatchId: r.batchId });
 
