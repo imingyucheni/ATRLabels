@@ -1907,3 +1907,7 @@ tr.best .q-price b { color: var(--accent); }
 .batch-table td.bt-recip { min-width: 13em; }
 .batch-table th.bt-ch { min-width: 280px; }
 .batch-table tbody tr td { padding-top: 12px; padding-bottom: 12px; }
+
+/* 运费申诉（订单详情） */
+.dispute-item { padding: 10px 0; border-top: 1px solid var(--line); }
+.dispute-item:first-of-type { border-top: 0; }

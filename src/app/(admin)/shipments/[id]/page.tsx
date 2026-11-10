@@ -12,6 +12,7 @@ import { money, signedPercent } from "@/lib/pricing";
 import { defaultCancelFees, JG_LABEL_TIMEOUT_MIN, JG_LABEL_TIMEOUT_MSG, JG_TIMEOUT_VOIDED_MSG, providerOf } from "@/lib/service";
 import { listProviderEvents } from "@/lib/providerLog";
 import { listBillIssues } from "@/lib/gdeBill";
+import DisputeCard from "./DisputeCard";
 import { isJiaguCode, jgOrders, jiaguConfig, orderWarehouse, parseJgCode } from "@/lib/shipbest/jiagu";
 import { stripProviderTag } from "@/lib/carriers";
 import CopyText from "@/components/CopyText";
@@ -326,6 +327,8 @@ export default async function ShipmentDetail({ params }: { params: Promise<{ id:
           </table>
         </div>
       )}
+
+      <DisputeCard s={s} provider={provider} t={t} />
 
       {charges.length > 0 && (
         <div className="card">

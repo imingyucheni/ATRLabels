@@ -31,6 +31,7 @@ export default async function AdjustmentsPage() {
           {t("“{name}”是按旧规则导入的，嘉谷少收的 {n} 笔退给了客户（共 {a}）。", { name: x.filename, n: x.count, a: money(-x.total) })} <Link href={`/adjustments/gde/${x.id}`}>{t("去撤回 →")}</Link>
         </div>
       ))}
+      <p className="small"><Link href="/adjustments/disputes">{t("运费申诉记录 →")}</Link> <span className="muted">{t("（在订单详情页记录申诉；成功后服务商退回的钱按加价比例退给客户）")}</span></p>
       <GdeBillImport />
       {bills.length > 0 && (
         <div className="card table-wrap">

@@ -48,6 +48,7 @@ export function clearTestData(): { backup: string; removed: ReturnType<typeof te
   const files = (conn.prepare(`SELECT label_path FROM shipments WHERE id IN (${TEST_IDS}) AND label_path IS NOT NULL`).all() as { label_path: string }[]).map((r) => r.label_path);
   conn.transaction(() => {
     // 按外键依赖顺序删：流水 → 补差 → 批量导入 → 订单
+    if (hasTable("disputes")) conn.exec(`DELETE FROM disputes WHERE shipment_id IN (${TEST_IDS})`);
     conn.exec(`DELETE FROM ledger WHERE shipment_id IN (${TEST_IDS}) OR adjustment_id IN (SELECT id FROM adjustments WHERE shipment_id IN (${TEST_IDS}))`);
     conn.exec(`DELETE FROM adjustments WHERE shipment_id IN (${TEST_IDS})`);
     conn.exec("DELETE FROM adjustment_batches WHERE id NOT IN (SELECT batch_id FROM adjustments)");
@@ -79,7 +80,7 @@ export function resetSandboxData(): { shipments: number } {
   const conn = db();
   const shipments = (conn.prepare("SELECT COUNT(*) AS n FROM shipments").get() as { n: number }).n;
   const tables = [
-    "ledger", "provider_bill_issues", "provider_bill_lines", "provider_bills", "adjustments", "adjustment_batches", "batch_job_rows", "batch_jobs", "topup_requests",
+    "ledger", "disputes", "provider_bill_issues", "provider_bill_lines", "provider_bills", "adjustments", "adjustment_batches", "batch_job_rows", "batch_jobs", "topup_requests",
     "provider_events", "provider_orders", "mock_orders", "password_resets", "terms_acceptances", "email_log", "leads", "shipments",
   ];
   conn.transaction(() => {
