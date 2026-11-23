@@ -3,7 +3,7 @@ import Link from "next/link";
 import { listCustomers } from "@/lib/db";
 import { LEDGER_TYPE_LABEL, listLedger } from "@/lib/ledger";
 import { money } from "@/lib/pricing";
-import { getTopup, listTopups, TOPUP_METHOD_LABEL, TOPUP_STATUS_LABEL } from "@/lib/topup";
+import { getTopup, listManualTopups, listTopups, TOPUP_METHOD_LABEL, TOPUP_STATUS_LABEL } from "@/lib/topup";
 import FlashForm from "@/components/FlashForm";
 import { approveTopupAction, rejectTopupAction } from "@/app/actions";
 import PinField from "@/components/PinField";
@@ -30,9 +30,14 @@ export default async function FinancePage({ searchParams }: { searchParams: Prom
   const byType = ledger.reduce<Record<string, number>>((m, l) => ((m[l.type] = (m[l.type] ?? 0) + l.amount), m), {});
   const pending = listTopups({ status: "pending" }).filter((t) => mine(t.customerId));
   // 按处理时间排（不是申请顺序）：先申请的可能后处理
-  const handled = listTopups({ limit: 30 })
-    .filter((t) => t.status !== "pending" && mine(t.customerId))
-    .sort((a, b) => (b.handledAt ?? "").localeCompare(a.handledAt ?? "") || b.id - a.id);
+  // 客户提交的充值申请 + 后台在客户页面直接记的充值，按处理时间一起排
+  type Handled = { kind: "request"; at: string; t: ReturnType<typeof listTopups>[number] } | { kind: "manual"; at: string; m: ReturnType<typeof listManualTopups>[number] };
+  const handled: Handled[] = [
+    ...listTopups({ limit: 30 }).filter((t) => t.status !== "pending" && mine(t.customerId)).map((t) => ({ kind: "request" as const, at: t.handledAt ?? t.createdAt, t })),
+    ...listManualTopups(30).filter((m) => mine(m.customerId)).map((m) => ({ kind: "manual" as const, at: m.createdAt, m })),
+  ]
+    .sort((a, b) => b.at.localeCompare(a.at))
+    .slice(0, 30);
   const qs = new URLSearchParams(Object.entries({ from: sp.from, to: sp.to }).filter(([, v]) => v) as [string, string][]).toString();
   // 审核充值后跳回这里（?done=approved|rejected&id=N），在页面上显示处理结果
   const doneRaw = sp.done === "approved" || sp.done === "rejected" ? getTopup(Number(sp.id)) : null;
@@ -100,7 +105,25 @@ export default async function FinancePage({ searchParams }: { searchParams: Prom
             <table className="card-table">
               <thead><tr><th>#</th><th>{tr("处理时间")}</th><th>{tr("客户")}</th><th>{tr("方式")}</th><th className="num">{tr("应收")}</th><th>{tr("状态")}</th><th className="num">{tr("入账（美元）")}</th><th>{tr("确认人")}</th><th>{tr("备注")}</th></tr></thead>
               <tbody>
-                {handled.map((t) => (
+                {handled.map((h) => {
+                  if (h.kind === "manual") {
+                    const m = h.m;
+                    return (
+                      <tr key={`m${m.ledgerId}`}>
+                        <td className="muted hide-m">-</td>
+                        <td className="small muted" data-label={tr("处理时间")}>{fmtTime(m.createdAt)}</td>
+                        <td className="c-main"><Link href={`/customers/${m.customerId}`}>{m.customerName}</Link></td>
+                        <td className="small" data-label={tr("方式")}>{tr("后台直接记账")}</td>
+                        <td className="num" data-label={tr("应收")}>-</td>
+                        <td data-label={tr("状态")}>{tr("已入账")}</td>
+                        <td className="num" data-label={tr("入账（美元）")}>{money(m.amount)}</td>
+                        <td className="small" data-label={tr("确认人")}><b>{m.createdBy ? tr(actorLabel(m.createdBy)) : "-"}</b></td>
+                        <td className="small" data-label={tr("备注")}>{note(m.note) || "-"}</td>
+                      </tr>
+                    );
+                  }
+                  const t = h.t;
+                  return (
                   <tr key={t.id}>
                     <td className="muted hide-m">{t.id}</td>
                     <td className="small muted" data-label={tr("处理时间")}>{fmtTime(t.handledAt)}</td>
@@ -112,7 +135,8 @@ export default async function FinancePage({ searchParams }: { searchParams: Prom
                     <td className="small" data-label={tr("确认人")}><b>{t.handledBy ? tr(actorLabel(t.handledBy)) : "-"}</b></td>
                     <td className="small" data-label={tr("备注")}>{t.adminNote || "-"}{t.hasProof && <> <a href={`/api/topup/${t.id}/proof`} target="_blank">{tr("凭证")}</a></>}</td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </>

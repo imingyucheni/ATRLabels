@@ -127,6 +127,28 @@ export function listTopups(f: { customerId?: number; status?: TopupStatus; limit
   return (db().prepare(`${SELECT} ${where.length ? "WHERE " + where.join(" AND ") : ""} ORDER BY t.id DESC LIMIT ${Number(f.limit ?? 200)}`).all(...args) as Row[]).map(toReq);
 }
 
+/** 后台在客户页面直接记的充值（不是客户提交的充值申请）：财务页“最近处理”里一起列出来 */
+export interface ManualTopup {
+  ledgerId: number;
+  customerId: number;
+  customerName: string;
+  amount: number;
+  note: string | null;
+  createdBy: string | null;
+  createdAt: string;
+}
+
+export function listManualTopups(limit = 30): ManualTopup[] {
+  return (db()
+    .prepare(
+      `SELECT l.id, l.customer_id, c.name AS customer_name, l.amount, l.note, l.created_by, l.created_at FROM ledger l JOIN customers c ON c.id = l.customer_id
+       WHERE l.type = 'topup' AND l.id NOT IN (SELECT ledger_id FROM topup_requests WHERE ledger_id IS NOT NULL)
+       ORDER BY l.id DESC LIMIT ?`,
+    )
+    .all(limit) as { id: number; customer_id: number; customer_name: string; amount: number; note: string | null; created_by: string | null; created_at: string }[])
+    .map((r) => ({ ledgerId: r.id, customerId: r.customer_id, customerName: r.customer_name, amount: r.amount, note: r.note, createdBy: r.created_by, createdAt: r.created_at }));
+}
+
 export function getTopup(id: number): TopupRequest | null {
   const r = db().prepare(`${SELECT} WHERE t.id = ?`).get(id) as Row | undefined;
   return r ? toReq(r) : null;

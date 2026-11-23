@@ -503,4 +503,6 @@ export const qa3: Record<string, string> = {
   "客户说点了重置密码没动静时，在这里看是没收到邮件、发送失败，还是填错了邮箱": "When a customer says reset did nothing, check here whether the email was sent, failed, or the wrong email was entered",
   "填的邮箱": "Email entered",
   "没收到的话请看一下垃圾邮件；还是没有，请确认填的是开通账号时的登录邮箱。": " If it doesn't arrive, check your spam folder, and make sure you entered the login email your account was opened with.",
+  "后台直接记账": "Recorded by admin",
+  "已入账": "Credited",
 };
