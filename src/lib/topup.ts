@@ -175,9 +175,15 @@ export function listManualTopups(limit = 30): ManualTopup[] {
   return (checksTable().prepare(`${MANUAL_SQL} ORDER BY l.id DESC LIMIT ?`).all(limit) as ManualRow[]).map(toManual);
 }
 
-/** 管理员记的、主管理员还没核对的充值 */
+/** 管理员确认收钱的充值（直接记的、审核通过的充值申请都算），主管理员还没核对的 */
 export function uncheckedStaffTopups(): ManualTopup[] {
-  return (checksTable().prepare(`${MANUAL_SQL} AND l.created_by LIKE 'staff:%' AND k.ledger_id IS NULL ORDER BY l.id`).all() as ManualRow[]).map(toManual);
+  return (checksTable()
+    .prepare(
+      `SELECT l.id, l.customer_id, c.name AS customer_name, l.amount, l.note, l.created_by, l.created_at, NULL AS checked_at, NULL AS checked_by, NULL AS check_note
+       FROM ledger l JOIN customers c ON c.id = l.customer_id LEFT JOIN topup_checks k ON k.ledger_id = l.id
+       WHERE l.type = 'topup' AND l.created_by LIKE 'staff:%' AND k.ledger_id IS NULL ORDER BY l.id`,
+    )
+    .all() as ManualRow[]).map(toManual);
 }
 
 /** 主管理员核对过（钱收到了 / 已经处理好） */

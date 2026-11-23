@@ -237,7 +237,7 @@ export default async function CustomerEdit({ params, searchParams }: { params: P
 
           {show("overview") && <FlashForm action={ledgerEntryAction} submitLabel="确认" className="card" resetOnSuccess review confirm={t("给【{name}】记一笔账：提交后立即改变客户余额（当前余额 {bal}）。请核对类型和金额：充值加钱，扣款减钱。", { name: c.name, bal: money(c.balance) })}>
               <h2>{staff ? t("充值") : t("充值 / 调账")}</h2>
-              {staff && <p className="small muted" style={{ marginTop: -4 }}>{t("管理员账号只能记充值；加款、扣款请找主管理员。确认人会记下你的名字。")}{t("你记的充值会提醒主管理员核对（确认钱已经到了公司账户）。")}</p>}
+              {staff && <p className="small muted" style={{ marginTop: -4 }}>{t("管理员账号只能记充值；加款、扣款请找主管理员。确认人会记下你的名字。")}{t("你确认收钱后会提醒主管理员核对钱收到了哪里。")}</p>}
               <input type="hidden" name="id" value={c.id} />
               <div className="grid" style={{ marginBottom: 12 }}>
                 <label className="f">{t("类型")}

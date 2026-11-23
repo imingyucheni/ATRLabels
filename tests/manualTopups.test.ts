@@ -23,7 +23,7 @@ describe("财务“最近处理”：后台直接记的充值也列出来", () =
     expect(list).toEqual([expect.objectContaining({ customerId: cid, customerName: "Elodie Han", amount: 322, note: "Zelle 到账", createdBy: "staff:1" })]);
   });
 
-  it("管理员（不是主管理员）直接记的充值要主管理员核对；主管理员自己记的、客户申请审核过的不用", async () => {
+  it("管理员（不是主管理员）确认收钱的充值要主管理员核对；主管理员自己记的不用", async () => {
     const db = await import("@/lib/db");
     const ledger = await import("@/lib/ledger");
     const tp = await import("@/lib/topup");
@@ -32,8 +32,9 @@ describe("财务“最近处理”：后台直接记的充值也列出来", () =
     ledger.addLedger({ customerId: cid, type: "topup", amount: 80, note: "公司 Zelle", createdBy: "admin" });
     const req = await tp.createTopup({ customerId: cid, method: "zelle", amountUsd: 30, reference: "Z2" });
     tp.approveTopup(req, 30, null, "staff:2:Derek");
+    // 管理员直接记的、管理员审核通过的充值申请都要核对；主管理员记的不用
     const open = tp.uncheckedStaffTopups().filter((m) => m.customerId === cid);
-    expect(open.map((m) => [m.ledgerId, m.amount, m.createdBy])).toEqual([[staffId, 100, "staff:2:Derek"]]);
+    expect(open.map((m) => [m.amount, m.createdBy])).toEqual([[100, "staff:2:Derek"], [30, "staff:2:Derek"]]);
     expect(tp.listManualTopups().find((m) => m.ledgerId === staffId)!.needsCheck).toBe(true);
     expect(tp.listManualTopups().find((m) => m.amount === 80 && m.customerId === cid)!.needsCheck).toBe(false);
     tp.checkStaffTopup(staffId, "已转回公司", "主管理员");

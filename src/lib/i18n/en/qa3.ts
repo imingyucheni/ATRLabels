@@ -515,4 +515,9 @@ export const qa3: Record<string, string> = {
   "管理员记的充值待核对": "Admin top-ups to check",
   "你记的充值会提醒主管理员核对（确认钱已经到了公司账户）。": " Top-ups you record will be flagged for the owner to check (that the money reached the company account).",
   "充值记录不存在": "Top-up record not found",
+  "管理员确认收钱的充值，待你核对（{n}）": "Top-ups confirmed by admins, to check ({n})",
+  "这些充值是管理员确认收钱的（在客户页面直接记的，或审核通过的充值申请），客户余额已经加上了。请查一下钱实际收到了哪里：到了公司账户就点“已核对”；是管理员自己收的，记得跟他收回（或从佣金里扣），处理好再点“已核对”。": "These top-ups were confirmed by admins (recorded on the customer page or approved requests) and are already in customer balances. Check where the money actually went: if it reached the company account, click “Checked”; if the admin collected it personally, collect it from them (or deduct from commission) first.",
+  "说明（可不填），例如：已到公司 Zelle / 已跟 Derek 收回": "Note (optional), e.g. in company Zelle / collected from Derek",
+  "管理员收款待核对": "Admin-collected payments to check",
+  "你确认收钱后会提醒主管理员核对钱收到了哪里。": " After you confirm a payment, the owner is reminded to check where the money went.",
 };

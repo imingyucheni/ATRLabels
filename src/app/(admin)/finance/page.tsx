@@ -57,8 +57,8 @@ export default async function FinancePage({ searchParams }: { searchParams: Prom
 
       {toCheck.length > 0 && (
         <div className="card table-wrap" id="staff-topups" style={{ borderColor: "var(--warn)" }}>
-          <h2>{tr("管理员记的充值，待你核对（{n}）", { n: toCheck.length })}</h2>
-          <p className="small muted" style={{ marginTop: 0 }}>{tr("这些充值是管理员在客户页面直接记的，客户余额已经加上了。请确认钱已经到了公司账户（管理员自己收的，要转回公司或从佣金里抵扣），再点“已核对”。")}</p>
+          <h2>{tr("管理员确认收钱的充值，待你核对（{n}）", { n: toCheck.length })}</h2>
+          <p className="small muted" style={{ marginTop: 0 }}>{tr("这些充值是管理员确认收钱的（在客户页面直接记的，或审核通过的充值申请），客户余额已经加上了。请查一下钱实际收到了哪里：到了公司账户就点“已核对”；是管理员自己收的，记得跟他收回（或从佣金里扣），处理好再点“已核对”。")}</p>
           <table className="card-table">
             <thead><tr><th>{tr("记账时间")}</th><th>{tr("客户")}</th><th className="num">{tr("金额")}</th><th>{tr("记账人")}</th><th>{tr("备注")}</th><th></th></tr></thead>
             <tbody>
@@ -72,7 +72,7 @@ export default async function FinancePage({ searchParams }: { searchParams: Prom
                   <td className="c-act" style={{ minWidth: 260 }}>
                     <FlashForm action={checkStaffTopupAction} submitLabel="已核对" submitClass="small primary" inline>
                       <input type="hidden" name="id" value={m.ledgerId} />
-                      <input name="note" placeholder={tr("核对说明（可不填），例如：已转回公司")} maxLength={300} style={{ maxWidth: 200 }} />
+                      <input name="note" placeholder={tr("说明（可不填），例如：已到公司 Zelle / 已跟 Derek 收回")} maxLength={300} style={{ maxWidth: 200 }} />
                     </FlashForm>
                   </td>
                 </tr>
