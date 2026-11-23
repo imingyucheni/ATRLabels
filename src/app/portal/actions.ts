@@ -29,7 +29,7 @@ import { cleanAddress, cleanRequest, n, str } from "@/lib/sanitize";
 import { createLabel, PriceChangedError, refreshShipment, requestCancel, resubmitShipment } from "@/lib/service";
 import { ShipBestError } from "@/lib/shipbest/client";
 import { createTopup, getTopup } from "@/lib/topup";
-import { checkToken, requestReset, resetWithToken } from "@/lib/passwordReset";
+import { checkToken, logResetAttempt, requestReset, resetWithToken } from "@/lib/passwordReset";
 import { smtpConfigured } from "@/lib/mailer";
 import type { Address, ShipmentRequest } from "@/lib/shipbest/types";
 import type { FlashState } from "@/app/actions";
@@ -349,13 +349,17 @@ export async function portalForgotAction(_: unknown, fd: FormData) {
   // 要发邮件、却没有可信的网址：不发链接（不然链接可能指向别人伪造的域名），只在服务器日志里提醒；回复照常
   const untrusted = !base && smtpConfigured();
   if (untrusted && !internal) {
-    console.warn("[password-reset] 没有配置 APP_URL / OMS_URL，请求的域名也不在配置里，没有发送重置链接。请在 .env.local 里设置 APP_URL（客户 OMS 的网址）");
+    console.warn("[password-reset] 没有配置 APP_URL / OMS_URL，请求的域名也不在配置里，没有发送重置链接（申请已交给后台“客户”页面处理）。请在 .env.local 里设置 APP_URL（客户 OMS 的网址）");
   }
-  const r = internal || untrusted ? { emailed: smtpConfigured() } : await requestReset(email, base ?? "");
+  const ip = await clientIp();
+  if (internal) logResetAttempt(email, login!.id, "internal", null, ip);
+  // 没有可信的网址时 requestReset 不发链接，把申请交给客服处理（后台“客户”页面能看到）
+  const r = internal ? { emailed: smtpConfigured() && !untrusted } : await requestReset(email, base, ip);
   const t = await getT();
+  const contact = getSettings().supportContact;
   return {
     ok: r.emailed
-      ? t("如果这个邮箱已开通账号，我们已发送重置密码的链接，请在 1 小时内查收邮件。")
+      ? `${t("如果这个邮箱已开通账号，我们已发送重置密码的链接，请在 1 小时内查收邮件。")}${t("没收到的话请看一下垃圾邮件；还是没有，请确认填的是开通账号时的登录邮箱。")}${contact ? t("也可以直接联系：{contact}", { contact }) : ""}`
       : `${t("已收到你的申请。客服会在工作时间内（一般 1 个工作日内）为你重置密码，并通过你登记的联系方式告知新密码。")}${
           getSettings().supportContact ? t("着急的话可以直接联系：{contact}", { contact: getSettings().supportContact }) : ""
         }`,

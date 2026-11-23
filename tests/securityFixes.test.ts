@@ -517,9 +517,15 @@ describe("安全修复", () => {
       S.hdr.set("x-forwarded-for", "192.0.2.150");
       S.hdr.set("host", "evil.example");
       const r = await portal.portalForgotAction(undefined, fd({ email: "c1@example.test" }));
-      expect(r?.ok).toMatch(/如果这个邮箱已开通账号/);
+      // 没发出链接：不能告诉客户“已发送邮件”，申请交给后台客服处理
+      expect(r?.ok).toMatch(/已收到你的申请/);
       expect(S.mails).toEqual([]);
       expect(warned.length).toBe(1);
+      const { pendingResets, recentResetAttempts } = await import("@/lib/passwordReset");
+      expect(pendingResets().some((x) => x.portal_email === "c1@example.test")).toBe(true);
+      expect(recentResetAttempts(1)[0]).toMatchObject({ email: "c1@example.test", outcome: "no_url" });
+      // 邮箱不存在时回复一样（不能用来试探账号）
+      expect((await portal.portalForgotAction(undefined, fd({ email: "nobody@example.test" })))?.ok).toMatch(/已收到你的申请/);
 
       // 后台网址 / ALLOWED_ORIGINS 里写明的域名可以用
       clear();

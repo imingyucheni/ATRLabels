@@ -119,6 +119,13 @@ export async function notify(customerId: number, event: NotifyEvent, subject: { 
   }
 }
 
+/** 记一条发信记录（后台“设置 → 邮件通知 → 最近发送记录”里能看到），例如重置密码邮件 */
+export function recordEmail(customerId: number | null, event: string, to: string, subject: string, error: string | null) {
+  ensure()
+    .prepare("INSERT INTO email_log (customer_id, event, to_email, subject, status, error) VALUES (?,?,?,?,?,?)")
+    .run(customerId, event, to, subject, error ? "failed" : "sent", error ? error.slice(0, 300) : null);
+}
+
 /** 不等待发送结果（业务流程里调用） */
 export function notifyLater(...args: Parameters<typeof notify>) {
   if (!notifyReady()) return;

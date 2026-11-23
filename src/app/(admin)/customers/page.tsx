@@ -2,7 +2,7 @@ import { fmtTime } from "@/lib/time";
 import Link from "next/link";
 import { customerChannels, getSettings, listCustomers } from "@/lib/db";
 import { money } from "@/lib/pricing";
-import { pendingResets } from "@/lib/passwordReset";
+import { pendingResets, recentResetAttempts, RESET_OUTCOME_LABEL } from "@/lib/passwordReset";
 import FlashForm from "@/components/FlashForm";
 import { handleResetRequestAction } from "@/app/actions";
 import { getT } from "@/lib/prefs";
@@ -25,12 +25,15 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
   const sales = staff ? new Map<number, string>() : salesNameByCustomer();
   const { markup } = getSettings();
   const resets = pendingResets().filter((r) => canSee(r.customer_id));
+  // 重置密码申请记录：客户说“点了没动静”时查得到是怎么回事；员工只看授权给他的客户，邮箱对不上的只给主管理员看
+  const attempts = recentResetAttempts(30).filter((a) => (a.customerId ? canSee(a.customerId) : !staff));
+  const noUrl = attempts.some((a) => a.outcome === "no_url");
   const t = await getT();
   return (
     <>
       {resets.length > 0 && (
         <div className="card" style={{ borderColor: "var(--warn)" }}>
-          <div className="card-head"><h2>{t("客户申请重置密码（{n}）", { n: resets.length })}</h2><span className="small muted">{t("没有配置邮件发送时，由这里生成新密码后告诉客户")}</span></div>
+          <div className="card-head"><h2>{t("客户申请重置密码（{n}）", { n: resets.length })}</h2><span className="small muted">{t("重置邮件没发出去的（没配置发件邮箱、发送失败、没配置网址），在这里生成新密码后告诉客户")}</span></div>
           <table className="list card-table">
             <tbody>
               {resets.map((r) => (
@@ -47,6 +50,9 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
             </tbody>
           </table>
         </div>
+      )}
+      {noUrl && !staff && (
+        <div className="alert warn">{t("客户申请重置密码时，系统没法发重置链接：服务器没有配置客户 OMS 的网址。请在服务器的 .env.local 里加一行 APP_URL=https://你的 OMS 网址（例如 https://atrship.com），然后运行 atr-update。在那之前，申请会出现在上面，由客服生成新密码。")}</div>
       )}
       {deniedParam === "customer" && <div className="alert warn">{t("你没有这个客户的权限，请找主管理员授权。")}</div>}
       {denied && <div className="alert warn">{t("这个功能只有主管理员能用。管理员账号可以开客户账号、设置客户邮费、确认充值。")}</div>}
@@ -98,6 +104,29 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
       <p className="small muted">
         {t("“默认”表示沿用渠道或全局设置（当前全局：+{p}%，固定 {f}，最低利润 {m}）。", { p: markup.percent, f: markup.fixed, m: markup.minProfit })}
       </p>
+      {attempts.length > 0 && (
+        <details className="card">
+          <summary><b>{t("重置密码申请记录（最近 {n} 条）", { n: attempts.length })}</b> <span className="small muted">{t("客户说点了重置密码没动静时，在这里看是没收到邮件、发送失败，还是填错了邮箱")}</span></summary>
+          <div className="table-wrap">
+            <table className="list" style={{ marginTop: 8 }}>
+              <thead><tr><th>{t("时间")}</th><th>{t("填的邮箱")}</th><th>{t("客户")}</th><th>{t("结果")}</th></tr></thead>
+              <tbody>
+                {attempts.map((a) => (
+                  <tr key={a.id}>
+                    <td className="small muted">{fmtTime(a.createdAt)}</td>
+                    <td className="small">{a.email}</td>
+                    <td className="small">{a.customerId ? <Link href={`/customers/${a.customerId}`}>{a.customerName}</Link> : <span className="muted">-</span>}</td>
+                    <td className="small">
+                      <span className={`badge ${a.outcome === "emailed" ? "ok" : a.outcome === "failed" || a.outcome === "no_url" ? "exception" : a.outcome === "duplicate" ? "" : "warn"}`}>{t(RESET_OUTCOME_LABEL[a.outcome])}</span>
+                      {a.error && <div className="muted">{a.error}</div>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      )}
     </>
   );
 }
