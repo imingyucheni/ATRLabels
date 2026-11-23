@@ -127,7 +127,10 @@ export function listTopups(f: { customerId?: number; status?: TopupStatus; limit
   return (db().prepare(`${SELECT} ${where.length ? "WHERE " + where.join(" AND ") : ""} ORDER BY t.id DESC LIMIT ${Number(f.limit ?? 200)}`).all(...args) as Row[]).map(toReq);
 }
 
-/** 后台在客户页面直接记的充值（不是客户提交的充值申请）：财务页“最近处理”里一起列出来 */
+/**
+ * 后台在客户页面直接记的充值（不是客户提交的充值申请）：财务页“最近处理”里一起列出来。
+ * 管理员（不是主管理员）记的充值，钱可能是管理员自己收的、没有进公司账户：要主管理员核对过才算完（首页待办提醒）。
+ */
 export interface ManualTopup {
   ledgerId: number;
   customerId: number;
@@ -136,17 +139,53 @@ export interface ManualTopup {
   note: string | null;
   createdBy: string | null;
   createdAt: string;
+  /** 管理员记的、主管理员还没核对 */
+  needsCheck: boolean;
+  checkedAt: string | null;
+  checkedBy: string | null;
+  checkNote: string | null;
 }
 
+function checksTable() {
+  const c = db();
+  c.exec(`CREATE TABLE IF NOT EXISTS topup_checks (
+    ledger_id INTEGER PRIMARY KEY REFERENCES ledger(id) ON DELETE CASCADE,
+    note TEXT,
+    checked_by TEXT,
+    checked_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`);
+  return c;
+}
+
+const MANUAL_SQL = `SELECT l.id, l.customer_id, c.name AS customer_name, l.amount, l.note, l.created_by, l.created_at,
+         k.checked_at, k.checked_by, k.note AS check_note
+       FROM ledger l JOIN customers c ON c.id = l.customer_id LEFT JOIN topup_checks k ON k.ledger_id = l.id
+       WHERE l.type = 'topup' AND l.id NOT IN (SELECT ledger_id FROM topup_requests WHERE ledger_id IS NOT NULL)`;
+
+type ManualRow = {
+  id: number; customer_id: number; customer_name: string; amount: number; note: string | null; created_by: string | null; created_at: string;
+  checked_at: string | null; checked_by: string | null; check_note: string | null;
+};
+const toManual = (r: ManualRow): ManualTopup => ({
+  ledgerId: r.id, customerId: r.customer_id, customerName: r.customer_name, amount: r.amount, note: r.note, createdBy: r.created_by, createdAt: r.created_at,
+  needsCheck: !!r.created_by?.startsWith("staff:") && !r.checked_at, checkedAt: r.checked_at, checkedBy: r.checked_by, checkNote: r.check_note,
+});
+
 export function listManualTopups(limit = 30): ManualTopup[] {
-  return (db()
-    .prepare(
-      `SELECT l.id, l.customer_id, c.name AS customer_name, l.amount, l.note, l.created_by, l.created_at FROM ledger l JOIN customers c ON c.id = l.customer_id
-       WHERE l.type = 'topup' AND l.id NOT IN (SELECT ledger_id FROM topup_requests WHERE ledger_id IS NOT NULL)
-       ORDER BY l.id DESC LIMIT ?`,
-    )
-    .all(limit) as { id: number; customer_id: number; customer_name: string; amount: number; note: string | null; created_by: string | null; created_at: string }[])
-    .map((r) => ({ ledgerId: r.id, customerId: r.customer_id, customerName: r.customer_name, amount: r.amount, note: r.note, createdBy: r.created_by, createdAt: r.created_at }));
+  return (checksTable().prepare(`${MANUAL_SQL} ORDER BY l.id DESC LIMIT ?`).all(limit) as ManualRow[]).map(toManual);
+}
+
+/** 管理员记的、主管理员还没核对的充值 */
+export function uncheckedStaffTopups(): ManualTopup[] {
+  return (checksTable().prepare(`${MANUAL_SQL} AND l.created_by LIKE 'staff:%' AND k.ledger_id IS NULL ORDER BY l.id`).all() as ManualRow[]).map(toManual);
+}
+
+/** 主管理员核对过（钱收到了 / 已经处理好） */
+export function checkStaffTopup(ledgerId: number, note: string | null, by: string) {
+  const c = checksTable();
+  const r = c.prepare("SELECT created_by FROM ledger WHERE id = ? AND type = 'topup'").get(ledgerId) as { created_by: string | null } | undefined;
+  if (!r) throw new Error("充值记录不存在");
+  c.prepare("INSERT OR IGNORE INTO topup_checks (ledger_id, note, checked_by) VALUES (?, ?, ?)").run(ledgerId, note?.trim().slice(0, 300) || null, by);
 }
 
 export function getTopup(id: number): TopupRequest | null {

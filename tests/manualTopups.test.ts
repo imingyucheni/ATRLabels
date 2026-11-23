@@ -22,4 +22,24 @@ describe("财务“最近处理”：后台直接记的充值也列出来", () =
     const list = tp.listManualTopups();
     expect(list).toEqual([expect.objectContaining({ customerId: cid, customerName: "Elodie Han", amount: 322, note: "Zelle 到账", createdBy: "staff:1" })]);
   });
+
+  it("管理员（不是主管理员）直接记的充值要主管理员核对；主管理员自己记的、客户申请审核过的不用", async () => {
+    const db = await import("@/lib/db");
+    const ledger = await import("@/lib/ledger");
+    const tp = await import("@/lib/topup");
+    const cid = db.saveCustomer(null, { name: "核对客户", contact: null, phone: null, email: null, note: null, markup: {} });
+    const staffId = ledger.addLedger({ customerId: cid, type: "topup", amount: 100, note: "现金", createdBy: "staff:2:Derek" });
+    ledger.addLedger({ customerId: cid, type: "topup", amount: 80, note: "公司 Zelle", createdBy: "admin" });
+    const req = await tp.createTopup({ customerId: cid, method: "zelle", amountUsd: 30, reference: "Z2" });
+    tp.approveTopup(req, 30, null, "staff:2:Derek");
+    const open = tp.uncheckedStaffTopups().filter((m) => m.customerId === cid);
+    expect(open.map((m) => [m.ledgerId, m.amount, m.createdBy])).toEqual([[staffId, 100, "staff:2:Derek"]]);
+    expect(tp.listManualTopups().find((m) => m.ledgerId === staffId)!.needsCheck).toBe(true);
+    expect(tp.listManualTopups().find((m) => m.amount === 80 && m.customerId === cid)!.needsCheck).toBe(false);
+    tp.checkStaffTopup(staffId, "已转回公司", "主管理员");
+    tp.checkStaffTopup(staffId, "再点一次", "主管理员"); // 重复点不出错
+    expect(tp.uncheckedStaffTopups().some((m) => m.ledgerId === staffId)).toBe(false);
+    expect(tp.listManualTopups().find((m) => m.ledgerId === staffId)).toMatchObject({ needsCheck: false, checkedBy: "主管理员", checkNote: "已转回公司" });
+    expect(() => tp.checkStaffTopup(999999, null, "x")).toThrow(/不存在/);
+  });
 });

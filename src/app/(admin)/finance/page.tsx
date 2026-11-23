@@ -3,7 +3,8 @@ import Link from "next/link";
 import { listCustomers } from "@/lib/db";
 import { LEDGER_TYPE_LABEL, listLedger } from "@/lib/ledger";
 import { money } from "@/lib/pricing";
-import { getTopup, listManualTopups, listTopups, TOPUP_METHOD_LABEL, TOPUP_STATUS_LABEL } from "@/lib/topup";
+import { getTopup, listManualTopups, listTopups, TOPUP_METHOD_LABEL, TOPUP_STATUS_LABEL, uncheckedStaffTopups } from "@/lib/topup";
+import { checkStaffTopupAction } from "@/app/topupCheckActions";
 import FlashForm from "@/components/FlashForm";
 import { approveTopupAction, rejectTopupAction } from "@/app/actions";
 import PinField from "@/components/PinField";
@@ -38,6 +39,8 @@ export default async function FinancePage({ searchParams }: { searchParams: Prom
   ]
     .sort((a, b) => b.at.localeCompare(a.at))
     .slice(0, 30);
+  // 管理员记的充值：主管理员核对（钱可能是管理员自己收的，没进公司账户）
+  const toCheck = staff ? [] : uncheckedStaffTopups();
   const qs = new URLSearchParams(Object.entries({ from: sp.from, to: sp.to }).filter(([, v]) => v) as [string, string][]).toString();
   // 审核充值后跳回这里（?done=approved|rejected&id=N），在页面上显示处理结果
   const doneRaw = sp.done === "approved" || sp.done === "rejected" ? getTopup(Number(sp.id)) : null;
@@ -51,6 +54,33 @@ export default async function FinancePage({ searchParams }: { searchParams: Prom
         <div className="stat"><div className="muted">{tr("客户欠款合计")}</div><div className={`v ${owed < 0 ? "profit-neg" : ""}`}>{money(-owed)}</div></div>
         <div className="stat"><div className="muted">{tr("客户数")}</div><div className="v">{customers.length}</div></div>
       </div>
+
+      {toCheck.length > 0 && (
+        <div className="card table-wrap" id="staff-topups" style={{ borderColor: "var(--warn)" }}>
+          <h2>{tr("管理员记的充值，待你核对（{n}）", { n: toCheck.length })}</h2>
+          <p className="small muted" style={{ marginTop: 0 }}>{tr("这些充值是管理员在客户页面直接记的，客户余额已经加上了。请确认钱已经到了公司账户（管理员自己收的，要转回公司或从佣金里抵扣），再点“已核对”。")}</p>
+          <table className="card-table">
+            <thead><tr><th>{tr("记账时间")}</th><th>{tr("客户")}</th><th className="num">{tr("金额")}</th><th>{tr("记账人")}</th><th>{tr("备注")}</th><th></th></tr></thead>
+            <tbody>
+              {toCheck.map((m) => (
+                <tr key={m.ledgerId}>
+                  <td className="small muted" data-label={tr("记账时间")}>{fmtTime(m.createdAt)}</td>
+                  <td className="c-main"><Link href={`/customers/${m.customerId}`}>{m.customerName}</Link></td>
+                  <td className="num" data-label={tr("金额")}><b>{money(m.amount)}</b></td>
+                  <td className="small" data-label={tr("记账人")}><b>{tr(actorLabel(m.createdBy))}</b></td>
+                  <td className="small" data-label={tr("备注")}>{note(m.note) || "-"}</td>
+                  <td className="c-act" style={{ minWidth: 260 }}>
+                    <FlashForm action={checkStaffTopupAction} submitLabel="已核对" submitClass="small primary" inline>
+                      <input type="hidden" name="id" value={m.ledgerId} />
+                      <input name="note" placeholder={tr("核对说明（可不填），例如：已转回公司")} maxLength={300} style={{ maxWidth: 200 }} />
+                    </FlashForm>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       <div className="card table-wrap" id="topups">
         {done && done.status === "approved" && (
@@ -115,7 +145,10 @@ export default async function FinancePage({ searchParams }: { searchParams: Prom
                         <td className="c-main"><Link href={`/customers/${m.customerId}`}>{m.customerName}</Link></td>
                         <td className="small" data-label={tr("方式")}>{tr("后台直接记账")}</td>
                         <td className="num" data-label={tr("应收")}>-</td>
-                        <td data-label={tr("状态")}>{tr("已入账")}</td>
+                        <td data-label={tr("状态")}>
+                          {m.needsCheck ? <span className="badge warn">{tr("待主管理员核对")}</span> : tr("已入账")}
+                          {m.checkedAt && <div className="small muted">{tr("{who} 已核对", { who: m.checkedBy ?? "" })}{m.checkNote ? ` · ${m.checkNote}` : ""}</div>}
+                        </td>
                         <td className="num" data-label={tr("入账（美元）")}>{money(m.amount)}</td>
                         <td className="small" data-label={tr("确认人")}><b>{m.createdBy ? tr(actorLabel(m.createdBy)) : "-"}</b></td>
                         <td className="small" data-label={tr("备注")}>{note(m.note) || "-"}</td>
